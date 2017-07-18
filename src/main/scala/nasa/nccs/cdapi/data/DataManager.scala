@@ -3,8 +3,8 @@ package nasa.nccs.cdapi.data
 import nasa.nccs.caching.{CachePartition, Partition}
 import nasa.nccs.cdapi.cdm.{NetcdfDatasetMgr, RemapElem, TimeConversionSpec}
 import nasa.nccs.cdapi.tensors.{CDFloatArray, _}
-import nasa.nccs.cdas.engine.spark.{RangePartitioner, RecordKey}
-import nasa.nccs.cdas.workers.TransVar
+import nasa.nccs.edas.engine.spark.{RangePartitioner, RecordKey}
+import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.esgf.process.{CDSection, TargetGrid}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import org.apache.spark.rdd.RDD
@@ -15,7 +15,7 @@ import java.util.Formatter
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import nasa.nccs.cdas.kernels.KernelContext
+import nasa.nccs.edas.kernels.KernelContext
 import ucar.ma2.{Index, IndexIterator}
 import ucar.nc2.dataset.{CoordinateAxis1DTime, NetcdfDataset}
 import ucar.nc2.time.{CalendarDate, CalendarPeriod}
@@ -27,7 +27,7 @@ import scala.collection.immutable.{SortedMap, TreeMap}
 import scala.collection.mutable.ListBuffer
 import scala.reflect.ClassTag
 
-// Developer API for integrating various data management and IO frameworks such as SIA-IO and CDAS-Cache.
+// Developer API for integrating various data management and IO frameworks such as SIA-IO and EDAS-Cache.
 // It is intended to be deployed on the master node of the analytics server (this is not a client API).
 
 object MetadataOps {

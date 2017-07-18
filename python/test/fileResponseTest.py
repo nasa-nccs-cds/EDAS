@@ -1,7 +1,7 @@
-from pycdas.portal.cdas import *
+from pyedas.portal.edas import *
 import time, sys, cdms2, os
 import pandas as pd
-from pycdas.portal.cdas import *
+from pyedas.portal.edas import *
 import matplotlib.pyplot as plt
 
 startServer = False
@@ -13,7 +13,7 @@ server = "localhost"
 
 try:
 
-    portal = CDASPortal(ConnectionMode.CONNECT, server, request_port, response_port)
+    portal = EDASPortal(ConnectionMode.CONNECT, server, request_port, response_port)
     response_manager = portal.createResponseManager()
 
     t0 = time.time()

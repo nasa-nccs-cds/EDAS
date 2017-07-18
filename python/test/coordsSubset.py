@@ -1,6 +1,6 @@
 import cdms2
 
-gridFilePath = '/Users/thomas/.cdas/cache/collections/NCML/giss_r1i1p1.nc'
+gridFilePath = '/Users/thomas/.edas/cache/collections/NCML/giss_r1i1p1.nc'
 gridfile = cdms2.open( gridFilePath )
 dimensions = ['time', 'lat', 'lon']
 axes = [ gridfile.axes.get(dim) for dim in dimensions ]

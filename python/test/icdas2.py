@@ -22,7 +22,7 @@
 #         subAxes.append( axes[index].subAxis( start, start + length) )
 #     return subAxes
 #
-# class ICDAS(object):
+# class IEDAS(object):
 #
 #     def __init__(self, part_index, data_port ):
 #         self.logger = self.getLogger(part_index)
@@ -132,7 +132,7 @@
 #         return variable
 #
 #     def getLogger( self, index ):
-#         logger = logging.getLogger('ICDAS')
+#         logger = logging.getLogger('IEDAS')
 #         handler = logging.FileHandler( self.getLogFile(index) )
 #         formatter = logging.Formatter('\t\t%(asctime)s %(levelname)s %(message)s')
 #         handler.setFormatter(formatter)
@@ -141,13 +141,13 @@
 #         return logger
 #
 #     def getLogFile( self, index ):
-#         log_file = os.path.expanduser('~/.cdas/pycdas-{0}.log'.format(index))
+#         log_file = os.path.expanduser('~/.edas/pyedas-{0}.log'.format(index))
 #         try: os.remove(log_file)
 #         except Exception: pass
 #         return log_file
 #
 #     class Java:
-#         implements = ["nasa.nccs.cdas.workers.ICDAS"]
+#         implements = ["nasa.nccs.edas.workers.IEDAS"]
 #
 # part_index = getIntArg(1,0)
 # java_port = getIntArg(2,8201 )
@@ -155,14 +155,14 @@
 # data_port = getIntArg(4,8202)
 # java_parms = JavaParameters(DEFAULT_ADDRESS,java_port,True,True,True)
 # python_parms = PythonParameters(DEFAULT_ADDRESS,python_port)
-# icdas = ICDAS( part_index, data_port )
+# iedas = IEDAS( part_index, data_port )
 #
-# icdas.logger.info( " Running ICDAS-{0} on ports: {1} {2}".format( part_index, java_port, python_port ) )
+# iedas.logger.info( " Running IEDAS-{0} on ports: {1} {2}".format( part_index, java_port, python_port ) )
 # try:
-#     gateway = ClientServer( java_parameters=java_parms, python_parameters=python_parms, python_server_entry_point=icdas)
+#     gateway = ClientServer( java_parameters=java_parms, python_parameters=python_parms, python_server_entry_point=iedas)
 #
 #
 # except Exception as err:
-#     icdas.logger.info("\n-------------------------------\nClientServer startup error: {0}\n{1}-------------------------------\n".format(err, traceback.format_exc()))
+#     iedas.logger.info("\n-------------------------------\nClientServer startup error: {0}\n{1}-------------------------------\n".format(err, traceback.format_exc()))
 #     sys.exit( -1 )
 #

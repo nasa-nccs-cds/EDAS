@@ -1,7 +1,7 @@
 package nasa.nccs.esgf.wps
 import nasa.nccs.caching.RDDTransientVariable
-import nasa.nccs.cdas.portal.CDASPortal.ConnectionMode
-import nasa.nccs.cdas.portal.CDASPortalClient
+import nasa.nccs.edas.portal.EDASPortal.ConnectionMode
+import nasa.nccs.edas.portal.EDASPortalClient
 import nasa.nccs.utilities.Loggable
 
 import scala.collection.JavaConversions._
@@ -53,32 +53,32 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
-    logger.info( "CDAS ProcessManager-> getResultFile: " + resultId)
+    logger.info( "EDAS ProcessManager-> getResultFile: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
     serviceProvider.getResultFilePath(resultId)
   }
 
   def getResult( service: String, resultId: String ): xml.Node = {
-    logger.info( "CDAS ProcessManager-> getResult: " + resultId)
+    logger.info( "EDAS ProcessManager-> getResult: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
     serviceProvider.getResult(resultId)
   }
 
   def getResultVariable( service: String, resultId: String ): Option[RDDTransientVariable] = {
-    logger.info( "CDAS ProcessManager-> getResult: " + resultId)
+    logger.info( "EDAS ProcessManager-> getResult: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
     serviceProvider.getResultVariable(resultId)
   }
 
   def getResultStatus( service: String, resultId: String ): xml.Node = {
-    logger.info( "CDAS ProcessManager-> getResult: " + resultId)
+    logger.info( "EDAS ProcessManager-> getResult: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
     serviceProvider.getResultStatus(resultId)
   }
 }
 
 class zmqProcessManager( serverConfiguration: Map[String,String] )  extends GenericProcessManager with Loggable {
-  val portal = new CDASPortalClient( ConnectionMode.BIND, "localhost", 5670, 5671 )
+  val portal = new EDASPortalClient( ConnectionMode.BIND, "localhost", 5670, 5671 )
   val response_manager = portal.createResponseManager()
 
   def unacceptable(msg: String) = {

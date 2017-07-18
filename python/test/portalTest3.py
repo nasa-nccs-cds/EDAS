@@ -1,10 +1,10 @@
-from pycdas.portal.cdas import CDASPortal
+from pyedas.portal.edas import EDASPortal
 import time
 
 try:
-    portal = CDASPortal()
+    portal = EDASPortal()
     response_manager = portal.createResponseManager()
-    portal.start_CDAS()
+    portal.start_EDAS()
     time.sleep(4)
     rId = portal.sendMessage("getCapabilities", [ "WPS" ] )
 #    rId = portal.sendMessage("describeProcess", [ "numpymodule.ptp" ] )

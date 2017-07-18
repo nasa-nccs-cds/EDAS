@@ -3,7 +3,7 @@ package nasa.nccs.wps
 import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.cdapi.data.{RDDRecord}
 import nasa.nccs.cdapi.tensors.CDFloatArray
-import nasa.nccs.cdas.utilities.appParameters
+import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.{DataFragmentSpec, TargetGrid}
 import nasa.nccs.utilities.Loggable
 import scala.xml
@@ -48,7 +48,7 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
     case ResponseSyntax.WPS =>
       <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA">
         <wps:Status>
-          <wps:ProcessSucceeded>CDAS Process successfully calculated</wps:ProcessSucceeded>
+          <wps:ProcessSucceeded>EDAS Process successfully calculated</wps:ProcessSucceeded>
         </wps:Status>
         <wps:ProcessOutputs>
           {tvar.result.elements.map { case (id, result) =>
@@ -108,7 +108,7 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
     case ResponseSyntax.WPS =>
       <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" serviceInstance={serviceInstance} statusLocation={proxyAddress}>
         {processes.map(_.ExecuteHeader)}<wps:Status>
-        <wps:ProcessStarted>CDAS Process executing</wps:ProcessStarted>
+        <wps:ProcessStarted>EDAS Process executing</wps:ProcessStarted>
       </wps:Status>
         <wps:ProcessOutputs>
           {getOutputs}

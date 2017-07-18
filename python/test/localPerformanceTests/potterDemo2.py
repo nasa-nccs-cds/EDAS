@@ -1,9 +1,9 @@
-pth1='/home/tpmaxwel/.cdas/cache/cdscan/merra2_mon_ua.xml'
-pth2='/home/tpmaxwel/.cdas/cache/cdscan/merra_mon_ua.xml'
+pth1='/home/tpmaxwel/.edas/cache/cdscan/merra2_mon_ua.xml'
+pth2='/home/tpmaxwel/.edas/cache/cdscan/merra_mon_ua.xml'
 varin='ua'
 model1_name='MERRA2'
 model2_name='MERRA'
-outfile='/home/tpmaxwel/.cdas/cache/'
+outfile='/home/tpmaxwel/.edas/cache/'
 plot_title='MERRA2 (top) MERRA zonal averaged DJF U winds'
 ###########################   END of SETUP    ###############
 

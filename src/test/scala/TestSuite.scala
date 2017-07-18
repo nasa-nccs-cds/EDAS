@@ -2,10 +2,10 @@ import java.net.URI
 import java.nio.file.{Path, Paths}
 
 import nasa.nccs.cdapi.tensors.CDFloatArray
-import nasa.nccs.cdas.engine.spark.CDSparkContext
-import nasa.nccs.cdas.loaders.Collections
-import nasa.nccs.cdas.utilities.runtime
-import nasa.nccs.utilities.{CDASLogManager, Loggable}
+import nasa.nccs.edas.engine.spark.CDSparkContext
+import nasa.nccs.edas.loaders.Collections
+import nasa.nccs.edas.utilities.runtime
+import nasa.nccs.utilities.{EDASLogManager, Loggable}
 
 import scala.xml
 import scala.collection.JavaConversions._
@@ -16,13 +16,12 @@ import ucar.nc2.Variable
 import scala.collection.mutable.ListBuffer
 
 class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
-  CDASLogManager.testing
+  EDASLogManager.testing
   import nasa.nccs.cdapi.tensors.CDFloatArray
   import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
   import ucar.nc2.dataset.NetcdfDataset
   val serverConfiguration = Map[String,String]()
   val webProcessManager = new ProcessManager( serverConfiguration )
-  val scontext: CDSparkContext = webProcessManager.apiManager.providers.head._2.cds2ExecutionManager.serverContext.spark
   val nExp = 3
   val shutdown_after = false
   val use_6hr_data = false
@@ -33,8 +32,8 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   val service = "cds2"
   val run_args = Map("async" -> "false")
   val printer = new scala.xml.PrettyPrinter(200, 3)
-  val test_data_dir = sys.env.get("CDAS_HOME_DIR") match {
-    case Some(cdas_home) => Paths.get( cdas_home, "src", "test", "resources", "data" )
+  val test_data_dir = sys.env.get("EDAS_HOME_DIR") match {
+    case Some(edas_home) => Paths.get( edas_home, "src", "test", "resources", "data" )
     case None => Paths.get("")
   }
   after {
@@ -183,7 +182,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   }
 
   test("NCML-timeAveTestLocal") {
-    val data_file = "file:///Users/tpmaxwel/.cdas/cache/collections/NCML/MERRA2-6hr-ana_Np.200001.ncml"
+    val data_file = "file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA2-6hr-ana_Np.200001.ncml"
     val datainputs = s"""[domain=[{"name":"d0","lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":20,"end":20,"system":"indices"}}],variable=[{"uri":"%s","name":"T:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"t"}]]""".format( data_file )
     val result_node = executeTest( datainputs, Map("numParts"->"2") )
     val result_data = CDFloatArray( getResultData( result_node ) )
@@ -199,7 +198,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   }
 
   //  test("pyMaxTestLocal") {
-//    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"file:///Users/tpmaxwel/.cdas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"tzyx"}]]"""
+//    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"tzyx"}]]"""
 //    val result_node = executeTest(datainputs)
 //    val result_data = CDFloatArray( getResultData( result_node ) )
 //    println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
@@ -339,7 +338,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     }
 
 //  test("Maximum-local") {
-//    val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.cdas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
+//    val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
 //    val result_node = executeTest(datainputs, Map("response"->"file"))
 //    println("Op Result:       " + printer.format( result_node ) )// result_data.mkBoundedDataString("[ ",", "," ]",100))
 //  }
@@ -372,7 +371,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     }
 
   test("Seasons-filter") {
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":30,"end":50,"system":"indices"},"time":{"start":0,"end":200,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.cdas/cache/collections/NCML/giss_r1i1p1.xml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","axes":"xt","filter":"DJF"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":30,"end":50,"system":"indices"},"time":{"start":0,"end":200,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/giss_r1i1p1.xml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","axes":"xt","filter":"DJF"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = getResultData( result_node, true )
     println( "Op Result:       " + result_data.toDataString )
@@ -400,7 +399,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
   test("SpaceAve-dap") {
     val nco_verified_result: CDFloatArray = CDFloatArray( Array( 270.07922, 269.5924, 267.8264, 265.12802, 262.94022, 261.35474, 260.80325, 260.67126, 261.85434, 263.46478, 265.88184, 269.2312, 270.60336, 270.05328, 267.67136, 265.6528, 263.22043, 262.25778, 261.28976, 261.22495, 260.86606, 263.05197, 265.86447, 269.4156, 270.377, 269.69855, 267.54056, 264.81995, 263.0417, 261.2425, 260.65546, 260.83783, 261.6036, 263.3008, 265.84967 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.cdas/cache/collections/NCML/giss_e2_r_r3i1p1.xml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/giss_e2_r_r3i1p1.xml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"xy"}]]"""
     val result_node = executeTest( datainputs, Map("numParts"->"4") )
     val result_data = getResultData( result_node ).sample(35)
     println( "Op Result:       " + result_data.mkBoundedDataString(", ", 35) )
@@ -669,8 +668,8 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   }
 }
 
-class CDASDemoTestSuite extends FunSuite with Loggable with BeforeAndAfter {
-  CDASLogManager.testing
+class EDASDemoTestSuite extends FunSuite with Loggable with BeforeAndAfter {
+  EDASLogManager.testing
   import nasa.nccs.cdapi.tensors.CDFloatArray
   import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
   import ucar.nc2.dataset.NetcdfDataset
@@ -702,7 +701,7 @@ class CDASDemoTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 }
 /*
 
-@Ignore class CDASMainTestSuite extends TestSuite(0, 0, 0f, 0f ) with Loggable {
+@Ignore class EDASMainTestSuite extends TestSuite(0, 0, 0f, 0f ) with Loggable {
 //  Collections.addCollection( "merra.test", merra_data, "MERRA data", List("ta") )
 //  Collections.addCollection( "const.test", const_data, "Constant data", List("ta") )
 
@@ -883,7 +882,7 @@ class CDASDemoTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val result_array = CDFloatArray( Array( result_values.length ), result_values, Float.MaxValue )
     val computed_result = computeCycle( direct_result_array, 12 )
     val max_scaled_diff = result_array.maxScaledDiff( computed_result)
-    printf( "    cdas result: " + result_array.mkDataString(",") + "\n" )
+    printf( "    edas result: " + result_array.mkDataString(",") + "\n" )
     printf( "computed result: " + computed_result.mkDataString(",") + "\n *** max_scaled_diff = " + max_scaled_diff )
     assert(max_scaled_diff < eps, s" Incorrect series computed for Yearly Cycle")
   }
@@ -901,7 +900,7 @@ class CDASDemoTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val result_array = CDFloatArray( Array( result_values.length ), result_values, Float.MaxValue )
     val computed_result = computeCycle( direct_result_array, 12 )
     val max_scaled_diff = result_array.maxScaledDiff( computed_result )
-    printf( "    cdas result: " + result_array.mkDataString(",") + "\n" )
+    printf( "    edas result: " + result_array.mkDataString(",") + "\n" )
     printf( "computed result: " + computed_result.mkDataString(",") + "\n *** max_scaled_diff = " + max_scaled_diff )
     assert(max_scaled_diff < eps, s" Incorrect series computed for Yearly Cycle")
   }

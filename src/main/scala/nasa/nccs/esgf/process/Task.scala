@@ -1,19 +1,19 @@
 package nasa.nccs.esgf.process
 
-import nasa.nccs.caching.{CDASPartitioner, JobRecord}
+import nasa.nccs.caching.{EDASPartitioner, JobRecord}
 import nasa.nccs.cdapi.cdm.{CDSVariable, Collection, PartitionedFragment}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import nasa.nccs.cdapi.tensors.{CDCoordMap, CDFloatArray}
-import nasa.nccs.cdas.loaders.Collections
+import nasa.nccs.edas.loaders.Collections
 import ucar.{ma2, nc2}
 import org.joda.time.{DateTime, DateTimeZone}
 import nasa.nccs.utilities.Loggable
 import java.util.UUID
 
 import nasa.nccs.cdapi.data.RDDVariableSpec
-import nasa.nccs.cdas.engine.spark.{RecordKey, RecordKey$}
-import nasa.nccs.cdas.engine.{CDS2ExecutionManager, Workflow}
-import nasa.nccs.cdas.kernels.AxisIndices
+import nasa.nccs.edas.engine.spark.{RecordKey, RecordKey$}
+import nasa.nccs.edas.engine.{CDS2ExecutionManager, Workflow}
+import nasa.nccs.edas.kernels.AxisIndices
 import nasa.nccs.esgf.process.OperationContext.OpResultType
 
 import scala.collection.JavaConversions._

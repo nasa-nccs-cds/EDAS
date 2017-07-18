@@ -21,7 +21,7 @@
 //    val pythonFile = args(0)
 //    val pyFiles = args(1)
 //    val otherArgs = args.slice(2, args.length)
-//    val pythonExec = sys.env.getOrElse("CDAS_DRIVER_PYTHON", sys.env.getOrElse("CDAS_PYTHON", "python"))
+//    val pythonExec = sys.env.getOrElse("EDAS_DRIVER_PYTHON", sys.env.getOrElse("EDAS_PYTHON", "python"))
 //
 //    // Format python file paths before adding them to the PYTHONPATH
 //    val formattedPythonFile = formatPath(pythonFile)

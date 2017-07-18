@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 source ~/.bash_profile
-CDAS_WORKER=${CDAS_HOME_DIR}/python/src/pycdas/worker.py
+EDAS_WORKER=${EDAS_HOME_DIR}/python/src/pyedas/worker.py
 echo "Running Python worker: "
-echo ${CDAS_WORKER}
-python ${CDAS_WORKER} $*
+echo ${EDAS_WORKER}
+python ${EDAS_WORKER} $*
 
 
 

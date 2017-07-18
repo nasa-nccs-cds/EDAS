@@ -1,4 +1,4 @@
-from pycdas.portal.cdas import *
+from pyedas.portal.edas import *
 import zmq
 
 request_port = 5670

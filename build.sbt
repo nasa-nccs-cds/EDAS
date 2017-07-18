@@ -8,14 +8,14 @@ import sbt.{SettingKey, _}
 
 val kernelPackages = settingKey[ Seq[String] ]("A list of user-defined Kernel packages")
 
-name := "CDAS2"
+name := "EDAS2"
 version := "1.2.2-SNAPSHOT"
 scalaVersion := "2.10.5"
 organization := "nasa.nccs"
 
 lazy val root = project in file(".")
 val sbtcp = taskKey[Unit]("sbt-classpath")
-val upscr = taskKey[Unit]("update-cdas-scripts")
+val upscr = taskKey[Unit]("update-edas-scripts")
 
 resolvers += "Unidata maven repository" at "http://artifacts.unidata.ucar.edu/content/repositories/unidata-releases"
 resolvers += "Java.net repository" at "http://download.java.net/maven/2"
@@ -29,8 +29,8 @@ resolvers += "Maven Central" at "http://central.maven.org/maven2/"
 
 enablePlugins(JavaAppPackaging)
 
-mainClass in (Compile, run) := Some("nasa.nccs.cdas.portal.CDASApplication")
-mainClass in (Compile, packageBin) := Some("nasa.nccs.cdas.portal.CDASApplication")
+mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
+mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
 libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
 
@@ -61,34 +61,34 @@ javaOptions in test ++= Seq( "-Xmx8000M", "-Xms512M", "-Xss1M", "-XX:+CMSClassUn
 ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
 
 import java.util.Properties
-lazy val cdasPropertiesFile = settingKey[File]("The cdas properties file")
-lazy val cdasDefaultPropertiesFile = settingKey[File]("The cdas defaultproperties file")
-lazy val cdasPythonRunScript = settingKey[File]("The cdas python worker startup script")
-lazy val cdasDefaultPythonRunScript = settingKey[File]("The default cdas python worker startup script")
-lazy val cdasStandaloneRunScript = settingKey[File]("The cdas spark-cluster startup script")
-lazy val cdasDefaultStandaloneRunScript = settingKey[File]("The default cdas spark-cluster startup script")
-lazy val cdasPythonShutdownScript = settingKey[File]("The cdas python worker shutdown script")
-lazy val cdasDefaultPythonShutdownScript = settingKey[File]("The default cdas python worker shutdown script")
-lazy val cdasSetupScript = settingKey[File]("The cdas setup runtime script")
-lazy val cdasDefaultSetupScript = settingKey[File]("The default cdas setup runtime script")
-lazy val cdasLocalCollectionsFile = settingKey[File]("The cdas local Collections file")
-lazy val cdas_cache_dir = settingKey[File]("The CDAS cache directory.")
-lazy val cdas_conf_dir = settingKey[File]("The CDAS conf directory.")
-lazy val cdas_sbin_dir = settingKey[File]("The CDAS sbin directory.")
-lazy val cdas_logs_dir = settingKey[File]("The CDAS logs directory.")
+lazy val edasPropertiesFile = settingKey[File]("The edas properties file")
+lazy val edasDefaultPropertiesFile = settingKey[File]("The edas defaultproperties file")
+lazy val edasPythonRunScript = settingKey[File]("The edas python worker startup script")
+lazy val edasDefaultPythonRunScript = settingKey[File]("The default edas python worker startup script")
+lazy val edasStandaloneRunScript = settingKey[File]("The edas spark-cluster startup script")
+lazy val edasDefaultStandaloneRunScript = settingKey[File]("The default edas spark-cluster startup script")
+lazy val edasPythonShutdownScript = settingKey[File]("The edas python worker shutdown script")
+lazy val edasDefaultPythonShutdownScript = settingKey[File]("The default edas python worker shutdown script")
+lazy val edasSetupScript = settingKey[File]("The edas setup runtime script")
+lazy val edasDefaultSetupScript = settingKey[File]("The default edas setup runtime script")
+lazy val edasLocalCollectionsFile = settingKey[File]("The edas local Collections file")
+lazy val edas_cache_dir = settingKey[File]("The EDAS cache directory.")
+lazy val edas_conf_dir = settingKey[File]("The EDAS conf directory.")
+lazy val edas_sbin_dir = settingKey[File]("The EDAS sbin directory.")
+lazy val edas_logs_dir = settingKey[File]("The EDAS logs directory.")
 lazy val conda_lib_dir = settingKey[File]("The Conda lib directory.")
-val cdasProperties = settingKey[Properties]("The cdas properties map")
+val edasProperties = settingKey[Properties]("The edas properties map")
 
-cdas_conf_dir := baseDirectory.value / "src" / "universal" / "conf"
-cdas_sbin_dir := getCDASbinDir
-cdas_logs_dir := getCDASlogsDir
+edas_conf_dir := baseDirectory.value / "src" / "universal" / "conf"
+edas_sbin_dir := getEDASbinDir
+edas_logs_dir := getEDASlogsDir
 conda_lib_dir := getCondaLibDir
 
 unmanagedJars in Compile ++= {
-  sys.env.get("CDAS_UNMANAGED_JARS") match {
+  sys.env.get("EDAS_UNMANAGED_JARS") match {
     case Some(jars_dir) =>
       val customJars: PathFinder =  file(jars_dir) ** (("*.jar" -- "*netcdf*") -- "*concurrentlinkedhashmap*")
-      val classpath_file = cdas_cache_dir.value / "classpath.txt"
+      val classpath_file = edas_cache_dir.value / "classpath.txt"
       val pw = new PrintWriter( classpath_file )
       val jars_list = customJars.getPaths.mkString("\n")
       pw.write( jars_list )
@@ -110,46 +110,46 @@ unmanagedClasspath in (Compile, runMain) ++= Seq( conda_lib_dir.value )
 classpathTypes += "dylib"
 classpathTypes += "so"
 
-stage ~= { (file: File) => cdas2Patch( file / "bin" / "cdas2" ); file }
-// lazy val cdasGlobalCollectionsFile = settingKey[File]("The cdas global Collections file")
+stage ~= { (file: File) => edas2Patch( file / "bin" / "edas" ); file }
+// lazy val edasGlobalCollectionsFile = settingKey[File]("The edas global Collections file")
 
-cdas_cache_dir := getCacheDir()
-cdasPropertiesFile := cdas_cache_dir.value / "cdas.properties"
-cdasDefaultPropertiesFile := baseDirectory.value / "project" / "cdas.properties"
-cdasPythonRunScript := cdas_sbin_dir.value / "startup_python_worker.sh"
-cdasDefaultPythonRunScript := baseDirectory.value / "bin" / "startup_python_worker.sh"
-cdasStandaloneRunScript := cdas_sbin_dir.value / "startup_cdas_standalone.sh"
-cdasDefaultStandaloneRunScript := baseDirectory.value / "bin" / "startup_cdas_standalone.sh"
-cdasPythonShutdownScript := cdas_sbin_dir.value / "shutdown_python_worker.sh"
-cdasDefaultPythonShutdownScript := baseDirectory.value / "bin" / "shutdown_python_worker.sh"
-cdasSetupScript := cdas_sbin_dir.value / "setup_runtime.sh"
-cdasDefaultSetupScript := baseDirectory.value / "bin" / "setup_runtime.sh"
+edas_cache_dir := getCacheDir()
+edasPropertiesFile := edas_cache_dir.value / "edas.properties"
+edasDefaultPropertiesFile := baseDirectory.value / "project" / "edas.properties"
+edasPythonRunScript := edas_sbin_dir.value / "startup_python_worker.sh"
+edasDefaultPythonRunScript := baseDirectory.value / "bin" / "startup_python_worker.sh"
+edasStandaloneRunScript := edas_sbin_dir.value / "startup_edas_standalone.sh"
+edasDefaultStandaloneRunScript := baseDirectory.value / "bin" / "startup_edas_standalone.sh"
+edasPythonShutdownScript := edas_sbin_dir.value / "shutdown_python_worker.sh"
+edasDefaultPythonShutdownScript := baseDirectory.value / "bin" / "shutdown_python_worker.sh"
+edasSetupScript := edas_sbin_dir.value / "setup_runtime.sh"
+edasDefaultSetupScript := baseDirectory.value / "bin" / "setup_runtime.sh"
 
-cdasProperties := {
+edasProperties := {
   val prop = new Properties()
   try{
-     println("Loading property file: " + cdasPropertiesFile.value.toString )
-    IO.load( prop, cdasPropertiesFile.value )
+     println("Loading property file: " + edasPropertiesFile.value.toString )
+    IO.load( prop, edasPropertiesFile.value )
   } catch {
-    case err: Exception => println("No property file found: " + cdasPropertiesFile.value.toString )
+    case err: Exception => println("No property file found: " + edasPropertiesFile.value.toString )
   }
   prop
 }
 
 upscr := {
-  if( !cdasPropertiesFile.value.exists() ) {
-    println("Copying default property file: " + cdasDefaultPropertiesFile.value.toString )
-    copy( cdasDefaultPropertiesFile.value.toPath, cdasPropertiesFile.value.toPath )
+  if( !edasPropertiesFile.value.exists() ) {
+    println("Copying default property file: " + edasDefaultPropertiesFile.value.toString )
+    copy( edasDefaultPropertiesFile.value.toPath, edasPropertiesFile.value.toPath )
   }
-  println("Copying default python run script: " + cdasDefaultPythonRunScript.value.toString)
-  copy( cdasDefaultPythonRunScript.value.toPath, cdasPythonRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
-  println("Copying default python shutdown script: " + cdasDefaultPythonShutdownScript.value.toString )
-  copy( cdasDefaultPythonShutdownScript.value.toPath, cdasPythonShutdownScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
-  println("Copying default cdas spark-cluster startup script: " + cdasDefaultStandaloneRunScript.value.toString  + " to " + cdasStandaloneRunScript.value.toString )
-  copy( cdasDefaultStandaloneRunScript.value.toPath, cdasStandaloneRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
-  if( !cdasSetupScript.value.exists() ) {
-    println("Copying default setup script: " + cdasDefaultSetupScript.value.toString )
-    copy( cdasDefaultSetupScript.value.toPath, cdasSetupScript.value.toPath )
+  println("Copying default python run script: " + edasDefaultPythonRunScript.value.toString)
+  copy( edasDefaultPythonRunScript.value.toPath, edasPythonRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
+  println("Copying default python shutdown script: " + edasDefaultPythonShutdownScript.value.toString )
+  copy( edasDefaultPythonShutdownScript.value.toPath, edasPythonShutdownScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
+  println("Copying default edas spark-cluster startup script: " + edasDefaultStandaloneRunScript.value.toString  + " to " + edasStandaloneRunScript.value.toString )
+  copy( edasDefaultStandaloneRunScript.value.toPath, edasStandaloneRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
+  if( !edasSetupScript.value.exists() ) {
+    println("Copying default setup script: " + edasDefaultSetupScript.value.toString )
+    copy( edasDefaultSetupScript.value.toPath, edasSetupScript.value.toPath )
   }
 }
 
@@ -157,40 +157,40 @@ compile  <<= (compile in Compile).dependsOn(upscr)
 
 def getCondaLibDir(): File = sys.env.get("CONDA_PREFIX") match {
   case Some(ldir) => file(ldir) / "lib"
-  case None => throw new Exception( "Must activate the cdas2 environment in Anaconda: '>> source activate cdas2' ")
+  case None => throw new Exception( "Must activate the edas environment in Anaconda: '>> source activate edas' ")
 }
 
 def getCacheDir(): File = {
-  val cache_dir = sys.env.get("CDAS_CACHE_DIR") match {
+  val cache_dir = sys.env.get("EDAS_CACHE_DIR") match {
     case Some(cache_dir) => file(cache_dir)
-    case None => file(System.getProperty("user.home")) / ".cdas" / "cache";
+    case None => file(System.getProperty("user.home")) / ".edas" / "cache";
   }
   val ncml_dir = cache_dir / "collections" / "NCML";
   ncml_dir.mkdirs();
   cache_dir
 }
 
-def getCDASbinDir(): File = {
-  val bin_dir =  file(System.getProperty("user.home")) / ".cdas" / "sbin";
+def getEDASbinDir(): File = {
+  val bin_dir =  file(System.getProperty("user.home")) / ".edas" / "sbin";
   bin_dir.mkdirs();
   bin_dir
 }
 
-def getCDASlogsDir(): File = {
-  val log_dir =  file(System.getProperty("user.home")) / ".cdas" / "logs";
+def getEDASlogsDir(): File = {
+  val log_dir =  file(System.getProperty("user.home")) / ".edas" / "logs";
   log_dir.mkdirs();
   log_dir
 }
 
-cdasLocalCollectionsFile :=  {
-  val collections_file = cdas_cache_dir.value / "local_collections.xml"
+edasLocalCollectionsFile :=  {
+  val collections_file = edas_cache_dir.value / "local_collections.xml"
   if( !collections_file.exists ) { xml.XML.save( collections_file.getAbsolutePath, <collections></collections> ) }
   collections_file
 }
 
-//cdasGlobalCollectionsFile := {
+//edasGlobalCollectionsFile := {
 //  val collections_file = baseDirectory.value / "src" / "main" / "resources" / "global_collections.xml"
-//  val collections_install_path = cdas_cache_dir.value / "global_collections.xml"
+//  val collections_install_path = edas_cache_dir.value / "global_collections.xml"
 //  if( !collections_install_path.exists() ) { copy( collections_file.toPath, collections_install_path.toPath ) }
 //  collections_install_path
 //}

@@ -1,7 +1,7 @@
 package nasa.nccs.cdapi.cdm
 import nasa.nccs.cdapi.data.HeapFltArray
 import nasa.nccs.cdapi.tensors.CDFloatArray
-import nasa.nccs.cdas.engine.spark.{RecordKey, RecordKey$}
+import nasa.nccs.edas.engine.spark.{RecordKey, RecordKey$}
 import nasa.nccs.utilities.Loggable
 import ucar.nc2.dataset.CoordinateAxis1DTime
 import ucar.ma2

@@ -1,6 +1,6 @@
-###                                CDS2 Project
+###                                EDAS Project
 
-_Climate Data Analytic Service provider built on scala, Spark, Akka, Haddop, and python tools such as UVCDAT, etc._
+_Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and python tools such as UVCDAT, etc._
 
 ####  Prerequisite: Install the Java/Scala develpment tools:
 
@@ -8,16 +8,16 @@ _Climate Data Analytic Service provider built on scala, Spark, Akka, Haddop, and
     2) Scala:                        http://www.scala-lang.org/download/install.html
     3) Scala Build Tool (sbt):       http://www.scala-sbt.org/0.13/docs/Setup.html
 
-####  Install and run CDS2:
+####  Install and run EDAS:
 
-    1) Checkout the CDS2 sources:
+    1) Checkout the EDAS sources:
 
         >> cd <prefix>
-        >> git clone https://github.com/nasa-nccs-cds/CDAS2.git 
+        >> git clone https://github.com/nasa-nccs-cds/EDAS.git 
 
     2) Build the application (for a clean build one can execute "sbt clean" before "sbt package"):
 
-        >> cd CDAS2
+        >> cd EDAS
         >> sbt package
 
      3) Run unit tests:
@@ -26,12 +26,12 @@ _Climate Data Analytic Service provider built on scala, Spark, Akka, Haddop, and
 
      4) Source the setup file to configure the runtime environment:
 
-        >> source <prefix>/CDAS2/bin/setup_runtime.sh
+        >> source <prefix>/EDAS/bin/setup_runtime.sh
 
-     6) Startup the CDAS server:
+     6) Startup the EDAS server:
      
-        >> cd CDAS2
-        >> ./bin/startup_cdas_local.sh
+        >> cd EDAS
+        >> ./bin/startup_edas_local.sh
 
      7) Access demos:
 
@@ -41,30 +41,25 @@ _Climate Data Analytic Service provider built on scala, Spark, Akka, Haddop, and
 
     1) Install Anaconda: https://github.com/UV-CDAT/uvcdat/wiki/Install-using-Anaconda
     
-    2) Create cdas2 conda environment:
+    2) Create EDAS conda environment:
         
-        >> conda create -n cdas -c conda-forge -c uvcdat uvcdat nco pyzmq psutil lxml
+        >> conda create -n edas -c conda-forge -c uvcdat uvcdat nco pyzmq psutil lxml
         
-    3) Initialize shell enviromnment for cdas:
+    3) Initialize shell enviromnment for edas:
     
-        >> source <prefix>/CDAS2/bin/setup_runtime.sh
-        >> source activate cdas
+        >> source <prefix>/EDAS/bin/setup_runtime.sh
+        >> source activate edas
         
-    4) Build CDAS python pacakges:
+    4) Build EDAS python pacakges:
     
-        >> cd CDAS
+        >> cd EDAS
         >> python setup.py
 
 ####  Code development:
 
     1) Install IntelliJ IDEA CE from https://www.jetbrains.com/idea/download/ with Scala plugin enabled.
     
-    2) Start IDEA and import the CDAS2 Project from Version Control (github) using the address https://github.com/nasa-nccs-cds/CDAS2.git.
-    
-####  Acknowledgements:
-
-    CDAS uses the YourKit profiler (https://www.yourkit.com/java/profiler/), by YourKit, LLC, which supports 
-    open source projects with innovative and intelligent tools for profiling Java and .Net applications.
-    
+    2) Start IDEA and import the EDAS Project from Version Control (github) using the address https://github.com/nasa-nccs-cds/EDAS.git.
+        
     
 

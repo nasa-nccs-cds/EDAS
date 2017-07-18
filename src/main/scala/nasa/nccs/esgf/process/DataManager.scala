@@ -9,10 +9,10 @@ import java.util.Formatter
 
 import nasa.nccs.cdapi.data._
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
-import nasa.nccs.cdas.engine.WorkflowNode
-import nasa.nccs.cdas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey, RecordKey$}
-import nasa.nccs.cdas.kernels.{AxisIndices, KernelContext}
-import nasa.nccs.cdas.utilities.appParameters
+import nasa.nccs.edas.engine.WorkflowNode
+import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey, RecordKey$}
+import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
+import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}
 import org.apache.spark.rdd.RDD
@@ -546,7 +546,7 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
           val fragFut = cacheInputData( fragSpec, partsConfig, Some(workflowNode) )
           Await.result( fragFut, Duration.Inf )
         }
-        else { new CDASDirectDataInput( fragSpec, partsConfig, workflowNode ) }
+        else { new EDASDirectDataInput( fragSpec, partsConfig, workflowNode ) }
     }
   }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source $HOME/.cdas/sbin/setup_runtime.sh
-source activate cdas
-python -m pycdas.worker $*
+source $HOME/.edas/sbin/setup_runtime.sh
+source activate edas
+python -m pyedas.worker $*
 

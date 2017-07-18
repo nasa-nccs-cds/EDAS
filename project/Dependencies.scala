@@ -63,7 +63,7 @@ object Dependencies {
 }
 
 
-object cdas2Patch {
+object edas2Patch {
   def apply( filePath: sbt.File ) = {
     import scala.io.Source
     import java.io

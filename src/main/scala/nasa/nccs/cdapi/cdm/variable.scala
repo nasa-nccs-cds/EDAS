@@ -3,8 +3,8 @@ package nasa.nccs.cdapi.cdm
 import nasa.nccs.caching._
 import nasa.nccs.cdapi.data._
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray, CDIndexMap}
-import nasa.nccs.cdas.engine.WorkflowNode
-import nasa.nccs.cdas.engine.spark.RecordKey
+import nasa.nccs.edas.engine.WorkflowNode
+import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.esgf.process.DomainContainer.{filterMap, key_equals}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
 import nasa.nccs.esgf.utilities.wpsNameMatchers
@@ -161,9 +161,9 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
     }
 }
 
-class CDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {
-  def getPartitioner( optSection: Option[ma2.Section] = None ): Option[CDASPartitioner] = domainSection( optSection ) map {
-    case( frag1, section) => new CDASPartitioner( section, partsConfig, Some(workflowNode), fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
+class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {
+  def getPartitioner( optSection: Option[ma2.Section] = None ): Option[EDASPartitioner] = domainSection( optSection ) map {
+    case( frag1, section) => new EDASPartitioner( section, partsConfig, Some(workflowNode), fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
   }
   override def data(partIndex: Int ): CDFloatArray = {
     CDFloatArray.empty
@@ -228,7 +228,7 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
 //    }
 //  }
 
-//  def domainDataFragment( partIndex: Int, context: CDASExecutionContext ): Option[DataFragment] = {
+//  def domainDataFragment( partIndex: Int, context: EDASExecutionContext ): Option[DataFragment] = {
 //    val optSection: Option[ma2.Section] = context.getOpSections match {
 //      case None => return None
 //      case Some( sections ) =>

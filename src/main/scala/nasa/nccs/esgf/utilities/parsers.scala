@@ -42,7 +42,7 @@ object wpsNameMatchers {
 }
 
 //object readTest extends App {
-//  val filename = "/Users/tpmaxwel/.cdas/cache/ncdump.test"
+//  val filename = "/Users/tpmaxwel/.edas/cache/ncdump.test"
 //  var timeData = false
 //  var elem_count: Int = 0
 //  for (line <- Source.fromFile(filename).getLines) {

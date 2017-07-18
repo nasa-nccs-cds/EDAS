@@ -12,11 +12,11 @@ import java.util.Formatter
 import scala.xml
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
-import nasa.nccs.caching.{CDASCachePartitioner, CDASPartitioner}
+import nasa.nccs.caching.{EDASCachePartitioner, EDASPartitioner}
 import nasa.nccs.cdapi.data.HeapFltArray
 import nasa.nccs.cdapi.tensors.{CDDoubleArray, CDFloatArray, CDLongArray}
-import nasa.nccs.cdas.loaders.XmlResource
-import nasa.nccs.cdas.utilities.{appParameters, runtime}
+import nasa.nccs.edas.loaders.XmlResource
+import nasa.nccs.edas.utilities.{appParameters, runtime}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset._
@@ -28,9 +28,9 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 import scala.xml.XML
-import nasa.nccs.cdas.loaders.Collections
-import nasa.nccs.cdas.workers.TransVar
-import nasa.nccs.cdas.workers.python.{PythonWorker, PythonWorkerPortal}
+import nasa.nccs.edas.loaders.Collections
+import nasa.nccs.edas.workers.TransVar
+import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
 import nasa.nccs.esgf.process.{CDSection, DataSource}
 import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
 import ucar.nc2._
@@ -432,7 +432,7 @@ object DiskCacheFileMgr extends XmlResource {
         })
       Map(tuples.flatten: _*)
     } catch {
-      case err: Throwable => Map( "main"->"~/.cdas2/cache" )
+      case err: Throwable => Map( "main"->"~/.edas2/cache" )
     }
   }
 }
@@ -623,7 +623,7 @@ class bigDataTest extends Loggable {
   val service = "cds2"
 
 //  def main(args: Array[String]): Unit = {
-//    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"file://att/gpfsfs/ffs2004/ppl/tpmaxwel/cdas/cache/collections/NCML/npana.xml","name":"T:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"tz"}]]"""
+//    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"file://att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/collections/NCML/npana.xml","name":"T:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"tz"}]]"""
 //    val result_node = executeTest(datainputs)
 ////    val result_data = getResultData( result_node )
 //  }
@@ -693,7 +693,7 @@ class profilingTest extends Loggable {
   }
 
 //  def processCacheData(cache_id: String, roi: ma2.Section) = {
-//    val partitioner = new CDASCachePartitioner(cache_id, roi)
+//    val partitioner = new EDASCachePartitioner(cache_id, roi)
 //    val t0 = System.nanoTime()
 //    val full_shape = partitioner.getShape
 //    var total_read_time = 0.0
@@ -818,8 +818,8 @@ class profilingTest extends Loggable {
   }
 
 //  def main(args: Array[String]): Unit = {
-//    val ncmlFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/cdas/cache/collections/NCML/npana.xml"
-//    val gridFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/cdas/cache/collections/NCML/npana.nc"
+//    val ncmlFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/collections/NCML/npana.xml"
+//    val gridFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/collections/NCML/npana.nc"
 //    val cache_id = "a3298cb50c2abb"
 //    val varName = "T"
 //    val iLevel = 10
@@ -832,16 +832,16 @@ class profilingTest extends Loggable {
 
 class ncReadTest extends Loggable {
 
-  import nasa.nccs.cdas.utilities.runtime
+  import nasa.nccs.edas.utilities.runtime
   import java.nio.channels.FileChannel
   import java.nio.file.StandardOpenOption._
   import TestType._
 
-  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/cdas/cache/NCML/merra_daily_2005.xml"
-//  val outputFile = "/Users/tpmaxwel/.cdas/cache/test/testBinaryFile.out"
-  val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/cdas/cache/test/testBinaryFile.out"
-//  val outputNcFile = "/Users/tpmaxwel/.cdas/cache/test/testFile.nc"
-  val outputNcFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/cdas/cache/test/testFile.nc"
+  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/NCML/merra_daily_2005.xml"
+//  val outputFile = "/Users/tpmaxwel/.edas/cache/test/testBinaryFile.out"
+  val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/test/testBinaryFile.out"
+//  val outputNcFile = "/Users/tpmaxwel/.edas/cache/test/testFile.nc"
+  val outputNcFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/test/testFile.nc"
   val bufferSize: Int = -1
   val varName = "t"
   val shape = getShape(url, varName)
@@ -1000,17 +1000,17 @@ object NetcdfDatasetMgr extends Loggable {
 }
 
 //class ncWriteTest extends Loggable {
-//  import nasa.nccs.cdas.utilities.runtime
+//  import nasa.nccs.edas.utilities.runtime
 //  import java.nio.channels.FileChannel
 //  import java.nio.file.StandardOpenOption._
 //  val testType = TestType.Buffer
 //
-////  val url = "file:/Users/tpmaxwel/.cdas/cache/NCML/merra_daily.xml"
-//  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/cdas/cache/NCML/merra_daily_2005.xml"
-////  val outputFile = "/Users/tpmaxwel/.cdas/cache/test/testBinaryFile.out"
-//  val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/cdas/cache/test/testBinaryFile.out"
-////  val outputNcFile = "/Users/tpmaxwel/.cdas/cache/test/testFile.nc"
-//  val outputNcFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/cdas/cache/test/testFile.nc"
+////  val url = "file:/Users/tpmaxwel/.edas/cache/NCML/merra_daily.xml"
+//  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/NCML/merra_daily_2005.xml"
+////  val outputFile = "/Users/tpmaxwel/.edas/cache/test/testBinaryFile.out"
+//  val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/test/testBinaryFile.out"
+////  val outputNcFile = "/Users/tpmaxwel/.edas/cache/test/testFile.nc"
+//  val outputNcFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/test/testFile.nc"
 //  val bufferSize: Int = -1
 //  val varName = "t"
 //  NetcdfDataset.setUseNaNs(false)
@@ -1097,7 +1097,7 @@ object NetcdfDatasetMgr extends Loggable {
 
 /*
 object readTest extends App {
-  val ncDataset: NetcdfDataset = NetcdfDataset.openDataset("/usr/local/web/WPS/CDAS2/src/test/resources/data/GISS-r1i1p1-sample.nc")
+  val ncDataset: NetcdfDataset = NetcdfDataset.openDataset("/usr/local/web/WPS/EDAS2/src/test/resources/data/GISS-r1i1p1-sample.nc")
   val variable = ncDataset.findVariable(null, "tas")
   val section = new ma2.Section(Array(0, 0, 0), Array(1, 50, 50))
   val data = variable.read(section)
@@ -1105,7 +1105,7 @@ object readTest extends App {
 }
 
 object writeTest extends App {
-  val ncDataset: NetcdfDataset = NetcdfDataset.acquireDataset("/usr/local/web/WPS/CDAS2/src/test/resources/data/GISS-r1i1p1-sample.nc", null)
+  val ncDataset: NetcdfDataset = NetcdfDataset.acquireDataset("/usr/local/web/WPS/EDAS2/src/test/resources/data/GISS-r1i1p1-sample.nc", null)
   val gridFilePath = "/tmp/gridFile.nc"
   println( "Creating Grid File at: " + gridFilePath )
   val gridWriter = NetcdfFileWriter.createNew( NetcdfFileWriter.Version.netcdf4, gridFilePath, null )
@@ -1139,7 +1139,7 @@ object writeTest extends App {
 
 
 //object readTest extends App {
-//  val  gridFilePath =  "/Users/tpmaxwel/.cdas/cache/collections/NCML/cip_cfsr_6hr_ta.nc"
+//  val  gridFilePath =  "/Users/tpmaxwel/.edas/cache/collections/NCML/cip_cfsr_6hr_ta.nc"
 //  val dset = NetcdfDataset.acquireDataset(gridFilePath, null)
 //  val axis = dset.findCoordinateAxis( "time" )
 //  axis.setCaching(true)
@@ -1149,7 +1149,7 @@ object writeTest extends App {
 //}
 
 
-// needs: DYLD_FALLBACK_LIBRARY_PATH=/Users/tpmaxwel/anaconda/envs/cdas2/lib
+// needs: DYLD_FALLBACK_LIBRARY_PATH=/Users/tpmaxwel/anaconda/envs/edas2/lib
 //object ncmlTest extends App {
 //  val test_dir = new File("/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/MERRA2/6hr")
 //  val gridFile = "/Users/tpmaxwel/test.nc"
@@ -1177,7 +1177,7 @@ object writeTest extends App {
 //
 
 //object gridFileTest extends App {
-//  val gridFilePath = "/Users/tpmaxwel/.cdas/cache/collections/NCML/npana.nc"
+//  val gridFilePath = "/Users/tpmaxwel/.edas/cache/collections/NCML/npana.nc"
 //  val gridDS = NetcdfDatasetMgr.open( gridFilePath )
 //  val name = "time"
 //  try {
@@ -1197,9 +1197,9 @@ object writeTest extends App {
 //}
 
 //object dataFileTest extends App {
-//  val gridFilePath = "/Users/tpmaxwel/.cdas/cache/collections/NCML/npana.nc"
+//  val gridFilePath = "/Users/tpmaxwel/.edas/cache/collections/NCML/npana.nc"
 //  val gridDS = NetcdfDatasetMgr.open( gridFilePath )
-//  val dataPath = "/Users/tpmaxwel/.cdas/cache/collections/NCML/npana.xml"
+//  val dataPath = "/Users/tpmaxwel/.edas/cache/collections/NCML/npana.xml"
 //  val ncDataset = NetcdfDatasetMgr.open(dataPath)
 //  val varShortName = "T"
 //  val origin = Array(0,40,0,0)

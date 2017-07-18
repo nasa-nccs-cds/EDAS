@@ -8,7 +8,7 @@ def nbDisplay( x ):
     x.png(outFile)
     display( Image(outFile) )
 
-dataPath = "/home/tpmaxwel/.cdas/cache/cdscan/merra2_mon_ua.xml"
+dataPath = "/home/tpmaxwel/.edas/cache/cdscan/merra2_mon_ua.xml"
 varName = "ua"
 f = cdms2.openDataset(dataPath)
 var = f( varName, time=slice(0,1),level=slice(10,11) )

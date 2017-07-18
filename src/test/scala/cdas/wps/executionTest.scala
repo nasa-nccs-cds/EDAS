@@ -1,11 +1,11 @@
-package cdas.wps
+package edas.wps
 
 import java.nio.file.Paths
 
 import nasa.nccs.caching.{FragmentPersistence, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{CDSVariable, Collection}
 import nasa.nccs.cdapi.tensors.CDFloatArray
-import nasa.nccs.cdas.utilities.appParameters
+import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
 import org.scalatest._
 import ucar.ma2
@@ -15,7 +15,7 @@ import org.scalatest.Tag
 
 // Execution Example (tag = yearly_cycle):
 // >> sbt test-only *wpsSuite -J-Xmx16000M -- -n subset+cache
-// Define frag id in ~/.cdas/test_config.txt
+// Define frag id in ~/.edas/test_config.txt
 // sample test_config.txt:
 // fragment=t|merra/daily|0,0,0,0|248,42,144,288
 /*
@@ -98,7 +98,7 @@ class LocalExecutionTestSuite extends FunSuite with Matchers {
   val webProcessManager = new ProcessManager( serverConfiguration )
   val service = "cds2"
   val operation = "CDSpark.sum"
-  val config_file_path = Paths.get(  System.getProperty("user.home"), ".cdas", "test_config.txt" ).toString
+  val config_file_path = Paths.get(  System.getProperty("user.home"), ".edas", "test_config.txt" ).toString
   lazy val config = getConfiguration
 
   def executeTest( datainputs: String, async: Boolean = false, identifier: String = "CDSpark.workflow" ): xml.Elem = {

@@ -1,4 +1,4 @@
-from pycdas.portal.cdas import *
+from pyedas.portal.edas import *
 import time, sys, cdms2, os
 import plotly.offline as py
 import plotly.graph_objs as go
@@ -13,7 +13,7 @@ server = "10.71.9.11"
 
 try:
 
-    portal = CDASPortal(ConnectionMode.CONNECT, server, request_port, response_port)
+    portal = EDASPortal(ConnectionMode.CONNECT, server, request_port, response_port)
     response_manager = portal.createResponseManager()
 
     t0 = time.time()

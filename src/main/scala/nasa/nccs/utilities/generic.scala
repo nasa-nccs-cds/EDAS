@@ -27,7 +27,7 @@ import scala.collection.mutable
 //
 //  val fa = new FileAppender();
 //  fa.setName("FileLogger");
-//  fa.setFile("${user.home}/.cdas/wps.log");
+//  fa.setFile("${user.home}/.edas/wps.log");
 //  fa.setLayout(new PatternLayout("%d %-5p [%c{1}] %m%n"));
 //  fa.setThreshold(Level.DEBUG);
 //  fa.setAppend(true);
@@ -38,7 +38,7 @@ import scala.collection.mutable
 class Logger( val name: String, val test: Boolean, val master: Boolean ) extends Serializable {
   val LNAME = if( test ) name + "-test" else name + "-"
   val LID = if( master ) "master" else UID().uid
-  val logFilePath: Path = Paths.get( System.getProperty("user.home"), ".cdas", "logs", LNAME + LID + ".log" )
+  val logFilePath: Path = Paths.get( System.getProperty("user.home"), ".edas", "logs", LNAME + LID + ".log" )
   val writer = if(Files.exists(logFilePath)) {
     new PrintWriter(logFilePath.toString)
   } else {
@@ -58,10 +58,10 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
 }
 
 
-object CDASLogManager extends Serializable {
+object EDASLogManager extends Serializable {
   private var _test = false
   private var _master = false
-  lazy private val _logger: Logger = new Logger("cdas",_test,_master)
+  lazy private val _logger: Logger = new Logger("edas",_test,_master)
   def testing = { _test = true }
   def isMaster = { _master = true }
   def getCurrentLogger() = { _logger }
@@ -88,7 +88,7 @@ object CDASLogManager extends Serializable {
 }
 
 trait Loggable extends Serializable {
-  def logger = CDASLogManager.getCurrentLogger()
+  def logger = EDASLogManager.getCurrentLogger()
 
   def logError( err: Throwable, msg: String ) = {
     logger.error(msg)

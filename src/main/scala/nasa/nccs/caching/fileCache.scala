@@ -9,15 +9,15 @@ import java.util.concurrent.TimeUnit
 import java.util.{Calendar, Comparator}
 
 import com.googlecode.concurrentlinkedhashmap.{ConcurrentLinkedHashMap, EntryWeigher, EvictionListener}
-import nasa.nccs.caching.CDASPartitioner.{partitionSize, recordSize}
-import nasa.nccs.cdas.utilities.{GeoTools, appParameters, runtime}
+import nasa.nccs.caching.EDASPartitioner.{partitionSize, recordSize}
+import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
 import nasa.nccs.cdapi.cdm.{PartitionedFragment, _}
 import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray}
-import nasa.nccs.cdas.engine.WorkflowNode
-import nasa.nccs.cdas.engine.spark.RecordKey
-import nasa.nccs.cdas.kernels.TransientFragment
-import nasa.nccs.cdas.loaders.Masks
+import nasa.nccs.edas.engine.WorkflowNode
+import nasa.nccs.edas.engine.spark.RecordKey
+import nasa.nccs.edas.kernels.TransientFragment
+import nasa.nccs.edas.loaders.Masks
 import nasa.nccs.esgf.process.{DataFragmentKey, _}
 import nasa.nccs.esgf.wps.cds2ServiceProvider
 import nasa.nccs.utilities.{Loggable, cdsutils}
@@ -267,7 +267,7 @@ class TimePeriod( val dateRange: CalendarDateRange ){
 //  private val netcdfDataset = NetcdfDataset.openDataset( datasetFile )
 // private val ncVariable = netcdfDataset.findVariable(varName)
 
-object CDASPartitioner {
+object EDASPartitioner {
   implicit def int2String(x: Int): String = x.toString
   val M = 1024 * 1024
   val maxRecordSize = 200*M
@@ -281,7 +281,7 @@ object CDASPartitioner {
   val nCoresPerPart = 1
 }
 
-class CDASCachePartitioner(val cache_id: String, _section: ma2.Section, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], numDataFiles: Int, dataType: ma2.DataType = ma2.DataType.FLOAT, cacheType: String = "fragment") extends CDASPartitioner(_section,partsConfig,workflowNodeOpt,timeAxisOpt,numDataFiles,dataType,cacheType) {
+class EDASCachePartitioner(val cache_id: String, _section: ma2.Section, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], numDataFiles: Int, dataType: ma2.DataType = ma2.DataType.FLOAT, cacheType: String = "fragment") extends EDASPartitioner(_section,partsConfig,workflowNodeOpt,timeAxisOpt,numDataFiles,dataType,cacheType) {
 
   def getCacheFilePath(partIndex: Int): String = {
     val cache_file = cache_id + "-" + partIndex.toString
@@ -329,7 +329,7 @@ class FilteredRecordSpec {
   override def toString = s"FilteredRecordSpec( first:$first last:$last length:$length )"
 }
 
-class CDASPartitionSpec( val _partitions: IndexedSeq[Partition] ) {
+class EDASPartitionSpec( val _partitions: IndexedSeq[Partition] ) {
   def getParition( index: Int ): Partition = { _partitions(index) }
   def getNPartitions: Int = _partitions.length
 }
@@ -348,8 +348,8 @@ case class PartitionConstraints( partsConfig: Map[String,String] ) {
   }
 }
 
-class CDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[String,String], val workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], val numDataFiles: Int, dataType: ma2.DataType = ma2.DataType.FLOAT, val cacheType: String = "fragment") extends Loggable {
-  import CDASPartitioner._
+class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[String,String], val workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], val numDataFiles: Int, dataType: ma2.DataType = ma2.DataType.FLOAT, val cacheType: String = "fragment") extends Loggable {
+  import EDASPartitioner._
 
   val elemSize = dataType.getSize
   val baseShape = _section.getShape
@@ -404,7 +404,7 @@ class CDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
     }
   }
 
-  def computeRecordSizes( ): CDASPartitionSpec = {
+  def computeRecordSizes( ): EDASPartitionSpec = {
     val sparkConfig = BatchSpec.serverContext.spark.sparkContext.getConf.getAll map { case (key, value ) =>  key + " -> " + value } mkString( "\n\t")
     if( filters.isEmpty ) {
       val pSpecs = getPartitionSpecs( PartitionConstraints( partsConfig ++ Map( "numDataFiles" -> numDataFiles.toString ) ) )
@@ -414,7 +414,7 @@ class CDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
         RegularPartition(partIndex, 0, startIndex, partSize, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
       })
       logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${partitions.length} \n---------------------------------------------\n")
-      new CDASPartitionSpec( partitions )
+      new EDASPartitionSpec( partitions )
     } else {
       val seasonFilters = filters.flatMap( SeasonFilter.get )
       if( seasonFilters.length < filters.length ) throw new Exception ( "Unrecognized filter: " + filters.mkString(",") )
@@ -437,11 +437,11 @@ class CDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
         } )
       }
       logger.info(  s"\n---------------------------------------------\n ~~~~ Generating partitions for ${BatchSpec.nParts} procs: \n ${partitions.map( _.toString ).mkString( "\n\t" )}  \n---------------------------------------------\n")
-      new CDASPartitionSpec( partitions )
+      new EDASPartitionSpec( partitions )
     }
   }
 
-//  def computeRecordSizes1( ): CDASPartitionSpec = {
+//  def computeRecordSizes1( ): EDASPartitionSpec = {
 //    val sparkConfig = BatchSpec.serverContext.spark.sparkContext.getConf.getAll map { case (key, value ) =>  key + " -> " + value } mkString( "\n\t")
 //    val _preferredNParts = math.ceil( sectionMemorySize / partitionSize.toFloat ).toInt
 //    if( _preferredNParts > BatchSpec.nProcessors * 1.5 ) {
@@ -457,7 +457,7 @@ class CDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
 //        RegularPartition(partIndex, 0, startIndex, partSize, _nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
 //      })
 //      logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: preferredNParts: ${_preferredNParts}, sectionMemorySize: $sectionMemorySize, sliceMemorySize: $sliceMemorySize, nSlicesPerRecord: ${_nSlicesPerRecord}, recordMemorySize: ${_recordMemorySize}, nRecordsPerPart: ${_nRecordsPerPart}, partMemorySize: ${_partMemorySize}, nPartitions: ${partitions.length} \n---------------------------------------------\n")
-//      new CDASPartitionSpec( partitions )
+//      new EDASPartitionSpec( partitions )
 //    } else {
 //      if( filters.isEmpty ) {
 //        val __nPartitions: Int = BatchSpec.nProcessors
@@ -473,7 +473,7 @@ class CDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
 //          if(partSize>0) { Some( RegularPartition(partIndex, 0, startIndex, partSize, __nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape ) ) } else { None }
 //        })
 //        logger.info(  s"\n---------------------------------------------\n ~~~~ Generating partitions: nAvailCores: ${__nPartitions}, sectionMemorySize: $sectionMemorySize, sliceMemorySize: $sliceMemorySize, nSlicesPerRecord: ${__nSlicesPerRecord}, recordMemorySize: ${__recordMemorySize}, nRecordsPerPart: ${__nRecordsPerPart}, partMemorySize: ${__partMemorySize}, nPartitions: ${partitions.length} \n---------------------------------------------\n")
-//        new CDASPartitionSpec( partitions )
+//        new EDASPartitionSpec( partitions )
 //      } else {
 //        val seasonFilters = filters.flatMap( SeasonFilter.get )
 //        if( seasonFilters.length < filters.length ) throw new Exception ( "Unrecognized filter: " + filters.mkString(",") )
@@ -496,7 +496,7 @@ class CDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
 //          } )
 //        }
 //        logger.info(  s"\n---------------------------------------------\n ~~~~ Generating partitions for ${BatchSpec.nProcessors} procs: \n ${partitions.map( _.toString ).mkString( "\n\t" )}  \n---------------------------------------------\n")
-//        new CDASPartitionSpec( partitions )
+//        new EDASPartitionSpec( partitions )
 //      }
 //    }
 //  }
@@ -564,7 +564,7 @@ class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[Str
   val sType = getAttributeValue("dtype", "FLOAT")
   val dType = ma2.DataType.getType( sType )
   def roi: ma2.Section = new ma2.Section(_section.getRanges)
-  val partitioner = new CDASCachePartitioner(cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, dType)
+  val partitioner = new EDASCachePartitioner(cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, dType)
   def getAttributeValue(key: String, default_value: String) =
     attributes.get(key) match {
       case Some(attr_val) => attr_val.toString.split('=').last.replace('"',' ').trim
@@ -701,7 +701,7 @@ object FragmentPersistence extends DiskCachable with FragSpecKeySet {
               case Some(cache_id_fut) =>
                 Some(cache_id_fut.map((cache_id: String) => {
                   val roi = DataFragmentKey(foundFragKey).getRoi
-                  val partitioner = new CDASCachePartitioner( cache_id, roi, partsConfig, workflowNodeOpt, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
+                  val partitioner = new EDASCachePartitioner( cache_id, roi, partsConfig, workflowNodeOpt, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
                   fragSpec.cutIntersection(roi) match {
                     case Some(section) =>
                       new PartitionedFragment( new CachePartitions( cache_id, roi, partitioner.getCachePartitions ), None, section)

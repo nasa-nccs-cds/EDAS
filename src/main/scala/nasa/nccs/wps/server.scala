@@ -1,6 +1,6 @@
 package nasa.nccs.wps
 import scala.xml
-import nasa.nccs.cdas.utilities.appParameters
+import nasa.nccs.edas.utilities.appParameters
 
 trait WPSServer extends WPSResponse {
   def getProcesses: Map[String, WPSProcess]
@@ -23,7 +23,7 @@ trait WPSServer extends WPSResponse {
       <wps:Capabilities service="WPS" version="1.0.0" xml:lang="en-CA" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsGetCapabilities_response.xsd" updateSequence="1">
         <ows:ServiceIdentification>
           <ows:Title>
-            {appParameters("wps.server.title", "Climate Data Analytics Server (CDAS)")}
+            {appParameters("wps.server.title", "Climate Data Analytics Server (EDAS)")}
           </ows:Title>
           <ows:Abstract>
             {appParameters("wps.server.abstract", "High Performance Spark-based Climate Data Analytics delivered via the ESGF Compute Working Team WPS API")}
@@ -31,7 +31,7 @@ trait WPSServer extends WPSResponse {
           <ows:Keywords>
             <ows:Keyword>WPS</ows:Keyword>
             <ows:Keyword>ESGF-CWT</ows:Keyword>
-            <ows:Keyword>CDAS</ows:Keyword>
+            <ows:Keyword>EDAS</ows:Keyword>
             <ows:Keyword>Cliimate Data Analytics</ows:Keyword>
           </ows:Keywords>
           <ows:ServiceType>WPS</ows:ServiceType>
@@ -77,7 +77,7 @@ trait WPSServer extends WPSResponse {
       </wps:Capabilities>
     case ResponseSyntax.Generic =>
       <capabilities service="WPS">
-        <serviceIdentification title={appParameters("wps.server.title", "Climate Data Analytics Server (CDAS)")}>
+        <serviceIdentification title={appParameters("wps.server.title", "Climate Data Analytics Server (EDAS)")}>
             {appParameters("wps.server.abstract", "High Performance Spark-based Climate Data Analytics delivered via the ESGF Compute Working Team WPS API")}
         </serviceIdentification>
         <serviceProvider name={appParameters("wps.server.provider.name", "NASA NCCS")} site={appParameters("wps.server.provider.url", "https://www.nccs.nasa.gov")}/>

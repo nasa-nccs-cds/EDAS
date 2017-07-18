@@ -1,4 +1,4 @@
-from pycdas.portal.cdas import *
+from pyedas.portal.edas import *
 import time, sys, cdms2, vcs, os, EzTemplate
 import xml.etree.ElementTree
 
@@ -11,7 +11,7 @@ server = "localhost"
 
 try:
 
-    portal = CDASPortal(ConnectionMode.CONNECT, server, request_port, response_port)
+    portal = EDASPortal(ConnectionMode.CONNECT, server, request_port, response_port)
     response_manager = portal.createResponseManager()
 
     t0 = time.time()
