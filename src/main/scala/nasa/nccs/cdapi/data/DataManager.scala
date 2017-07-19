@@ -12,7 +12,7 @@ import ucar.nc2.constants.AxisType
 import ucar.ma2
 import java.nio
 import java.util.Formatter
-import org.apache.spark.mlib.linalg
+// import org.apache.spark.mlib.linalg
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
