@@ -58,7 +58,7 @@ package nasa.nccs.streaming
 //class streamingTest extends Loggable {
 //
 //  def main(args: Array[String]): Unit = {
-//    val ncmlFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/collections/NCML/ncml.xml"
+//    val ncmlFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/collections/NCML/ncml.xml"
 //    val varName = "T"
 //    val nRecords = 8
 //    val recordSize = 1

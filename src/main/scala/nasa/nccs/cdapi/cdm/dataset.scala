@@ -623,7 +623,7 @@ class bigDataTest extends Loggable {
   val service = "cds2"
 
 //  def main(args: Array[String]): Unit = {
-//    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"file://att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/collections/NCML/npana.xml","name":"T:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"tz"}]]"""
+//    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"file://att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/collections/NCML/npana.xml","name":"T:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"tz"}]]"""
 //    val result_node = executeTest(datainputs)
 ////    val result_data = getResultData( result_node )
 //  }
@@ -818,8 +818,8 @@ class profilingTest extends Loggable {
   }
 
 //  def main(args: Array[String]): Unit = {
-//    val ncmlFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/collections/NCML/npana.xml"
-//    val gridFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/collections/NCML/npana.nc"
+//    val ncmlFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/collections/NCML/npana.xml"
+//    val gridFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/collections/NCML/npana.nc"
 //    val cache_id = "a3298cb50c2abb"
 //    val varName = "T"
 //    val iLevel = 10
@@ -837,11 +837,11 @@ class ncReadTest extends Loggable {
   import java.nio.file.StandardOpenOption._
   import TestType._
 
-  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/NCML/merra_daily_2005.xml"
+  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/NCML/merra_daily_2005.xml"
 //  val outputFile = "/Users/tpmaxwel/.edas/cache/test/testBinaryFile.out"
-  val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/test/testBinaryFile.out"
+  val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/test/testBinaryFile.out"
 //  val outputNcFile = "/Users/tpmaxwel/.edas/cache/test/testFile.nc"
-  val outputNcFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/test/testFile.nc"
+  val outputNcFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/test/testFile.nc"
   val bufferSize: Int = -1
   val varName = "t"
   val shape = getShape(url, varName)
@@ -1006,11 +1006,11 @@ object NetcdfDatasetMgr extends Loggable {
 //  val testType = TestType.Buffer
 //
 ////  val url = "file:/Users/tpmaxwel/.edas/cache/NCML/merra_daily.xml"
-//  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/NCML/merra_daily_2005.xml"
+//  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/NCML/merra_daily_2005.xml"
 ////  val outputFile = "/Users/tpmaxwel/.edas/cache/test/testBinaryFile.out"
-//  val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/test/testBinaryFile.out"
+//  val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/test/testBinaryFile.out"
 ////  val outputNcFile = "/Users/tpmaxwel/.edas/cache/test/testFile.nc"
-//  val outputNcFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/test/testFile.nc"
+//  val outputNcFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/test/testFile.nc"
 //  val bufferSize: Int = -1
 //  val varName = "t"
 //  NetcdfDataset.setUseNaNs(false)

@@ -11,7 +11,7 @@ server = "localhost"
 edas_cache_dir = os.environ['EDAS_CACHE_DIR']
 
 if host == "webmap":
-    dataset = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/edas/cache/collections/NCML/merra_mon_ua.xml"
+    dataset = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/collections/NCML/merra_mon_ua.xml"
     var = "ua"
 elif host == "cldra":
     dataset = "file:/home/tpmaxwel/.edas/cache/collections/NCML/CIP_MERRA_ua_mon.ncml"
