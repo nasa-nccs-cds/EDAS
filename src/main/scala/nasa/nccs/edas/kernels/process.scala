@@ -243,6 +243,10 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val initValue: Float = 0f
   def cleanUp() = {}
 
+  def mapRDD(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
+    logger.info( "Executing map OP for Kernel " + id + ", OP = " + context.operation.identifier )
+    input.mapValues( map(context) )
+  }
 
   def addWeights( context: KernelContext ): Boolean = {
     weightsOpt match {

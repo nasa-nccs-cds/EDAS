@@ -12,7 +12,7 @@ import ucar.nc2.constants.AxisType
 import ucar.ma2
 import java.nio
 import java.util.Formatter
-// import org.apache.spark.mlib.linalg
+import org.apache.spark.mllib.linalg.DenseVector
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -483,7 +483,7 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def getMissing( default: Float = Float.MaxValue ): Float = _missing.getOrElse(default)
   def sameGrid( other: HeapFltArray) = gridSpec.equals( other.gridSpec )
   def hasData = (data.length > 0)
-  def toVector = data.map(_.toDouble )
+  def toVector: DenseVector = new DenseVector( data.map(_.toDouble ) )
 
   def reinterp( weights: Map[Int,RemapElem], origin_mapper: Array[Int] => Array[Int] ): HeapFltArray = {
     val reinterpArray = toCDFloatArray.reinterp(weights)

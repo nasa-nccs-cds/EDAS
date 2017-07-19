@@ -28,7 +28,6 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
   import WorkflowNode._
   def getResultId: String = operation.rid
   def getNodeId(): String = operation.identifier
-  protected val _mapByKey = false
 
   def fatal( msg: String ) = throw new Exception( s"Workflow Node '${operation.identifier}' Error: " + msg )
 
@@ -88,14 +87,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
     CDSparkContext.coalesce( input, context ).map { case ( pkey, rdd_part ) => ( new_partitioner.range, rdd_part.reinterp( conversionMap ) ) } repartitionAndSortWithinPartitions new_partitioner
   }
 
-  def map(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
-    logger.info( "Executing map OP for Kernel " + kernel.id + ", OP = " + context.operation.identifier )
-    if( _mapByKey ) {
-      input.reduceByKey( kernel.aggregate(context) )
-    } else {
-      input.mapValues( kernel.map(context) )
-    }
-  }
+  def map(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = kernel.mapRDD( input, context )
 
   def disaggPartitions(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
     logger.info( "Executing map OP for Kernel " + kernel.id + ", OP = " + context.operation.identifier )

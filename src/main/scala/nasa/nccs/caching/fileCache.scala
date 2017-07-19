@@ -342,6 +342,7 @@ case class PartitionConstraints( partsConfig: Map[String,String] ) {
   private val _numDataFiles: Int = partsConfig.getOrElse("numDataFiles","0").toInt
   private val _numParts: Int = partsConfig.getOrElse("numParts","0").toInt
   val nSlicesPerRecord: Int = partsConfig.getOrElse("numSlicesPerRecord","0").toInt
+  val oneRecPerSlice: Boolean = partsConfig.getOrElse("oneRecPerSlice","false").toBoolean
   val numParts: Int = if( _numParts > 0 ) { _numParts } else {
     val _numfilesPerPart: Double = math.ceil( _numDataFiles / BatchSpec.nParts.toFloat )
     if ( _numfilesPerPart == 0.0 ) 0 else math.ceil( _numDataFiles / _numfilesPerPart ).toInt
@@ -382,7 +383,7 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
   def getPartitionSpecs( constraints: PartitionConstraints ): PartitionSpecs = {
     val desiredPartSize = if( constraints.numParts == 0 ) { partitionSize } else { math.min( partitionSize, sectionMemorySize / constraints.numParts.toFloat ) }
     val currentPartitionSize: Float = math.max( desiredPartSize, sliceMemorySize )
-    val currentRecordSize: Float = if( constraints.nSlicesPerRecord == 0 ) { math.min( recordSize, currentPartitionSize ) } else { constraints.nSlicesPerRecord * sliceMemorySize }
+    val currentRecordSize: Float = if( constraints.oneRecPerSlice ) { sliceMemorySize } else { if( constraints.nSlicesPerRecord == 0 ) { math.min( recordSize, currentPartitionSize ) } else { constraints.nSlicesPerRecord * sliceMemorySize } }
     val _nSlicesPerRecord: Int = math.max( currentRecordSize / sliceMemorySize, 1.0).round.toInt
     val _recordMemorySize: Long = getMemorySize(_nSlicesPerRecord)
     val _nRecordsPerPart: Int = math.max( currentPartitionSize / _recordMemorySize, 1.0).round.toInt

@@ -4,9 +4,15 @@ import nasa.nccs.cdapi.data._
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import ucar.ma2
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}
+import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels._
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
+import org.apache.spark.rdd.RDD
 import ucar.ma2.DataType
+import org.apache.spark.mllib.linalg.{DenseVector, Vector}
+import org.apache.spark.mllib.linalg.Matrix
+import org.apache.spark.mllib.linalg.distributed.RowMatrix
+import org.apache.spark.mllib.linalg.SingularValueDecomposition
 
 import scala.collection.immutable.TreeMap
 import scala.reflect.runtime.{universe => u}
@@ -327,6 +333,47 @@ class subset extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Subset"
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
+}
+
+class svd extends SingularRDDKernel(Map.empty) {
+  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
+  val outputs = List( WPSProcessOutput( "operation result" ) )
+  val title = "Space/Time Mean"
+  val description = "Computes a singular value decomposition of element values assumed to be structured with one record per timestep"
+
+  override def mapRDD(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
+    logger.info( "Executing map OP for Kernel " + id + ", OP = " + context.operation.identifier )
+    val elem_index = 0
+    val vectors: RDD[Vector] = input.map { case (key,record) => record.elements.toIndexedSeq(elem_index)._2.toVector }
+    val mat: RowMatrix = new RowMatrix(vectors)
+    val svd: SingularValueDecomposition[RowMatrix, Matrix] = mat.computeSVD(20)
+    val eigenvalues: Vector = svd.s
+    val eigenVectors: Matrix = svd.V
+  }
+
+//  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
+//    val t0 = System.nanoTime
+//    val elems = context.operation.inputs.map( inputId => inputs.element(inputId) match {
+//      case Some( input_data ) =>
+//        val input_array: FastMaskedArray = input_data.toFastMaskedArray
+//        val (weighted_value_sum_masked, weights_sum_masked) =  if( addWeights(context) ) {
+//          val weights: FastMaskedArray = FastMaskedArray(KernelUtilities.getWeights(inputId, context))
+//          input_array.weightedSum(axisIndices,Some(weights))
+//        } else {
+//          input_array.weightedSum(axisIndices,None)
+//        }
+//        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "axes" -> axes.toUpperCase )
+//        context.operation.rid -> HeapFltArray(weighted_value_sum_masked.toCDFloatArray, input_data.origin, result_metadata, Some(weights_sum_masked.toCDFloatArray.getArrayData()))
+//      case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
+//    })
+//    logger.info("Executed Kernel %s map op, input = %s, time = %.4f s".format(name,  id, (System.nanoTime - t0) / 1.0E9))
+//    context.addTimestamp( "Map Op complete" )
+//    val rv = RDDRecord( TreeMap( elems:_*), inputs.metadata )
+//    logger.info("Returning result value")
+//    rv
+//  }
+//  override def combineRDD(context: KernelContext)(a0: RDDRecord, a1: RDDRecord ): RDDRecord =  weightedValueSumRDDCombiner(context)(a0, a1)
+//  override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
 }
 
 
