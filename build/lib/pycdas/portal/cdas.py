@@ -251,7 +251,7 @@ class AppThread(Thread):
             mem = virtual_memory()
             total_ram = mem.total / MB
             EDAS_DRIVER_MEM = os.environ.get( 'EDAS_DRIVER_MEM', str( total_ram - 1000 ) + 'M' )
-            edas_startup = "edas2 connect {0} {1} -J-Xmx{2} -J-Xms512M -J-Xss1M -J-XX:+CMSClassUnloadingEnabled -J-XX:+UseConcMarkSweepGC".format( self._request_port, self._response_port, EDAS_DRIVER_MEM )
+            edas_startup = "edas connect {0} {1} -J-Xmx{2} -J-Xms512M -J-Xss1M -J-XX:+CMSClassUnloadingEnabled -J-XX:+UseConcMarkSweepGC".format( self._request_port, self._response_port, EDAS_DRIVER_MEM )
             self.process = subprocess.Popen(shlex.split(edas_startup))
             print "Staring EDAS with command: {0}, total RAM: {1}\n".format( edas_startup, mem.total )
             self.process.wait()

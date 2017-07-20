@@ -10,8 +10,8 @@ The EDAS environment is initialized by sourcing the **{EDAS}/bin/setup_runtime.s
 The following environment variables can be set to customize the environment:
 
     * EDAS_CACHE_DIR: Sets the location of the EDAS cache directory (default: ~/.edas/cache).
-    * CDWPS_HOME_DIR: Sets the location of the CDWPS home directory (default: {EDAS2}/../CDWPS).
-    * CDSHELL_HOME_DIR: Sets the location of the CDSHELL home directory (default: {EDAS2}/../EDASClientConsole).
+    * CDWPS_HOME_DIR: Sets the location of the CDWPS home directory (default: {EDAS}/../CDWPS).
+    * CDSHELL_HOME_DIR: Sets the location of the CDSHELL home directory (default: {EDAS}/../EDASClientConsole).
 
 ####  Configuration parameters:
 During the EDAS build process a copy of the file _edas.properties_ is copied to the EDAS cache directory.
@@ -35,7 +35,7 @@ The use may contribute new analysis modules (kernels) developed in java, scala, 
 #### Python Kernels
 Here are some pointers on developing new python kernels. Some example code is displayed below.
 
-    1. Create a new python file called {moduleName}.py under {EDAS2}/src/pyedas/kernels/internal. All kernels defined in this file will be automatically registered in WPS under a KernelModule named {moduleName}. In a future version it will be possible to locate this file outside of {EDAS}.
+    1. Create a new python file called {moduleName}.py under {EDAS}/src/pyedas/kernels/internal. All kernels defined in this file will be automatically registered in WPS under a KernelModule named {moduleName}. In a future version it will be possible to locate this file outside of {EDAS}.
     2. Create a class that extends either Kernel (for numpy operations) of CDMSKernel (for cdms2 operations) from pyedas.kernels.Kernel.  
     3. An example Kernel definition, and a corresponding WPS request, are shown below.  One can also take a look at any of the existing python files in the pyedas/kernels/internal directory.
     4. Configure the Kernel by passing a pyedas.kernels.Kernel.KernelSpec instance to the __init__ method.  
@@ -48,7 +48,7 @@ Here are some pointers on developing new python kernels. Some example code is di
     9. The createResult method (on either CDMSKernel or npArray) creates a properly formatted kernel result.
     10. The Kernel is referenced in the WPS request (see below) using the id "python.{moduleName}.{kernelId}"
     
-##### Python kernel example code (from file {EDAS2}/src/pyedas/kernels/internal/cdmsModule.py).
+##### Python kernel example code (from file {EDAS}/src/pyedas/kernels/internal/cdmsModule.py).
 
 ```python
 from pyedas.kernels.Kernel import CDMSKernel, KernelSpec
@@ -104,7 +104,7 @@ and a data access URI will be passed to the kernel.  Until further notice _(hand
 ###  Rebuilding
 
 After modifying the EDAS source code (or pulling a new snapshot from github), the framework can be rebuilt using some or all of the 
-commands in the **{EDAS2}/bin/update.sh** script.
+commands in the **{EDAS}/bin/update.sh** script.
 
 ###  Distribution
 

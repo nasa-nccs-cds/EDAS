@@ -8,7 +8,7 @@ import sbt.{SettingKey, _}
 
 val kernelPackages = settingKey[ Seq[String] ]("A list of user-defined Kernel packages")
 
-name := "EDAS2"
+name := "EDAS"
 version := "1.2.2-SNAPSHOT"
 scalaVersion := "2.10.5"
 organization := "nasa.nccs"
@@ -110,7 +110,7 @@ unmanagedClasspath in (Compile, runMain) ++= Seq( conda_lib_dir.value )
 classpathTypes += "dylib"
 classpathTypes += "so"
 
-stage ~= { (file: File) => edas2Patch( file / "bin" / "edas" ); file }
+stage ~= { (file: File) => edasPatch( file / "bin" / "edas" ); file }
 // lazy val edasGlobalCollectionsFile = settingKey[File]("The edas global Collections file")
 
 edas_cache_dir := getCacheDir()

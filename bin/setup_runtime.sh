@@ -18,7 +18,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
 
 alias edas='cd $EDAS_HOME_DIR'
 alias cdist='cd $CDWPS_HOME_DIR; sbt dist; cd target/universal/; rm -rf cdwps-*-SNAPSHOT; unzip *.zip; cd ../..; chmod -R a+rwX target; chmod -R a+rX ../CDWPS'
-alias pdist='cd $EDAS_HOME_DIR; sbt universal:packageBin; cd target/universal/; rm -rf edas2-*-SNAPSHOT; unzip *.zip; cd ../..; chmod -R a+rwX target; chmod -R a+rX ../EDAS2'
+alias pdist='cd $EDAS_HOME_DIR; sbt universal:packageBin; cd target/universal/; rm -rf edas-*-SNAPSHOT; unzip *.zip; cd ../..; chmod -R a+rwX target; chmod -R a+rX ../EDAS'
 alias cdwps=$WPS_CMD
 alias cdwpsb='nohup $WPS_CMD &'
 alias pedas='cd $EDAS_HOME_DIR; git fetch; git pull; sbt publish'

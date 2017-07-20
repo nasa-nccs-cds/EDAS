@@ -432,7 +432,7 @@ object DiskCacheFileMgr extends XmlResource {
         })
       Map(tuples.flatten: _*)
     } catch {
-      case err: Throwable => Map( "main"->"~/.edas2/cache" )
+      case err: Throwable => Map( "main"->"~/.edas/cache" )
     }
   }
 }
@@ -1097,7 +1097,7 @@ object NetcdfDatasetMgr extends Loggable {
 
 /*
 object readTest extends App {
-  val ncDataset: NetcdfDataset = NetcdfDataset.openDataset("/usr/local/web/WPS/EDAS2/src/test/resources/data/GISS-r1i1p1-sample.nc")
+  val ncDataset: NetcdfDataset = NetcdfDataset.openDataset("/usr/local/web/WPS/EDAS/src/test/resources/data/GISS-r1i1p1-sample.nc")
   val variable = ncDataset.findVariable(null, "tas")
   val section = new ma2.Section(Array(0, 0, 0), Array(1, 50, 50))
   val data = variable.read(section)
@@ -1105,7 +1105,7 @@ object readTest extends App {
 }
 
 object writeTest extends App {
-  val ncDataset: NetcdfDataset = NetcdfDataset.acquireDataset("/usr/local/web/WPS/EDAS2/src/test/resources/data/GISS-r1i1p1-sample.nc", null)
+  val ncDataset: NetcdfDataset = NetcdfDataset.acquireDataset("/usr/local/web/WPS/EDAS/src/test/resources/data/GISS-r1i1p1-sample.nc", null)
   val gridFilePath = "/tmp/gridFile.nc"
   println( "Creating Grid File at: " + gridFilePath )
   val gridWriter = NetcdfFileWriter.createNew( NetcdfFileWriter.Version.netcdf4, gridFilePath, null )
@@ -1149,7 +1149,7 @@ object writeTest extends App {
 //}
 
 
-// needs: DYLD_FALLBACK_LIBRARY_PATH=/Users/tpmaxwel/anaconda/envs/edas2/lib
+// needs: DYLD_FALLBACK_LIBRARY_PATH=/Users/tpmaxwel/anaconda/envs/edas/lib
 //object ncmlTest extends App {
 //  val test_dir = new File("/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/MERRA2/6hr")
 //  val gridFile = "/Users/tpmaxwel/test.nc"
