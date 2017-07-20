@@ -368,7 +368,10 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
   }
   def getCalDateBounds( time_index: Int ): Array[CalendarDate] = timeAxis.getCoordBoundsDate(time_index)
   def getCalDate( time_index: Int ): CalendarDate = timeAxis.getCalendarDate( time_index )
-  def getBoundsStartDate( time_index: Int ): CalendarDate =  getCalDateBounds( time_index )(0)
+  def getBoundsStartDate( time_index: Int ): CalendarDate = {
+    logger.info( "getBoundsStartDate: index = " + time_index.toString )
+    getCalDateBounds(time_index)(0)
+  }
   def getBoundsEndDate( time_index: Int ): CalendarDate =  getCalDateBounds( time_index )(1)
 
   val sectionCalendarRange: CalendarDateRange = CalendarDateRange.of( getBoundsStartDate( sectionRange.first ), getBoundsEndDate( sectionRange.last ) )
