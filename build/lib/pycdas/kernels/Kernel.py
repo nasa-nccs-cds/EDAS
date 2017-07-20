@@ -70,7 +70,7 @@ class Kernel:
                 try:
                     newDataset.copyAxis(axis)
                 except Exception, err:
-                    self.logger.error( "Error copying axis " + axis.id + "to grid file: " + str(err) )
+                    self.logger.error( "Error copying axis " + axis.id + " to grid file: " + str(err) )
             newDataset.copyGrid(grid)
             newDataset.close()
             self.logger.info( "Saved grid file: {0}".format( outpath ) )
