@@ -98,12 +98,13 @@ object TimeCycleSorter {
   val Year = 3
 }
 
-class TimeSpecs( val input_data: HeapFltArray, val startIndex: Int ) {
+class TimeSpecs( val input_data: HeapFltArray, val startIndex: Int ) extends Loggable {
 
   val dateList: IndexedSeq[CalendarDate] = getDateList
   val dateRange: ( CalendarDate, CalendarDate ) = ( dateList.head, dateList.last )
 
   def getDateList: IndexedSeq[CalendarDate] = {
+    logger.info( "\n\n    *************>>>>>>>>>>> Opening gridSpec: " + input_data.gridSpec )
     val gridDS: NetcdfDataset = NetcdfDatasetMgr.open(input_data.gridSpec)
     val timeAxis = CoordinateAxis1DTime.factory(gridDS, gridDS.findCoordinateAxis(AxisType.Time), new Formatter())
     val dateList: IndexedSeq[CalendarDate] = timeAxis.section( new ma2.Range( startIndex, startIndex + input_data.shape(0)-1 ) ).getCalendarDates.toIndexedSeq
