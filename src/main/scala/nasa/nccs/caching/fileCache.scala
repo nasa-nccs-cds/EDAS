@@ -375,14 +375,14 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
   }
   def getBoundsEndDate( time_index: Int ): CalendarDate =  getCalDateBounds( time_index )(1)
 
-  val sectionCalendarRange: CalendarDateRange = CalendarDateRange.of( getBoundsStartDate( sectionRange.first ), getBoundsEndDate( sectionRange.last ) )
-  val secondsPerSection: Long = sectionCalendarRange.getDurationInSecs
-  val monthsPerSection: Float = secondsPerSection / secPerMonth
-  val daysPerSection: Float = secondsPerSection / secPerDay
-  val resolutionInDays: Float = daysPerSection / baseShape(0)
-  val monthMemorySize: Float = sectionMemorySize / monthsPerSection
-  val slicesPerDay: Float = daysPerSection / baseShape(0)
-  val yearsPerSection: Float = secondsPerSection / secPeryear
+//  val sectionCalendarRange: CalendarDateRange = CalendarDateRange.of( getBoundsStartDate( sectionRange.first ), getBoundsEndDate( sectionRange.last ) )
+//  val secondsPerSection: Long = sectionCalendarRange.getDurationInSecs
+//  val monthsPerSection: Float = secondsPerSection / secPerMonth
+//  val daysPerSection: Float = secondsPerSection / secPerDay
+//  val resolutionInDays: Float = daysPerSection / baseShape(0)
+//  val monthMemorySize: Float = sectionMemorySize / monthsPerSection
+//  val slicesPerDay: Float = daysPerSection / baseShape(0)
+//  val yearsPerSection: Float = secondsPerSection / secPeryear
 
   def getPartitionSpecs( constraints: PartitionConstraints ): PartitionSpecs = {
     val desiredPartSize = if( constraints.numParts == 0 ) { partitionSize } else { math.min( partitionSize, sectionMemorySize / constraints.numParts.toFloat ) }
