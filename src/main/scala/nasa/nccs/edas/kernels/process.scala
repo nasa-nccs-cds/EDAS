@@ -705,6 +705,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val elems = a0.elements flatMap { case (key, data0) =>
         a1.elements.get( key ) match {
           case Some( data1 ) =>
+            logger.info(s"weightedValueSumRDDCombiner: element ${key}, shape0: ${data0.shape.mkString(",")}, shape1: ${data1.shape.mkString(",")}" )
             val vTot: FastMaskedArray = data0.toFastMaskedArray + data1.toFastMaskedArray
             val t1 = System.nanoTime
             val wTotOpt: Option[Array[Float]] = data0.toMa2WeightsArray flatMap { wtsArray0 => data1.toMa2WeightsArray map { wtsArray1 => (wtsArray0 + wtsArray1).toFloatArray } }
