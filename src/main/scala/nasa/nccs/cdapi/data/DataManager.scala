@@ -99,18 +99,12 @@ object TimeCycleSorter {
 }
 
 class TimeSpecs( val input_data: HeapFltArray, val startIndex: Int ) extends Loggable {
-
-  val dateList: IndexedSeq[CalendarDate] = getDateList
-  val dateRange: ( CalendarDate, CalendarDate ) = ( dateList.head, dateList.last )
-
-  def getDateList: IndexedSeq[CalendarDate] = {
-    logger.info( "\n\n    *************>>>>>>>>>>> Opening gridSpec: " + input_data.gridSpec )
-    val gridDS: NetcdfDataset = NetcdfDatasetMgr.open(input_data.gridSpec)
-    val timeAxis = CoordinateAxis1DTime.factory(gridDS, gridDS.findCoordinateAxis(AxisType.Time), new Formatter())
-    val dateList: IndexedSeq[CalendarDate] = timeAxis.section( new ma2.Range( startIndex, startIndex + input_data.shape(0)-1 ) ).getCalendarDates.toIndexedSeq
-    gridDS.close()
-    dateList
-  }
+  logger.info( "\n    *************>>>>>>>>>>> Opening gridSpec: " + input_data.gridSpec )
+  private val __gridDS: NetcdfDataset = NetcdfDatasetMgr.open( input_data.gridSpec )
+  val timeAxis = CoordinateAxis1DTime.factory( __gridDS, __gridDS.findCoordinateAxis(AxisType.Time), new Formatter())
+  val dateList: IndexedSeq[CalendarDate] = timeAxis.section( new ma2.Range( startIndex, startIndex + input_data.shape(0)-1 ) ).getCalendarDates.toIndexedSeq
+  val dateRange = ( timeAxis.getCalendarDate(0), timeAxis.getCalendarDate( timeAxis.getSize.toInt-1 ) )
+  __gridDS.close()
 }
 
 class TimeCycleSorter(val input_data: HeapFltArray, val context: KernelContext, val startIndex: Int ) extends BinSorter with Loggable {
@@ -139,8 +133,6 @@ class TimeCycleSorter(val input_data: HeapFltArray, val context: KernelContext, 
 
   def getNumBins: Int = nBins
   def getSeason( monthIndex: Int ): Int = ( monthIndex - 2 ) / 3
-
-
 
   val nBins: Int = cycle match {
     case Diurnal => 24
