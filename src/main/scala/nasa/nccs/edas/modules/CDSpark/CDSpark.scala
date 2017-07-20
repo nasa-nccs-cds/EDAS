@@ -349,6 +349,7 @@ class svd extends SingularRDDKernel(Map.empty) {
     val svd: SingularValueDecomposition[RowMatrix, Matrix] = mat.computeSVD(20)
     val eigenvalues: Vector = svd.s
     val eigenVectors: Matrix = svd.V
+    input
   }
 
 //  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {

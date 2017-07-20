@@ -98,8 +98,23 @@ object TimeCycleSorter {
   val Year = 3
 }
 
+class TimeSpecs( val input_data: HeapFltArray, val startIndex: Int ) {
+
+  val dateList: IndexedSeq[CalendarDate] = getDateList
+  val dateRange: ( CalendarDate, CalendarDate ) = ( dateList.head, dateList.last )
+
+  def getDateList: IndexedSeq[CalendarDate] = {
+    val gridDS: NetcdfDataset = NetcdfDatasetMgr.open(input_data.gridSpec)
+    val timeAxis = CoordinateAxis1DTime.factory(gridDS, gridDS.findCoordinateAxis(AxisType.Time), new Formatter())
+    val dateList: IndexedSeq[CalendarDate] = timeAxis.section( new ma2.Range( startIndex, startIndex + input_data.shape(0)-1 ) ).getCalendarDates.toIndexedSeq
+    gridDS.close()
+    dateList
+  }
+}
+
 class TimeCycleSorter(val input_data: HeapFltArray, val context: KernelContext, val startIndex: Int ) extends BinSorter with Loggable {
   import TimeCycleSorter._
+  val timeSpecs = new TimeSpecs( input_data, startIndex )
   val cycle = context.config("cycle", "hour" ) match {
     case x if (x == "diurnal") || x.startsWith("hour")  => Diurnal
     case x if x.startsWith("month") => Monthly
@@ -111,29 +126,20 @@ class TimeCycleSorter(val input_data: HeapFltArray, val context: KernelContext, 
     case x if x.startsWith("year") => Year
     case x => Undef
   }
-  val timeAxis: CoordinateAxis1DTime = getTimeAxis
-  val dateList: IndexedSeq[CalendarDate] = timeAxis.section( new ma2.Range( startIndex, startIndex + input_data.shape(0)-1 ) ).getCalendarDates.toIndexedSeq
-  val dateRange: ( CalendarDate, CalendarDate ) = getFullDataRange
   val binMod = context.config("binMod", "" )
   private var _startBinIndex = -1
   private var _currentDate: CalendarDate = CalendarDate.of(0L)
-  val _startMonth = dateRange._1.getFieldValue( CalendarPeriod.Field.Month )
-  val _startYear = dateRange._1.getFieldValue( CalendarPeriod.Field.Year )
-  lazy val yearRange = dateList.last.getFieldValue( CalendarPeriod.Field.Year ) - dateList.head.getFieldValue( CalendarPeriod.Field.Year )
-  lazy val monthRange = dateList.last.getFieldValue( CalendarPeriod.Field.Month ) - dateList.head.getFieldValue( CalendarPeriod.Field.Month )
-  lazy val fullYearRange = dateRange._2.getFieldValue( CalendarPeriod.Field.Year ) - dateRange._1.getFieldValue( CalendarPeriod.Field.Year )
-  lazy val fullMonthRange = dateRange._2.getFieldValue( CalendarPeriod.Field.Month ) - dateRange._1.getFieldValue( CalendarPeriod.Field.Month )
+  val _startMonth = timeSpecs.dateRange._1.getFieldValue( CalendarPeriod.Field.Month )
+  val _startYear = timeSpecs.dateRange._1.getFieldValue( CalendarPeriod.Field.Year )
+  lazy val yearRange = timeSpecs.dateList.last.getFieldValue( CalendarPeriod.Field.Year ) - timeSpecs.dateList.head.getFieldValue( CalendarPeriod.Field.Year )
+  lazy val monthRange = timeSpecs.dateList.last.getFieldValue( CalendarPeriod.Field.Month ) - timeSpecs.dateList.head.getFieldValue( CalendarPeriod.Field.Month )
+  lazy val fullYearRange = timeSpecs.dateRange._2.getFieldValue( CalendarPeriod.Field.Year ) - timeSpecs.dateRange._1.getFieldValue( CalendarPeriod.Field.Year )
+  lazy val fullMonthRange = timeSpecs.dateRange._2.getFieldValue( CalendarPeriod.Field.Month ) - timeSpecs.dateRange._1.getFieldValue( CalendarPeriod.Field.Month )
 
   def getNumBins: Int = nBins
   def getSeason( monthIndex: Int ): Int = ( monthIndex - 2 ) / 3
 
-  def getTimeAxis: CoordinateAxis1DTime = {
-    val gridDS: NetcdfDataset = NetcdfDatasetMgr.open(input_data.gridSpec)
-    val rv = CoordinateAxis1DTime.factory(gridDS, gridDS.findCoordinateAxis(AxisType.Time), new Formatter())
-    gridDS.close()
-    rv
-  }
-  def getFullDataRange: ( CalendarDate, CalendarDate ) = ( timeAxis.getCalendarDate(0), timeAxis.getCalendarDate( timeAxis.getSize.toInt-1 ) )
+
 
   val nBins: Int = cycle match {
     case Diurnal => 24
@@ -162,7 +168,7 @@ class TimeCycleSorter(val input_data: HeapFltArray, val context: KernelContext, 
   }
 
   def setCurrentCoords( coords: Array[Int] ): Unit = {
-    _currentDate = dateList( coords(0) )
+    _currentDate = timeSpecs.dateList( coords(0) )
   }
 
   def getBinIndex: Int = cycle match {
