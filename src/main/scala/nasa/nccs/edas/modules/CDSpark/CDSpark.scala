@@ -251,9 +251,11 @@ class binAve extends Kernel(Map.empty) {
   override def combineRDD(context: KernelContext)( a0: RDDRecord, a1: RDDRecord ): RDDRecord =  weightedValueSumRDDCombiner(context)( a0, a1 )
   override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
 
-  def getSorter( input_data: HeapFltArray, context: KernelContext, startIndex: Int  ): BinSorter = {
-    new TimeCycleSorter( input_data, context, startIndex )
-  }
+  def getSorter( input_data: HeapFltArray, context: KernelContext, startIndex: Int  ): BinSorter =
+    context.config("cycle", "" ) match {
+      case x if !x.isEmpty  => new TimeCycleSorter( input_data, context, startIndex )
+      case x  => new AnomalySorter( input_data, context, startIndex )
+    }
 
   def getOp(context: KernelContext): ReduceOpFlt = {
     if ( mapCombineOp.isDefined ) { mapCombineOp.get }
@@ -334,6 +336,47 @@ class subset extends Kernel(Map.empty) {
   val title = "Space/Time Subset"
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
 }
+
+class anomaly extends SingularRDDKernel(Map.empty) {
+  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
+  val outputs = List( WPSProcessOutput( "operation result" ) )
+  val title = "Space/Time Mean"
+  val description = "Computes an anomaly of the input variable data"
+
+  override def mapRDD(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
+    logger.info( "Executing map OP for Kernel " + id + ", OP = " + context.operation.identifier )
+    val binAveKernel = new binAve( )
+    val binAveRDD = binAveKernel.mapRDD(input,context)
+    binAveRDD
+  }
+  override def combineRDD(context: KernelContext)(a0: RDDRecord, a1: RDDRecord ): RDDRecord =  weightedValueSumRDDCombiner(context)(a0, a1)
+  override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
+
+  //  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
+  //    val t0 = System.nanoTime
+  //    val elems = context.operation.inputs.map( inputId => inputs.element(inputId) match {
+  //      case Some( input_data ) =>
+  //        val input_array: FastMaskedArray = input_data.toFastMaskedArray
+  //        val (weighted_value_sum_masked, weights_sum_masked) =  if( addWeights(context) ) {
+  //          val weights: FastMaskedArray = FastMaskedArray(KernelUtilities.getWeights(inputId, context))
+  //          input_array.weightedSum(axisIndices,Some(weights))
+  //        } else {
+  //          input_array.weightedSum(axisIndices,None)
+  //        }
+  //        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "axes" -> axes.toUpperCase )
+  //        context.operation.rid -> HeapFltArray(weighted_value_sum_masked.toCDFloatArray, input_data.origin, result_metadata, Some(weights_sum_masked.toCDFloatArray.getArrayData()))
+  //      case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
+  //    })
+  //    logger.info("Executed Kernel %s map op, input = %s, time = %.4f s".format(name,  id, (System.nanoTime - t0) / 1.0E9))
+  //    context.addTimestamp( "Map Op complete" )
+  //    val rv = RDDRecord( TreeMap( elems:_*), inputs.metadata )
+  //    logger.info("Returning result value")
+  //    rv
+  //  }
+  //  override def combineRDD(context: KernelContext)(a0: RDDRecord, a1: RDDRecord ): RDDRecord =  weightedValueSumRDDCombiner(context)(a0, a1)
+  //  override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
+}
+
 
 class svd extends SingularRDDKernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )

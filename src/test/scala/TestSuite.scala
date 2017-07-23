@@ -306,15 +306,11 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for Max")
     }
 
-  test("TimeSum-dap-file") {
-    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 140615.5f, 139952f, 139100.6f, 138552.2f, 137481.9f, 137100.5f ), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"}}],variable=[{"uri":"http://esgf.nccs.nasa.gov/thredds/dodsC/CMIP5/NASA/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0","cache":"false"}],operation=[{"name":"CDSpark.sum","input":"v1","domain":"d0","axes":"t"}]]"""
-    val result_node = executeTest( datainputs, Map( "response" -> "file" ) )
-    val result_variable: Variable = getResultVariables( result_node ).head
-    val result_data: CDFloatArray = CDFloatArray.factory( result_variable.read.reshape(Array(nco_verified_result.getSize)), Float.MaxValue )
+  test("anomaly") {
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":0,"end":80,"system":"values"}}],variable=[{"uri":"http://esgf.nccs.nasa.gov/thredds/dodsC/CREATE-IP/reanalysis/NASA-GMAO/GEOS-5/MERRA2/mon/atmos/tas/tas_Amon_reanalysis_MERRA2_198001-201412.nc","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.anomaly","input":"v1","domain":"d0","axes":"yt"}]]"""
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
-    println( "Verified Result: " + nco_verified_result.mkBoundedDataString(", ",100) )
-    assert( nco_verified_result.maxScaledDiff( result_data )  < eps, s" Incorrect value computed for Max")
   }
 
   test("pyMaximum-cache") {

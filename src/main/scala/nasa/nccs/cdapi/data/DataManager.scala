@@ -179,6 +179,38 @@ class TimeCycleSorter(val input_data: HeapFltArray, val context: KernelContext, 
 }
 
 
+class AnomalySorter(val input_data: HeapFltArray, val context: KernelContext, val startIndex: Int ) extends BinSorter with Loggable {
+  import TimeCycleSorter._
+  val timeSpecs = new TimeSpecs( input_data, startIndex )
+  val axes = context.config("axes", "" )
+  val yIndex: Int = context.grid.getAxisIndices( "y" ).getAxes(0)
+  val (cycle, nBins) = if( axes.contains('t') ) ( Monthly,  12 ) else ( Undef, 1 )
+  val removeYvar = axes.contains('y')
+  private var _currentDate: CalendarDate = CalendarDate.of(0L)
+  private var _currentCoords: Array[Int] = Array.emptyIntArray
+
+  def getNumBins: Int = nBins
+
+  def getReducedShape( shape: Array[Int]  ): Array[Int] = {
+    var newshape = Array.fill[Int](shape.length)(1)
+    if( removeYvar ) { newshape(yIndex) = shape(yIndex) }
+    newshape
+  }
+
+  def setCurrentCoords( coords: Array[Int] ): Unit = {
+    _currentDate = timeSpecs.dateList( coords(0) )
+    _currentCoords = coords
+  }
+
+  def getBinIndex: Int = cycle match {
+    case Monthly => _currentDate.getFieldValue( CalendarPeriod.Field.Month ) - 1
+    case Undef => 0
+  }
+
+  def getItemIndex: Int = if( removeYvar ) { _currentCoords(yIndex) } else { 0 }
+}
+
+
 object FastMaskedArray {
   type ReduceOp = (Float,Float)=>Float
   def apply( array: ma2.Array, missing: Float ): FastMaskedArray = new FastMaskedArray( array, missing )

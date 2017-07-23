@@ -43,7 +43,7 @@ _Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and 
     
     2) Create EDAS conda environment:
         
-        >> conda create -n edas -c conda-forge -c uvcdat uvcdat nco pyzmq psutil lxml
+        >> conda create -n edas -c conda-forge -c uvcdat uvcdat pyzmq psutil lxml
         
     3) Initialize shell enviromnment for edas:
     
