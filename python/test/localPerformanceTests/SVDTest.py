@@ -13,9 +13,10 @@ try:
     responses = response_manager.getResponseVariables(rId1)
 
     print "Received " + str(len(responses)) + " responses"
-    resultVar = responses[0](squeeze=1)
-
-    print " Result data: " + str( resultVar.data )
+    print " Result data shape: " + str( responses[0].shape )
+    
+    cycle = [ responses[i](squeeze=1)[100] for i in range(12) ]
+    print " Seasonal Cycle: " + str(cycle)
 
 finally:
     portal.shutdown()
