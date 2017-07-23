@@ -14,9 +14,11 @@ try:
 
     print "Received " + str(len(responses)) + " responses"
     print " Result data shape: " + str( responses[0].shape )
-    
+
     cycle = [ responses[i](squeeze=1)[100] for i in range(12) ]
     print " Seasonal Cycle: " + str(cycle)
+
+    print " Zonal variation: " + str( responses[0].data.flatten )
 
 finally:
     portal.shutdown()
