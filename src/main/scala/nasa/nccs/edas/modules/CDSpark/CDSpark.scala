@@ -337,7 +337,7 @@ class subset extends Kernel(Map.empty) {
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
 }
 
-class anomaly extends SingularRDDKernel(Map.empty) {
+class anomaly extends SingularRDDKernel(Map.empty) {   
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Mean"
