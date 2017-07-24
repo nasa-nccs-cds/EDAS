@@ -32,12 +32,16 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
   def fatal( msg: String ) = throw new Exception( s"Workflow Node '${operation.identifier}' Error: " + msg )
 
   def getKernelOption( key: String , default: String = ""): String = kernel.options.getOrElse(key,default)
+  def doesTimeReduction: Boolean = operation.operatesOnAxis('t' )
 
   def generateKernelContext( requestCx: RequestContext, profiler: ProfilingTool ): KernelContext = {
     val sectionMap: Map[String, Option[CDSection]] = requestCx.inputs.mapValues(_.map(_.cdsection)).map(identity)
     val gridMap: Map[String,Option[GridContext]] = requestCx.getTargetGrids.map { case (uid,tgridOpt) => uid -> tgridOpt.map( tg => GridContext(uid,tg)) }
     new KernelContext( operation, gridMap, sectionMap, requestCx.domains, requestCx.getConfiguration, profiler )
   }
+  def map(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = kernel.mapRDD( input, context )
+
+  def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int  ): (RecordKey,RDDRecord) = kernel.mapReduce( input, context, batchIndex )
 
   def reduce(mapresult: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
     logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
@@ -87,7 +91,6 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
     CDSparkContext.coalesce( input, context ).map { case ( pkey, rdd_part ) => ( new_partitioner.range, rdd_part.reinterp( conversionMap ) ) } repartitionAndSortWithinPartitions new_partitioner
   }
 
-  def map(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = kernel.mapRDD( input, context )
 
   def disaggPartitions(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
     logger.info( "Executing map OP for Kernel " + kernel.id + ", OP = " + context.operation.identifier )
@@ -105,12 +108,12 @@ object Workflow {
 }
 
 class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager ) extends Loggable {
-  val nodes = request.operations.map(opCx => WorkflowNode( opCx, createKernel( opCx.name.toLowerCase ) ) )
+  val nodes: List[WorkflowNode] = request.operations.map(opCx => WorkflowNode( opCx, createKernel( opCx.name.toLowerCase ) ) )
   val roots = findRootNodes()
 
   def createKernel(id: String): Kernel = executionMgr.getKernel(id)
 
-  def generateProduct( requestCx: RequestContext, node: WorkflowNode  ): WPSProcessExecuteResponse = {
+  def generateProduct( requestCx: RequestContext, node: WorkflowNode  ): Option[WPSProcessExecuteResponse] = {
     val result = executeKernel( requestCx, node )
     createResponse( result, requestCx, node )
   }
@@ -131,19 +134,18 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def executeRequest(requestCx: RequestContext): List[ WPSProcessExecuteResponse ] = {
     linkNodes( requestCx )
-    val product_nodes = DAGNode.sort( nodes.filter( _.isRoot ) )
-    for (product_node <- product_nodes) yield {
+    val product_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeReduction ) )
+    val productNodeOpts = for (product_node <- product_nodes) yield {
       logger.info( "\n\n ----------------------- Execute PRODUCT Node: %s -------\n".format( product_node.getNodeId() ))
       generateProduct(requestCx, product_node)
     }
+    productNodeOpts.flatten
   }
 
   def mapReduceBatch( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[ ( RecordKey, RDDRecord ) ] = {
     prepareInputs(node, opInputs, kernelContext, requestCx, batchIndex) map (inputs => {
       kernelContext.addTimestamp( s"Executing Map Op, Batch ${batchIndex.toString} for node ${node.getNodeId}", true )
-      val mapresult = node.map(inputs, kernelContext)
-      logger.info(s"Executing Reduce Op, Batch ${batchIndex.toString} for node ${node.getNodeId}")
-      val result: (RecordKey, RDDRecord) = node.reduce(mapresult, kernelContext, batchIndex)
+      val result: (RecordKey, RDDRecord) = node.mapReduce(inputs, kernelContext, batchIndex)
       logger.info(s"Completed Reduce op, result metadata: ${result._2.metadata.mkString(", ")}")
       mapReduceBatch(node, opInputs, kernelContext, requestCx, batchIndex + 1) match {
         case Some(next_result) =>
@@ -158,20 +160,20 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     prepareInputs(node, opInputs, kernelContext, requestCx, batchIndex) map ( inputs => {
       logger.info( s"Executing mapReduce Batch ${batchIndex.toString}" )
       val mapresult = node.map( inputs, kernelContext )
-      streamReduceNode( mapresult, node, kernelContext, batchIndex )
+      streamReduceNode( mapresult, node, kernelContext, batchIndex )        // Stream batch -> assumes no spatial reduction; time reduction (confined to batch) allowed
       })
 
-  def streamMapReduceBatchRecursive( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] =
-    prepareInputs(node, opInputs, kernelContext, requestCx, batchIndex) map ( inputs => {
-      logger.info( s"Executing mapReduce Batch ${batchIndex.toString}" )
-      val mapresult = node.map( inputs, kernelContext )
-      val result: RDD[(RecordKey,RDDRecord)] = streamReduceNode( mapresult, node, kernelContext, batchIndex )
-      streamMapReduceBatchRecursive( node, opInputs, kernelContext, requestCx, batchIndex + 1 ) match {
-        case Some( next_result ) =>
-          val reduceOp = node.kernel.getReduceOp(kernelContext)
-          result.join(next_result).mapValues(rdds => node.kernel.combineRDD(kernelContext)(rdds._1, rdds._2))
-        case None => result
-      }})
+//  def streamMapReduceBatchRecursive( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] =
+//    prepareInputs(node, opInputs, kernelContext, requestCx, batchIndex) map ( inputs => {
+//      logger.info( s"Executing mapReduce Batch ${batchIndex.toString}" )
+//      val mapresult = node.map( inputs, kernelContext )
+//      val result: RDD[(RecordKey,RDDRecord)] = streamReduceNode( mapresult, node, kernelContext, batchIndex )
+//      streamMapReduceBatchRecursive( node, opInputs, kernelContext, requestCx, batchIndex + 1 ) match {
+//        case Some( next_result ) =>
+//          val reduceOp = node.kernel.getReduceOp(kernelContext)
+//          result.join(next_result).mapValues(rdds => node.kernel.combineRDD(kernelContext)(rdds._1, rdds._2))
+//        case None => result
+//      }})
 
   def streamReduceNode(mapresult: RDD[(RecordKey,RDDRecord)], node: WorkflowNode, context: KernelContext, batchIndex: Int ): RDD[(RecordKey,RDDRecord)] = {
     logger.debug( "\n\n ----------------------- BEGIN stream reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
@@ -184,8 +186,6 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
       }
       else {
         val inputNParts = mapresult.partitions.length
-        val intermediateNParts: Int = if (context.commutativeReduction) { inputNParts } else { 1 }
-        logger.debug( "NPARTS: " + inputNParts + ", " + intermediateNParts )
         val pre_result_pair = mapresult treeReduce node.kernel.getReduceOp(context)
         val result = pre_result_pair._1 -> node.kernel.postRDDOp( pre_result_pair._2, context  )
         logger.debug("\n\n ----------------------- FINISHED stream reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
@@ -273,17 +273,19 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     Map(items: _*)
   }
 
-  def createResponse(result: RDDRecord, context: RequestContext, node: WorkflowNode ): WPSProcessExecuteResponse = {
+  def createResponse(result: RDDRecord, context: RequestContext, node: WorkflowNode ): Option[WPSProcessExecuteResponse] = {
     val resultId = cacheResult( result, context, node )
-    context.getConf("response","xml") match {
-      case "object" =>
-        new RefExecutionResult ("WPS", node.kernel, node.operation.identifier, resultId, None )
-      case "xml" =>
-        new RDDExecutionResult ("WPS", node.kernel, node.operation.identifier, result, resultId) // TODO: serviceInstance
-      case "file" =>
-        val resultFileOpt: Option[String] = executionMgr.getResultFilePath( resultId )
-        new RefExecutionResult( "WPS", node.kernel, node.operation.identifier, resultId, resultFileOpt )
-    }
+    if( node.isRoot ) {
+      context.getConf("response", "xml") match {
+        case "object" =>
+          Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, None) )
+        case "xml" =>
+          Some( new RDDExecutionResult("WPS", node.kernel, node.operation.identifier, result, resultId) )// TODO: serviceInstance
+        case "file" =>
+          val resultFileOpt: Option[String] = executionMgr.getResultFilePath(resultId)
+          Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFileOpt) )
+      }
+    } else { None }
   }
 
   def cacheResult(result: RDDRecord, context: RequestContext, node: WorkflowNode ): String = {

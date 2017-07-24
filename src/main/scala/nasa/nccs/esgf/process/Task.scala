@@ -1144,6 +1144,7 @@ class OperationContext(val index: Int,
   val moduleName: String = name.toLowerCase.split('.').head
   override def toString =  s"OperationContext { id = $identifier,  name = $name, rid = $rid, inputs = $inputs, configurations = $configuration }"
   override def toXml = <proc id={identifier} name={name} rid={rid} inputs={inputs.toString} configurations={configuration.toString}/>
+  def operatesOnAxis( axis: Char ): Boolean = configuration.getOrElse("axes","").contains(axis)
 }
 
 object OperationContext extends ContainerBase {

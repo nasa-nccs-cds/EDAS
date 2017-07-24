@@ -450,7 +450,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     ( target_arrays, weight_arrays )
   }
 
-  def binDiff( sorter: BinSorter, binnedData: IndexedSeq[FastMaskedArray] ):  IndexedSeq[FastMaskedArray] = {
+  def binDiff( sorter: BinSorter, binnedData: IndexedSeq[FastMaskedArray], binnedDataAxis: Int ):  IndexedSeq[FastMaskedArray] = {
     val rank = array.getRank
     val iter: IndexIterator = array.getIndexIterator
     val target_shape: Array[Int] = sorter.getReducedShape( array.getShape )
@@ -462,10 +462,12 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
         var coords: Array[Int] = iter.getCurrentCounter
         sorter.setCurrentCoords( coords )
         val binIndex: Int = sorter.getBinIndex
+        val otherDataArray = binnedData(binIndex)
         val target_array = target_arrays( binIndex )
         val itemIndex: Int = sorter.getItemIndex
-        val currVal = target_array.array.getFloat(itemIndex)
-        target_array.array.setFloat( itemIndex, currVal + fval )
+        val otherItemIndex = coords( binnedDataAxis )
+        val otherVal = otherDataArray.array.getFloat( otherItemIndex )
+        target_array.array.setFloat( itemIndex, fval - otherVal )
       }
     }
     target_arrays

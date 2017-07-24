@@ -248,6 +248,24 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     input.mapValues( map(context) )
   }
 
+  def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+    logger.info( "Executing map OP for Kernel " + id + ", OP = " + context.operation.identifier )
+    val mapresult = input.mapValues( map(context) )
+    logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
+    runtime.printMemoryUsage
+    val t0 = System.nanoTime()
+    val nparts = mapresult.getNumPartitions
+    if( !parallelizable || (nparts==1) ) { mapresult.collect()(0) }
+    else {
+      val result = mapresult treeReduce getReduceOp(context)
+      logger.debug("\n\n ----------------------- FINISHED reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
+      context.addTimestamp( "FINISHED reduce Operation" )
+      result
+    }
+  }
+
+
+
   def addWeights( context: KernelContext ): Boolean = {
     weightsOpt match {
       case Some( weights ) =>
