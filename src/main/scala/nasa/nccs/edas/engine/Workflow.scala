@@ -160,8 +160,8 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     prepareInputs(node, opInputs, kernelContext, requestCx, batchIndex) map ( inputs => {
       logger.info( s"Executing mapReduce Batch ${batchIndex.toString}" )
       val mapresult = node.map( inputs, kernelContext )
-      streamReduceNode( mapresult, node, kernelContext, batchIndex )        // Stream batch -> assumes no spatial reduction; time reduction (confined to batch) allowed
-      })
+      mapresult mapValues ( array => node.kernel.postRDDOp( array, kernelContext ) )   // Stream batch -> assumes no spatial reduction; time reduction (confined to batch) allowed
+    })
 
 //  def streamMapReduceBatchRecursive( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] =
 //    prepareInputs(node, opInputs, kernelContext, requestCx, batchIndex) map ( inputs => {
@@ -175,25 +175,19 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 //        case None => result
 //      }})
 
-  def streamReduceNode(mapresult: RDD[(RecordKey,RDDRecord)], node: WorkflowNode, context: KernelContext, batchIndex: Int ): RDD[(RecordKey,RDDRecord)] = {
-    logger.debug( "\n\n ----------------------- BEGIN stream reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
-    runtime.printMemoryUsage
-    val t0 = System.nanoTime()
-    if( context.doesTimeReduction ) {
-      val nparts = mapresult.getNumPartitions
-      if( !node.kernel.parallelizable || (nparts==1) ) {
-        mapresult.mapValues( record => node.kernel.postRDDOp( record, context  ) )
-      }
-      else {
-        val inputNParts = mapresult.partitions.length
-        val pre_result_pair = mapresult treeReduce node.kernel.getReduceOp(context)
-        val result = pre_result_pair._1 -> node.kernel.postRDDOp( pre_result_pair._2, context  )
-        logger.debug("\n\n ----------------------- FINISHED stream reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
-        val results = List.fill(inputNParts)( result )
-        executionMgr.serverContext.spark.sparkContext.parallelize( results )
-      }
-    } else { mapresult }
-  }
+//  def streamReduceNode(mapresult: RDD[(RecordKey,RDDRecord)], node: WorkflowNode, context: KernelContext, batchIndex: Int ): RDD[(RecordKey,RDDRecord)] = {
+//    logger.debug( "\n\n ----------------------- BEGIN stream reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
+//    runtime.printMemoryUsage
+//    val t0 = System.nanoTime()
+//    if( context.doesTimeReduction ) {}
+//        val inputNParts = mapresult.partitions.length
+//        val pre_result_pair = mapresult treeReduce node.kernel.getReduceOp(context)
+//        val result = pre_result_pair._1 -> node.kernel.postRDDOp( pre_result_pair._2, context  )
+//        logger.debug("\n\n ----------------------- FINISHED stream reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
+//        val results = List.fill(inputNParts)( result )
+//        executionMgr.serverContext.spark.sparkContext.parallelize( results )
+//    } else { mapresult }
+//  }
 
   def mapReduce( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext ): RDDRecord = {
     mapReduceBatch( node, opInputs, kernelContext, requestCx, 0 ) match {

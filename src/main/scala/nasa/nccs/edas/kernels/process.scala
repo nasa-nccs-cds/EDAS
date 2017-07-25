@@ -250,7 +250,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
     logger.info( "Executing map OP for Kernel " + id + ", OP = " + context.operation.identifier )
-    val mapresult = input.mapValues( map(context) )
+    val mapresult = mapRDD( input, context )
     logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
     runtime.printMemoryUsage
     val t0 = System.nanoTime()

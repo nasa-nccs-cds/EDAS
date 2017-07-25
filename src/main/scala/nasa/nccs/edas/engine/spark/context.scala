@@ -201,7 +201,7 @@ class CDSparkContext( @transient val sparkContext: SparkContext ) extends Loggab
         val partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
         logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString ).mkString("\n\t"))
         val parallelized_rddspecs = sparkContext parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy partitioner
-        Some(parallelized_rddspecs mapValues (spec => spec.getRDDPartition(kernelContext,batchIndex)) )
+        Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition(kernelContext,batchIndex)) )
       }
     } )
   }
