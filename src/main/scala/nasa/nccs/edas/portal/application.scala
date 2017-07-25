@@ -11,6 +11,7 @@ import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.portal.EDASPortal.ConnectionMode._
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
+import nasa.nccs.wps.WPSExceptionReport
 import org.apache.spark.SparkEnv
 
 import scala.xml
@@ -72,6 +73,11 @@ class EDASapp( mode: EDASPortal.ConnectionMode, request_port: Int, response_port
     val response = processManager.executeProcess( process, process_name, datainputs, runargs )
     if( responseType == "object" ) { sendDirectResponse( taskSpec(0), response ) }
     sendResponse( taskSpec(0), printer.format( response ) )
+  }
+
+  def sendErrorReport( id: String, exc: Exception ) = {
+    val err = new WPSExceptionReport(exc)
+    sendResponse( id, printer.format( err.toXml ) )
   }
 
   def shutdown = { processManager.shutdown( process ) }

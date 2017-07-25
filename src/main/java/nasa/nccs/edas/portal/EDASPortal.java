@@ -26,6 +26,8 @@ public abstract class EDASPortal {
     protected Logger logger = EDASLogManager.getCurrentLogger();
     private boolean active = true;
 
+    public abstract void sendErrorReport(  String id,  Exception err  );
+
     protected EDASPortal( ConnectionMode mode, int _request_port, int _response_port ) {
         try {
             request_port = _request_port;
@@ -109,11 +111,11 @@ public abstract class EDASPortal {
     }
 
     public void run() {
-
+        String parts[] = {"","",""};
         while( active ) try {
             logger.info( String.format( "Listening for requests on port: %d, host: %s",  request_port, getHostInfo() ) );
             String request_header = new String(request_socket.recv(0)).trim();
-            String[] parts = request_header.split("[!]");
+            parts = request_header.split("[!]");
             logger.info( String.format( "  ###  Processing %s request: %s",  parts[1], request_header ) );
             if( parts[1].equals("array") ) {
                 logger.info("Waiting for result data ");
@@ -138,7 +140,7 @@ public abstract class EDASPortal {
         } catch ( Exception ex ) {
             logger.error( "Error in Request: " + ex.toString() );
             ex.printStackTrace();
-            term();
+            sendErrorReport( parts[0], ex );
         }
     }
 
