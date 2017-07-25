@@ -160,7 +160,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     prepareInputs(node, opInputs, kernelContext, requestCx, batchIndex) map ( inputs => {
       logger.info( s"Executing mapReduce Batch ${batchIndex.toString}" )
       val mapresult = node.map( inputs, kernelContext )
-      mapresult mapValues ( array => node.kernel.postRDDOp( array, kernelContext ) )   // Stream batch -> assumes no spatial reduction; time reduction (confined to batch) allowed
+      mapresult mapValues ( array => node.kernel.postRDDOp( array, kernelContext ) )
     })
 
 //  def streamMapReduceBatchRecursive( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] =

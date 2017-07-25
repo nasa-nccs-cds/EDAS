@@ -1,11 +1,12 @@
 package nasa.nccs.edas.modules.CDSpark
 
-import nasa.nccs.cdapi.data._
+import nasa.nccs.cdapi.data.{RDDRecord, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import ucar.ma2
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels._
+import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import ucar.ma2.DataType
@@ -239,7 +240,8 @@ class binAve extends Kernel(Map.empty) {
         } else {
           input_array.weightedSumBin(sorter, None)
         }
-        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "axes" -> axes.toUpperCase )
+        val NBins = result_arrays._1.length
+        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "NBins" -> NBins.toString, "cycle" ->  context.config("cycle", "" ), "axes" -> axes.toUpperCase )
         result_arrays._1.indices.map( index => context.operation.rid + "." + index ->
           HeapFltArray( result_arrays._1(index).toCDFloatArray, input_data.origin, result_metadata, Some(result_arrays._2(index).toFloatArray) )
         )
@@ -343,14 +345,15 @@ class anomaly extends SingularRDDKernel(Map.empty) {
   val title = "Space/Time Mean"
   val description = "Computes an anomaly of the input variable data"
 
-  override def mapRDD(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
+  override def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
     logger.info( "Executing map OP for Kernel " + id + ", OP = " + context.operation.identifier )
     val binAveKernel = new binAve( )
-    val binAveRDD = binAveKernel.mapRDD(input,context)
-    binAveRDD
+    val mapReduceResult = binAveKernel.mapReduce(input,context,0)
+    binAveKernel.finalize( mapReduceResult, context )
   }
-  override def combineRDD(context: KernelContext)(a0: RDDRecord, a1: RDDRecord ): RDDRecord =  weightedValueSumRDDCombiner(context)(a0, a1)
-  override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
+
+//  override def combineRDD(context: KernelContext)(a0: RDDRecord, a1: RDDRecord ): RDDRecord =  weightedValueSumRDDCombiner(context)(a0, a1)
+//  override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
 
   //  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
   //    val t0 = System.nanoTime

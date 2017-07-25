@@ -12,6 +12,8 @@ import ucar.nc2.constants.AxisType
 import ucar.ma2
 import java.nio
 import java.util.Formatter
+
+import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import org.apache.spark.mllib.linalg.DenseVector
 
 import scala.collection.JavaConversions._
@@ -450,7 +452,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     ( target_arrays, weight_arrays )
   }
 
-  def binDiff( sorter: BinSorter, binnedData: IndexedSeq[FastMaskedArray], binnedDataAxis: Int ):  IndexedSeq[FastMaskedArray] = {
+  def binMerge( sorter: BinSorter, binnedData: Map[Int,FastMaskedArray], binnedDataAxis: Int, reduceOp: ReduceOpFlt ):  IndexedSeq[FastMaskedArray] = {
     val rank = array.getRank
     val iter: IndexIterator = array.getIndexIterator
     val target_shape: Array[Int] = sorter.getReducedShape( array.getShape )
@@ -467,7 +469,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
         val itemIndex: Int = sorter.getItemIndex
         val otherItemIndex = coords( binnedDataAxis )
         val otherVal = otherDataArray.array.getFloat( otherItemIndex )
-        target_array.array.setFloat( itemIndex, fval - otherVal )
+        target_array.array.setFloat( itemIndex, reduceOp(fval,otherVal) )
       }
     }
     target_arrays

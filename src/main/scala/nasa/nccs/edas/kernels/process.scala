@@ -264,7 +264,10 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
-
+  def finalize( mapReduceResult: (RecordKey,RDDRecord), context: KernelContext ): (RecordKey,RDDRecord) = {
+    val result = postRDDOp( orderElements( mapReduceResult._2, context ), context  )
+    mapReduceResult._1 -> result
+  }
 
   def addWeights( context: KernelContext ): Boolean = {
     weightsOpt match {
@@ -310,6 +313,35 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     case None => {
       a0 ++ a1
     }
+  }
+
+  def mergeBinnedArrays( binnedArrayData: List[Map[Int,HeapFltArray]], context: KernelContext, reduceOp: ReduceOpFlt, startIndex: Int ): HeapFltArray = {
+    if( binnedArrayData.length != 2 ) { throw new Exception( "Unsupported number of data inputs to mergeBinnedArrays: " + binnedArrayData.length.toString )}
+    val cycles = scala.collection.mutable.SortedSet[String]()
+    for( binnedArrayMap <- binnedArrayData; if binnedArrayMap.size > 1 ) {
+      val cycle = binnedArrayMap.head._2.attr("cycle")
+      cycles += cycle
+    }
+    if( cycles.size > 1 ) { throw new Exception( " Multiple cycle definitions in merge: " + cycles.mkString(" ") ) }
+    val cycle = cycles.head
+
+    val result_arrays: IndexedSeq[FastMaskedArray] = binnedArrayData.find( _.size == 1 ) match {
+      case Some( dataMap ) =>
+        val input_data: HeapFltArray = dataMap.head._2
+        binnedArrayData.find( _.size > 1 ) match {
+          case Some( binnedArrayMap ) =>
+            val sorter = cycle match {
+              case x if !x.isEmpty  => new TimeCycleSorter( input_data, context, startIndex )
+              case x  => new AnomalySorter( input_data, context, startIndex )
+            }
+            input_data.toFastMaskedArray.binMerge( sorter, binnedArrayMap.mapValues(_.toFastMaskedArray), 0, reduceOp )
+
+          case None => throw new Exception( "Can't find base data array in merge" )
+        }
+      case None => throw new Exception( "Can't find base data array in merge" )
+    }
+// TODO: Create result from result_arrays
+    binnedArrayData.head.head._2
   }
 
   def getCombinedGridfile( inputs: Map[String,ArrayBase[Float]] ): String = {
@@ -920,14 +952,28 @@ abstract class DualRDDKernel( options: Map[String,String] ) extends Kernel(optio
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
     if( mapCombineOp.isDefined ) {
       val t0 = System.nanoTime
-      val input_arrays: List[ArrayBase[Float]] = context.operation.inputs.map(id => inputs.findElements(id)).foldLeft(List[ArrayBase[Float]]())(_ ++ _)
-      assert(input_arrays.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      val ma2_input_arrays = input_arrays.map( _.toFastMaskedArray )
-      val result_array: CDFloatArray =   ma2_input_arrays(0).merge( ma2_input_arrays(1), mapCombineOp.get ).toCDFloatArray
-      val result_metadata = input_arrays.head.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
-      logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
-      context.addTimestamp("Map Op complete")
-      RDDRecord( TreeMap(context.operation.rid -> HeapFltArray(result_array, input_arrays(0).origin, result_metadata, None)), inputs.metadata)
+      val startIndex = inputs.metadata.getOrElse("startIndex","0").toInt
+      val input_keys = inputs.elements.keys.map( key => if(key.contains('.')) { key.split('.').dropRight(1).mkString(".") } else { key } )
+      val keyMap: Map[String,Iterable[String]] = Map( input_keys.map( key => key -> inputs.elements.keys.filter( _.startsWith(key) ) ).toSeq: _* )
+      val dataMap: Map[String,Map[Int,HeapFltArray]] = keyMap.mapValues( keys => Map( keys.map( key => ( if(key.contains('.')) { key.split('.').last.toInt } else { 0 } ) -> inputs.elements.getOrElse(key,HeapFltArray.empty(0)) ).toSeq: _* ) )
+      val input_array_maps: List[Map[Int,HeapFltArray]] = context.operation.inputs.flatMap(id => dataMap.get(id))
+//      val input_arrays: List[ArrayBase[Float]] = context.operation.inputs.map(id => inputs.findElements(id)).foldLeft(List[ArrayBase[Float]]())(_ ++ _)
+      assert(input_array_maps.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
+      if( input_array_maps.forall( _.size == 1 ) ) {
+        val input_arrays = input_array_maps.map( _.head._2 )
+        val ma2_input_arrays = input_arrays.map( _.toFastMaskedArray )
+        val result_array: CDFloatArray = ma2_input_arrays(0).merge(ma2_input_arrays(1), mapCombineOp.get).toCDFloatArray
+        val result_metadata = input_arrays.head.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
+        logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
+        context.addTimestamp("Map Op complete")
+        RDDRecord(TreeMap(context.operation.rid -> HeapFltArray(result_array, input_arrays(0).origin, result_metadata, None)), inputs.metadata)
+      } else {
+        val result_array: HeapFltArray = mergeBinnedArrays( input_array_maps, context, mapCombineOp.get, startIndex )
+        val result_metadata = result_array.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
+        logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
+        context.addTimestamp("Map Op complete")
+        RDDRecord( TreeMap( context.operation.rid -> result_array ), inputs.metadata)
+      }
     } else { inputs }
   }
 }
