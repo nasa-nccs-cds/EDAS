@@ -1,5 +1,6 @@
 package nasa.nccs.edas.modules.CDSpark
 
+import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.data.{RDDRecord, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import ucar.ma2
@@ -208,7 +209,9 @@ class bin extends Kernel(Map.empty) {
   override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
 
   def getSorter( input_data: HeapFltArray, context: KernelContext, startIndex: Int  ): BinSorter = {
-    new TimeCycleSorter( input_data, context, startIndex )
+    val cycle = context.config( "cycle", "hour" )
+    val bin = context.config( "bin", "month" )
+    new TimeCycleSorter( input_data, cycle, bin, startIndex )
   }
 
   def getOp(context: KernelContext): ReduceOpFlt = {
@@ -229,6 +232,7 @@ class binAve extends Kernel(Map.empty) {
     import BinKeyUtils.BinKeyOrdering
     val t0 = System.nanoTime
     val axes = context.config("axes","")
+    val binParm = context.config( "bin", "month" )
     val startIndex = inputs.metadata.getOrElse("startIndex","0").toInt
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId) match {
       case Some( input_data ) =>
@@ -241,7 +245,7 @@ class binAve extends Kernel(Map.empty) {
           input_array.weightedSumBin(sorter, None)
         }
         val NBins = result_arrays._1.length
-        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "NBins" -> NBins.toString, "varAxis" -> sorter.getVaryingAxis.toString, "cycle" ->  context.config("cycle", "" ), "axes" -> axes.toUpperCase )
+        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "bin" -> binParm, "gridfile" -> getCombinedGridfile(inputs.elements), "NBins" -> NBins.toString, "varAxis" -> sorter.getVaryingAxis.toString, "cycle" ->  context.config("cycle", "" ), "axes" -> axes.toUpperCase )
         result_arrays._1.indices.map( index => context.operation.rid + "." + index ->
           HeapFltArray( result_arrays._1(index).toCDFloatArray, input_data.origin, result_metadata, Some(result_arrays._2(index).toFloatArray) )
         )
@@ -255,8 +259,13 @@ class binAve extends Kernel(Map.empty) {
 
   def getSorter( input_data: HeapFltArray, context: KernelContext, startIndex: Int  ): BinSorter =
     context.config("cycle", "" ) match {
-      case x if !x.isEmpty  => new TimeCycleSorter( input_data, context, startIndex )
-      case x  => new AnomalySorter( input_data, context, startIndex )
+      case x if !x.isEmpty  =>
+        val cycle = context.config("cycle", "hour" )
+        val bin = context.config("bin", "month" )
+        new TimeCycleSorter( input_data, cycle, bin, startIndex )
+      case x  =>
+        val axes = context.config("axes", "" )
+        new AnomalySorter( input_data, axes, context.grid, startIndex )
     }
 
   def getOp(context: KernelContext): ReduceOpFlt = {

@@ -5,7 +5,7 @@ import nasa.nccs.cdapi.cdm.{NetcdfDatasetMgr, RemapElem, TimeConversionSpec}
 import nasa.nccs.cdapi.tensors.{CDFloatArray, _}
 import nasa.nccs.edas.engine.spark.{RangePartitioner, RecordKey}
 import nasa.nccs.edas.workers.TransVar
-import nasa.nccs.esgf.process.{CDSection, TargetGrid}
+import nasa.nccs.esgf.process.{CDSection, GridContext, TargetGrid}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import org.apache.spark.rdd.RDD
 import ucar.nc2.constants.AxisType
@@ -110,21 +110,20 @@ class TimeSpecs( val input_data: HeapFltArray, val startIndex: Int ) extends Log
   __gridDS.close()
 }
 
-class TimeCycleSorter(val input_data: HeapFltArray, val context: KernelContext, val startIndex: Int ) extends BinSorter with Loggable {
+class TimeCycleSorter(val input_data: HeapFltArray, val cycleParm: String, val binParm: String, val startIndex: Int ) extends BinSorter with Loggable {
   import TimeCycleSorter._
   val timeSpecs = new TimeSpecs( input_data, startIndex )
-  val cycle = context.config("cycle", "hour" ) match {
+  val cycle = cycleParm match {
     case x if (x == "diurnal") || x.startsWith("hour")  => Diurnal
     case x if x.startsWith("month") => Monthly
     case x if x.startsWith("season") => Seasonal
   }
-  val bin = context.config("bin", "month" ) match {
+  val bin = binParm match {
     case x if x.startsWith("month") => Month
     case x if x.startsWith("monthof") => MonthOfYear
     case x if x.startsWith("year") => Year
     case x => Undef
   }
-  val binMod = context.config("binMod", "" )
   private var _startBinIndex = -1
   private var _currentDate: CalendarDate = CalendarDate.of(0L)
   val _startMonth = timeSpecs.dateRange._1.getFieldValue( CalendarPeriod.Field.Month )
@@ -182,11 +181,11 @@ class TimeCycleSorter(val input_data: HeapFltArray, val context: KernelContext, 
 }
 
 
-class AnomalySorter(val input_data: HeapFltArray, val context: KernelContext, val startIndex: Int ) extends BinSorter with Loggable {
+class AnomalySorter(val input_data: HeapFltArray, val axesParm: String, grid: GridContext, val startIndex: Int ) extends BinSorter with Loggable {
   import TimeCycleSorter._
+  val axes = axesParm.toLowerCase
   val timeSpecs = new TimeSpecs( input_data, startIndex )
-  val axes = context.config("axes", "" )
-  val yIndex: Int = context.grid.getAxisIndices( "y" ).getAxes(0)
+  val yIndex: Int = grid.getAxisIndices( "y" ).getAxes(0)
   val (cycle, nBins) = if( axes.contains('t') ) ( Monthly,  12 ) else ( Undef, 1 )
   val removeYvar = axes.contains('y')
   private var _currentDate: CalendarDate = CalendarDate.of(0L)

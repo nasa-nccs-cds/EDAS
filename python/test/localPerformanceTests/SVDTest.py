@@ -1,6 +1,7 @@
 from pyedas.portal.edas import *
 import time, numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import animation
 
 request_port = 5670
 response_port = 5671
@@ -17,22 +18,30 @@ try:
     t0 = time.time()
     rId1 = portal.sendMessage("execute", [ "WPS", datainputs, '{ "response":"object" }'] )
     responses = response_manager.getResponseVariables(rId1)
+    responseVar = responses[0]
+    nTimeSteps = responseVar.shape[0]
 
-    print "Received " + str(len(responses)) + " responses"
-    print " Result data shape: " + str( responses[0].shape )
+    print " Result data shape: " + str( responseVar.shape ) + ", nTimeSteps = " + str( nTimeSteps )
     print "Completed OP in time {0}".format( time.time()-t0 );
+    timeslice = responseVar.subSlice( 0, ":", ":" ).data.squeeze()
 
-    vertslice = responses[0].subSlice( 100, ":", 100 ).data.squeeze()
-    print " Vertical anomaly slice: " + str( vertslice.tolist() )
+    fig = plt.figure()
+    im = plt.imshow( timeslice, origin="lower",interpolation='none' )
 
-    time_index = 100
-    timeslice = responses[0].subSlice( time_index, ":", ":" ).data.squeeze()
-    print "PLOTTING IMAGE: Image data shape: " + str( timeslice.shape )
+    def getImage( tindex ):
+        return responseVar.subSlice( tindex, ":", ":" ).data.squeeze()
 
-    plt.imshow( timeslice, origin="lower" )
+    def init():
+        im.set_data( getImage( 0 ) )
+        return [im]
+
+    def animate(i):
+        im.set_data( getImage( i ) )
+        return [im]
+
+    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=nTimeSteps, interval=500, blit=True)
+#    anim.save('anomaly_animation.mp4', fps=2, extra_args=['-vcodec', 'libx264'])
     plt.show()
-
-    print "DONE"
 
 finally:
     portal.shutdown()

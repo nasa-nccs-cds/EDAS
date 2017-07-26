@@ -6,6 +6,7 @@ import scala.xml
 import java.nio.{ByteBuffer, ByteOrder, FloatBuffer}
 
 import nasa.nccs.cdapi.cdm._
+import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.data.{HeapFltArray, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.{ReduceNOpFlt, ReduceOpFlt, ReduceWNOpFlt}
 import nasa.nccs.cdapi.tensors.{CDArray, CDCoordMap, CDFloatArray, CDTimeCoordMap}
@@ -336,8 +337,12 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         binnedArrayData.find( _.size > 1 ) match {
           case Some( binnedArrayMap ) =>
             val sorter = cycle match {
-              case x if !x.isEmpty  => new TimeCycleSorter( input_data, context, startIndex )
-              case x  => new AnomalySorter( input_data, context, startIndex )
+              case x if !x.isEmpty  =>
+                val bin = getParamValue( binnedArrayData, "bin" )
+                new TimeCycleSorter( input_data, cycle, bin, startIndex )
+              case x  =>
+                val axes = getParamValue( binnedArrayData, "axes" )
+                new AnomalySorter( input_data, axes, context.grid, startIndex )
             }
             input_data.toFastMaskedArray.binMerge( sorter, binnedArrayMap.mapValues(_.toFastMaskedArray), varyingAxisIndex, reduceOp )
 
