@@ -241,7 +241,7 @@ class binAve extends Kernel(Map.empty) {
           input_array.weightedSumBin(sorter, None)
         }
         val NBins = result_arrays._1.length
-        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "NBins" -> NBins.toString, "cycle" ->  context.config("cycle", "" ), "axes" -> axes.toUpperCase )
+        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "NBins" -> NBins.toString, "varAxis" -> sorter.getVaryingAxis.toString, "cycle" ->  context.config("cycle", "" ), "axes" -> axes.toUpperCase )
         result_arrays._1.indices.map( index => context.operation.rid + "." + index ->
           HeapFltArray( result_arrays._1(index).toCDFloatArray, input_data.origin, result_metadata, Some(result_arrays._2(index).toFloatArray) )
         )

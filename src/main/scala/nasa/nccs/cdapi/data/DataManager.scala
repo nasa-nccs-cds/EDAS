@@ -87,6 +87,7 @@ trait BinSorter {
   def getNumBins: Int
   def getBinIndex: Int
   def getItemIndex: Int
+  def getVaryingAxis: Int = -1
 }
 
 object TimeCycleSorter {
@@ -190,6 +191,8 @@ class AnomalySorter(val input_data: HeapFltArray, val context: KernelContext, va
   val removeYvar = axes.contains('y')
   private var _currentDate: CalendarDate = CalendarDate.of(0L)
   private var _currentCoords: Array[Int] = Array.emptyIntArray
+
+  override def getVaryingAxis: Int = if( removeYvar ) { yIndex } else { -1 }
 
   def getNumBins: Int = nBins
 
@@ -452,7 +455,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     ( target_arrays, weight_arrays )
   }
 
-  def binMerge( sorter: BinSorter, binnedData: Map[Int,FastMaskedArray], binnedDataAxis: Int, reduceOp: ReduceOpFlt ):  FastMaskedArray = {
+  def binMerge( sorter: BinSorter, binnedData: Map[Int,FastMaskedArray], varyingAxisIndex: Int, reduceOp: ReduceOpFlt ):  FastMaskedArray = {
     val iter: IndexIterator = array.getIndexIterator
     val target_array = FastMaskedArray( array.getShape, 0f, missing )
     val target_array_iter: IndexIterator = target_array.array.getIndexIterator
@@ -465,7 +468,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
         sorter.setCurrentCoords( coords )
         val binIndex: Int = sorter.getBinIndex
         val otherDataArray = binnedData(binIndex)
-        val otherItemIndex = coords( binnedDataAxis )
+        val otherItemIndex = if( varyingAxisIndex >= 0 ) { coords( varyingAxisIndex ) } else { 0 }
         val otherVal = otherDataArray.array.getFloat( otherItemIndex )
         target_array_iter.setFloatNext( reduceOp(fval,otherVal) )
       }

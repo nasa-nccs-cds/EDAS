@@ -315,17 +315,21 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
+  def getParamValue( binnedArrayData: List[Map[Int,HeapFltArray]], paramId: String ): String = {
+    val pvals = scala.collection.mutable.SortedSet[String]()
+    for( binnedArrayMap <- binnedArrayData; if binnedArrayMap.size > 1 ) {
+      val pval = binnedArrayMap.head._2.attr(paramId)
+      pvals += pval
+    }
+    if( pvals.size > 1 ) { throw new Exception( " Multiple " + paramId + " definitions in getParamValue: " + pvals.mkString(" ") ) }
+    pvals.head
+  }
+
   def mergeBinnedArrays( binnedArrayData: List[Map[Int,HeapFltArray]], context: KernelContext, reduceOp: ReduceOpFlt, startIndex: Int ): HeapFltArray = {
     if( binnedArrayData.length != 2 ) { throw new Exception( "Unsupported number of data inputs to mergeBinnedArrays: " + binnedArrayData.length.toString )}
-    val cycles = scala.collection.mutable.SortedSet[String]()
-    for( binnedArrayMap <- binnedArrayData; if binnedArrayMap.size > 1 ) {
-      val cycle = binnedArrayMap.head._2.attr("cycle")
-      cycles += cycle
-    }
-    if( cycles.size > 1 ) { throw new Exception( " Multiple cycle definitions in merge: " + cycles.mkString(" ") ) }
-    val cycle = cycles.head
     var input_data: HeapFltArray = HeapFltArray.empty(0)
-
+    val cycle = getParamValue( binnedArrayData, "cycle" )
+    val varyingAxisIndex = getParamValue( binnedArrayData, "varAxis" ).toInt
     val result_array: FastMaskedArray = binnedArrayData.find( _.size == 1 ) match {
       case Some( dataMap ) =>
         input_data = dataMap.head._2
@@ -335,7 +339,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
               case x if !x.isEmpty  => new TimeCycleSorter( input_data, context, startIndex )
               case x  => new AnomalySorter( input_data, context, startIndex )
             }
-            input_data.toFastMaskedArray.binMerge( sorter, binnedArrayMap.mapValues(_.toFastMaskedArray), 0, reduceOp )
+            input_data.toFastMaskedArray.binMerge( sorter, binnedArrayMap.mapValues(_.toFastMaskedArray), varyingAxisIndex, reduceOp )
 
           case None => throw new Exception( "Can't find base data array in merge" )
         }
