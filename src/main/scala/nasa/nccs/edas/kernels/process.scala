@@ -324,10 +324,11 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
     if( cycles.size > 1 ) { throw new Exception( " Multiple cycle definitions in merge: " + cycles.mkString(" ") ) }
     val cycle = cycles.head
+    var input_data: HeapFltArray = HeapFltArray.empty(0)
 
-    val result_arrays: IndexedSeq[FastMaskedArray] = binnedArrayData.find( _.size == 1 ) match {
+    val result_array: FastMaskedArray = binnedArrayData.find( _.size == 1 ) match {
       case Some( dataMap ) =>
-        val input_data: HeapFltArray = dataMap.head._2
+        input_data = dataMap.head._2
         binnedArrayData.find( _.size > 1 ) match {
           case Some( binnedArrayMap ) =>
             val sorter = cycle match {
@@ -340,8 +341,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         }
       case None => throw new Exception( "Can't find base data array in merge" )
     }
-// TODO: Create result from result_arrays
-    binnedArrayData.head.head._2
+    HeapFltArray( result_array.toCDFloatArray, input_data.origin, input_data.gridSpec, input_data.metadata, None )
   }
 
   def getCombinedGridfile( inputs: Map[String,ArrayBase[Float]] ): String = {

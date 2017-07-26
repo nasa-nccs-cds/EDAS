@@ -452,27 +452,25 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     ( target_arrays, weight_arrays )
   }
 
-  def binMerge( sorter: BinSorter, binnedData: Map[Int,FastMaskedArray], binnedDataAxis: Int, reduceOp: ReduceOpFlt ):  IndexedSeq[FastMaskedArray] = {
-    val rank = array.getRank
+  def binMerge( sorter: BinSorter, binnedData: Map[Int,FastMaskedArray], binnedDataAxis: Int, reduceOp: ReduceOpFlt ):  FastMaskedArray = {
     val iter: IndexIterator = array.getIndexIterator
-    val target_shape: Array[Int] = sorter.getReducedShape( array.getShape )
-    val nBins: Int = sorter.getNumBins
-    val target_arrays = ( 0 until nBins ) map ( index => FastMaskedArray( target_shape, 0f, missing ) )
+    val target_array = FastMaskedArray( array.getShape, 0f, missing )
+    val target_array_iter: IndexIterator = target_array.array.getIndexIterator
     while ( iter.hasNext ) {
       val fval = iter.getFloatNext
-      if( ( fval != missing ) && !fval.isNaN  ) {
+      if( ( fval == missing ) || fval.isNaN  ) {
+        target_array_iter.setFloatNext( missing )
+      } else {
         var coords: Array[Int] = iter.getCurrentCounter
         sorter.setCurrentCoords( coords )
         val binIndex: Int = sorter.getBinIndex
         val otherDataArray = binnedData(binIndex)
-        val target_array = target_arrays( binIndex )
-        val itemIndex: Int = sorter.getItemIndex
         val otherItemIndex = coords( binnedDataAxis )
         val otherVal = otherDataArray.array.getFloat( otherItemIndex )
-        target_array.array.setFloat( itemIndex, reduceOp(fval,otherVal) )
+        target_array_iter.setFloatNext( reduceOp(fval,otherVal) )
       }
     }
-    target_arrays
+    target_array
   }
 
   def getReducedFlatIndex( reduced_index: Index, reduction_axes: Array[Int], iter: IndexIterator ): Int = {
