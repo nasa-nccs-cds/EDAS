@@ -229,7 +229,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
     test("pyRegridTest") {
       val unverified_result: CDFloatArray = CDFloatArray( Array( 238.94734, 238.95024, 238.95496, 238.95744, 238.95612, 238.95665, 238.95854, 238.95789, 238.95601, 238.95627, 238.95576, 238.95413, 238.95435, 238.95703, 238.95584, 238.95236, 238.94908, 238.94554, 238.94348, 238.94159, 238.94058, 238.93684, 238.93082, 238.92488, 238.91869, 238.9234, 238.92516, 238.91739, 238.91312, 238.91335, 238.91077, 238.90666, 238.902, 238.89793, 238.90051 ).map(_.toFloat), Float.MaxValue )
-      val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"http://esgf.nccs.nasa.gov/thredds/dodsC/CMIP5/NASA/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.cdmsModule.regrid","input":"v1","domain":"d0","crs":"gaussian~128"}]]"""
+      val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"http://esgf.nccs.nasa.gov/thredds/dodsC/CMIP5/NASA/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.cdmsModule.regrid","input":"v1","domain":"d0","grid":"gaussian","shape":"128"}]]"""
       val result_node = executeTest(datainputs)
       val result_data = CDFloatArray( getResultData( result_node ) ).sample( 35 )
       println( " ** CDMS Result:       " + result_data.mkDataString( ", " ) )
