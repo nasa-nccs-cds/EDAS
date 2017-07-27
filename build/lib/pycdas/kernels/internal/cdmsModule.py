@@ -22,7 +22,12 @@ class RegridKernel(CDMSKernel):
         cdms2.setAutoBounds(2)
         t0 = time.time()
         self.logger.info( " Execute REGRID Task with metadata: " + str( task.metadata ) )
-        crsSpec = task.metadata.get("crs","")
+        gridType = task.metadata.get("grid","uniform")
+        resolution = task.metadata.get("res","")
+        toGrid = None
+        if( gridType
+            case x if x.
+        }
         if( len(crsSpec) and (crsSpec[0] == '~') ):
             crsId = crsSpec[1:]
             grid_input = _inputs.get( crsId, None )

@@ -26,7 +26,7 @@ try:
     timeslice = responseVar.subSlice( 0, ":", ":" ).data.squeeze()
 
     fig = plt.figure()
-    im = plt.imshow( timeslice, origin="lower",interpolation='none' )
+    im = plt.imshow( timeslice, origin="lower", cmap=plt.cm.get_cmap('jet') )
 
     def getImage( tindex ):
         return responseVar.subSlice( tindex, ":", ":" ).data.squeeze()
@@ -39,8 +39,9 @@ try:
         im.set_data( getImage( i ) )
         return [im]
 
-    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=nTimeSteps, interval=500, blit=True)
+    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=nTimeSteps, interval=250, blit=True)
 #    anim.save('anomaly_animation.mp4', fps=2, extra_args=['-vcodec', 'libx264'])
+
     plt.show()
 
 finally:
