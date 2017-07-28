@@ -37,6 +37,9 @@ import ucar.nc2._
 import ucar.nc2.write.Nc4Chunking
 
 object Collection extends Loggable {
+  def apply( id: String, ncmlFile: File ) = {
+    new Collection( "file", id, ncmlFile.toString )
+  }
   def apply( id: String,  dataPath: String, fileFilter: String = "", scope: String="", title: String= "", vars: List[String] = List() ) = {
     val ctype = dataPath match {
       case url if(url.startsWith("http:")) => "dap"
@@ -410,6 +413,13 @@ object DiskCacheFileMgr extends XmlResource {
       Files.createDirectories( cacheFilePath.getParent )
       cacheFilePath.toString
     }
+
+
+  def getDiskCachePath( cachetype: String ): Path = {
+    val cacheDirPath = Paths.get( appParameters.cacheDir, cachetype )
+    Files.createDirectories( cacheDirPath.getParent )
+    cacheDirPath
+  }
 
 
 

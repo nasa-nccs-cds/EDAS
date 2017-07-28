@@ -183,7 +183,7 @@ def getEDASlogsDir(): File = {
 }
 
 edasLocalCollectionsFile :=  {
-  val collections_file = edas_cache_dir.value / "local_collections.xml"
+  val collections_file = edas_cache_dir.value / "collections" / "local_collections.xml"
   if( !collections_file.exists ) { xml.XML.save( collections_file.getAbsolutePath, <collections></collections> ) }
   collections_file
 }

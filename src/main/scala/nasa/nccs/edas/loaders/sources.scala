@@ -1,5 +1,6 @@
 package nasa.nccs.edas.loaders
 import java.io.{File, FileNotFoundException, FileOutputStream}
+
 import scala.xml
 import java.nio.channels.Channels
 import java.nio.file.{Files, Path, Paths}
@@ -11,6 +12,7 @@ import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.caching.{FragmentPersistence, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{Collection, DiskCacheFileMgr, NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.utilities.Loggable
+import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
 import ucar.{ma2, nc2}
 
@@ -92,11 +94,23 @@ object Collections extends XmlResource {
   val maxCapacity: Int=500
   val initialCapacity: Int=10
   val datasets: ConcurrentLinkedHashMap[String,Collection] =  loadCollectionXmlData( Map( "local" -> getCacheFilePath("local_collections.xml") ) )
+  refreshCollectionList
 
-  def toXml: xml.Elem =
+  def refreshCollectionList = {
+    val collPath: Path = Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
+    val ncmlExtensions = List( ".xml", ".ncml" )
+    val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists( file.getName.toLowerCase.endsWith(_) ) }
+    for (ncmlFile <- ncmlFiles; fileName = ncmlFile.getName; collId = fileName.substring( 0, fileName.lastIndexOf('.') ).toLowerCase; if (collId != "local_collections") && !datasets.containsKey(collId) ) {
+      datasets.put( collId, Collections.addCollection( collId, ncmlFile.toString ) )
+    }
+  }
+
+  def toXml: xml.Elem = {
+    refreshCollectionList
     <collections>
-      { for( ( id: String, collection:Collection ) <- datasets ) yield collection.toXml }
+      {for ((id: String, collection: Collection) <- datasets) yield collection.toXml}
     </collections>
+  }
 
   def getCollectionMetadata( collId: String  ): List[nc2.Attribute] = {
     findCollection( collId ) match {
@@ -109,6 +123,7 @@ object Collections extends XmlResource {
     dataset.getGlobalAttributes.toList.find( attr => possible_names.contains( attr.getShortName ) ) match { case Some(attr) => attr.getStringValue; case None => "" }
 
   def updateVars = {
+    refreshCollectionList
     for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase("local") ) {
       logger.info( "Opening NetCDF dataset(4) at: " + collection.dataPath )
       val dataset: NetcdfDataset = NetcdfDatasetMgr.open( collection.dataPath )
@@ -125,6 +140,7 @@ object Collections extends XmlResource {
   def getCacheFilePath( fileName: String ): String = DiskCacheFileMgr.getDiskCacheFilePath( "collections", fileName)
 
   def getVariableListXml(vids: Array[String]): xml.Elem = {
+    refreshCollectionList
     <collections>
       { for (vid: String <- vids; vidToks = vid.split('!'); varName=vidToks(0); cid=vidToks(1) ) yield Collections.findCollection(cid) match {
       case Some(collection) => <variables cid={collection.id}> { collection.getVariable(varName).toXml } </variables>
@@ -139,6 +155,7 @@ object Collections extends XmlResource {
   def values: Iterator[Collection] = datasets.valuesIterator
 
   def toXml( scope: String ): xml.Elem = {
+    refreshCollectionList
     <collections>
       { for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase(scope) ) yield collection.toXml }
     </collections>
@@ -172,6 +189,17 @@ object Collections extends XmlResource {
     persistLocalCollections()
     collection
   }
+
+  def addCollection(  id: String, ncmlFilePath: String ): Collection = {
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.open(ncmlFilePath)
+    val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
+    val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
+    val newCollection = new Collection( "file", id, ncmlFilePath, "", "", title, vars )
+    datasets.put( id, newCollection  )
+    persistLocalCollections()
+    newCollection
+  }
+
 
   def addCollection(  id: String, dataPath: String, title: String, vars: List[String] ): Collection = {
     val collection = Collection( id, dataPath, "", "local", title, vars )
