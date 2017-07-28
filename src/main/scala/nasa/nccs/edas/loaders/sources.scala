@@ -162,9 +162,9 @@ object Collections extends XmlResource {
   }
 
   def uriToFile( uri: String ): String = {
-    uri.toLowerCase.split(":").last.stripPrefix("/").stripPrefix("/").replaceAll("[-/]","_").replaceAll("[^a-zA-Z0-9_.]", "X") + ".xml"
+    uri.toLowerCase.split(":").last.stripPrefix("/").stripPrefix("/").replaceAll("[-/]","_").replaceAll("[^a-zA-Z0-9_.]", "X") + ".ncml"
   }
-  def idToFile( id: String, ext: String = ".xml" ): String = id.replaceAll("[-/]","_").replaceAll("[^a-zA-Z0-9_.]", "X") + ext
+  def idToFile( id: String, ext: String = ".ncml" ): String = id.replaceAll("[-/]","_").replaceAll("[^a-zA-Z0-9_.]", "X") + ext
 
   def removeCollections( collectionIds: Array[String] ): Array[String] = {
     val removedCids = collectionIds.flatMap( collectionId  => {
