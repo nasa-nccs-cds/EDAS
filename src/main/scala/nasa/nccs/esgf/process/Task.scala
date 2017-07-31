@@ -26,7 +26,7 @@ import mutable.ListBuffer
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.esgf.utilities.wpsNameMatchers
 import nasa.nccs.esgf.wps.cds2ServiceProvider
-import nasa.nccs.wps.{WPSDataInput, WPSProcess, WPSProcessOutput, WPSWorkflowProcess}
+import nasa.nccs.wps._
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2.dataset.CoordinateAxis1DTime
 
@@ -93,6 +93,7 @@ class TaskRequest(val id: UID,
 
   def getInputs: List[WPSDataInput] =
     inputVariables.map(_.toWPSDataInput).toList
+
   def getOutputs: List[WPSProcessOutput] =
     List(WPSProcessOutput(id.toString, "text/xml", "Workflow Output"))
 

@@ -420,12 +420,15 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
   }
 
   def executeWorkflows( request: TaskRequest, requestCx: RequestContext ): WPSResponse = {
-    val results = request.operations.head.moduleName match {
-      case "util" =>  new WPSMergedEventReport( request.operations.map( utilityExecution( _, requestCx )))
-      case x =>
-        logger.info( "---------->>> Execute Workflows: " + request.operations.mkString(",") )
-        val responses = request.workflow.executeRequest( requestCx )
-        new MergedWPSExecuteResponse( request.id.toString, responses )
+    val results = request.operations.headOption match {
+      case Some(opContext) => opContext.moduleName match {
+        case "util" =>  new WPSMergedEventReport( request.operations.map( utilityExecution( _, requestCx )))
+        case x =>
+          logger.info( "---------->>> Execute Workflows: " + request.operations.mkString(",") )
+          val responses = request.workflow.executeRequest( requestCx )
+          new MergedWPSExecuteResponse( request.id.toString, responses )
+      }
+      case None => throw new Exception( "Error, no operation specified, cannot define workflow")
     }
     FragmentPersistence.close()
 //    logger.info( "---------->>> Execute Workflows: Created XML response: " + results.toXml.toString )

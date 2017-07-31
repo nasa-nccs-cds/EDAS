@@ -222,6 +222,19 @@ class bin extends Kernel(Map.empty) {
   }
 }
 
+class noOp extends Kernel(Map.empty) {
+  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
+  val outputs = List( WPSProcessOutput( "operation result" ) )
+  val title = "NoOperation"
+  override val description = "Returns the input data subset to the specified domain as the result"
+
+  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
+    val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => inputId -> array ) )
+    RDDRecord( TreeMap(elems:_*), inputs.metadata )
+  }
+}
+
+
 class binAve extends Kernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
