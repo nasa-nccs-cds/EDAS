@@ -101,7 +101,10 @@ object Collections extends XmlResource {
     val ncmlExtensions = List( ".xml", ".ncml" )
     val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists( file.getName.toLowerCase.endsWith(_) ) }
     for (ncmlFile <- ncmlFiles; fileName = ncmlFile.getName; collId = fileName.substring( 0, fileName.lastIndexOf('.') ).toLowerCase; if (collId != "local_collections") && !datasets.containsKey(collId) ) {
-      datasets.put( collId, Collections.addCollection( collId, ncmlFile.toString ) )
+      Collections.addCollection( collId, ncmlFile.toString ) match {
+        case Some( collection ) => datasets.put( collId, collection )
+        case None => logger.warn( s"Skipping collection ${collId}" )
+      }
     }
   }
 
@@ -190,14 +193,18 @@ object Collections extends XmlResource {
     collection
   }
 
-  def addCollection(  id: String, ncmlFilePath: String ): Collection = {
+  def addCollection(  id: String, ncmlFilePath: String ): Option[Collection] = try {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.open(ncmlFilePath)
     val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
     val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
     val newCollection = new Collection( "file", id, ncmlFilePath, "", "", title, vars )
     datasets.put( id, newCollection  )
     persistLocalCollections()
-    newCollection
+    Some(newCollection)
+  } catch {
+    case err: Exception =>
+      logger.error( s"Error reading collection ${id} from ncml ${ncmlFilePath}: ${err.toString}" )
+      None
   }
 
 

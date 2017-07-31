@@ -28,11 +28,13 @@ class OperationsManager:
                             kernel_instance = mod_cls();
                             kernels.append( kernel_instance )
                             self.logger.debug(  " ----------->> Adding Kernel Class: " + str( clsname ) )
+                        else: self.logger.debug(  " xxxxxxx-->> Skipping non-Kernel Class: " + str( clsname ) )
                     except TypeError, err:
                         self.logger.debug( "Skipping improperly structured class: " + clsname + " -->> " + str(err) )
             if len(kernels) > 0:
                 self.operation_modules["python."+module_name] = KernelModule( module_name, kernels )
                 self.logger.debug(  " ----------->> Adding Module: " + str( module_name ) )
+            else: self.logger.debug(  " XXXXXXXX-->> Skipping Empty Module: " + str( module_name ) )
 
     def getModule(self, task ):
         return self.operation_modules[ task.module ]

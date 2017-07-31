@@ -26,7 +26,7 @@ alias cdshd='unset EDAS_SERVER_ADDRESS; unset EDAS_SERVER_PORT; $CDSHELL_CMD'
 alias cdshw='export EDAS_SERVER_ADDRESS=localhost; unset EDAS_SERVER_PORT; $CDSHELL_CMD'
 alias cdshr='export EDAS_SERVER_ADDRESS=localhost; export EDAS_SERVER_PORT=9001; $CDSHELL_CMD'
 alias cdup='cd $EDAS_HOME_DIR; ./bin/update.sh; rm ~/.edas/*.log; python ./python/src/pyedas/shutdown.py'
-alias cdupy='cd $EDAS_HOME_DIR; python setup.py install; rm ~/.edas/logs/*.log; rm ~/.edas/*.log; ~/.edas/bin/shutdown_python_worker.sh'
+alias cdupy='cd $EDAS_HOME_DIR; python setup.py install; rm ~/.edas/logs/*.log; rm ~/.edas/*.log; ~/.edas/sbin/shutdown_python_worker.sh'
 alias rncml='rm $EDAS_CACHE_DIR/collections/NCML/*'
 alias rfrag='rm $EDAS_CACHE_DIR/fragment/*'
 

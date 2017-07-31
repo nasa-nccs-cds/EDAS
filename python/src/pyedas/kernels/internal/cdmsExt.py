@@ -7,7 +7,7 @@ import numpy as np
 class AverageKernel(CDMSKernel):
 
     def __init__( self ):
-        Kernel.__init__( self, KernelSpec("ave", "Average", "Averages the inputs using UVCDAT with area weighting by default", handlesInput=True ) )
+        Kernel.__init__( self, KernelSpec("ave", "Average", "Averages the inputs using UVCDAT with area weighting  by default", handlesInput=True ) )
         self._debug = False
 
     def executeOperation(self, task, _input):
