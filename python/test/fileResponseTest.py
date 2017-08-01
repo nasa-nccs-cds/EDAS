@@ -6,7 +6,6 @@ startServer = False
 portal = None
 request_port = 5670
 response_port = 5671
-host = "cldra"
 server = "localhost"
 
 try:
