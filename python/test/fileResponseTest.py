@@ -1,8 +1,6 @@
 from pyedas.portal.edas import *
 import time, sys, cdms2, os
-import pandas as pd
 from pyedas.portal.edas import *
-import matplotlib.pyplot as plt
 
 startServer = False
 portal = None
