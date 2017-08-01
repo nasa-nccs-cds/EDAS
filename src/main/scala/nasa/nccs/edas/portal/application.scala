@@ -72,6 +72,7 @@ class EDASapp( mode: EDASPortal.ConnectionMode, request_port: Int, response_port
     val responseType = runargs.getOrElse("response","xml")
     val response = processManager.executeProcess( process, process_name, datainputs, runargs )
     if( responseType == "object" ) { sendDirectResponse( taskSpec(0), response ) }
+    else if( responseType == "file" ) { sendFileResponse( taskSpec(0), response ) }
     sendResponse( taskSpec(0), printer.format( response ) )
   }
 
@@ -103,6 +104,20 @@ class EDASapp( mode: EDASPortal.ConnectionMode, request_port: Int, response_port
 
       case None =>
         logger.error( "Can't find result Id in direct response: " + response.toString() )
+    }
+  }
+
+  def getNodeAttribute( node: xml.Node, attrId: String ): Option[String] = {
+    node.attribute("href").flatMap( _.find( _.nonEmpty ).map( _.text ) )
+  }
+
+  def sendFileResponse( responseId: String, response: xml.Elem ): Unit =  {
+    val refs: xml.NodeSeq = response \\ "data"
+    for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file");
+         if hrefOpt.isDefined && fileOpt.isDefined; href = hrefOpt.get; filepath=fileOpt.get ) {
+      val rid = href.split("[/]").last
+      logger.info( "\n\n     **** Found result Id: " + rid + ": sending File: " + filepath + " ****** \n\n" )
+      sendFile( rid, "variable", filepath )
     }
   }
 
