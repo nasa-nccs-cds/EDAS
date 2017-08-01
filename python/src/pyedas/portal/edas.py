@@ -38,6 +38,7 @@ class ResponseManager(Thread):
         self.setName('EDAS Response Thread')
         self.cached_results = {}
         self.cached_arrays = {}
+        self.filePaths = {}
         self.setDaemon(True)
         self.cacheDir = os.environ.get( 'EDAS_CACHE_DIR','/tmp/' )
 
@@ -100,7 +101,8 @@ class ResponseManager(Thread):
                 print "\n\n #### Received file " + rId + ": " + toks[2]
                 header = toks[2]
                 data = self.socket.recv()
-                self.saveFile( header, data )
+                filePath = self.saveFile( header, data )
+                self.filePaths[rId] = filePath
                 self.logger.info("Received file '{0}' for rid {1}".format(header,rId))
             elif type == "response":
                 print "\n\n #### Received response " + rId + ": " + toks[2]
@@ -165,10 +167,10 @@ class ResponseManager(Thread):
                             vars.append( result_array.getVariable( gridFilePath ) )
                     else:
                         from cdms2.dataset import Dataset
-                        resultFileUri = data_node.get("file", "")
-                        print "Processing file: " + resultFileUri
-                        if resultFileUri:
-                            dset = cdms2.open( resultFileUri ); """:type : Dataset """
+                        resultFilePath = self.filePaths.get( rId, data_node.get("file", "") )
+                        print "Processing file: " + resultFilePath
+                        if resultFilePath:
+                            dset = cdms2.open( resultFilePath ); """:type : Dataset """
                             for fvar in dset.variables:
                                 vars.append( dset(fvar) )
                         else:
