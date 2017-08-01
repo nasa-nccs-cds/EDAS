@@ -7,7 +7,6 @@ import ucar.ma2
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels._
-import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import ucar.ma2.DataType
