@@ -1,6 +1,7 @@
 from pyedas.portal.edas import *
 import time, sys, cdms2, os
 from pyedas.portal.edas import *
+from cdms2.variable import DatasetVariable
 
 startServer = False
 portal = None
@@ -18,9 +19,11 @@ try:
     print "Sending request on port {0}, server {1}: {2}".format( portal.request_port, server, datainputs ); sys.stdout.flush()
 
     rId = portal.sendMessage( "execute", [ "CDSpark.workflow", datainputs, '{ "response":"file" }'] )
-    responses = response_manager.getResponseVariables(rId)
-    timeSeries = responses[0](squeeze=1)
+    responses = response_manager.getResponseVariables(rId);   """:type : list[DatasetVariable] """
+    timeSeries = responses[0](squeeze=1);
     timeSeries -= 273.15
+
+    print "Received timeSeries data: " + str( timeSeries.data )
 
 
 except Exception, err:

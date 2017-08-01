@@ -1,6 +1,7 @@
 import zmq, traceback, time, logging, xml, cdms2
 from threading import Thread
 from pyedas.edasArray import npArray
+from cdms2.variable import DatasetVariable
 import random, string, os
 MB = 1024 * 1024
 
@@ -84,7 +85,6 @@ class ResponseManager(Thread):
     def processNextResponse(self):
         try:
             response = self.socket.recv()
-            print "Received response: " + response
             self.logger.info( "Received response: {0}".format(response) )
             toks = response.split('!')
             rId = toks[0]
@@ -145,6 +145,7 @@ class ResponseManager(Thread):
 #                count = count + 1
 
     def getResponseVariables(self, rId, wait=True):
+        """  :rtype: list[DatasetVariable] """
         responses = self.getResponses( rId, wait )
         gridFileDir = self.getFileCacheDir("gridfile")
         vars = []
@@ -163,10 +164,11 @@ class ResponseManager(Thread):
                             gridFilePath = os.path.join(gridFileDir, result_array.gridFile )
                             vars.append( result_array.getVariable( gridFilePath ) )
                     else:
+                        from cdms2.dataset import Dataset
                         resultFileUri = data_node.get("file", "")
                         print "Processing file: " + resultFileUri
                         if resultFileUri:
-                            dset = cdms2.open( resultFileUri )
+                            dset = cdms2.open( resultFileUri ); """:type : Dataset """
                             for fvar in dset.variables:
                                 vars.append( dset(fvar) )
                         else:
