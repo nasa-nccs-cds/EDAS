@@ -84,6 +84,7 @@ class ResponseManager(Thread):
     def processNextResponse(self):
         try:
             response = self.socket.recv()
+            print "Received response: " + response
             self.logger.info( "Received response: {0}".format(response) )
             toks = response.split('!')
             rId = toks[0]
@@ -131,7 +132,7 @@ class ResponseManager(Thread):
 
     def getResponses( self, rId, wait=True ):
         import subprocess, sys
-        print "Waiting for a response from the server"
+        print "Waiting for a response from the server... "
 #        count = 0
         while( True ):
             results = self.getResults(rId)
@@ -212,6 +213,7 @@ class EDASPortal:
 
     def createResponseManager(self):
         self.response_manager = ResponseManager(self)
+        print "Starting ResponseManager thread"
         self.response_manager.start()
         return self.response_manager
 
