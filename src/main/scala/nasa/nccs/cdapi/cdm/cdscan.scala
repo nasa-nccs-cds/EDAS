@@ -436,7 +436,7 @@ object CDScan extends Loggable {
     def main(args: Array[String]) {
       if( args.length < 2 ) { println( "Usage: dsagg <collectionID> <datPath>"); return }
       EDASLogManager.isMaster
-      val collectionId = args(0)
+      val collectionId = args(0).toLowerCase
       val pathFile = new File(args(1))
       val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(collectionId + ".ncml" ).toFile
       if( ncmlFile.exists ) { throw new Exception( "Collection already exists, defined by: " + ncmlFile.toString ) }

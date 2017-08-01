@@ -60,7 +60,7 @@ object wpsObjectParser extends ObjectNotationParser with Loggable {
   def parseDataInputs(data_input: String): Map[String, Seq[Map[String, Any]]] = {
     try {
       CDSecurity.sanitize( data_input )
-      parseAll(expr, data_input) match {
+      val result = parseAll(expr, data_input) match {
         case result: Success[_] => result.get.asInstanceOf[Map[String, Seq[Map[String, Any]]]]
         case err: Error =>
           logger.error("Error Parsing '%s'".format(data_input) )
@@ -68,6 +68,14 @@ object wpsObjectParser extends ObjectNotationParser with Loggable {
         case err: Failure =>
           logger.error("Error Parsing '%s'".format(data_input) )
           throw new BadRequestException(err.toString)
+      }
+      if( result.keySet.contains("operation") ) { result } else {
+        result.get("variable") match {
+          case Some( vars ) =>
+            val varIds = vars.flatMap( varmap => varmap.get("name") ).map( _.toString.split(':').last )
+            result ++ Map ( "operation" -> Seq( Map( "name"->"CDSpark.noOp", "input"->varIds.mkString(",")) ) )
+          case None => result
+        }
       }
     } catch {
       case e: Exception =>

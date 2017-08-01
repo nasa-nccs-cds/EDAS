@@ -244,8 +244,15 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     println( " ** CDMS Result:       " + result_data.mkDataString( ", " ) )
   }
 
-  test("IOTest1") {
+  test("IOTestNoOp") {
     val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":1,"system":"indices"},"level":{"start":0,"end":0,"system":"indices"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/CFSR/6hr/atmos/ta_2000s.ncml","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.subset","input":"v1","domain":"d0"}]]"""
+    val result_node = executeTest(datainputs)
+    val result_data = CDFloatArray( getResultData( result_node ) ).sample( 35 )
+    println( " ** CDMS Result:       " + result_data.mkDataString( ", " ) )
+  }
+
+  test("IOTestEmpty") {
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":1,"system":"indices"},"level":{"start":0,"end":0,"system":"indices"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/CFSR/6hr/atmos/ta_2000s.ncml","name":"ta:v1","domain":"d0"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ) ).sample( 35 )
     println( " ** CDMS Result:       " + result_data.mkDataString( ", " ) )
