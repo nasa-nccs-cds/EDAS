@@ -62,7 +62,7 @@ public abstract class EDASPortal {
     public void sendResponse( String rId, String response  ) {
         List<String> request_args = Arrays.asList( rId, "response", response );
         response_socket.send( StringUtils.join( request_args,  "!" ).getBytes(), 0);
-        logger.info( " Sent response: " + rId + ", content: " + response.substring( 0, Math.min(100,response.length()) ) );
+        logger.info( " Sent response: " + rId + ", content: " + response.substring( 0, Math.min(300,response.length()) ) );
     }
     public void sendArrayData( String rid, int[] origin, int[] shape, byte[] data, Map<String, String> metadata ) {
         logger.debug( String.format("Portal: Sending response data to client for rid %s, nbytes=%d", rid, data.length ));
