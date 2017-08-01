@@ -89,17 +89,20 @@ class ResponseManager(Thread):
             rId = toks[0]
             type = toks[1]
             if type == "array":
+                print "Received array " + rId + ": " + toks[2]
                 header = toks[2]
                 data = self.socket.recv()
                 array = npArray.createInput(header,data)
                 self.logger.info("Received array: {0}".format(rId))
                 self.cacheArray( rId, array )
             elif type == "file":
+                print "Received file " + rId + ": " + toks[2]
                 header = toks[2]
                 data = self.socket.recv()
                 self.saveFile( header, data )
                 self.logger.info("Received file '{0}' for rid {1}".format(header,rId))
             elif type == "response":
+                print "Received response " + rId + ": " + toks[2]
                 self.cacheResult( rId, toks[2] )
                 self.logger.info("Received result: {0}".format(toks[2]))
             else:
