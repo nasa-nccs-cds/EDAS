@@ -33,10 +33,11 @@ try:
             "domain":"d0",
             "axes":"xy"
         }] ]"""
-    
-    rId = portal.sendMessage("execute", [ "WPS", datainputs, ""] )
-    responses = response_manager.getResponses(rId)
-    print "Got responses:\n" + "\n".join(responses)
+
+    rId = portal.sendMessage("execute", [ "WPS", datainputs, '{ "response":"object" }'] )
+    responses = response_manager.getResponses(rId);   """:type : list[str] """
+    response = "\n".join(responses);   """:type : str """
+    print "Got responses:\n" + response[:300]
 
 finally:
     portal.shutdown()
