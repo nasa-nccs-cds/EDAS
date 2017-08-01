@@ -145,10 +145,12 @@ class ResponseManager(Thread):
         gridFileDir = self.getFileCacheDir("gridfile")
         vars = []
         for response in responses:
+            print "Processing response node: " + response
             e = xml.etree.ElementTree.fromstring( response )
             for data_node in e.iter('data'):
                 resultUri = data_node.get("href","")
                 if resultUri:
+                    print "Processing response: " + resultUri
                     self.logger.info("Processing response: " + resultUri )
                     resultId = resultUri.split("/")[-1]
                     result_arrays = self.cached_arrays.get( resultId, [] )
@@ -158,6 +160,7 @@ class ResponseManager(Thread):
                             vars.append( result_array.getVariable( gridFilePath ) )
                     else:
                         resultFileUri = data_node.get("file", "")
+                        print "Processing file: " + resultFileUri
                         if resultFileUri:
                             dset = cdms2.open( resultFileUri )
                             for fvar in dset.variables:
