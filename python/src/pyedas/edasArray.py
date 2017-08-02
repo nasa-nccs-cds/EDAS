@@ -93,10 +93,12 @@ class npArray(CDArray):
         metadata = mParse.s2m(header_toks[4])
         if data:
             try:
-                print(" *** Creating Input, id = {0}, data size = {1}, shape = {2}".format( id, len(data), str(shape) ) )
-                raw_data = np.frombuffer( data, dtype=IO_DType ).astype(np.float32)
+                print(" ***>> Creating Input, id = {0}, data size = {1}, shape = {2}".format( id, len(data), str(shape) ) )
+#                raw_data = np.frombuffer( data, dtype=IO_DType ).astype(np.float32)
+                raw_data = struct.unpack( '!f', data )
+                print("xxx")
                 undef_value = raw_data[-1]
-                print(" *** buffer len = {0}, undef = {1}".format( str(len(raw_data)), str(undef_value) ) )
+                print(" *** buffer len = {0}, undef = {1}, head = {2}".format( str(len(raw_data)), str(undef_value), str(raw_data[0]) ) )
                 data_array = ma.masked_invalid( raw_data[0:-1].reshape(shape) )
                 nparray =  ma.masked_equal(data_array,undef_value) if ( undef_value != 1.0 ) else data_array
             except Exception as err:
