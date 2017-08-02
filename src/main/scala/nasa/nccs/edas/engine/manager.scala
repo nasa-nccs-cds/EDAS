@@ -1,6 +1,7 @@
 package nasa.nccs.edas.engine
 import java.io.{IOException, PrintWriter, StringWriter}
-import java.nio.file.{ Paths, Files }
+import java.nio.file.{Files, Paths}
+
 import scala.xml
 import java.io.File
 
@@ -12,6 +13,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}
 import nasa.nccs.edas.kernels.{Kernel, KernelMgr, KernelModule}
 import java.util.concurrent.atomic.AtomicReference
+
 import scala.concurrent.{Await, Future, Promise}
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDFloatArray}
 import nasa.nccs.caching._
@@ -23,6 +25,8 @@ import scala.collection.JavaConverters._
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.wps._
 import ucar.nc2.Attribute
+import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingDefault, Nc4ChunkingStrategyNone}
+
 import scala.io.Source
 
 
@@ -204,7 +208,9 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     request.getCollection(server) map { collection =>
       val varname = searchForValue(varMetadata, List("varname", "fullname", "standard_name", "original_name", "long_name"), "Nd4jMaskedTensor")
       val resultFile = Kernel.getResultFile( resultId, true )
-      val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath)
+      val chunker: Nc4Chunking  = new Nc4ChunkingStrategyNone()
+      val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker )
+      writer.setLargeFile(true)
       assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
       val coordAxes = collection.grid.getCoordinateAxes
       val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, maskedTensor.getShape(idim)))
@@ -245,8 +251,9 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         resultFile.getAbsolutePath
       } catch {
         case ex: IOException =>
-          logger.error("ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
+          logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
           ex.printStackTrace( logger.writer )
+          ex.printStackTrace()
           return None
       }
     }
