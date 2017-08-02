@@ -45,7 +45,7 @@ public abstract class WorkerPortal {
     int getNumWorkers() { return availableWorkers.size() + busyWorkers.size(); }
 
     public void shutdown() {
-        logger.info( "\t   *** WorkerPortal SHUTDOWN *** " );
+        logger.info( "\t   ***!! WorkerPortal SHUTDOWN !!*** " );
         while( !availableWorkers.isEmpty() ) try { availableWorkers.poll().quit(); } catch ( Exception ex ) {;}
         while( !busyWorkers.isEmpty() ) try { busyWorkers.poll().quit(); } catch ( Exception ex ) {;}
         logger.info( "\t   *** Worker shutdown complete *** " );
