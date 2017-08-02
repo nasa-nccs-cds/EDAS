@@ -63,8 +63,7 @@ object KernelModule extends Loggable {
     }
   } catch {
     case err: Exception =>
-      logger.error( "%s(%s) loading Kernel class: %s".format( err.getClass.getName, err.getMessage, cls.getName ) )
-      logger.error( err.getStackTrace.mkString("\n") )
+      logger.warn( "%s(%s) Can't construct Kernel from class: %s".format( err.getClass.getName, err.getMessage, cls.getName ) )
       None
   }
 }
