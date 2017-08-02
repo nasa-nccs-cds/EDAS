@@ -96,6 +96,7 @@ class ResponseManager(Thread):
                 print "\n\n #### Received array " + rId + ": " + toks[2]
                 header = toks[2]
                 data = self.socket.recv()
+                print "<-- ** Received array data ** -->"
                 array = npArray.createInput(header,data)
                 self.logger.info("Received array: {0}".format(rId))
                 self.cacheArray( rId, array )
