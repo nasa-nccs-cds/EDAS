@@ -62,4 +62,9 @@ def testOnePointCDSparkAvg():
 
     assert data.shape == (21, 6, 1, 1)
 
+    print "Test Completed"
+
+
 testOnePointCDSparkAvg()
+
+response_manager.term()
