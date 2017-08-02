@@ -92,12 +92,17 @@ class npArray(CDArray):
         shape = mParse.s2it(header_toks[3])
         metadata = mParse.s2m(header_toks[4])
         if data:
-            print(" *** Creating Input, id = {0}, data size = {1}, shape = {2}".format( id, len(data), str(shape) ) )
-            raw_data = np.frombuffer( data, dtype=IO_DType ).astype(np.float32)
-            undef_value = raw_data[-1]
-            print(" *** buffer len = {0}, undef = {1}".format( str(len(raw_data)), str(undef_value) ) )
-            data_array = ma.masked_invalid( raw_data[0:-1].reshape(shape) )
-            nparray =  ma.masked_equal(data_array,undef_value) if ( undef_value != 1.0 ) else data_array
+            try:
+                print(" *** Creating Input, id = {0}, data size = {1}, shape = {2}".format( id, len(data), str(shape) ) )
+                raw_data = np.frombuffer( data, dtype=IO_DType ).astype(np.float32)
+                undef_value = raw_data[-1]
+                print(" *** buffer len = {0}, undef = {1}".format( str(len(raw_data)), str(undef_value) ) )
+                data_array = ma.masked_invalid( raw_data[0:-1].reshape(shape) )
+                nparray =  ma.masked_equal(data_array,undef_value) if ( undef_value != 1.0 ) else data_array
+            except Exception as err:
+                print " !!!!! Error creating input array: " + str(err)
+                nparray = None
+                undef_value = float('inf')
         else:
             nparray = None
             undef_value = float('inf')
