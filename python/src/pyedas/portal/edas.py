@@ -86,7 +86,7 @@ class ResponseManager(Thread):
     def processNextResponse(self):
         try:
             response = self.socket.recv()
-            print "Received response: {0}".format(response)
+            print "n\n ------------------------->>> Received response: {0}".format(response)
             self.logger.info( "Received response: {0}".format(response) )
             toks = response.split('!')
             rId = toks[0]

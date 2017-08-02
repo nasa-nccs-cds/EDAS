@@ -55,16 +55,10 @@ def testOnePointCDSparkAvg():
     # """:type : str """
     # print "Got responses:\n" + response[:300]
     data = responses[0]
-
-    print data.shape
-
-    portal.shutdown()
-
     assert data.shape == (21, 6, 1, 1)
-
-    print "Test Completed"
+    print "Test Completed, response data shape = " + str(data.shape)
 
 
 testOnePointCDSparkAvg()
 
-response_manager.term()
+portal.shutdown()
