@@ -3,8 +3,8 @@ import time, numpy as np
 
 request_port = 5670
 response_port = 5671
-edas_server = "10.71.9.11"
-# edas_server = "localhost"
+# edas_server = "10.71.9.11"
+edas_server = "localhost"
 test_collection = "cip_cfsr_6hr_ta"
 
 try:

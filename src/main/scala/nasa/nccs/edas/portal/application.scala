@@ -108,13 +108,14 @@ class EDASapp( mode: EDASPortal.ConnectionMode, request_port: Int, response_port
   }
 
   def getNodeAttribute( node: xml.Node, attrId: String ): Option[String] = {
-    node.attribute("href").flatMap( _.find( _.nonEmpty ).map( _.text ) )
+    node.attribute( attrId ).flatMap( _.find( _.nonEmpty ).map( _.text ) )
   }
 
   def sendFileResponse( responseId: String, response: xml.Elem ): Unit =  {
     val refs: xml.NodeSeq = response \\ "data"
     for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file");
          if hrefOpt.isDefined && fileOpt.isDefined; href = hrefOpt.get; filepath=fileOpt.get ) {
+      print( "Processing result node: " + node.toString() )
       val rid = href.split("[/]").last
       logger.info( "\n\n     **** Found result Id: " + rid + ": sending File: " + filepath + " ****** \n\n" )
       sendFile( rid, "variable", filepath )

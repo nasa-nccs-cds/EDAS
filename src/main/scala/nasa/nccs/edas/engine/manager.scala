@@ -244,7 +244,9 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         writer.close()
         resultFile.getAbsolutePath
       } catch {
-        case e: IOException => logger.error("ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, e.getMessage()));
+        case ex: IOException =>
+          logger.error("ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
+          ex.printStackTrace( logger.writer )
           return None
       }
     }
