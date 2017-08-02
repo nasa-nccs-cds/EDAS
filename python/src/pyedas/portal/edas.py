@@ -98,8 +98,10 @@ class ResponseManager(Thread):
                 data = self.socket.recv()
                 print "<-- ** Received array data ** -->"
                 array = npArray.createInput(header,data)
+                print "<-- ** Created array wrapper ** -->"
                 self.logger.info("Received array: {0}".format(rId))
                 self.cacheArray( rId, array )
+                print "<-- ** Cached array ** -->"
             elif type == "file":
                 print "\n\n #### Received file " + rId + ": " + toks[2]
                 header = toks[2]
