@@ -112,6 +112,7 @@ class ResponseManager(Thread):
                 self.logger.info("Received result: {0}".format(toks[2]))
             else:
                 self.logger.error("EDASPortal.ResponseThread-> Received unrecognized message type: {0}".format(type))
+            print "\n &&& Completed processNextResponse &&& "
 
         except Exception as err:
             self.logger.error( "EDAS error: {0}\n{1}\n".format(err, traceback.format_exc() ) )
