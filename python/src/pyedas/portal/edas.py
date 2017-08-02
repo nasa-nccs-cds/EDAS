@@ -85,6 +85,7 @@ class ResponseManager(Thread):
 
     def processNextResponse(self):
         try:
+            print "\n  ** ResponseManager Thread ** ---> Waiting for response on socket connection... "
             response = self.socket.recv()
             print "\n\n ------------------------->>> Received response: {0}".format(response)
             self.logger.info( "Received response: {0}".format(response) )
