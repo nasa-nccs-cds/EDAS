@@ -221,6 +221,39 @@ object FastMaskedArray {
   def apply( shape: Array[Int], data:  Array[Float], missing: Float ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, shape, data ), missing )
   def apply( shape: Array[Int], init_value: Float, missing: Float ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, shape, Array.fill[Float](shape.product)(init_value) ), missing )
   def apply( fltArray: CDFloatArray ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, fltArray.getShape, fltArray.getArrayData() ), fltArray.getInvalid )
+
+  def weightedSum( arrays: Array[FastMaskedArray], wtsOpt: Option[FastMaskedArray] ): ( FastMaskedArray, FastMaskedArray ) = {
+    val input0: FastMaskedArray = arrays.head
+    wtsOpt match {
+      case Some( wts ) => if( !wts.shape.sameElements(input0.shape) ) { throw new Exception( s"Weights shape [${wts.shape.mkString(",")}] does not match data shape [${input0.shape.mkString(",")}]") }
+      case None => Unit
+    }
+    val missing = input0.missing
+    val iters: Array[IndexIterator] = arrays.map( _.array.getIndexIterator )
+    val target_array = FastMaskedArray( input0.shape, 0.0f, input0.missing )
+    val target_iter: IndexIterator = target_array.array.getIndexIterator
+    val weights_array = FastMaskedArray( input0.shape, 0.0f, input0.missing )
+    val wtsIterOpt = wtsOpt.map( _.array.getIndexIterator )
+
+    while ( target_iter.hasNext ) {
+      var i=0
+      while (i < arrays.length) {
+        val fval = iters(i).getFloatNext
+        if ((fval != missing) && !fval.isNaN) {
+          wtsIterOpt match {
+            case Some(wtsIter) =>
+              val wtval = wtsIter.getFloatNext
+              target_array.array.setFloat(current_index, target_array.array.getFloat(current_index) + fval * wtval)
+              weights_array.array.setFloat(current_index, weights_array.array.getFloat(current_index) + wtval)
+            case None =>
+              target_array.array.setFloat(current_index, target_array.array.getFloat(current_index) + fval)
+              weights_array.array.setFloat(current_index, weights_array.array.getFloat(current_index) + 1.0f)
+          }
+        }
+      }
+    }
+    ( target_array, weights_array )
+  }
 }
 
 class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggable {

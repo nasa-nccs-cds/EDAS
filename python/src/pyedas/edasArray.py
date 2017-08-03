@@ -94,9 +94,7 @@ class npArray(CDArray):
         if data:
             try:
                 print(" ***>> Creating Input, id = {0}, data size = {1}, shape = {2}".format( id, len(data), str(shape) ) )
-#                raw_data = np.frombuffer( data, dtype=IO_DType ).astype(np.float32)
-                raw_data = struct.unpack( '!f', data )
-                print("xxx")
+                raw_data = np.frombuffer( data, dtype=IO_DType ).astype(np.float32)
                 undef_value = raw_data[-1]
                 print(" *** buffer len = {0}, undef = {1}, head = {2}".format( str(len(raw_data)), str(undef_value), str(raw_data[0]) ) )
                 data_array = ma.masked_invalid( raw_data[0:-1].reshape(shape) )
