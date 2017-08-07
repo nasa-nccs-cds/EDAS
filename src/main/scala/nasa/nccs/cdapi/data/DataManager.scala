@@ -230,29 +230,28 @@ object FastMaskedArray {
     }
     val missing = input0.missing
     val iters: Array[IndexIterator] = arrays.map( _.array.getIndexIterator )
-    val target_array = FastMaskedArray( input0.shape, 0.0f, input0.missing )
-    val target_iter: IndexIterator = target_array.array.getIndexIterator
-    val weights_array = FastMaskedArray( input0.shape, 0.0f, input0.missing )
+    val vsum_array = FastMaskedArray( input0.shape, 0.0f, input0.missing )
+    val vsum_iter: IndexIterator = vsum_array.array.getIndexIterator
+    val wsum_array = FastMaskedArray( input0.shape, 0.0f, input0.missing )
+    val wsum_iter: IndexIterator = wsum_array.array.getIndexIterator
     val wtsIterOpt = wtsOpt.map( _.array.getIndexIterator )
 
-    while ( target_iter.hasNext ) {
+    while ( vsum_iter.hasNext ) {
+      var vsum = 0f
+      var wsum = 0f
+      val wval = wtsIterOpt.map( _.getFloatNext ).getOrElse( 1.0f )
       var i=0
       while (i < arrays.length) {
         val fval = iters(i).getFloatNext
         if ((fval != missing) && !fval.isNaN) {
-          wtsIterOpt match {
-            case Some(wtsIter) =>
-              val wtval = wtsIter.getFloatNext
-              target_array.array.setFloat(current_index, target_array.array.getFloat(current_index) + fval * wtval)
-              weights_array.array.setFloat(current_index, weights_array.array.getFloat(current_index) + wtval)
-            case None =>
-              target_array.array.setFloat(current_index, target_array.array.getFloat(current_index) + fval)
-              weights_array.array.setFloat(current_index, weights_array.array.getFloat(current_index) + 1.0f)
-          }
+          vsum = vsum + fval * wval
+          wsum = wsum + wval
         }
       }
+      vsum_iter.setFloatNext( vsum )
+      wsum_iter.setFloatNext( wsum )
     }
-    ( target_array, weights_array )
+    ( vsum_array, wsum_array )
   }
 }
 
