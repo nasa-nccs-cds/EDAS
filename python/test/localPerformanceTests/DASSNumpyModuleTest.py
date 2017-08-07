@@ -19,6 +19,8 @@ try:
 
     print "Received " + str(len(responses)) + " responses"
 
+    print "Response: " + str( responses[0] )
+
 finally:
     portal.shutdown()
 
