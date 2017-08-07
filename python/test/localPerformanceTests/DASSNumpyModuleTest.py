@@ -14,7 +14,7 @@ try:
     response_manager = portal.createResponseManager()
     datainputs = """[domain=[{"lat":{"start":8,"end":13,"system":"indices"},"lon":{"start":70,"end":72,"system":"indices"},"name":"d0","time":{"start":5,"end":10,"system":"indices"}}],variable=[{"uri":"file:///dass/nobackup/tpmaxwel/.edas/cache/collections/NCML/CIP_MERRA_mon_pr.ncml","name":"pr","domain":"d0"}],operation=[{"input":"pr","domain":"d0","name":"python.numpyModule.avew","axes":"xy"}]]"""
 
-    rId1 = portal.sendMessage("execute", [ "WPS", datainputs ] )
+    rId1 = portal.sendMessage("execute", [ "WPS", datainputs, '{ "response":"object" }' ] )
     responses = response_manager.getResponses(rId1)
 
     print "Received " + str(len(responses)) + " responses"
