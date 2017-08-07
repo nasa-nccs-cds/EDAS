@@ -150,6 +150,7 @@ object Kernel extends Loggable {
     val ( k0, k1 ) = ( a0._1, a1._1 )
     val t0 = System.nanoTime
     val new_key = k0 + k1
+    logger.info("orderedMergeRDD: %s + %s -> %s".format( k0.toString, k1.toString, new_key.toString ))
     val new_elements = rdd0.elements.map { case (key, array) => (key+"%"+k0.elemStart, array) } ++ rdd1.elements.map { case (key, array) => (key+"%"+k1.elemStart, array) }
     val dt = (System.nanoTime - t0) / 1.0E9
     context.addTimestamp("&MERGE: complete, time = %.4f s, key = ".format( dt, new_key.toString ) )
