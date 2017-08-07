@@ -140,37 +140,34 @@ class multiAverage extends Kernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Ensemble Mean"
-  val description = "Computes point-by-point average over inputs withing specified ROI"
+  val description = "Computes ensemble averages over inputs withing specified ROI"
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
     val t0 = System.nanoTime
-    val axes = context.config("axes","")
-    val async = context.config("async", "false").toBoolean
+    val axes: String = context.config("axes","")
+    val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
     val input_arrays: List[HeapFltArray] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[HeapFltArray]())( _ ++ _ )
-    val input_ucarrays: Array[ma2.Array] = input_arrays.map(_.toUcarFloatArray).toArray
-    assert( input_ucarrays.size > 1, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format( context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",") ) )
+    val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
+    assert( input_fastArrays.size > 1, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format( context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",") ) )
     val missing = input_arrays.head.getMissing()
-    val resultArray: ma2.Array = ma2.Array.factory( DataType.FLOAT, input_ucarrays.head.getShape )
-    var sum: Float = 0f
-    var weight: Int = 0
-    var fval: Float = 0f
-    for( ipoint: Int <- ( 0 until input_ucarrays.head.getSize.toInt ) ) {
-      sum = 0f; weight = 0
-      for( ivar: Int <- (0 until input_ucarrays.length) ) {
-        fval = input_ucarrays(ivar).getFloat(ipoint)
-        if (fval != missing) {
-          sum = sum + fval
-          weight = weight + 1
-        }
-      }
-      if( weight > 0 ) { resultArray.setFloat(ipoint,sum/weight) }
-      else { resultArray.setFloat(ipoint,missing) }
+    val inputId = context.operation.inputs.head
+    val input_data = inputs.element(inputId).get
+
+    val ( resultArray, weightArray ) = if( addWeights(context) ) {
+      val weights: FastMaskedArray = FastMaskedArray(KernelUtilities.getWeights(inputId, context))
+      FastMaskedArray.weightedSum( input_fastArrays, Some(weights), axisIndices )
+    } else {
+      FastMaskedArray.weightedSum( input_fastArrays, None, axisIndices )
     }
+    val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value")  ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "axes" -> axes.toUpperCase )
+    val elem = context.operation.rid -> HeapFltArray(resultArray.toCDFloatArray, input_data.origin, result_metadata, Some(weightArray.toCDFloatArray.getArrayData()))
+
     logger.info("&MAP: Finished Kernel %s, inputs = %s, output = %s, time = %.4f s".format(name, context.operation.inputs.mkString(","), context.operation.rid, (System.nanoTime - t0)/1.0E9) )
     context.addTimestamp( "Map Op complete" )
-    val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_arrays.head.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "axes" -> axes.toUpperCase )
-    RDDRecord( TreeMap( context.operation.rid -> HeapFltArray( resultArray, input_arrays(0).origin, input_arrays.head.gridSpec, result_metadata, missing) ), inputs.metadata )
+    RDDRecord( TreeMap(elem), inputs.metadata )
   }
+  override def combineRDD(context: KernelContext)(a0: RDDRecord, a1: RDDRecord ): RDDRecord =  weightedValueSumRDDCombiner(context)(a0, a1)
+  override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
 }
 
 object BinKeyUtils {

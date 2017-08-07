@@ -279,6 +279,22 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     assert( getResultData( result_node ).maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for Subset")
   }
 
+  test("ensemble_time_ave") {
+    val unverified_result: CDFloatArray = CDFloatArray(  Array( 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167 ).map(_.toFloat), Float.MaxValue )
+    val GISS_H_vids = ( 1 to nExp ) map { index => s"vH$index" }
+    val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
+    val datainputs = s"""[
+             variable=[$GISS_H_variables],
+             domain=[       {"name":"d0","time":{"start":"1985-01-01T00:00:00Z","end":"1985-04-04T00:00:00Z","system":"values"}}],
+             operation=[    {"name":"CDSpark.multiAverage","input":"${GISS_H_vids.mkString(",")}","domain":"d0","id":"eaGISS-H","axes":"t"} ]
+            ]""".replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = CDFloatArray( getResultData( result_node, false ).slice(0,0,10) )
+    println( " ** Op Result:         " + result_data.mkDataString(", ") )
+    println( " ** Unverified Result: " + unverified_result.mkDataString(", ") )
+    assert( result_data.maxScaledDiff( unverified_result )  < eps, s" Incorrect value computed for Max")
+  }
+
   test("ESGF_subDemo1") {
     val unverified_result: CDFloatArray = CDFloatArray(  Array( 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841 ).map(_.toFloat), Float.MaxValue )
     val GISS_H_vids = ( 1 to nExp ) map { index => s"vH$index" }

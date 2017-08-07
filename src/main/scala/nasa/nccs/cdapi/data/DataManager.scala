@@ -214,7 +214,6 @@ class AnomalySorter(val input_data: HeapFltArray, val axesParm: String, grid: Gr
   def getItemIndex: Int = if( removeYvar ) { _currentCoords(yIndex) } else { 0 }
 }
 
-
 object FastMaskedArray {
   type ReduceOp = (Float,Float)=>Float
   def apply( array: ma2.Array, missing: Float ): FastMaskedArray = new FastMaskedArray( array, missing )
@@ -222,7 +221,7 @@ object FastMaskedArray {
   def apply( shape: Array[Int], init_value: Float, missing: Float ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, shape, Array.fill[Float](shape.product)(init_value) ), missing )
   def apply( fltArray: CDFloatArray ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, fltArray.getShape, fltArray.getArrayData() ), fltArray.getInvalid )
 
-  def weightedSum( arrays: Array[FastMaskedArray], wtsOpt: Option[FastMaskedArray] ): ( FastMaskedArray, FastMaskedArray ) = {
+  def weightedSum( arrays: Array[FastMaskedArray], wtsOpt: Option[FastMaskedArray], axes: Array[Int] = Array.emptyIntArray ): ( FastMaskedArray, FastMaskedArray ) = {
     val input0: FastMaskedArray = arrays.head
     wtsOpt match {
       case Some( wts ) => if( !wts.shape.sameElements(input0.shape) ) { throw new Exception( s"Weights shape [${wts.shape.mkString(",")}] does not match data shape [${input0.shape.mkString(",")}]") }
@@ -239,19 +238,24 @@ object FastMaskedArray {
     while ( vsum_iter.hasNext ) {
       var vsum = 0f
       var wsum = 0f
-      val wval = wtsIterOpt.map( _.getFloatNext ).getOrElse( 1.0f )
-      var i=0
-      while (i < arrays.length) {
+      for (i <- 0 until arrays.length) {
         val fval = iters(i).getFloatNext
         if ((fval != missing) && !fval.isNaN) {
-          vsum = vsum + fval * wval
-          wsum = wsum + wval
+          vsum = vsum + fval
+          wsum = wsum + 1.0f
         }
       }
-      vsum_iter.setFloatNext( vsum )
-      wsum_iter.setFloatNext( wsum )
+      vsum_iter.setFloatNext( if( axes.isEmpty ) { vsum } else { vsum/wsum }  )
+      wsum_iter.setFloatNext( wsum  )
     }
-    ( vsum_array, wsum_array )
+    if( axes.isEmpty )    ( vsum_array, wsum_array )
+    else   {
+      val wts: FastMaskedArray = wtsOpt match {
+        case Some(aveWts) => wsum_array * aveWts
+        case None => wsum_array
+      }
+      vsum_array.weightedSum( axes, Some(wts) )
+    }
   }
 }
 
@@ -355,6 +359,18 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
       val uv1: Float = other.array.getFloat(index)
       if( (uv0==missing) || uv0.isNaN || (uv1==other.missing) || uv1.isNaN ) { missing }
       else {  vTot.setFloat(index, uv0 + uv1)  }
+    } )
+    FastMaskedArray( vTot, missing )
+  }
+
+  def *( other: FastMaskedArray ): FastMaskedArray = {
+    assert ( other.shape.sameElements(shape), s"Error, attempt to add arrays with different shapes: {${other.shape.mkString(",")}} -- {${shape.mkString(",")}}")
+    val vTot = new ma2.ArrayFloat( array.getShape )
+    (0 until array.getSize.toInt ) foreach ( index => {
+      val uv0: Float = array.getFloat(index)
+      val uv1: Float = other.array.getFloat(index)
+      if( (uv0==missing) || uv0.isNaN || (uv1==other.missing) || uv1.isNaN ) { missing }
+      else {  vTot.setFloat(index, uv0 * uv1)  }
     } )
     FastMaskedArray( vTot, missing )
   }
