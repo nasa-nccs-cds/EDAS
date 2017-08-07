@@ -153,6 +153,13 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     assert( result_data.maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
   }
 
+  test("pyWeightedAveTest1") {
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":8,"end":13,"system":"indices"},"lon":{"start":70,"end":72,"system":"indices"},"time":{"start":5,"end":10,"system":"indices"}}],variable=[{"uri":"file:///dass/nobackup/tpmaxwel/.edas/cache/collections/NCML/CIP_MERRA_mon_pr.ncml","name":"pr:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.avew","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val result_node = executeTest(datainputs)
+    val result_data = CDFloatArray( getResultData( result_node ) )
+    println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
+  }
+
   test("pyTimeAveTestLocal") {
 //    datafile=".../MERRA2_200.inst6_3d_ana_Np_T.20000101.nc4"
 //    ncwa -O -v T -d lat,10,10 -d lon,20,20 -a time ${datafile} ~/test/out/time_ave.nc
