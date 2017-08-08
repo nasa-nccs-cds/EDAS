@@ -36,23 +36,29 @@ class Worker(object):
 
     def run(self):
         active = True
-        try:
-            while active:
-                header = self.request_socket.recv()
-                type = self.getMessageField(header,0)
-                self.logger.info( "Received '{0}' message: {1}".format( type, header ) )
-                if type == "array":
+        while active:
+            header = self.request_socket.recv()
+            type = self.getMessageField(header,0)
+            self.logger.info( "Received '{0}' message: {1}".format( type, header ) )
+            if type == "array":
+                try:
                     withData = int(self.getMessageField(header,5))
                     data = self.request_socket.recv() if withData else None
                     array = npArray.createInput(header,data)
                     self.cached_inputs[array.uid()] = array
+                except Exception as err:
+                    self.sendError( err )
 
-                elif type == "task":
+            elif type == "task":
+                try:
                     resultVars = self.processTask( Task(header) )
                     for resultVar in resultVars:
                         self.sendVariableData( resultVar )
+                except Exception as err:
+                    self.sendError( err )
 
-                elif type == "util":
+            elif type == "util":
+                try:
                     utype = self.getMessageField(header,1)
                     if utype == "capabilities":
                         capabilities = edasOpManager.getCapabilitiesStr()
@@ -62,9 +68,9 @@ class Worker(object):
                         active = False
                     elif utype == "exception":
                         raise Exception("Test Exception")
+                except Exception as err:
+                    self.sendError( err )
 
-        except Exception as err:
-            self.sendError( err )
 
     def sendVariableData( self, resultVar ):
         header = "|".join( [ "array-"+str(os.getpid()), resultVar.id,  mParse.ia2s(resultVar.origin), mParse.ia2s(resultVar.shape), mParse.m2s(resultVar.metadata) ] )

@@ -46,7 +46,14 @@ class Kernel:
         self.logger.info( "\n\n Execute Operations, inputs: " + str(inputs) )
         kernel_inputs = [ inputs.get( inputId.split('-')[0] ) for inputId in task.inputs ]
         if None in kernel_inputs: raise Exception( "ExecuteTask ERROR: required input {0} not available in task inputs: {1}".format( task.inputs, inputs.keys() ))
-        return [ self.executeOperation(task,input) for input in kernel_inputs ]
+        return [  self.validExecuteOperation(task,input) for input in kernel_inputs ]
+
+    def validExecuteOperation( self, task, input ):
+        self.validate(input)
+        return self.executeOperation(task,input)
+
+    def validate( self, input ) :
+        if( input.array == None ): raise Exception( "Missing data for input " + input.name + " in Kernel " + self._spec )
 
     def executeOperation( self, task, input ): raise Exception( "Attempt to execute Kernel with undefined executeOperation method")
 

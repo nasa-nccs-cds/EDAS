@@ -63,6 +63,7 @@ class AverageKernel(Kernel):
         self.logger.info("  ~~~~~~~~~~~~~~~~~~~~~~~~~~ Execute Operations, inputs: " + str( task.inputs ) + ", task metadata = " + str(task.metadata) + ", axes = " + str(axes) )
         for input in kernel_inputs:
             t0 = time.time()
+            if( input.array == None ): raise Exception( "Missing data for input " + input.name + " in Average Kernel" )
             result_array = input.array.sum( axis=axes,   keepdims=True )
             mask_array = input.array.count(axis=self.getAxes(task.metadata), keepdims=True )
             results.append( npArray.createResult( task, input, result_array.filled( input.array.fill_value )  ) )
