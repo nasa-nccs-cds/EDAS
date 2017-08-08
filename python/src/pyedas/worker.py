@@ -9,8 +9,8 @@ from task import Task
 class Worker(object):
 
     def __init__( self, request_port, result_port ):
-        self.cached_results = {}
-        self.cached_inputs = {}
+        self.cached_results = {};                   """ :type : dict[str,npArray] """
+        self.cached_inputs = {};                    """ :type : dict[str,npArray] """
         self.logger = logging.getLogger("worker")
         try:
             self.context = zmq.Context()

@@ -14,7 +14,6 @@ try:
 
     rId = portal.sendMessage("execute", [ "WPS", datainputs, ""] )
     responses = response_manager.getResponses(rId)
-
     print "Got responses:\n" + "\n".join(responses)
 
 finally:

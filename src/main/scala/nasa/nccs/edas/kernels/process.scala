@@ -123,11 +123,16 @@ object Kernel extends Loggable {
   type RDDKeyValPair = ( RecordKey, RDDRecord )
 
   def getResultFile( resultId: String, deleteExisting: Boolean = false ): File = {
-    val resultsDirPath = appParameters("wps.results.dir", "~/.wps/results").replace( "~",  System.getProperty("user.home") ).replaceAll("[()]","-").replace("=","~")
-    val resultsDir = new File(resultsDirPath); resultsDir.mkdirs()
-    val resultFile = new File( resultsDirPath + s"/$resultId.nc" )
+    val resultsDir = getResultDir()
+    val resultFile = new File( resultsDir.toString + s"/$resultId.nc" )
     if( deleteExisting && resultFile.exists ) resultFile.delete
     resultFile
+  }
+
+  def getResultDir(): File = {
+    val resultsDirPath = appParameters("wps.results.dir", "~/.wps/results").replace( "~",  System.getProperty("user.home") ).replaceAll("[()]","-").replace("=","~")
+    val resultsDir = new File(resultsDirPath); resultsDir.mkdirs()
+    resultsDir
   }
 
   def mergeRDD(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair = {
@@ -1084,7 +1089,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
         case None =>
           worker.sendUtility( List( "input", input_id ).mkString(";") )
       }
-      val metadata = indexAxisConf( context.getConfiguration, context.grid.axisIndexMap )
+      val metadata = indexAxisConf( context.getConfiguration, context.grid.axisIndexMap ) ++ Map( "resultDir" -> Kernel.getResultDir().toString )
       worker.sendRequest(context.operation.identifier, context.operation.inputs.toArray, metadata )
       val resultItems = for( iInput <-  0 until (operation_input_arrays.length * nOutputsPerInput)  ) yield {
         val tvar: TransVar = worker.getResult

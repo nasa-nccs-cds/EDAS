@@ -74,17 +74,25 @@ class npArray(CDArray):
 
     @classmethod
     def createResult(cls, task, input, result_array ):
+        """  :rtype: npArray """
         return npArray( task.rId, input.origin, result_array.shape, dict( input.metadata, **task.metadata ), result_array, input.undef )
 
     @classmethod
     def createAuxResult( cls, id, metadata, input, result_array ):
+        """  :rtype: npArray """
         return npArray( id, input.origin, result_array.shape, metadata, result_array, input.undef )
+
+    def compress( self, condition, axis ):
+        """  :rtype: npArray """
+        result_array = self.array.compress( condition, self.array, axis )
+        return npArray( self._id, self._origin, result_array.shape, self._metadata, result_array, self._undef )
 
     def toBytes( self, dtype ):
         return self.array.astype(dtype).tobytes() + np.array([self.undef]).astype(dtype).tobytes() # bytearray(struct.pack("f", self.undef))
 
     @classmethod
     def createInput(self, header, data):
+        """  :rtype: npArray """
         print(" ***->> Creating Input, header = {0}".format( header ) )
         header_toks = header.split('|')
         id = header_toks[1]
@@ -110,6 +118,7 @@ class npArray(CDArray):
 
     @classmethod
     def createInput1(self, header, data):
+        """  :rtype: npArray """
         logger = logging.getLogger("worker")
         logger.info(" ***->> Creating Input, header = {0}".format( header ) )
         header_toks = header.split('|')
@@ -174,6 +183,7 @@ class npArray(CDArray):
         else: return baseGrid.subGrid( latInterval, lonInterval )
 
     def getVariable( self, gridFilePath = None ):
+        """  :rtype: cdms2.tvariable.TransientVariable """
         import cdms2
         if( self.variable is None ):
             t0 = time.time()

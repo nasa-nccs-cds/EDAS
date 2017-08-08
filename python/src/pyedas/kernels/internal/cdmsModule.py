@@ -1,5 +1,5 @@
 from pyedas.kernels.Kernel import CDMSKernel, Kernel, KernelSpec
-from pyedas.edasArray import cdmsArray
+from pyedas.edasArray import cdmsArray, npArray
 import cdms2, time, os, cdutil
 from pyedas.messageParser import mParse
 import numpy as np
@@ -12,20 +12,6 @@ class RegridKernel(CDMSKernel):
     def __init__( self ):
         Kernel.__init__( self, KernelSpec("regrid", "Regridder", "Regrids the inputs using UVCDAT", parallelize=True ) )
         self._debug = False
-
-    def getGrid(self, gridFilePath, latInterval = None, lonInterval = None ):
-        import cdms2
-        gridfile = cdms2.open(gridFilePath)
-        baseGrid = gridfile.grids.values()[0]
-        if ( (latInterval == None) or (lonInterval == None)  ):  return baseGrid
-        else: return baseGrid.subGrid( latInterval, lonInterval )
-
-    def getListParm(self, metadata, id, default="" ):
-        """  :rtype: list[int] """
-        svals = str(metadata.get(id,default)).lower();  """:type : str """
-        return svals.split(",") if svals else []
-
-
 
     def executeOperations(self, task, _inputs):
         """
@@ -42,6 +28,7 @@ class RegridKernel(CDMSKernel):
         method = str( mdata.get("method","linear") ).lower()
         res = sa2f( self.getListParm( mdata, "res" ) )
         shape = sa2i( self.getListParm( mdata, "shape" ) )
+        plev = sa2f( self.getListParm( mdata, "plev" ) )
         toGrid = None
         if( target ):
             grid_input = _inputs.get( target, None )
@@ -64,7 +51,10 @@ class RegridKernel(CDMSKernel):
 
         results = []
         for input_id in task.inputs:
-            _input = _inputs.get( input_id.split('-')[0] )
+            vid = input_id.split('-')[0]
+            _input = _inputs.get( vid );    """ :type : npArray """
+#            if plev:
+#               _input = _input.compress()
             variable = _input.getVariable()
             ingrid = _input.getGrid()
             inlatBounds, inlonBounds = ingrid.getBounds()
