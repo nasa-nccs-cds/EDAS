@@ -13,4 +13,4 @@ dset = cdms2.open( dset_address )
 var = dset( vname, genutil.picker( level=levs ) );  """:type : AbstractVariable """
 t1 = time.time()
 
-print "Completed read test in time {1}, shape = {2}".format( str(t1-t0), str(var.shape) )
+print "Completed read test in time {0}, shape = {1}".format( str(t1-t0), str(var.shape) )
