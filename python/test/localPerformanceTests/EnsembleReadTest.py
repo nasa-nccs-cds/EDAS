@@ -6,7 +6,7 @@ import numpy as np
 import numpy.ma as ma
 
 
-target_grid_dset = cdms2.open( '/att/dataportal01/CREATE-IP/reanalysis/JMA/JRA-55/6hr/atmos/ta/ta_6hr_reanalysis_JRA-55_1980010100-1980013118.nc' )
+target_grid_dset = cdms2.open( '/dass/pubrepo/CREATE-IP/data/reanalysis/JMA/JRA-55/6hr/atmos/ta/ta_6hr_reanalysis_JRA-55_1958010100-1958013118.nc' )
 target_grid_var = target_grid_dset['ta'];  """:type : FileVariable """
 
 dset_address = "/dass/pubrepo/CREATE-IP/data/reanalysis/NASA-GMAO/GEOS-5/MERRA2/mon/atmos/tas/tas_Amon_reanalysis_MERRA2_198001-201412.nc"
