@@ -10,7 +10,7 @@ levs = (100000, 97500, 95000, 92500, 90000, 87500, 85000, 82500, 80000, 77500, 7
 
 t0 = time.time()
 dset = cdms2.open( dset_address )
-var = dset( vname, genutil.picker( plev=levs ) );  """:type : AbstractVariable """
+var = dset( vname, genutil.picker( level=levs ) );  """:type : AbstractVariable """
 t1 = time.time()
 
 print "Completed read test in time {1}, shape = {2}".format( str(t1-t0), str(var.shape) )
