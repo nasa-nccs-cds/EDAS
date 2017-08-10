@@ -194,7 +194,7 @@ object TestReadApplication extends Loggable {
         val f0 = slice_iter.getFloatNext()
         if( !f0.isNaN  ) {
           val counter = slice_iter.getCurrentCounter
-          out_index.set1(slice_index)
+          out_index.set( counter(0), slice_index, counter(1), counter(2) )
           out_array.setFloat( out_index.currentElement, f0 )
         }
       }
