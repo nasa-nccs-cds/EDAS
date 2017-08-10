@@ -13,6 +13,7 @@ import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import nasa.nccs.wps.WPSExceptionReport
 import org.apache.spark.SparkEnv
+import ucar.nc2.dataset.NetcdfDataset
 
 import scala.xml
 import scala.io.Source
@@ -169,4 +170,23 @@ object TestApplication extends Loggable {
   }
 }
 
+object TestReadApplication extends Loggable {
+  def main(args: Array[String]): Unit = {
+    val data_path= "/dass/pubrepo/CREATE-IP/data/reanalysis"
+    val dset_address = data_path + "/NASA-GMAO/GEOS-5/MERRA2/6hr/atmos/ta/ta_6hr_reanalysis_MERRA2_1980010100-1980013118.nc"
+    val vname = "ta"
+    val t0 = System.nanoTime()
+    val input_dataset = NetcdfDataset.openDataset(dset_address)
+    val input_variable = input_dataset.findVariable(vname)
+    val raw_data = input_variable.read()
+    val indices = List( 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41 )
+    val slices = indices.map( raw_data.slice(1,_) )
+    logger.info( s"Completed test, time = %.4f sec".format( (System.nanoTime() - t0) / 1.0E9 ) )
+  }
+}
+
+//    val levs = List(100000, 97500, 95000, 92500, 90000, 87500, 85000, 82500, 80000, 77500, 75000, 70000, 65000, 60000, 55000, 50000, 45000, 40000, 35000, 30000, 25000, 20000, 15000, 10000)
+
+
 // nasa.nccs.edas.portal.TestApplication
+// nasa.nccs.edas.portal.TestReadApplication
