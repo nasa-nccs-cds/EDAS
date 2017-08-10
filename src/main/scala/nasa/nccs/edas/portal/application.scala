@@ -184,11 +184,18 @@ object TestReadApplication extends Loggable {
     var fsum = 0.0
     val attrs = input_variable.getAttributes.map( _.getStringValue ).mkString(", ")
     logger.info( s"Running test, var attrs = " + attrs )
-    for( slice <- slices; slice_iter = slice.getIndexIterator ) {
+    var out_shape = input_variable.getShape
+    out_shape(1) = indices.length
+    var out_array = ucar.ma2.Array.factory( ucar.ma2.DataType.FLOAT, out_shape )
+    val out_index = out_array.getIndex
+    for( slice_index <- slices.indices; slice = slices(slice_index); slice_iter = slice.getIndexIterator ) {
+      logger.info( s"Merging slice ${slice_index}, shape = [ ${slice.getShape.mkString(", ")} ]" )
       while ( slice_iter.hasNext ) {
         val f0 = slice_iter.getFloatNext()
         if( !f0.isNaN  ) {
-          fsum = fsum + f0
+          val counter = slice_iter.getCurrentCounter
+          out_index.set1(slice_index)
+          out_array.setFloat( out_index.currentElement, f0 )
         }
       }
     }
