@@ -182,10 +182,14 @@ object TestReadApplication extends Loggable {
     val indices = List( 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41 )
     val slices = indices.map( raw_data.slice(1,_) )
     var fsum = 0.0
+    val attrs = input_variable.getAttributes.map( _.getStringValue ).mkString(", ")
+    logger.info( s"Running test, var attrs = " + attrs )
     for( slice <- slices; slice_iter = slice.getIndexIterator ) {
       while ( slice_iter.hasNext ) {
         val f0 = slice_iter.getFloatNext()
-        fsum = fsum + f0
+        if( !f0.isNaN  ) {
+          fsum = fsum + f0
+        }
       }
     }
     logger.info( s"Completed test, time = %.4f sec, sum = %.1f".format( (System.nanoTime() - t0) / 1.0E9, fsum ) )
