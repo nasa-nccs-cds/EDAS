@@ -15,8 +15,9 @@ levs = (100000, 97500, 95000, 92500, 90000, 87500, 85000, 82500, 80000, 77500, 7
 
 t0 = time.time()
 dset = cdms2.open( dset_address )
-var = dset( vname, genutil.picker( level=levs ) );  """:type : AbstractVariable """
-newvar = var.regrid( target_grid_var.getGrid() )
+var0 = dset[vname]
+var1 = dset( vname, genutil.picker( level=levs ) );  """:type : AbstractVariable """
+# newvar = var.regrid( target_grid_var.getGrid() )
 t1 = time.time()
 
-print "Completed read test in time {0}, shape = {1}".format( str(t1-t0), str( newvar.shape ) )
+print "Completed test in time {0}, shape0 = {1}, shape1 = {2}".format( str(t1-t0), str( var0.shape ), str( var1.shape ) )
