@@ -12,7 +12,7 @@ data_path = dass_data_path
 target_grid_dset = cdms2.open( data_path + '/JMA/JRA-55/6hr/atmos/ta/ta_6hr_reanalysis_JRA-55_1958010100-1958013118.nc' )
 target_grid_var = target_grid_dset['ta'];  """:type : FileVariable """
 
-dset_address = data_path + "/NASA-GMAO/GEOS-5/MERRA2/mon/atmos/tas/tas_Amon_reanalysis_MERRA2_198001-201412.nc"
+dset_address = data_path + "/NASA-GMAO/GEOS-5/MERRA2/mon/atmos/ta/ta_Amon_reanalysis_MERRA2_198001-201412.nc"
 vname = "ta"
 levs = (100000, 97500, 95000, 92500, 90000, 87500, 85000, 82500, 80000, 77500, 75000, 70000, 65000, 60000, 55000, 50000, 45000, 40000, 35000, 30000, 25000, 20000, 15000, 10000)
 
