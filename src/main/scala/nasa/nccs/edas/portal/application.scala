@@ -177,8 +177,7 @@ object TestReadApplication extends Loggable {
     val data_path= "/dass/pubrepo/CREATE-IP/data/reanalysis"
     val dset_address = data_path + "/NASA-GMAO/GEOS-5/MERRA2/6hr/atmos/ta/ta_6hr_reanalysis_MERRA2_1980010100-1980013118.nc"
     val vname = "ta"
-    val axis = 1
-    val t0 = System.nanoTime()
+    val test = 3
     val input_dataset = NetcdfDataset.openDataset(dset_address)
     val input_variable = input_dataset.findVariable(vname)
     val raw_data = input_variable.read()
@@ -192,13 +191,15 @@ object TestReadApplication extends Loggable {
     val out_array: ArrayFloat = ucar.ma2.Array.factory( ucar.ma2.DataType.FLOAT, out_shape ).asInstanceOf[ArrayFloat]
     val out_buffer: Any = out_array.getStorage
     val out_index = out_array.getIndex
-    val out_size = out_array.getSize
+    val out_size = out_array.getSize.toInt
     val nTS = out_shape(0)
+    val out_tstride = out_size / nTS
     val slice_shape = slices(0).getShape
     val slice_size = slices(0).getSize.toInt
-    val copy_size = ( slice_size / nTS )
+    val copy_size =  slice_size / nTS
+    val t0 = System.nanoTime()
     logger.info( s"Running test, in_shape : [ ${in_shape.mkString(",")} ], out_shape : [ ${out_shape.mkString(",")} ], slice_shape : [ ${slice_shape.mkString(",")} ], slice_size : [ ${slice_size} ] , nTS : [ ${nTS} ]  " )
-    if( axis == 1 ) {
+    if( test == 1 ) {
       for (si <- slices.indices; slice = slices(si); slice_index = slice.getIndex ) {
         for( iTS <- 0 until nTS ) {
           val slice_element = copy_size*iTS
@@ -207,7 +208,7 @@ object TestReadApplication extends Loggable {
           System.arraycopy( slice_buffer, slice_element, out_buffer, out_element,  copy_size.toInt )
         }
       }
-    } else {
+    } else if( test == 2 )  {
       for (slice_index <- slices.indices; slice = slices(slice_index); slice_iter = slice.getIndexIterator) {
         logger.info(s"Merging slice ${slice_index}, shape = [ ${slice.getShape.mkString(", ")} ]")
         while (slice_iter.hasNext) {
@@ -215,6 +216,17 @@ object TestReadApplication extends Loggable {
           val counter = slice_iter.getCurrentCounter
           out_index.set(counter(0), slice_index, counter(1), counter(2))
           out_array.setFloat(out_index.currentElement, f0)
+        }
+      }
+    } else if( test == 3 )  {
+      for( iT <- 0 until nTS ) {
+        for ( iZ <- slices.indices; slice = slices(iZ) ) {
+          for( iXY <- 0 until copy_size ) {
+            val i0 = iT * copy_size + iXY
+            val f0 = slice.getFloat(i0)
+            val i1 = iT * out_tstride + iZ * copy_size + iXY
+            out_array.setFloat( i1, f0 )
+          }
         }
       }
     }
