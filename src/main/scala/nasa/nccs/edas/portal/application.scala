@@ -186,20 +186,25 @@ object TestReadApplication extends Loggable {
     val slices = indices.map( raw_data.slice(1,_) )
     var fsum = 0.0
     val attrs = input_variable.getAttributes.map( _.getStringValue ).mkString(", ")
-    logger.info( s"Running test, var attrs = " + attrs )
+    val in_shape = input_variable.getShape
     var out_shape = input_variable.getShape
     out_shape(1) = indices.length
     val out_array: ArrayFloat = ucar.ma2.Array.factory( ucar.ma2.DataType.FLOAT, out_shape ).asInstanceOf[ArrayFloat]
     val out_buffer: Any = out_array.getStorage
     val out_index = out_array.getIndex
+    val out_size = out_array.getSize
     val nTS = out_shape(0)
     val copy_size = slices(0).getSize / nTS
+    logger.info( s"Running test, in_shape : [ ${in_shape.mkString(",")} ], out_shape : [ ${out_shape.mkString(",")} ], nTS : [ ${nTS} ]  " )
     if( axis == 1 ) for (si <- slices.indices; slice = slices(si); slice_index = slice.getIndex ) {
       for( iTS <- 0 until nTS ) {
         out_index.set( iTS, si, 0, 0 )
         slice_index.set( iTS, 0, 0 )
+        val slice_element = slice_index.currentElement
+        val out_element = out_index.currentElement
         val slice_buffer: Any = slice.get1DJavaArray( slice.getElementType )
-        System.arraycopy( slice_buffer, slice_index.currentElement, out_buffer, out_index.currentElement,  copy_size.toInt )
+        logger.info( s"COPY: si: ${si},  iTS: ${iTS},  slice_element: ${slice_element},  out_element: ${out_element},  copy_size: ${copy_size.toInt}, out_size: ${out_size.toInt}   " )
+        System.arraycopy( slice_buffer, slice_element, out_buffer, out_element,  copy_size.toInt )
       }
     } else {
       for (slice_index <- slices.indices; slice = slices(slice_index); slice_iter = slice.getIndexIterator) {
