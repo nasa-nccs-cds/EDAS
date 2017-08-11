@@ -199,6 +199,7 @@ object TestReadApplication extends Loggable {
     val slice_shape = slices(0).getShape
     val slice_size = slices(0).getSize.toInt
     val copy_size =  slice_size / nTS
+    val t1 = System.nanoTime()
     logger.info( s"Running test, in_shape : [ ${in_shape.mkString(",")} ], out_shape : [ ${out_shape.mkString(",")} ], slice_shape : [ ${slice_shape.mkString(",")} ], slice_size : [ ${slice_size} ] , nTS : [ ${nTS} ]  " )
     if( test == 1 ) {
       for (si <- slices.indices; slice = slices(si); slice_index = slice.getIndex ) {
@@ -231,7 +232,8 @@ object TestReadApplication extends Loggable {
         }
       }
     }
-    logger.info( s"Completed test, time = %.4f sec".format( (System.nanoTime() - t0) / 1.0E9 ) )
+    val t2 = System.nanoTime()
+    logger.info( s"Completed test, time = %.4f sec, array join time = %.4f sec".format( (t2 - t0) / 1.0E9, (t1 - t0) / 1.0E9 ) )
   }
 }
 
