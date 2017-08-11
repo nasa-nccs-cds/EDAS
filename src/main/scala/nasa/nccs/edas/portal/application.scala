@@ -190,7 +190,7 @@ object TestReadApplication extends Loggable {
     var out_shape = input_variable.getShape
     out_shape(1) = indices.length
     val out_array: ArrayFloat = ucar.ma2.Array.factory( ucar.ma2.DataType.FLOAT, out_shape ).asInstanceOf[ArrayFloat]
-    val out_buffer: Any = out_array.getStorage.asInstanceOf[ArrayFloat]
+    val out_buffer: Any = out_array.getStorage
     val out_index = out_array.getIndex
     val nTS = out_shape(0)
     val copy_size = slices(0).getSize / nTS
