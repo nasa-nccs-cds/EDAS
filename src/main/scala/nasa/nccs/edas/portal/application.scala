@@ -195,15 +195,13 @@ object TestReadApplication extends Loggable {
     val out_size = out_array.getSize
     val nTS = out_shape(0)
     val slice_shape = slices(0).getShape
-    val slice_size = slices(0).getSize
-    val copy_size = slice_size / nTS
+    val slice_size = slices(0).getSize.toInt
+    val copy_size = ( slice_size / nTS )
     logger.info( s"Running test, in_shape : [ ${in_shape.mkString(",")} ], out_shape : [ ${out_shape.mkString(",")} ], slice_shape : [ ${slice_shape.mkString(",")} ], slice_size : [ ${slice_size} ] , nTS : [ ${nTS} ]  " )
     if( axis == 1 ) for (si <- slices.indices; slice = slices(si); slice_index = slice.getIndex ) {
       for( iTS <- 0 until nTS ) {
-        out_index.set( iTS, si, 0, 0 )
-        slice_index.set( iTS, 0, 0 )
-        val slice_element = slice_index.currentElement
-        val out_element = out_index.currentElement
+        val slice_element = copy_size*iTS
+        val out_element = si*slice_size + slice_element
         val slice_buffer: Any = slice.get1DJavaArray( slice.getElementType )
         logger.info( s"COPY: si: ${si},  iTS: ${iTS},  slice_element: ${slice_element},  out_element: ${out_element},  copy_size: ${copy_size.toInt}, out_size: ${out_size.toInt}   " )
         System.arraycopy( slice_buffer, slice_element, out_buffer, out_element,  copy_size.toInt )
