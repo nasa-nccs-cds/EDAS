@@ -194,8 +194,10 @@ object TestReadApplication extends Loggable {
     val out_index = out_array.getIndex
     val out_size = out_array.getSize
     val nTS = out_shape(0)
-    val copy_size = slices(0).getSize / nTS
-    logger.info( s"Running test, in_shape : [ ${in_shape.mkString(",")} ], out_shape : [ ${out_shape.mkString(",")} ], nTS : [ ${nTS} ]  " )
+    val slice_shape = slices(0).getShape
+    val slice_size = slices(0).getSize
+    val copy_size = slice_size / nTS
+    logger.info( s"Running test, in_shape : [ ${in_shape.mkString(",")} ], out_shape : [ ${out_shape.mkString(",")} ], slice_shape : [ ${slice_shape.mkString(",")} ], slice_size : [ ${slice_size} ] , nTS : [ ${nTS} ]  " )
     if( axis == 1 ) for (si <- slices.indices; slice = slices(si); slice_index = slice.getIndex ) {
       for( iTS <- 0 until nTS ) {
         out_index.set( iTS, si, 0, 0 )
