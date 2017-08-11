@@ -13,6 +13,7 @@ import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import nasa.nccs.wps.WPSExceptionReport
 import org.apache.spark.SparkEnv
+import ucar.ma2.ArrayFloat
 import ucar.nc2.dataset.NetcdfDataset
 
 import scala.xml
@@ -172,9 +173,11 @@ object TestApplication extends Loggable {
 
 object TestReadApplication extends Loggable {
   def main(args: Array[String]): Unit = {
+    import ucar.ma2.ArrayFloat
     val data_path= "/dass/pubrepo/CREATE-IP/data/reanalysis"
     val dset_address = data_path + "/NASA-GMAO/GEOS-5/MERRA2/6hr/atmos/ta/ta_6hr_reanalysis_MERRA2_1980010100-1980013118.nc"
     val vname = "ta"
+    val axis = 1
     val t0 = System.nanoTime()
     val input_dataset = NetcdfDataset.openDataset(dset_address)
     val input_variable = input_dataset.findVariable(vname)
@@ -186,16 +189,26 @@ object TestReadApplication extends Loggable {
     logger.info( s"Running test, var attrs = " + attrs )
     var out_shape = input_variable.getShape
     out_shape(1) = indices.length
-    var out_array = ucar.ma2.Array.factory( ucar.ma2.DataType.FLOAT, out_shape )
+    val out_array: ArrayFloat = ucar.ma2.Array.factory( ucar.ma2.DataType.FLOAT, out_shape ).asInstanceOf[ArrayFloat]
+    val out_buffer: Any = out_array.getStorage.asInstanceOf[ArrayFloat]
     val out_index = out_array.getIndex
-    for( slice_index <- slices.indices; slice = slices(slice_index); slice_iter = slice.getIndexIterator ) {
-      logger.info( s"Merging slice ${slice_index}, shape = [ ${slice.getShape.mkString(", ")} ]" )
-      while ( slice_iter.hasNext ) {
-        val f0 = slice_iter.getFloatNext()
-        if( !f0.isNaN  ) {
+    val nTS = out_shape(0)
+    val copy_size = slices(0).getSize / nTS
+    if( axis == 1 ) for (si <- slices.indices; slice = slices(si); slice_index = slice.getIndex ) {
+      for( iTS <- 0 until nTS ) {
+        out_index.set( iTS, si, 0, 0 )
+        slice_index.set( iTS, 0, 0 )
+        val slice_buffer: Any = slice.get1DJavaArray( slice.getElementType )
+        System.arraycopy( slice_buffer, slice_index.currentElement, out_buffer, out_index.currentElement,  copy_size.toInt )
+      }
+    } else {
+      for (slice_index <- slices.indices; slice = slices(slice_index); slice_iter = slice.getIndexIterator) {
+        logger.info(s"Merging slice ${slice_index}, shape = [ ${slice.getShape.mkString(", ")} ]")
+        while (slice_iter.hasNext) {
+          val f0 = slice_iter.getFloatNext()
           val counter = slice_iter.getCurrentCounter
-          out_index.set( counter(0), slice_index, counter(1), counter(2) )
-          out_array.setFloat( out_index.currentElement, f0 )
+          out_index.set(counter(0), slice_index, counter(1), counter(2))
+          out_array.setFloat(out_index.currentElement, f0)
         }
       }
     }
