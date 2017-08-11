@@ -233,7 +233,7 @@ object TestReadApplication extends Loggable {
       }
     }
     val t2 = System.nanoTime()
-    logger.info( s"Completed test, time = %.4f sec, array join time = %.4f sec".format( (t2 - t0) / 1.0E9, (t1 - t0) / 1.0E9 ) )
+    logger.info( s"Completed test, time = %.4f sec, array join time = %.4f sec".format( (t2 - t0) / 1.0E9, (t2 - t1) / 1.0E9 ) )
   }
 }
 
