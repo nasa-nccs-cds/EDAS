@@ -176,14 +176,14 @@ object TestReadApplication extends Loggable {
     import ucar.ma2.ArrayFloat
     val data_path= "/dass/pubrepo/CREATE-IP/data/reanalysis"
     val dset_address = data_path + "/NASA-GMAO/GEOS-5/MERRA2/6hr/atmos/ta/ta_6hr_reanalysis_MERRA2_1980010100-1980013118.nc"
+    val indices = List( 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41 )
     val vname = "ta"
     val test = 3
+    val t0 = System.nanoTime()
     val input_dataset = NetcdfDataset.openDataset(dset_address)
     val input_variable = input_dataset.findVariable(vname)
     val raw_data = input_variable.read()
-    val indices = List( 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41 )
     val slices = indices.map( raw_data.slice(1,_) )
-    var fsum = 0.0
     val attrs = input_variable.getAttributes.map( _.getStringValue ).mkString(", ")
     val in_shape = input_variable.getShape
     var out_shape = input_variable.getShape
@@ -193,11 +193,12 @@ object TestReadApplication extends Loggable {
     val out_index = out_array.getIndex
     val out_size = out_array.getSize.toInt
     val nTS = out_shape(0)
+    val nZ = out_shape(1)
     val out_tstride = out_size / nTS
+    val out_zstride = out_tstride / nZ
     val slice_shape = slices(0).getShape
     val slice_size = slices(0).getSize.toInt
     val copy_size =  slice_size / nTS
-    val t0 = System.nanoTime()
     logger.info( s"Running test, in_shape : [ ${in_shape.mkString(",")} ], out_shape : [ ${out_shape.mkString(",")} ], slice_shape : [ ${slice_shape.mkString(",")} ], slice_size : [ ${slice_size} ] , nTS : [ ${nTS} ]  " )
     if( test == 1 ) {
       for (si <- slices.indices; slice = slices(si); slice_index = slice.getIndex ) {
@@ -219,18 +220,18 @@ object TestReadApplication extends Loggable {
         }
       }
     } else if( test == 3 )  {
-      for( iT <- 0 until nTS ) {
-        for ( iZ <- slices.indices; slice = slices(iZ) ) {
+      for ( iZ <- slices.indices; slice = slices(iZ) ) {
+        for( iT <- 0 until nTS ) {
           for( iXY <- 0 until copy_size ) {
             val i0 = iT * copy_size + iXY
             val f0 = slice.getFloat(i0)
-            val i1 = iT * out_tstride + iZ * copy_size + iXY
+            val i1 = iT * out_tstride + iZ * out_zstride + iXY
             out_array.setFloat( i1, f0 )
           }
         }
       }
     }
-    logger.info( s"Completed test, time = %.4f sec, sum = %.1f".format( (System.nanoTime() - t0) / 1.0E9, fsum ) )
+    logger.info( s"Completed test, time = %.4f sec".format( (System.nanoTime() - t0) / 1.0E9 ) )
   }
 }
 
