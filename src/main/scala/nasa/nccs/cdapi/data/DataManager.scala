@@ -13,13 +13,15 @@ import ucar.ma2
 import java.nio
 import java.util.Formatter
 
+import nasa.nccs.cdapi.data.FastMaskedArray.join
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import org.apache.spark.mllib.linalg.DenseVector
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.kernels.KernelContext
-import ucar.ma2.{Index, IndexIterator}
+import nasa.nccs.edas.portal.TestReadApplication.logger
+import ucar.ma2.{ArrayFloat, Index, IndexIterator}
 import ucar.nc2.dataset.{CoordinateAxis1DTime, NetcdfDataset}
 import ucar.nc2.time.{CalendarDate, CalendarPeriod}
 
@@ -257,6 +259,71 @@ object FastMaskedArray {
       vsum_array.weightedSum( axes, Some(wts) )
     }
   }
+
+  def join( farrays: Array[FastMaskedArray], axis: Int ): FastMaskedArray = {
+    val t0 = System.nanoTime()
+    val nArrays = farrays.length
+    val in_shape: Array[Int] = farrays(0).array.getShape
+    val missing: Float = farrays(0).missing
+    val (front, back) = in_shape.splitAt(axis)
+    var out_shape = front ++ Array[Int](nArrays) ++ back
+    val out_array: ArrayFloat = ucar.ma2.Array.factory(ucar.ma2.DataType.FLOAT, out_shape).asInstanceOf[ArrayFloat]
+    val out_buffer: Any = out_array.getStorage
+    val out_size = out_array.getSize.toInt
+    val in_size = farrays(0).array.getSize.toInt
+    val n0 = out_shape(0)
+    val stride0 = out_size/n0
+
+    if( axis == 0 ) {
+      val slice_size = in_size
+      for (i0 <- farrays.indices; farray = farrays(i0)) {
+        for (ielem0 <- 0 until slice_size) {
+          val f0 = farray.array.getFloat(ielem0)
+          val elem1 = i0 * stride0 + ielem0
+          out_array.setFloat(elem1, f0)
+        }
+      }
+    } else if( axis == 1 ) {
+      val n1 = out_shape(1)
+      val stride1 = stride0/n1
+      val slice_stride0 = in_size / n0
+      for (i1 <- farrays.indices; farray = farrays(i1)) {
+        for (i0 <- 0 until n0) {
+          for (i23 <- 0 until slice_stride0) {
+            val elem0 = i0 * slice_stride0 + i23
+            val f0 = farray.array.getFloat(elem0)
+            val elem1 = i0 * stride0 + i1 * stride1 + elem0
+            out_array.setFloat(elem1, f0)
+          }
+        }
+      }
+    } else if( axis == 2 ) {
+      val n1 = out_shape(1)
+      val n2 = out_shape(2)
+      val n3 = out_shape(3)
+      val stride1 = stride0/n1
+      val stride2 = stride1/n2
+      val slice_stride0 = in_size /  n0
+      val slice_stride1 = slice_stride0 / n1
+      for (i2 <- farrays.indices; farray = farrays(i2)) {
+        for (i0 <- 0 until n0) {
+          for (i1 <- 0 until n1) {
+            for (i3 <- 0 until n3) {
+              val elem0 = i0 * slice_stride0 + i1 * slice_stride1 + i3
+              val f0 = farray.array.getFloat(elem0)
+              val elem1 = i0 * stride0 + i1 * stride1 + i2 * stride2 + elem0
+              out_array.setFloat(elem1, f0)
+            }
+          }
+        }
+      }
+    } else  {
+      throw new Exception( "Operation not yet implemented: axis = " + axis.toString )
+    }
+    val t1 = System.nanoTime()
+    logger.info(s"Completed array join operation, time = %.4f sec".format( (t1 - t0) / 1.0E9))
+    new FastMaskedArray( out_array, missing )
+  }
 }
 
 class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggable {
@@ -268,6 +335,11 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
       else { throw new Exception( s"Incommensurate shapes in dual array operation: [${s0.mkString(",")}] --  [${s1.mkString(",")}] ") }
     }
     axes.toArray
+  }
+
+  def compress( indices: Array[Int], axis: Int ): FastMaskedArray = {
+    val slices = indices.map( index => new FastMaskedArray( array.slice(axis,index), missing ) )
+    FastMaskedArray.join( slices, axis )
   }
 
   def reduce(op: FastMaskedArray.ReduceOp, axes: Array[Int], initVal: Float = 0f ): FastMaskedArray = {
@@ -640,6 +712,7 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
     val result = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp )
     HeapFltArray( result.toCDFloatArray, origin, gridSpec, mergeMetadata("merge",other), toCDWeightsArray.map( _.append( other.toCDWeightsArray.get ) ) )
   }
+  def findValue( value: Float, eps: Float = 0.0001f ): Option[Int] = { val seps = eps*value; data.indexWhere( x => Math.abs(x-value) < seps ) } match { case -1 => None;  case x => Some(x) }
   def toXml: xml.Elem = <array shape={shape.mkString(",")} missing={getMissing().toString}> { data.mkString(",")} </array> % metadata
 }
 object HeapFltArray extends Loggable {
@@ -697,6 +770,7 @@ class HeapDblArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   }
   def combine( combineOp: CDArray.ReduceOp[Double], other: ArrayBase[Double] ): ArrayBase[Double] = HeapDblArray( CDDoubleArray.combine( combineOp, toCDDoubleArray, other.toCDDoubleArray ), origin, mergeMetadata("merge",other) )
   def toXml: xml.Elem = <array shape={shape.mkString(",")} missing={getMissing().toString} > {_data_.mkString(",")} </array> % metadata
+  def findValue( value: Double, eps: Float = 0.0001f ): Option[Int] = { val seps = eps*value; _data_.indexWhere( x => Math.abs(x-value) < seps ) } match { case -1 => None;  case x => Some(x) }
 }
 object HeapDblArray {
   def apply( cdarray: CDDoubleArray, origin: Array[Int], metadata: Map[String,String] ): HeapDblArray = new HeapDblArray( cdarray.getShape, origin, cdarray.getArrayData(), Some(cdarray.getInvalid), metadata )
@@ -722,6 +796,7 @@ class HeapLongArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=A
     }
   }
   def toXml: xml.Elem = <array shape={shape.mkString(",")} missing={getMissing().toString} > {_data_.mkString(",")} </array> % metadata
+  def findValue( value: Long ): Option[Int] = _data_.indexOf(value) match { case -1 => None;  case x => Some(x) }
 }
 object HeapLongArray {
   def apply( cdarray: CDLongArray, origin: Array[Int], metadata: Map[String,String] ): HeapLongArray = new HeapLongArray( cdarray.getShape, origin, cdarray.getArrayData(), Some(cdarray.getInvalid), metadata )

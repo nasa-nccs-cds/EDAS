@@ -63,6 +63,37 @@ class partition extends Kernel() {
   val description = "Configures various data partitioning and filtering operations"
 }
 
+class compress extends Kernel() {
+  val inputs = List(WPSDataInput("input variable", 1, 1))
+  val outputs = List(WPSProcessOutput("operation result"))
+  val title = "Compress"
+  val description = "Compress data by cherry-picking slices, etc."
+
+  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
+    val input_array_map: Map[String,HeapFltArray] = Map( context.operation.inputs.map( id => id -> inputs.findElements(id).head ):_*)
+    val input_fastArray_map:  Map[String,FastMaskedArray] = input_array_map.mapValues(_.toFastMaskedArray)
+    val levels: String = context.config("plev","")
+    val inputId = context.operation.inputs.head
+    val input_data = inputs.element(inputId).get
+    val t0 = System.nanoTime
+
+    if( !levels.isEmpty ) {
+      val levelValues = levels.split(',').map( _.toFloat )
+      val ( axisIndex: Int, levelIndices: Array[Int] ) = context.grid.coordValuesToIndices( 'z', levelValues )
+      val compressed_array_map: Map[String,FastMaskedArray] = input_fastArray_map.mapValues( _.compress( levelIndices, axisIndex ) )
+      val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value")  ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements) )
+      val elems: List[(String,HeapFltArray)] = compressed_array_map.map { case (id, carray) =>
+        context.operation.rid -> HeapFltArray( carray.toCDFloatArray, input_data.origin, result_metadata, None ) }.toList
+      logger.info("&MAP: Finished Kernel %s, inputs = %s, output = %s, time = %.4f s".format(name, context.operation.inputs.mkString(","), context.operation.rid, (System.nanoTime - t0)/1.0E9) )
+      RDDRecord( TreeMap(elems:_*), inputs.metadata )
+    } else {
+      logger.warn( "No operation performed in compress kernel")
+      inputs
+    }
+  }
+}
+
+
 class min2 extends DualRDDKernel(Map("mapOp" -> "min")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )

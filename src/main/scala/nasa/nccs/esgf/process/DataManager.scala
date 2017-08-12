@@ -414,6 +414,19 @@ class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblAr
     case Some(section) => getSpatialAxisData( axis, section );
     case None => getSpatialAxisData( axis ).map { case ( index, array ) => ( index, array.toUcarDoubleArray ) }
   }
+  def coordValuesToIndices( axis: Char, values: Array[Float] ): ( Int, Array[Int]) = {
+    if( axis == 't' ) {
+      getTimeAxisData match {
+        case Some(data) => 0 -> values.flatMap(x => data.findValue(x.toLong))
+        case None => -1 -> Array.emptyIntArray
+      }
+    } else {
+      getSpatialAxisData(axis) match {
+        case Some((axisIndex,data)) => axisIndex -> values.flatMap(x => data.findValue(x.toDouble))
+        case None => -1 -> Array.emptyIntArray
+      }
+    }
+  }
 }
 
 class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None ) extends CDSVariable( variable.name, variable.collection ) {
@@ -470,6 +483,20 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
         case x => Some(axisSpec.index -> HeapDblArray(axisSpec.coordAxis.read(), Array(0), axisSpec.getMetadata, variable.missing))
       }
       case None => None
+    }
+  }
+
+  def coordValuesToIndices( axis: Char, values: Array[Float] ): Array[Int] = {
+    grid.getAxisSpec(axis.toString) match {
+      case Some(axisSpec) => axisSpec.coordAxis.getAxisType match {
+        case AxisType.Time =>
+          val data =  HeapLongArray( axisSpec.coordAxis.read(), Array(0), axisSpec.getMetadata, variable.missing )
+          values.flatMap( x => data.findValue(x.toLong) )
+        case x =>
+          val data = HeapDblArray(axisSpec.coordAxis.read(), Array(0), axisSpec.getMetadata, variable.missing)
+          values.flatMap( x => data.findValue(x.toDouble) )
+      }
+      case None => Array.emptyIntArray
     }
   }
 
