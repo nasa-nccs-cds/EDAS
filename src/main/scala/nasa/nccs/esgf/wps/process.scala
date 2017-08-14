@@ -1,12 +1,12 @@
 package nasa.nccs.esgf.wps
 import nasa.nccs.caching.RDDTransientVariable
+import nasa.nccs.edas.loaders.EDAS_XML
 import nasa.nccs.edas.portal.EDASPortal.ConnectionMode
 import nasa.nccs.edas.portal.EDASPortalClient
 import nasa.nccs.utilities.Loggable
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConversions._
-import scala.xml
 
 class NotAcceptableException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
 
@@ -89,13 +89,13 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   def describeProcess(service: String, name: String): xml.Node  =  {
     val rId = portal.sendMessage( "describeProcess", List( name ).toArray )
     val responses = response_manager.getResponses(rId,true).toList
-    scala.xml.XML.loadString( responses(0) )
+    EDAS_XML.loadString( responses(0) )
   }
 
   def getCapabilities(service: String, identifier: String): xml.Node = {
     val rId = portal.sendMessage( "getCapabilities", List( "" ).toArray )
     val responses = response_manager.getResponses(rId,true).toList
-    scala.xml.XML.loadString( responses(0) )
+    EDAS_XML.loadString( responses(0) )
   }
 
   def executeProcess(service: String, process_name: String, datainputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node = {
@@ -110,7 +110,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
 
   def getResult( service: String, resultId: String ): xml.Node = {
     val responses = response_manager.getResponses(resultId,true).toList
-    scala.xml.XML.loadString( responses(0) )
+    EDAS_XML.loadString( responses(0) )
   }
 
   def getResultStatus( service: String, resultId: String ): xml.Node = {

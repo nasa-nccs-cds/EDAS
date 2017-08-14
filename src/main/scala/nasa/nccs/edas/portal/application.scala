@@ -15,8 +15,6 @@ import nasa.nccs.wps.WPSExceptionReport
 import org.apache.spark.SparkEnv
 import ucar.ma2.ArrayFloat
 import ucar.nc2.dataset.NetcdfDataset
-
-import scala.xml
 import scala.io.Source
 
 object EDASapp {

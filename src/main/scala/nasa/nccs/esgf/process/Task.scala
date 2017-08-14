@@ -11,7 +11,7 @@ import nasa.nccs.utilities.Loggable
 import java.util.UUID
 
 import nasa.nccs.cdapi.data.RDDVariableSpec
-import nasa.nccs.edas.engine.spark.{RecordKey, RecordKey$}
+import nasa.nccs.edas.engine.spark.{RecordKey}
 import nasa.nccs.edas.engine.{CDS2ExecutionManager, Workflow}
 import nasa.nccs.edas.kernels.AxisIndices
 import nasa.nccs.esgf.process.OperationContext.OpResultType
@@ -21,7 +21,6 @@ import scala.collection.JavaConverters._
 import scala.util.matching.Regex
 import scala.collection.{immutable, mutable}
 import scala.collection.mutable.HashSet
-import scala.xml._
 import mutable.ListBuffer
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.esgf.utilities.wpsNameMatchers

@@ -9,13 +9,12 @@ import java.net.URI
 import java.nio._
 import java.util.Formatter
 
-import scala.xml
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.caching.{EDASCachePartitioner, EDASPartitioner}
 import nasa.nccs.cdapi.data.HeapFltArray
 import nasa.nccs.cdapi.tensors.{CDDoubleArray, CDFloatArray, CDLongArray}
-import nasa.nccs.edas.loaders.XmlResource
+import nasa.nccs.edas.loaders.{Collections, EDAS_XML, XmlResource}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import ucar.nc2.constants.AxisType
@@ -27,8 +26,6 @@ import scala.collection.{concurrent, mutable}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
-import scala.xml.XML
-import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
 import nasa.nccs.esgf.process.{CDSection, DataSource}
@@ -432,7 +429,7 @@ object DiskCacheFileMgr extends XmlResource {
   protected def loadDiskCacheMap: Map[String,String] = {
     try {
       var filePath = getFilePath("/cache.xml")
-      val tuples = XML.loadFile(filePath).child.map(
+      val tuples = EDAS_XML.loadFile(filePath).child.map(
         node => node.attribute("id") match {
           case None => None;
           case Some(id) => node.attribute("path") match {
@@ -579,7 +576,7 @@ trait DiskCachable extends XmlResource {
 //  def getDatasetFileHeaders: Option[DatasetFileHeaders] = {
 //    if( collection.dataPath.startsWith("http:" ) ) { None }
 //    else if( collection.dataPath.endsWith(".ncml" ) ) {
-//      val aggregation = XML.loadFile(getFilePath) \ "aggregation"
+//      val aggregation = EDAS_XML.loadFile(getFilePath) \ "aggregation"
 //      val aggDim = (aggregation \ "@dimName").text
 //      val fileNodes = ( aggregation \ "netcdf" ).map( node => new FileHeader(  (node \ "@location").text,  (node \ "@coordValue").text.split(",").map( _.trim.toDouble ), false  ) )
 //      Some( new DatasetFileHeaders( aggDim, fileNodes ) )

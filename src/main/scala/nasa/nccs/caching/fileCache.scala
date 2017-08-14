@@ -26,10 +26,9 @@ import ucar.ma2.Range
 import ucar.nc2.dataset.CoordinateAxis1DTime
 import ucar.nc2.time.CalendarPeriod.Field.{Month, Year}
 import ucar.{ma2, nc2}
-
-import scala.xml
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future, Promise}
@@ -334,9 +333,11 @@ class EDASPartitionSpec( val _partitions: IndexedSeq[Partition] ) {
   def getNPartitions: Int = _partitions.length
 }
 
-case class PartitionSpecs( nPartitions: Int, partMemorySize: Long, nSlicesPerRecord: Int, recordMemorySize: Long, nRecordsPerPart: Int, nSlicesPerPart: Int ) {
+class PartitionSpecs( val nPartitions: Int, val nSlicesPerRecord: Int ) { }
 
-}
+class CustomPartitionSpecs( nPartitions: Int, val parts: Array[ma2.Range], nSlicesPerRecord: Int ) extends PartitionSpecs(nPartitions,nSlicesPerRecord) { }
+
+class RegularPartitionSpecs( nPartitions: Int, val partMemorySize: Long, nSlicesPerRecord: Int, val recordMemorySize: Long, val nRecordsPerPart: Int, val nSlicesPerPart: Int ) extends PartitionSpecs(nPartitions,nSlicesPerRecord) { }
 
 case class PartitionConstraints( partsConfig: Map[String,String] ) {
   private val _numDataFiles: Int = partsConfig.getOrElse("numDataFiles","0").toInt
@@ -385,6 +386,18 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
 //  val slicesPerDay: Float = daysPerSection / baseShape(0)
 //  val yearsPerSection: Float = secondsPerSection / secPeryear
 
+  def getPeriodRanges( periodValues: IndexedSeq[Int] ): Array[Range] = {
+    var periodValue = -1
+    var partStartIndex = -1
+    var ranges = ListBuffer.empty[ma2.Range]
+    periodValues.zipWithIndex foreach { case ( iP, index ) => if( iP != periodValue ) {
+      if( partStartIndex != -1 ) { ranges += new Range( partStartIndex, index-1 ) }
+      partStartIndex = index
+      periodValue = iP
+    }}
+    ranges.toArray
+  }
+
   def getPartitionSpecs( constraints: PartitionConstraints ): PartitionSpecs = {
     if( constraints.period.isEmpty ) {
       val desiredPartSize = if (constraints.numParts == 0) { partitionSize } else {
@@ -398,17 +411,21 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
           constraints.nSlicesPerRecord * sliceMemorySize
         }
       }
-      val _nSlicesPerRecord: Int = math.max(currentRecordSize / sliceMemorySize, 1.0).round.toInt
+      val _nSlicesPerRecord: Int = math.max( currentRecordSize / sliceMemorySize, 1.0).round.toInt
       val _recordMemorySize: Long = getMemorySize(_nSlicesPerRecord)
       val _nRecordsPerPart: Int = math.max(currentPartitionSize / _recordMemorySize, 1.0).round.toInt
       val _partMemorySize: Long = _nRecordsPerPart * _recordMemorySize
       var _nSlicesPerPart: Int = _nRecordsPerPart * _nSlicesPerRecord
       val _nPartitions: Int = math.ceil(sectionMemorySize / _partMemorySize.toFloat).toInt
-      PartitionSpecs(_nPartitions, _partMemorySize, _nSlicesPerRecord, _recordMemorySize, _nRecordsPerPart, _nSlicesPerPart)
+      new RegularPartitionSpecs(_nPartitions, _partMemorySize, _nSlicesPerRecord, _recordMemorySize, _nRecordsPerPart, _nSlicesPerPart)
     } else {
       if ( constraints.period.toLowerCase.startsWith("month") ) {
-        val partBounds = ( 0 until timeAxis.getSize.toInt ) map ( iTime => timeAxis.getCalendarDate(iTime).get )
-        PartitionSpecs()
+        val months: IndexedSeq[Int] = ( 0 until timeAxis.getSize.toInt ) map ( iTime => timeAxis.getCalendarDate(iTime).getFieldValue(CalendarPeriod.Field.Month) )
+        val parts: Array[Range] = getPeriodRanges( months )
+        val _nSlicesPerRecord: Int = if (constraints.nSlicesPerRecord == 0) { math.max( recordSize/sliceMemorySize, 1.0).round.toInt } else { constraints.nSlicesPerRecord }
+        new CustomPartitionSpecs( parts.length, parts, _nSlicesPerRecord )
+      } else {
+        throw new Exception( "Unrecognized partition period: " + constraints.period )
       }
     }
   }
@@ -428,13 +445,26 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
   def computeRecordSizes( ): EDASPartitionSpec = {
     val sparkConfig = BatchSpec.serverContext.spark.sparkContext.getConf.getAll map { case (key, value ) =>  key + " -> " + value } mkString( "\n\t")
     if( filters.isEmpty ) {
-      val pSpecs = getPartitionSpecs( PartitionConstraints( partsConfig ++ Map( "numDataFiles" -> numDataFiles.toString ) ) )
-      val partitions = (0 until pSpecs.nPartitions) map ( partIndex => {
-        val startIndex = partIndex * pSpecs.nSlicesPerPart
-        val partSize = Math.min(pSpecs.nSlicesPerPart, baseShape(0) - startIndex)
-        RegularPartition(partIndex, 0, startIndex, partSize, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
-      })
-      logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${partitions.length} \n---------------------------------------------\n")
+      val partitions: IndexedSeq[Partition] = getPartitionSpecs( PartitionConstraints( partsConfig ++ Map( "numDataFiles" -> numDataFiles.toString ) ) ) match {
+        case pSpecs: RegularPartitionSpecs => {
+          val parts = (0 until pSpecs.nPartitions) map (partIndex => {
+            val startIndex = partIndex * pSpecs.nSlicesPerPart
+            val partSize = Math.min(pSpecs.nSlicesPerPart, baseShape(0) - startIndex)
+            RegularPartition(partIndex, 0, startIndex, partSize, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
+          })
+          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length} \n---------------------------------------------\n")
+          parts
+        }
+        case cpSpecs: CustomPartitionSpecs => {
+          val parts = for (partIndex <- 0 until cpSpecs.nPartitions; pRange = cpSpecs.parts(partIndex)) yield {
+            val nSlicesPerRec = math.min(cpSpecs.nSlicesPerRecord, pRange.length)
+            RegularPartition(partIndex, 0, pRange.first, pRange.length, nSlicesPerRec, sliceMemorySize, _section.getOrigin, baseShape)
+          }
+          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${cpSpecs.nSlicesPerRecord}, nPartitions: ${parts.length} \n---------------------------------------------\n")
+          parts
+        }
+        case x => throw new Exception( "Unrecognized partition class: " + x.getClass.getName )
+      }
       new EDASPartitionSpec( partitions )
     } else {
       val seasonFilters = filters.flatMap( SeasonFilter.get )
@@ -647,8 +677,7 @@ class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[Str
 }
 
 object FragmentPersistence extends DiskCachable with FragSpecKeySet {
-  private val fragmentIdCache: Cache[String, String] =
-    new FutureCache("CacheIdMap", "fragment", true)
+  private val fragmentIdCache: Cache[String, String] = new PersistentCache("CacheIdMap", "fragment" )
   val M = 1000000
 
   def getCacheType = "fragment"
@@ -843,8 +872,7 @@ class RDDTransientVariable(val result: RDDRecord,
 }
 
 class TransientDataCacheMgr extends Loggable {
-  private val transientFragmentCache: Cache[String, TransientFragment] =
-    new FutureCache("Store", "result", false)
+  private val transientFragmentCache: Cache[String, TransientFragment] = new FutureCache("Store", "result" )
 
   def putResult(resultId: String,
                 resultFut: Future[Option[TransientFragment]]) =
@@ -870,7 +898,7 @@ class TransientDataCacheMgr extends Loggable {
 }
 class CollectionDataCacheMgr extends nasa.nccs.esgf.process.DataLoader with FragSpecKeySet {
   val K = 1000f
-  private val fragmentCache: Cache[String, PartitionedFragment] = new FutureCache[String, PartitionedFragment]("Store", "fragment", false) {
+  private val fragmentCache: Cache[String, PartitionedFragment] = new FutureCache[String, PartitionedFragment]( "Store", "fragment" ) {
       override def evictionNotice(key: String, value: Future[PartitionedFragment]) = {
         value.onSuccess {
           case pfrag =>
@@ -894,7 +922,7 @@ class CollectionDataCacheMgr extends nasa.nccs.esgf.process.DataLoader with Frag
       .maximumWeightedCapacity(128)
       .build()
 
-  private val maskCache: Cache[MaskKey, CDByteArray] = new FutureCache("Store", "mask", false)
+  private val maskCache: Cache[MaskKey, CDByteArray] = new FutureCache("Store", "mask" )
 
   def clearFragmentCache() = fragmentCache.clear
   def addJob(jrec: JobRecord): String = {

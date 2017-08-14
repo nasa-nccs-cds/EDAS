@@ -6,7 +6,6 @@ import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.{DataFragmentSpec, TargetGrid}
 import nasa.nccs.utilities.Loggable
-import scala.xml
 
 object WPSProcessExecuteResponse {
   def merge(  serviceInstance: String, responses: List[WPSProcessExecuteResponse] ): WPSProcessExecuteResponse = new MergedWPSExecuteResponse( serviceInstance, responses )

@@ -1,9 +1,9 @@
 package nasa.nccs.edas.loaders
-import java.io.{File, FileNotFoundException, FileOutputStream}
-
-import scala.xml
+import java.io._
+import java.net.URL
 import java.nio.channels.Channels
 import java.nio.file.{Files, Path, Paths}
+import javax.xml.parsers.{ParserConfigurationException, SAXParserFactory}
 
 import collection.JavaConverters._
 import scala.collection.JavaConversions._
@@ -15,9 +15,8 @@ import nasa.nccs.utilities.Loggable
 import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
 import ucar.{ma2, nc2}
-
-import scala.concurrent.Future
-import scala.xml.XML
+import scala.xml.factory.XMLLoader
+import scala.xml.{ Node, SAXParser, XML}
 
 object AxisNames {
   def apply( x: String = "", y: String = "", z: String = "", t: String = "" ): Option[AxisNames] = {
@@ -31,6 +30,21 @@ class AxisNames( val nameMap: Map[Char,String]  ) {
     case None=> throw new Exception( s"Not an axis: $dimension" )
   }
 }
+
+object EDAS_XML extends XMLLoader[Node]  {
+
+  override def parser: SAXParser = {
+    val f = SAXParserFactory.newInstance()
+    f.setNamespaceAware(false)
+    f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    f.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+    f.setFeature("http://xml.org/sax/features/external-general-entities", false)
+    f.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+    f.setXIncludeAware(false)
+    f.newSAXParser()
+  }
+}
+
 
 trait XmlResource extends Loggable {
   val Encoding = "UTF-8"
@@ -78,7 +92,7 @@ object Masks extends XmlResource {
   def isMaskId( maskId: String ): Boolean = (maskId(0) == mid_prefix )
 
   def loadMaskXmlData(filePath:String): Map[String,Mask] = {
-    Map(XML.loadFile(filePath).child.flatMap( node => node.attribute("id") match {
+    Map(EDAS_XML.loadFile(filePath).child.flatMap( node => node.attribute("id") match {
       case None => None;
       case Some(id) => Some( (mid_prefix +: id.toString) -> createMask(node)); }
     ) :_* )
@@ -261,7 +275,7 @@ object Collections extends XmlResource {
     for ( ( scope, filePath ) <- filePaths.iterator ) if( Files.exists( Paths.get(filePath) ) ) {
         try {
           logger.info( "Loading collections from file: " + filePath )
-          val children = XML.loadFile(filePath).child
+          val children = EDAS_XML.loadFile(filePath).child
           children.foreach( node => node.attribute("id") match {
             case None => None;
             case Some(id) => try {

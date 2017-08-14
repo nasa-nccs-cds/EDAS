@@ -24,8 +24,7 @@ import nasa.nccs.edas.portal.TestReadApplication.logger
 import ucar.ma2.{ArrayFloat, Index, IndexIterator}
 import ucar.nc2.dataset.{CoordinateAxis1DTime, NetcdfDataset}
 import ucar.nc2.time.{CalendarDate, CalendarPeriod}
-
-import scala.xml
+import scala.xml.{Elem,Node}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.{SortedMap, TreeMap}

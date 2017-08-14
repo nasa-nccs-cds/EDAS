@@ -7,7 +7,6 @@ import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 
-import scala.xml
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import org.scalatest.{BeforeAndAfter, FunSuite, Ignore}

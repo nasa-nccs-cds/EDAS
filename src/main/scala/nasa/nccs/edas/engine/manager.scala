@@ -2,7 +2,6 @@ package nasa.nccs.edas.engine
 import java.io.{IOException, PrintWriter, StringWriter}
 import java.nio.file.{Files, Paths}
 
-import scala.xml
 import java.io.File
 
 import nasa.nccs.cdapi.cdm.{Collection, PartitionedFragment, _}

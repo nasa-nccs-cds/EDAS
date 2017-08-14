@@ -4,8 +4,6 @@ import java.io.{File, PrintWriter}
 import java.lang.management.ManagementFactory
 import java.util.jar.JarFile
 import java.nio.file.{Files, Path, Paths}
-
-import scala.xml
 import com.joestelmach.natty
 import ucar.nc2.time.CalendarDate
 import java.nio.file.{Files, Path}

@@ -2,6 +2,7 @@ package nasa.nccs.caching
 
 import java.io._
 import java.nio.file.{Files, Paths}
+
 import nasa.nccs.utilities.Logger
 import org.apache.commons.io.FileUtils
 
@@ -15,6 +16,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.io.Source
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
@@ -114,11 +116,46 @@ object ValueMagnet {
 //class DeletionListener[K,Future[V]]( val cache: Int ) extends EvictionListener[K,Future[V]] {
 //  override def onEviction(key: K, value: V ) {;}
 //}
-class FutureCache[K,V](val cname: String, val ctype: String, val persistent: Boolean ) extends Cache[K,V] with Loggable {
+
+class PersistentCache( cname: String, ctype: String ) extends FutureCache[String,String](cname,ctype) {
+
+  override def persist(): Unit =  {
+    Files.createDirectories( Paths.get(cacheFile).getParent )
+    val ostr = new PrintWriter( cacheFile )
+    val entries = getEntries.toList
+    logger.info( " ***Persisting cache %s to file '%s', entries: [ %s ]".format( cname, cacheFile, entries.mkString(",") ) )
+    entries.foreach( entry => ostr.write( entry._1 + "," + entry._2 + "\n" ) )
+    ostr.close()
+  }
+
+  override def clear(): Set[String] = {
+    val keys = super.clear()
+    logger.info( " ** Deleting cache directory: " + cacheFile )
+    FileUtils.deleteDirectory( Paths.get(cacheFile).getParent.toFile )
+    keys
+  }
+
+
+  override def restore: Option[ Array[(String ,String)] ] = {
+    try {
+      val istr = Source.fromFile(cacheFile)
+      logger.info(s"Restoring $cname cache map from: " + cacheFile);
+      val entries: Iterator[(String ,String)] = for( line <- istr.getLines; tup = line.split(",") ) yield { tup(0) -> tup(1) }
+      Some( entries.toArray )
+    } catch {
+      case err: Throwable =>
+        logger.warn("Can't load persisted cache file '" + cacheFile + "' due to error: " + err.toString );
+        None
+    }
+  }
+
+}
+
+class FutureCache[K,V](val cname: String, val ctype: String  ) extends Cache[K,V] with Loggable {
   val KpG = 1000000L
   val maxCapacity: Long = appParameters(Array(ctype.toLowerCase,cname.toLowerCase,"capacity").mkString("."),"30").toLong * KpG
   val initialCapacity: Int=64
-  val cacheFile = DiskCacheFileMgr.getDiskCacheFilePath( ctype, cname )
+  val cacheFile = DiskCacheFileMgr.getDiskCacheFilePath( ctype, cname + ".csv" )
   require(maxCapacity >= 0, "maxCapacity must not be negative")
   require(initialCapacity <= maxCapacity, "initialCapacity must be <= maxCapacity")
 
@@ -139,7 +176,7 @@ class FutureCache[K,V](val cname: String, val ctype: String, val persistent: Boo
     } }
     val sizeWeighter = new EntryWeigher[K,Future[V]]{ def weightOf(key: K, value: Future[V] ): Int = { entrySize(key,value) } }
     val hmap = new ConcurrentLinkedHashMap.Builder[K, Future[V]].initialCapacity(initialCapacity).maximumWeightedCapacity(maxCapacity).listener( evictionListener ).weigher( sizeWeighter ).build()
-    if(persistent) restore match {
+    restore match {
       case Some( entryArray ) => entryArray.foreach { case (key,value) => hmap.put(key,Future(value)) }
       case None => Unit
     }
@@ -157,36 +194,13 @@ class FutureCache[K,V](val cname: String, val ctype: String, val persistent: Boo
     entries.flatten.toSeq
   }
 
-  def persist(): Unit = if( persistent ) {
-    Files.createDirectories( Paths.get(cacheFile).getParent )
-    val ostr = new ObjectOutputStream ( new FileOutputStream( cacheFile ) )
-    val entries = getEntries.toList
-    logger.info( " ***Persisting cache %s to file '%s', entries: [ %s ]".format( cname, cacheFile, entries.mkString(",") ) )
-    ostr.writeObject( entries )
-    ostr.close()
-  }
+  def persist(): Unit =  {;}
+  protected def restore: Option[ Array[(K,V)] ] = { None }
 
   def clear(): Set[K] = {
     val keys: Set[K] = Set[K](store.keys.toSeq: _*)
-    if (persistent) {
-      logger.info( " ** Deleting cache directory: " + cacheFile )
-      FileUtils.deleteDirectory( Paths.get(cacheFile).getParent.toFile )
-    }
     store.clear()
     keys
-  }
-
-
-  protected def restore: Option[ Array[(K,V)] ] = {
-    try {
-      val istr = new ObjectInputStream(new FileInputStream(cacheFile))
-      logger.info(s"Restoring $cname cache map from: " + cacheFile);
-      Some( istr.readObject.asInstanceOf[ List[(K,V)] ].toArray )
-    } catch {
-      case err: Throwable =>
-        logger.warn("Can't load persisted cache file '" + cacheFile + "' due to error: " + err.toString );
-        None
-    }
   }
 
   def put( key: K, value: V ) = if( store.put(key, Future(value) ) == null ) { capacity_log( key, "++" ) }

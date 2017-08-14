@@ -7,8 +7,6 @@ import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.wps.{BlockingExecutionResult, WPSExceptionReport, WPSResponse}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 
-import scala.xml
-
 trait ServiceProvider extends Loggable {
 
   def executeProcess(identifier: String, parsed_data_inputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem
