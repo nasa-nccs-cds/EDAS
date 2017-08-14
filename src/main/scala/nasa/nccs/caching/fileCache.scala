@@ -341,6 +341,7 @@ case class PartitionSpecs( nPartitions: Int, partMemorySize: Long, nSlicesPerRec
 case class PartitionConstraints( partsConfig: Map[String,String] ) {
   private val _numDataFiles: Int = partsConfig.getOrElse("numDataFiles","0").toInt
   private val _numParts: Int = partsConfig.getOrElse("numParts","0").toInt
+  val period = partsConfig.getOrElse("period","")
   val nSlicesPerRecord: Int = partsConfig.getOrElse("numSlicesPerRecord","0").toInt
   val oneRecPerSlice: Boolean = partsConfig.getOrElse("oneRecPerSlice","false").toBoolean
   val numParts: Int = if( _numParts > 0 ) { _numParts } else {
@@ -385,16 +386,31 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
 //  val yearsPerSection: Float = secondsPerSection / secPeryear
 
   def getPartitionSpecs( constraints: PartitionConstraints ): PartitionSpecs = {
-    val desiredPartSize = if( constraints.numParts == 0 ) { partitionSize } else { math.min( partitionSize, sectionMemorySize / constraints.numParts.toFloat ) }
-    val currentPartitionSize: Float = math.max( desiredPartSize, sliceMemorySize )
-    val currentRecordSize: Float = if( constraints.oneRecPerSlice ) { sliceMemorySize } else { if( constraints.nSlicesPerRecord == 0 ) { math.min( recordSize, currentPartitionSize ) } else { constraints.nSlicesPerRecord * sliceMemorySize } }
-    val _nSlicesPerRecord: Int = math.max( currentRecordSize / sliceMemorySize, 1.0).round.toInt
-    val _recordMemorySize: Long = getMemorySize(_nSlicesPerRecord)
-    val _nRecordsPerPart: Int = math.max( currentPartitionSize / _recordMemorySize, 1.0).round.toInt
-    val _partMemorySize: Long = _nRecordsPerPart * _recordMemorySize
-    var _nSlicesPerPart: Int = _nRecordsPerPart * _nSlicesPerRecord
-    val _nPartitions: Int = math.ceil(sectionMemorySize / _partMemorySize.toFloat).toInt
-    PartitionSpecs( _nPartitions, _partMemorySize, _nSlicesPerRecord, _recordMemorySize, _nRecordsPerPart, _nSlicesPerPart )
+    if( constraints.period.isEmpty ) {
+      val desiredPartSize = if (constraints.numParts == 0) { partitionSize } else {
+        math.min(partitionSize, sectionMemorySize / constraints.numParts.toFloat)
+      }
+      val currentPartitionSize: Float = math.max(desiredPartSize, sliceMemorySize)
+      val currentRecordSize: Float = if (constraints.oneRecPerSlice) { sliceMemorySize } else {
+        if (constraints.nSlicesPerRecord == 0) {
+          math.min(recordSize, currentPartitionSize)
+        } else {
+          constraints.nSlicesPerRecord * sliceMemorySize
+        }
+      }
+      val _nSlicesPerRecord: Int = math.max(currentRecordSize / sliceMemorySize, 1.0).round.toInt
+      val _recordMemorySize: Long = getMemorySize(_nSlicesPerRecord)
+      val _nRecordsPerPart: Int = math.max(currentPartitionSize / _recordMemorySize, 1.0).round.toInt
+      val _partMemorySize: Long = _nRecordsPerPart * _recordMemorySize
+      var _nSlicesPerPart: Int = _nRecordsPerPart * _nSlicesPerRecord
+      val _nPartitions: Int = math.ceil(sectionMemorySize / _partMemorySize.toFloat).toInt
+      PartitionSpecs(_nPartitions, _partMemorySize, _nSlicesPerRecord, _recordMemorySize, _nRecordsPerPart, _nSlicesPerPart)
+    } else {
+      if ( constraints.period.toLowerCase.startsWith("month") ) {
+        val partBounds = ( 0 until timeAxis.getSize.toInt ) map ( iTime => timeAxis.getCalendarDate(iTime).get )
+        PartitionSpecs()
+      }
+    }
   }
 
   def getForceNParts(): Int = {
