@@ -204,15 +204,21 @@ object TaskRequest extends Loggable {
   def apply(process_name: String, datainputs: Map[String, Seq[Map[String, Any]]]) = {
     logger.info( "TaskRequest--> process_name: %s, datainputs: %s".format(process_name, datainputs.toString))
     val uid = UID()
-    val opSpecs: Seq[Map[String, Any]] = datainputs .getOrElse("operation", List())
-    val data_list: List[DataContainer] = datainputs.getOrElse("variable", List()).flatMap(DataContainer.factory(uid, _, opSpecs.isEmpty )).toList
+    val op_spec_list: Seq[Map[String, Any]] = datainputs .getOrElse("operation", List())
+    val data_list: List[DataContainer] = datainputs.getOrElse("variable", List()).flatMap(DataContainer.factory(uid, _, op_spec_list.isEmpty )).toList
     val domain_list: List[DomainContainer] = datainputs.getOrElse("domain", List()).map(DomainContainer(_)).toList
+    val opSpecs: Seq[Map[String, Any]] = if(op_spec_list.isEmpty) { getEmptyOpSpecs(data_list) } else { op_spec_list }
     val operation_list: List[OperationContext] = opSpecs.zipWithIndex.map {  case (op, index) => OperationContext(index, uid, process_name, data_list.map(_.uid), op) } .toList
     val variableMap = buildVarMap(data_list, operation_list)
     val domainMap = buildDomainMap(domain_list)
     val gridId = datainputs.getOrElse("grid", data_list.headOption.map(dc => dc.uid).getOrElse("#META")).toString
     val gridSpec = Map("id" -> gridId.toString)
     new TaskRequest( uid, process_name, variableMap, domainMap, operation_list, gridSpec )
+  }
+
+  def getEmptyOpSpecs( data_list: List[DataContainer] ): Seq[Map[String, Any]] = {
+    val inputs: List[String] = data_list.flatMap( dc => if( dc.isSource ) { Some(dc.uid) } else { None } )
+    IndexedSeq( Map( "name"->"CDSpark.noOp", "input"->inputs ) )
   }
 
   def buildVarMap( data: List[DataContainer], workflow: List[OperationContext]): Map[String, DataContainer] = {
@@ -817,6 +823,7 @@ class DataContainer(val uid: String, private val source: Option[DataSource] = No
     assert( isOperation, s"Attempt to access a source based DataContainer($uid) as an operation")
     operation.get
   }
+  def getSourceOpt = { source }
 
   def addOpSpec(operation: OperationContext): Unit = { // used to inform data container what types of ops will be performed on it.
     def mergeOpSpec(oSpecList: mutable.ListBuffer[OperationSpecs], oSpec: OperationSpecs): Unit = oSpecList.headOption match {
