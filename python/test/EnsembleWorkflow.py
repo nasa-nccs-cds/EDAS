@@ -23,7 +23,7 @@ try:
                         ],
                         operation=[
                             {"name":"CDSpark.compress","id":"cmp","input":"v1,v2,v3,v4","plev":"100000, 97500, 95000, 92500, 90000, 87500, 85000, 82500, 80000, 77500, 75000, 70000, 65000, 60000, 55000, 50000, 45000, 40000, 35000, 30000, 25000, 20000, 15000, 10000" },
-                            {"name":"python.cdmsModule.regrid","id":"rg","input":"cmp.v1,cmp.v2,cmp.v3,cmp.v4","domain":"d0","grid":"uniform","target":"cmp.v4"}
+                            {"name":"python.cdmsModule.regrid","id":"rg","input":"cmp","domain":"d0","grid":"uniform","target":"v4"}
                         ]
                     ]"""
 

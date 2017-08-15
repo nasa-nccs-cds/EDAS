@@ -234,7 +234,7 @@ object TaskRequest extends Loggable {
         case Some(data_container) =>
           data_container.addOpSpec(operation)
         case None =>
-          throw new Exception( "Unrecognized variable %s in varlist [%s] for operation %s with inputs [ %s ] with data containers: %s".format(vid, var_map.keys.mkString(","),operation.name,operation.inputs.mkString(", "),data.map(data_container => ("id:" + data_container.uid)).mkString("[ ", ", ", " ]")))
+          throw new Exception( "Unrecognized variable %s in varlist [%s] for operation %s with inputs [ %s ] with data containers: %s, and with op_var_items: [ %s ]".format(vid, var_map.keys.mkString(","),operation.name,operation.inputs.mkString(", "),data.map(data_container => ("id:" + data_container.uid)).mkString("[ ", ", ", " ]"), op_var_items.map(_._1).mkString(", ")))
       }
     var_map
   }
