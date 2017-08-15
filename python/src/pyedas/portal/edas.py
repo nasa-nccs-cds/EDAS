@@ -11,14 +11,14 @@ class ConnectionMode():
     DefaultPort = 4336
 
     @classmethod
-    def bindSocket( cls, socket, port ):
+    def bindSocket( cls, socket, server_address, port ):
         if port > 0:
-            socket.bind("tcp://*:{0}".format(port))
+            socket.bind("tcp://{0}:{1}".format(server_address,port))
         else:
             test_port = cls.DefaultPort
             while( True ):
                 try:
-                    socket.bind( "tcp://*:{0}".format(test_port) )
+                    socket.bind( "tcp://{0}:{1}".format(server_address,test_port) )
                     return test_port
                 except Exception as err:
                     test_port = test_port + 1
@@ -188,7 +188,7 @@ class ResponseManager(Thread):
 
 class EDASPortal:
 
-    def __init__( self, connectionMode = ConnectionMode.BIND, host="localhost", request_port=0, response_port=0, **kwargs ):
+    def __init__( self, connectionMode = ConnectionMode.BIND, host="127.0.0.1", request_port=0, response_port=0, **kwargs ):
         try:
             self.logger =  logging.getLogger("portal")
             self.context = zmq.Context()
@@ -196,8 +196,8 @@ class EDASPortal:
             self.response_socket = self.context.socket(zmq.PULL)
             self.app_host = host
             if( connectionMode == ConnectionMode.BIND ):
-                self.request_port = ConnectionMode.bindSocket( self.request_socket, request_port )
-                self.response_port = ConnectionMode.bindSocket( self.response_socket, response_port )
+                self.request_port = ConnectionMode.bindSocket( self.request_socket, self.app_host, request_port )
+                self.response_port = ConnectionMode.bindSocket( self.response_socket, self.app_host, response_port )
                 self.logger.info( "Binding request socket to port: {0}".format( self.request_port ) )
                 self.logger.info( "Binding response socket to port: {0}".format( self.response_port ) )
             else:

@@ -57,7 +57,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
           val datainputs = s"""[variable=[{"uri":"collection:/$collection","path":"$collection_path"}]]"""
           val agg_result_node = executeTest (datainputs, Map.empty, "util.agg")
           logger.info (s"Agg collection $collection Result: " + printer.format (agg_result_node) )
-        case None => throw new Exception( s"Can't find collection $collection for model  $model")
+        case None => throw new Exception( s"Can't find collection $collection for model  $model ")
       }
     }
   }
@@ -152,12 +152,12 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     assert( result_data.maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
   }
 
-  test("pyWeightedAveTest1") {
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":8,"end":13,"system":"indices"},"lon":{"start":70,"end":72,"system":"indices"},"time":{"start":5,"end":10,"system":"indices"}}],variable=[{"uri":"file:///dass/nobackup/tpmaxwel/.edas/cache/collections/NCML/CIP_MERRA_mon_pr.ncml","name":"pr:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.avew","input":"v1","domain":"d0","axes":"xy"}]]"""
-    val result_node = executeTest(datainputs)
-    val result_data = CDFloatArray( getResultData( result_node ) )
-    println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
-  }
+//  test("pyWeightedAveTest1") {
+//    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":8,"end":13,"system":"indices"},"lon":{"start":70,"end":72,"system":"indices"},"time":{"start":5,"end":10,"system":"indices"}}],variable=[{"uri":"file:///dass/nobackup/tpmaxwel/.edas/cache/collections/NCML/CIP_MERRA_mon_pr.ncml","name":"pr:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.avew","input":"v1","domain":"d0","axes":"xy"}]]"""
+//    val result_node = executeTest(datainputs)
+//    val result_data = CDFloatArray( getResultData( result_node ) )
+//    println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
+//  }
 
   test("pyTimeAveTestLocal") {
 //    datafile=".../MERRA2_200.inst6_3d_ana_Np_T.20000101.nc4"
@@ -222,15 +222,15 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 //    assert( result_data.maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
   }
 
-  test("pyWeightedAveTestExt") {
-      val nco_result: CDFloatArray = CDFloatArray( Array( 286.2326, 286.5537, 287.2408, 288.1576, 288.9455, 289.5202, 289.6924, 289.5549, 288.8497, 287.8196, 286.8923 ).map(_.toFloat), Float.MaxValue )
-      val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"http://esgf.nccs.nasa.gov/thredds/dodsC/CMIP5/NASA/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.cdmsExt.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
-      val result_node = executeTest(datainputs)
-      val result_data = CDFloatArray( getResultData( result_node, true ) )
-      println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
-      println( " ** NCO Result:       " + nco_result.mkDataString(", ") )
-      assert( result_data.maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
-    }
+//  test("pyWeightedAveTestExt") {
+//      val nco_result: CDFloatArray = CDFloatArray( Array( 286.2326, 286.5537, 287.2408, 288.1576, 288.9455, 289.5202, 289.6924, 289.5549, 288.8497, 287.8196, 286.8923 ).map(_.toFloat), Float.MaxValue )
+//      val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"http://esgf.nccs.nasa.gov/thredds/dodsC/CMIP5/NASA/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.cdmsExt.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
+//      val result_node = executeTest(datainputs)
+//      val result_data = CDFloatArray( getResultData( result_node, true ) )
+//      println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
+//      println( " ** NCO Result:       " + nco_result.mkDataString(", ") )
+//      assert( result_data.maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
+//    }
 
 
     test("pyRegridTest") {

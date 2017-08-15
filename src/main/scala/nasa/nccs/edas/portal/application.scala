@@ -30,7 +30,7 @@ object EDASapp {
   }
 }
 
-class EDASapp( mode: EDASPortal.ConnectionMode, request_port: Int, response_port: Int, appConfiguration: Map[String,String] ) extends EDASPortal( mode, request_port, response_port ) {
+class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_port: Int, response_port: Int, appConfiguration: Map[String,String] ) extends EDASPortal( mode, client_address, request_port, response_port ) {
   import EDASapp._
   val processManager = new ProcessManager( appConfiguration )
   val process = "edas"
@@ -143,8 +143,9 @@ object EDASApplication extends Loggable {
     val response_port = elem(args, 2, "0").toInt
     val parameter_file = elem(args, 3, "")
     val appConfiguration = getConfiguration( parameter_file )
+    val client_address: String = appConfiguration.getOrElse("client","*")
     val cmode = if (connect_mode.toLowerCase.startsWith("c")) CONNECT else BIND
-    val app = new EDASapp(cmode, request_port, response_port, appConfiguration)
+    val app = new EDASapp( cmode, client_address, request_port, response_port, appConfiguration )
     sys.addShutdownHook( { app.term() } )
     app.run()
   }

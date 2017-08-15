@@ -9,7 +9,7 @@ import zmq, numpy as np
 
 context = zmq.Context()
 socket = context.socket(zmq.REP)
-socket.bind("tcp://*:5555")
+socket.bind("tcp://127.0.0.1:5555")
 
 data = socket.recv()
 print( "Received binary data: %s" % ( ' '.join([str(ord(a)) for a in data]) ) )

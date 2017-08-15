@@ -225,8 +225,10 @@ object TaskRequest extends Loggable {
     logger.info( "Created Variable Map: " + var_map.toString + " from data containers: " + data.map(data_container => ("id:" + data_container.uid)).mkString("[ ", ", ", " ]"))
     for (operation <- workflow; vid <- operation.inputs; if !vid.isEmpty)
       var_map.get(vid) match {
-        case Some(data_container) => data_container.addOpSpec(operation)
-        case None => throw new Exception( "Unrecognized variable %s in varlist [%s]".format(vid, var_map.keys.mkString(",")))
+        case Some(data_container) =>
+          data_container.addOpSpec(operation)
+        case None =>
+          throw new Exception( "Unrecognized variable %s in varlist [%s]".format(vid, var_map.keys.mkString(",")))
       }
     var_map
   }
@@ -325,6 +327,9 @@ object DataFragmentKey {
   }
   def apply(fkeyStr: String): DataFragmentKey = {
     val toks = fkeyStr.split('|')
+    if( toks.length < 4 ) {
+      throw new Exception( "Ill formed frag key (varname|collId|origin|shape): " + fkeyStr )
+    }
     new DataFragmentKey( toks(0), toks(1), parseArray(toks(2)), parseArray(toks(3)) )
   }
   def sameVariable(fkeyStr: String, otherCollection: String, otherVarName: String): Boolean = {
@@ -1163,7 +1168,7 @@ object OperationContext extends ContainerBase {
       case Some(input_values: List[_]) =>
         input_values.map(uid + _.toString.trim)
       case Some(input_value: String) =>
-        input_value.split(',').map(uid + _.trim)
+        if( input_value.isEmpty ) { uid_list } else { input_value.split(',').map(uid + _.trim) }
       case None => uid_list.map(uid + _.trim)
       case x =>
         throw new Exception(

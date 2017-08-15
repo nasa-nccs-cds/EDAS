@@ -69,14 +69,24 @@ object wpsObjectParser extends ObjectNotationParser with Loggable {
           logger.error("Error Parsing '%s'".format(data_input) )
           throw new BadRequestException(err.toString)
       }
-      if( result.keySet.contains("operation") ) { result } else {
-        result.get("variable") match {
-          case Some( vars ) =>
-            val varIds = vars.flatMap( varmap => varmap.get("name") ).map( _.toString.split(':').last )
-            result ++ Map ( "operation" -> Seq( Map( "name"->"CDSpark.noOp", "input"->varIds.mkString(",")) ) )
-          case None => result
-        }
-      }
+      result
+//      if( result.keySet.contains("operation") ) { result } else {
+//        result.get("variable") match {
+//          case Some( vars ) =>
+//       //     val varIds = vars.flatMap( varmap => varmap.get("name") ).map( _.toString.split(':').last )
+//            val varIds = for( vi <- vars.indices; varmap: Map[String,String] = vars(vi); varname: String = varmap.getOrElse("name","") ) yield {
+//              if( varname.isEmpty ) {
+//                val new_varname = "v" +
+//
+//              } else {
+//                varname
+//              }
+//
+//            }
+//            result ++ Map ( "operation" -> Seq( Map( "name"->"CDSpark.noOp", "input"->varIds.mkString(",")) ) )
+//          case None => result
+//        }
+//      }
     } catch {
       case e: Exception =>
         logger.error("Error[%s] Parsing '%s': %s".format( e.getClass.getName, data_input, e.getMessage ) )

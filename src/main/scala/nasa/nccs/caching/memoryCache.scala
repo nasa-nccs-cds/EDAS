@@ -124,7 +124,7 @@ class PersistentCache( cname: String, ctype: String ) extends FutureCache[String
     val ostr = new PrintWriter( cacheFile )
     val entries = getEntries.toList
     logger.info( " ***Persisting cache %s to file '%s', entries: [ %s ]".format( cname, cacheFile, entries.mkString(",") ) )
-    entries.foreach( entry => ostr.write( entry._1 + "," + entry._2 + "\n" ) )
+    entries.foreach( entry => ostr.write( entry._1 + ";" + entry._2 + "\n" ) )
     ostr.close()
   }
 
@@ -140,7 +140,7 @@ class PersistentCache( cname: String, ctype: String ) extends FutureCache[String
     try {
       val istr = Source.fromFile(cacheFile)
       logger.info(s"Restoring $cname cache map from: " + cacheFile);
-      val entries: Iterator[(String ,String)] = for( line <- istr.getLines; tup = line.split(",") ) yield { tup(0) -> tup(1) }
+      val entries: Iterator[(String ,String)] = for( line <- istr.getLines; tup = line.split(";") ) yield { tup(0) -> tup(1) }
       Some( entries.toArray )
     } catch {
       case err: Throwable =>
@@ -155,7 +155,7 @@ class FutureCache[K,V](val cname: String, val ctype: String  ) extends Cache[K,V
   val KpG = 1000000L
   val maxCapacity: Long = appParameters(Array(ctype.toLowerCase,cname.toLowerCase,"capacity").mkString("."),"30").toLong * KpG
   val initialCapacity: Int=64
-  val cacheFile = DiskCacheFileMgr.getDiskCacheFilePath( ctype, cname + ".csv" )
+  val cacheFile = DiskCacheFileMgr.getDiskCacheFilePath( ctype, cname + ".ssv" )
   require(maxCapacity >= 0, "maxCapacity must not be negative")
   require(initialCapacity <= maxCapacity, "initialCapacity must be <= maxCapacity")
 

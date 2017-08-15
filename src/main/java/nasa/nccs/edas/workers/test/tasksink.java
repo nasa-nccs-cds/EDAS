@@ -14,7 +14,7 @@ public class tasksink {
         //  Prepare our context and socket
         ZMQ.Context context = ZMQ.context(1);
         ZMQ.Socket receiver = context.socket(ZMQ.PULL);
-        receiver.bind("tcp://*:5558");
+        receiver.bind("tcp://127.0.0.1:5558");
 
         //  Wait for start of batch
         String string = new String(receiver.recv(0));

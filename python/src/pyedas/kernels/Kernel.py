@@ -53,7 +53,8 @@ class Kernel:
         return self.executeOperation(task,input)
 
     def validate( self, input ) :
-        if( input.array == None ): raise Exception( "Missing data for input " + input.name + " in Kernel " + self._spec )
+        if( input.array == None ):
+            raise Exception( "Missing data for input " + str(input.name) + " in Kernel " + str(self._spec) )
 
     def executeOperation( self, task, input ): raise Exception( "Attempt to execute Kernel with undefined executeOperation method")
 
@@ -74,8 +75,10 @@ class Kernel:
             outpath = os.path.join(outdir, resultId + ".nc" )
             newDataset = cdms2.createDataset( outpath )
             for axis in axes:
-                if axis.isTime:     pass
-                else:               newDataset.copyAxis(axis)
+                if axis.isTime:
+                    pass
+                else:
+                    newDataset.copyAxis(axis)
             newDataset.copyGrid(grid)
             newDataset.close()
             self.logger.info( "Saved grid file: {0}".format( outpath ) )

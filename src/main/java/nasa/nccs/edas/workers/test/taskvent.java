@@ -15,7 +15,7 @@ public class taskvent {
 
         //  Socket to send messages on
         ZMQ.Socket sender = context.socket(ZMQ.PUSH);
-        sender.bind("tcp://*:5557");
+        sender.bind("tcp://127.0.0.1:5557");
 
         //  Socket to send messages on
         ZMQ.Socket sink = context.socket(ZMQ.PUSH);

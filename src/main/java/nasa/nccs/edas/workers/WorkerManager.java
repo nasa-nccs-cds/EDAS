@@ -31,7 +31,7 @@ public class WorkerManager {
         public ResponderThread( int responder_port ) {
             zmqContext = ZMQ.context(1);
             responder = zmqContext.socket(ZMQ.REP);
-            responder.bind("tcp://*:"+ String.valueOf(responder_port));
+            responder.bind("tcp://127.0.0.1:"+ String.valueOf(responder_port));
         }
 
         public void setLogger( Logger logger ) { _logger = logger; }

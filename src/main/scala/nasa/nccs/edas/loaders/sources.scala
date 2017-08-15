@@ -16,7 +16,7 @@ import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
 import ucar.{ma2, nc2}
 import scala.xml.factory.XMLLoader
-import scala.xml.{ Node, SAXParser, XML}
+import scala.xml.{ Node, SAXParser, XML }
 
 object AxisNames {
   def apply( x: String = "", y: String = "", z: String = "", t: String = "" ): Option[AxisNames] = {

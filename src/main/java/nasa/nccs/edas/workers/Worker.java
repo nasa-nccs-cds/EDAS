@@ -33,7 +33,7 @@ public abstract class Worker {
         int test_port = init_port;
         while( true ) {
             try {
-                socket.bind("tcp://*:" + String.valueOf(test_port));
+                socket.bind("tcp://127.0.0.1:" + String.valueOf(test_port));
                 break;
             } catch (Exception err ) {
                 test_port = test_port + 1;
