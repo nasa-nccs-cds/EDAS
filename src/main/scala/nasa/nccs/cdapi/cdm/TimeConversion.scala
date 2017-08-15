@@ -39,7 +39,7 @@ class TimeAxisConverter( val toAxis: CoordinateAxis1DTime, val fromAxis: Coordin
       val dt = { val dt0 = cd0.getDifferenceInMsecs(cd1); if( dt0 == 0.0 ) 1.0 else dt0; }
       val (w0,w1) = ( cdate0.getDifferenceInMsecs(cd1)/dt, cd0.getDifferenceInMsecs(cdate0)/dt )
       buf += ( index -> new RemapElem( fromIndex, w0.toFloat, w1.toFloat ) )
-      logger.debug( s"  TimeAxisConverter ==> Weight[$index]{${cdate0.toString}} from W($w0):I[$fromIndex]:T{${cd0.toString}} - W($w1):I[$toIndex]:T{${cd1.toString}}")
+//      logger.debug( s"  TimeAxisConverter ==> Weight[$index]{${cdate0.toString}} from W($w0):I[$fromIndex]:T{${cd0.toString}} - W($w1):I[$toIndex]:T{${cd1.toString}}")
     }
     val toCoordRange = ( toAxis.getCalendarDate(toAxisRange._1).getMillis/1000, toAxis.getCalendarDate(toAxisRange._2).getMillis/1000 )
     new TimeConversionSpec( Map( buf: _* ), toAxisRange, toCoordRange )

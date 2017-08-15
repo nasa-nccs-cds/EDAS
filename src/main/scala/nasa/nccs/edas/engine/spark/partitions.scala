@@ -142,7 +142,10 @@ class RangePartitioner( val partitions: Map[Int,RecordKey] ) extends Partitioner
 
   override def equals( other: Any ): Boolean = other match {
     case partitioner: RangePartitioner =>
-      ( numParts == partitioner.numParts ) && ( numElems == partitioner.numElems ) && !differentPartitions( partitioner.partitions )
+      if( numParts != partitioner.numParts ) { logger.info(s"Partitioner Comparison: numParts DIFF: ${numParts} -- ${partitioner.numParts}"); false }
+      else if( numElems != partitioner.numElems ) { logger.info(s"Partitioner Comparison: numElems DIFF: ${numElems} -- ${partitioner.numElems}"); false }
+      else if( differentPartitions( partitioner.partitions ) ) { logger.info(s"Partitioner Comparison: different Partitions!" ); false; }
+      else { true }
     case x => super.equals(x)
   }
 
