@@ -13,7 +13,7 @@ try:
     portal = EDASPortal( ConnectionMode.CONNECT, edas_server, request_port, response_port )
     response_manager = portal.createResponseManager()
     datainputs = """[   domain=[
-                            {"name":"d0"}
+                            {"name":"d0","time":{"start":"1980-01-01T00:00:00","end":"1980-12-31T23:00:00","system":"values"}}
                         ],
                         variable=[
                             {"uri":"collection:/ecmwf_ifs-cy31r2_6hr_ta","name":"ta:v1","domain":"d0"},
