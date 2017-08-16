@@ -424,7 +424,7 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
         val months: IndexedSeq[Int] = ( 0 until timeAxis.getSize.toInt ) map ( iTime => timeAxis.getCalendarDate(iTime).getFieldValue(CalendarPeriod.Field.Month) )
         val parts: Array[Range] = getPeriodRanges( months )
         val _nSlicesPerRecord: Int = if (constraints.nSlicesPerRecord == 0) { math.max( recordSize/sliceMemorySize, 1.0).round.toInt } else { constraints.nSlicesPerRecord }
-        logger.info( s"Generating custom parts, period=${constraints.period}, parts = [ ${parts.map(_.toString).mkString(", ")} ]")
+        logger.info( s"Generating custom parts, period=${constraints.period}, nparts=${parts.length.toString}, parts = [ ${parts.map(_.toString).mkString(", ")} ]")
         new CustomPartitionSpecs( parts.length, parts, _nSlicesPerRecord )
       } else {
         throw new Exception( "Unrecognized partition period: " + constraints.period )
