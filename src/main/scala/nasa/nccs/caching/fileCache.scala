@@ -349,6 +349,7 @@ case class PartitionConstraints( partsConfig: Map[String,String] ) {
     val _numfilesPerPart: Double = math.ceil( _numDataFiles / BatchSpec.nParts.toFloat )
     if ( _numfilesPerPart == 0.0 ) 0 else math.ceil( _numDataFiles / _numfilesPerPart ).toInt
   }
+  override val toString = { s"{ numDataFiles: ${_numDataFiles.toString}, numParts: ${_numParts.toString}, period: ${period}, nSlicesPerRecord: ${nSlicesPerRecord.toString}, oneRecPerSlice: ${oneRecPerSlice.toString} , numParts: ${numParts.toString} }"}
 }
 
 class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[String,String], val workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], val numDataFiles: Int, dataType: ma2.DataType = ma2.DataType.FLOAT, val cacheType: String = "fragment") extends Loggable {
@@ -445,14 +446,15 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
   def computeRecordSizes( ): EDASPartitionSpec = {
     val sparkConfig = BatchSpec.serverContext.spark.sparkContext.getConf.getAll map { case (key, value ) =>  key + " -> " + value } mkString( "\n\t")
     if( filters.isEmpty ) {
-      val partitions: IndexedSeq[Partition] = getPartitionSpecs( PartitionConstraints( partsConfig ++ Map( "numDataFiles" -> numDataFiles.toString ) ) ) match {
+      val constraints = PartitionConstraints( partsConfig ++ Map( "numDataFiles" -> numDataFiles.toString ) )
+      val partitions: IndexedSeq[Partition] = getPartitionSpecs( constraints ) match {
         case pSpecs: RegularPartitionSpecs => {
           val parts = (0 until pSpecs.nPartitions) map (partIndex => {
             val startIndex = partIndex * pSpecs.nSlicesPerPart
             val partSize = Math.min(pSpecs.nSlicesPerPart, baseShape(0) - startIndex)
             RegularPartition(partIndex, 0, startIndex, partSize, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
           })
-          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length} \n---------------------------------------------\n")
+          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
         }
         case cpSpecs: CustomPartitionSpecs => {
@@ -460,7 +462,7 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
             val nSlicesPerRec = math.min(cpSpecs.nSlicesPerRecord, pRange.length)
             RegularPartition(partIndex, 0, pRange.first, pRange.length, nSlicesPerRec, sliceMemorySize, _section.getOrigin, baseShape)
           }
-          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${cpSpecs.nSlicesPerRecord}, nPartitions: ${parts.length} \n---------------------------------------------\n")
+          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${cpSpecs.nSlicesPerRecord}, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
         }
         case x => throw new Exception( "Unrecognized partition class: " + x.getClass.getName )

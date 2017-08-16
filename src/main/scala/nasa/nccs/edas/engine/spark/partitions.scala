@@ -145,8 +145,8 @@ class RangePartitioner( val partitions: Map[Int,RecordKey] ) extends Partitioner
       if( numParts != partitioner.numParts ) { logger.info(s"Partitioner Comparison: numParts DIFF: ${numParts} -- ${partitioner.numParts}"); false }
       else if( numElems != partitioner.numElems ) {
         logger.info(s"Partitioner Comparison: numElems DIFF: ${numElems} -- ${partitioner.numElems}");
-        logger.info(s" ---->  THIS: " + partitions.values.map( _.toString() ).mkString("  ") )
-        logger.info(s" ----> OTHER: " + partitioner.partitions.values.map( _.toString() ).mkString("  ") )
+//        logger.info(s" ---->  THIS: " + partitions.values.map( _.toString() ).mkString("  ") )
+//        logger.info(s" ----> OTHER: " + partitioner.partitions.values.map( _.toString() ).mkString("  ") )
         false
       }
       else if( differentPartitions( partitioner.partitions ) ) { logger.info(s"Partitioner Comparison: different Partitions!" ); false; }

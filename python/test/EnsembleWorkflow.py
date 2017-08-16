@@ -27,7 +27,7 @@ try:
                         ]
                     ]"""
 
-    rId1 = portal.sendMessage("execute", [ "WPS", datainputs ] )
+    rId1 = portal.sendMessage("execute", [ "WPS", datainputs, '{ "period":"month" }' ] )
     responses = response_manager.getResponses(rId1)
     vars = response_manager.getResponseVariables(rId1)
 
