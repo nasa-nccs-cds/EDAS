@@ -424,6 +424,7 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
         val months: IndexedSeq[Int] = ( 0 until timeAxis.getSize.toInt ) map ( iTime => timeAxis.getCalendarDate(iTime).getFieldValue(CalendarPeriod.Field.Month) )
         val parts: Array[Range] = getPeriodRanges( months )
         val _nSlicesPerRecord: Int = if (constraints.nSlicesPerRecord == 0) { math.max( recordSize/sliceMemorySize, 1.0).round.toInt } else { constraints.nSlicesPerRecord }
+        logger.info( s"Generating custom parts, period=${constraints.period}, parts = [ ${parts.map(_.toString).mkString(", ")} ]")
         new CustomPartitionSpecs( parts.length, parts, _nSlicesPerRecord )
       } else {
         throw new Exception( "Unrecognized partition period: " + constraints.period )
@@ -454,7 +455,7 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
             val partSize = Math.min(pSpecs.nSlicesPerPart, baseShape(0) - startIndex)
             RegularPartition(partIndex, 0, startIndex, partSize, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
           })
-          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
+          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating regular batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
         }
         case cpSpecs: CustomPartitionSpecs => {
@@ -462,7 +463,7 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
             val nSlicesPerRec = math.min(cpSpecs.nSlicesPerRecord, pRange.length)
             RegularPartition(partIndex, 0, pRange.first, pRange.length, nSlicesPerRec, sliceMemorySize, _section.getOrigin, baseShape)
           }
-          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${cpSpecs.nSlicesPerRecord}, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
+          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating custom batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${cpSpecs.nSlicesPerRecord}, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
         }
         case x => throw new Exception( "Unrecognized partition class: " + x.getClass.getName )
