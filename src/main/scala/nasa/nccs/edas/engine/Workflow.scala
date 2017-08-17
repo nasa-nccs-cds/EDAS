@@ -347,6 +347,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def unifyRDDs(rddMap: Map[String,RDD[(RecordKey,RDDRecord)]], kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode ) : RDD[(RecordKey,RDDRecord)] = {
     logger.info( "unifyRDDs: " + rddMap.keys.mkString(", ") )
+    val t0 = System.nanoTime
     val parallelizable = node.kernel.parallelizable
     val convertedRdds = if( node.kernel.extInputs ) { rddMap.values }
     else {
@@ -372,6 +373,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
         else { CDSparkContext.coalesce(repart_result,kernelContext) }
       })
     }
+    logger.info( "Merge RDDs, unify time = %.4f sec".format( (System.nanoTime() - t0) / 1.0E9 ) )
     if( convertedRdds.size == 1 ) convertedRdds.head
     else convertedRdds.tail.foldLeft( convertedRdds.head )( CDSparkContext.merge )
   }
