@@ -100,23 +100,23 @@ class OperationTransientInput( val variable: RDDTransientVariable ) extends Oper
   }
 }
 
-abstract class OperationDataInput( val fragmentSpec: DataFragmentSpec, val metadata: Map[String,nc2.Attribute] = Map.empty ) extends OperationInput with Loggable {
-  def toBoundsString = fragmentSpec.toBoundsString
-  def getKey: DataFragmentKey = fragmentSpec.getKey
-  def getKeyString: String = fragmentSpec.getKeyString
-  def size: Int = fragmentSpec.roi.computeSize.toInt
-  def contains( requestedSection: ma2.Section ): Boolean = fragmentSpec.roi.contains( requestedSection )
-  def getVariableMetadata(serverContext: ServerContext): Map[String,nc2.Attribute] = { fragmentSpec.getVariableMetadata(serverContext) ++ metadata }
-  def getDatasetMetadata(serverContext: ServerContext): List[nc2.Attribute] = { fragmentSpec.getDatasetMetadata(serverContext) }
-  def getGrid: TargetGrid = fragmentSpec.targetGridOpt match  {
+abstract class OperationDataInput( val fragSpec: DataFragmentSpec, val metadata: Map[String,nc2.Attribute] = Map.empty ) extends OperationInput with Loggable {
+  def toBoundsString = fragSpec.toBoundsString
+  def getKey: DataFragmentKey = fragSpec.getKey
+  def getKeyString: String = fragSpec.getKeyString
+  def size: Int = fragSpec.roi.computeSize.toInt
+  def contains( requestedSection: ma2.Section ): Boolean = fragSpec.roi.contains( requestedSection )
+  def getVariableMetadata(serverContext: ServerContext): Map[String,nc2.Attribute] = { fragSpec.getVariableMetadata(serverContext) ++ metadata }
+  def getDatasetMetadata(serverContext: ServerContext): List[nc2.Attribute] = { fragSpec.getDatasetMetadata(serverContext) }
+  def getGrid: TargetGrid = fragSpec.targetGridOpt match  {
     case Some( myGrid ) => myGrid
-    case None => throw new Exception( "Undefined target grid in matchGrids for input " + fragmentSpec.uid )
+    case None => throw new Exception( "Undefined target grid in matchGrids for input " + fragSpec.uid )
   }
   def data(partIndex: Int ): CDFloatArray
   def delete
 }
 
-class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  )
+class DirectOpDataInput( val uid: String, fragSpec: DataFragmentSpec, val workflowNode: WorkflowNode  )
   extends OperationDataInput( fragSpec, workflowNode.operation.getConfiguration.map { case (key,value) => key -> new nc2.Attribute( key, value) } ) {
 
   def data(partIndex: Int ): CDFloatArray = CDFloatArray.empty
@@ -125,15 +125,15 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
 
   def domainSection( optSection: Option[ma2.Section] ): Option[ ( DataFragmentSpec, ma2.Section )] = {
     try {
-      val domain_section = fragmentSpec.domainSectOpt match {
-        case Some(dsect) => fragmentSpec.roi.intersect(dsect)
-        case None => fragmentSpec.roi
+      val domain_section = fragSpec.domainSectOpt match {
+        case Some(dsect) => fragSpec.roi.intersect(dsect)
+        case None => fragSpec.roi
       }
       val sub_section = optSection match {
         case Some(osect) => domain_section.intersect( osect )
         case None =>domain_section
       }
-      fragmentSpec.cutIntersection( sub_section ) match {
+      fragSpec.cutIntersection( sub_section ) match {
         case Some( cut_spec: DataFragmentSpec ) => Some( ( cut_spec, cut_spec.roi ) )
         case None =>None
       }
@@ -144,13 +144,13 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
     }
   }
 
-  def getRDDVariableSpec( uid: String, optSection: Option[ma2.Section] ): DirectRDDVariableSpec  =
+  def getRDDVariableSpec( optSection: Option[ma2.Section] ): DirectRDDVariableSpec  =
     domainSection(optSection) match {
       case Some( ( domFragSpec, section ) ) => new DirectRDDVariableSpec( uid, domFragSpec.getMetadata( Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.dataPath )
       case _ => new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath )
     }
 
-  def getKeyedRDDVariableSpec( uid: String, optSection: Option[ma2.Section] ): ( RecordKey, DirectRDDVariableSpec ) =
+  def getKeyedRDDVariableSpec( optSection: Option[ma2.Section] ): ( RecordKey, DirectRDDVariableSpec ) =
     domainSection(optSection) match {
       case Some( ( domFragSpec, section ) ) =>
         domFragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, domFragSpec.getMetadata(Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.dataPath )
@@ -159,7 +159,26 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
     }
 }
 
-class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {
+object EDASDirectDataInput {
+  def getPartitioner( inputs: List[EDASDirectDataInput], node: WorkflowNode ): Option[EDASPartitioner] = {
+    val domains: List[(DataFragmentSpec,ma2.Section)] = inputs.flatMap( input => {
+      val opSection: Option[ma2.Section] = getOpSectionIntersection(input.getGrid, node)
+      input.domainSection(optSection)
+    })
+    val sections: List[ma2.Section] = domains.map( _._2 )
+    if( sections.isEmpty ) { None }
+    else {
+      val merged_section = sections.reduce(  _.intersect(_) )
+      val cut_domains = domains.flatMap( _._1.cutIntersection(merged_section) )
+      if( cut_domains.isEmpty ) { None } else {
+        val fragSpec: DataFragmentSpec = cut_domains(0)
+        Some(new EDASPartitioner(merged_section, inputs(0).partsConfig, Some(inputs(0).workflowNode), fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles ) )
+      }
+    }
+  }
+}
+
+class EDASDirectDataInput( uid: String, fragSpec: DataFragmentSpec, val partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(uid,fragSpec,workflowNode) {
   val test = 1
   def getPartitioner( optSection: Option[ma2.Section] = None ): Option[EDASPartitioner] = domainSection( optSection ) map {
     case( frag1, section) => new EDASPartitioner( section, partsConfig, Some(workflowNode), fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
@@ -169,18 +188,18 @@ class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,St
   }
 }
 
-class ExternalDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {
+class ExternalDataInput(uid: String, fragSpec: DataFragmentSpec, workflowNode: WorkflowNode ) extends DirectOpDataInput(uid,fragSpec,workflowNode) {
   override def data(partIndex: Int ): CDFloatArray = CDFloatArray.empty
 }
 
 class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[CDByteArray], fragSpec: DataFragmentSpec, mdata: Map[String,nc2.Attribute] = Map.empty ) extends OperationDataInput(fragSpec,mdata) with Loggable {
   def delete = partitions.delete
 
-  def data(partIndex: Int ): CDFloatArray = partitions.getPartData(partIndex, fragmentSpec.missing_value )
+  def data(partIndex: Int ): CDFloatArray = partitions.getPartData(partIndex, fragSpec.missing_value )
 
   def partFragSpec( partIndex: Int ): DataFragmentSpec = {
     val part = partitions.getPart(partIndex)
-    fragmentSpec.reSection( part.partSection( fragmentSpec.roi ) )
+    fragSpec.reSection( part.partSection( fragSpec.roi ) )
   }
   def matchGrids( targetGrid: TargetGrid ): Boolean = fragSpec.targetGridOpt match  {
     case Some( myGrid ) => myGrid.equals( targetGrid )
@@ -189,17 +208,17 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
 
   def domainFragSpec( partIndex: Int ): DataFragmentSpec = {
     val part = partitions.getPart(partIndex)
-    fragmentSpec.domainSpec.reSection( part.partSection( fragmentSpec.roi ) )
+    fragSpec.domainSpec.reSection( part.partSection( fragSpec.roi ) )
   }
 
   def partDataFragment( partIndex: Int ): DataFragment = {
     val partition = partitions.getPart(partIndex)
-    DataFragment( partFragSpec(partIndex), partition.data( fragmentSpec.missing_value ) )
+    DataFragment( partFragSpec(partIndex), partition.data( fragSpec.missing_value ) )
   }
 
   def partRDDPartition( partIndex: Int, startTime: Long ): RDDRecord = {
     val partition = partitions.getPart(partIndex)
-    val data: CDFloatArray = partition.data( fragmentSpec.missing_value )
+    val data: CDFloatArray = partition.data( fragSpec.missing_value )
     val spec: DataFragmentSpec = partFragSpec(partIndex)
     RDDRecord( TreeMap( spec.uid -> HeapFltArray(data, fragSpec.getOrigin, spec.getMetadata(), None) ), Map.empty )
   }
@@ -217,7 +236,7 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
 //  def domainDataSection( partIndex: Int,  optSection: Option[ma2.Section] ): Option[ ( DataFragmentSpec, CDFloatArray )] = {
 //    try {
 //      val partition = partitions.getPart(partIndex)
-//      val partition_data = partition.data(fragmentSpec.missing_value)
+//      val partition_data = partition.data(fragSpec.missing_value)
 //      domainSection(partition, optSection) map {
 //        case (fragSpec, section) => (fragSpec, CDFloatArray(partition_data.section(section)))
 //      }
@@ -245,7 +264,7 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
 //  def domainCDDataSection( partIndex: Int,  optSection: Option[ma2.Section] ): Option[ ( String, ma2.Section, Map[String,String], CDFloatArray )] = {
 //    try {
 //      val partition = partitions.getPart(partIndex)
-//      val partition_data = partition.data(fragmentSpec.missing_value)
+//      val partition_data = partition.data(fragSpec.missing_value)
 //      domainSection( partition, optSection ) map {
 //        case ( domFragSpec, section )  => ( domFragSpec.uid, section, domFragSpec.getMetadata(optSection), CDFloatArray( partition_data.section( section ) ) )
 //      }
@@ -266,8 +285,8 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
 
   def domainSection(partition: RegularPartition, optSection: Option[ma2.Section] ): Option[ ( DataFragmentSpec, ma2.Section )] = {
     try {
-      val frag_section = partition.partSection(fragmentSpec.roi)
-      val domain_section = fragmentSpec.domainSectOpt match {
+      val frag_section = partition.partSection(fragSpec.roi)
+      val domain_section = fragSpec.domainSectOpt match {
         case Some(dsect) => frag_section.intersect(dsect)
         case None => frag_section
       }
@@ -296,15 +315,15 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
     }
   }
 
-      //      val domainDataOpt: Option[CDFloatArray] = fragmentSpec.domainSectOpt match {
-//        case None => Some( partition.data(fragmentSpec.missing_value) )
+      //      val domainDataOpt: Option[CDFloatArray] = fragSpec.domainSectOpt match {
+//        case None => Some( partition.data(fragSpec.missing_value) )
 //        case Some(domainSect) =>
 //          val pFragSpec = partFragSpec( partIndex )
 //          pFragSpec.cutIntersection(domainSect) match {
 //            case Some(newFragSpec) =>
 //              val dataSection = partition.getRelativeSection( newFragSpec.roi ).shiftOrigin( domainSect )
 //              logger.info ("Domain Partition(%d) Fragment: fragSect=(%s), newFragSect=(%s), domainSect=(%s), dataSection=(%s), partition.shape=(%s)".format (partIndex, pFragSpec.roi.toString, newFragSpec.roi, domainSect.toString, dataSection.toString, partition.shape.mkString(",")) )
-//              Some( partition.data (fragmentSpec.missing_value).section (dataSection.getRanges.toList) )
+//              Some( partition.data (fragSpec.missing_value).section (dataSection.getRanges.toList) )
 //            case None =>
 //              logger.warn( "Domain Partition(%d) EMPTY INTERSECTION: fragSect=(%s), domainSect=(%s)".format (partIndex, pFragSpec.roi.toString, domainSect.toString) )
 //              None
@@ -313,12 +332,12 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
 //      domainDataOpt.map( new DataFragment(domainFragSpec(partIndex), _ ) )
 
 
-  def isMapped(partIndex: Int): Boolean = partitions.getPartData( partIndex, fragmentSpec.missing_value ).isMapped
+  def isMapped(partIndex: Int): Boolean = partitions.getPartData( partIndex, fragSpec.missing_value ).isMapped
   def mask: Option[CDByteArray] = maskOpt
   def shape: List[Int] = partitions.getShape.toList
   def getValue(partIndex: Int, indices: Array[Int] ): Float = data(partIndex).getValue( indices )
 
-  override def toString = { "{Fragment: shape = [%s], section = [%s]}".format( partitions.getShape.mkString(","), fragmentSpec.roi.toString ) }
+  override def toString = { "{Fragment: shape = [%s], section = [%s]}".format( partitions.getShape.mkString(","), fragSpec.roi.toString ) }
 
   def cutIntersection( partIndex: Int, cutSection: ma2.Section, copy: Boolean = true ): Option[DataFragment] = {
     val pFragSpec = partFragSpec( partIndex )

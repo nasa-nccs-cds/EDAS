@@ -564,7 +564,7 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
   def getVariable( collection: Collection, varname: String ): CDSVariable = collection.getVariable(varname)
   def getConfiguration: Map[String,String] = appParameters.getParameterMap
 
-  def getOperationInput( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ): OperationInput = {
+  def getOperationInput( uid: String, fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ): OperationInput = {
     dataLoader.getExistingFragment( fragSpec, partsConfig, Some(workflowNode) ) match {
       case Some( fragFut ) => Await.result( fragFut, Duration.Inf )
       case None =>
@@ -572,7 +572,7 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
           val fragFut = cacheInputData( fragSpec, partsConfig, Some(workflowNode) )
           Await.result( fragFut, Duration.Inf )
         }
-        else { new EDASDirectDataInput( fragSpec, partsConfig, workflowNode ) }
+        else { new EDASDirectDataInput( uid, fragSpec, partsConfig, workflowNode ) }
     }
   }
 

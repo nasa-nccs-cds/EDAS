@@ -2,7 +2,7 @@ package nasa.nccs.edas.engine
 
 import nasa.nccs.caching.{BatchSpec, RDDTransientVariable, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{OperationInput, _}
-import nasa.nccs.cdapi.data.{RDDRecord, RDDRecord$}
+import nasa.nccs.cdapi.data.{DirectRDDPartSpec, RDDRecord, RDDRecord$}
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.engine.spark.{RecordKey$, _}
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
@@ -251,8 +251,8 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
       requestCx.getInputSpec(uid) match {
         case Some(inputSpec) =>
           logger.info("getInputSpec: %s -> %s ".format(uid, inputSpec.longname))
-           if( workflowNode.kernel.extInputs ) {  uid -> new ExternalDataInput( inputSpec, workflowNode )                       }
-           else                                {  uid -> executionMgr.serverContext.getOperationInput(inputSpec, requestCx.getConfiguration, workflowNode )  }
+           if( workflowNode.kernel.extInputs ) {  uid -> new ExternalDataInput( uid, inputSpec, workflowNode )                       }
+           else                                {  uid -> executionMgr.serverContext.getOperationInput(uid, inputSpec, requestCx.getConfiguration, workflowNode )  }
         case None =>
           nodes.find(_.getResultId.equals(uid)) match {
             case Some(inode) =>
@@ -311,29 +311,87 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     else rdd
   }
 
+//  def domainRDDPartition1( opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+//    val enableRegridding = false
+//    kernelContext.addTimestamp( "Generating RDD for inputs: " + opInputs.keys.mkString(", "), true )
+//    val rawRddMap: Map[String,RDD[(RecordKey,RDDRecord)]] = opInputs flatMap { case ( uid, opinput ) => opinput match {
+//        case ( dataInput: PartitionedFragment) =>
+//          val opSection: Option[ma2.Section] = getOpSectionIntersection( dataInput.getGrid, node )
+//          executionMgr.serverContext.spark.getRDD( uid, dataInput, requestCx, opSection, node, batchIndex, kernelContext ) map ( result => uid -> result )
+//        case ( directInput: EDASDirectDataInput ) =>
+//          val opSection: Option[ma2.Section] = getOpSectionIntersection( directInput.getGrid, node )
+//          executionMgr.serverContext.spark.getRDD( uid, directInput, requestCx, opSection, node, batchIndex, kernelContext ) map ( result => uid -> result )
+//        case ( extInput: ExternalDataInput ) =>
+//          if( batchIndex > 0 ) { None } else {
+//            val opSection: Option[ma2.Section] = getOpSectionIntersection( extInput.getGrid, node )
+//            executionMgr.serverContext.spark.getRDD(uid, extInput, requestCx, opSection, node, kernelContext, batchIndex ) map (result => uid -> result)
+//          }
+//        case ( kernelInput: DependencyOperationInput  ) =>
+//          val keyValOpt = stream( kernelInput.inputNode, requestCx, batchIndex ) map ( result => uid -> result )
+//          logger.info( "\n\n ----------------------- NODE %s => Stream DEPENDENCY Node: %s, batch = %d, rID = %s, nParts = %d -------\n".format(
+//            node.getNodeId(), kernelInput.inputNode.getNodeId(), batchIndex, kernelInput.inputNode.getResultId, keyValOpt.map( _._2.partitions.length ).getOrElse(-1) ) )
+//          keyValOpt
+//        case (  x ) =>
+//          throw new Exception( "Unsupported OperationInput class: " + x.getClass.getName )
+//      }
+//    }
+//    if( rawRddMap.isEmpty ) {
+//      None
+//    } else {
+//      logger.info("\n\n ----------------------- Completed RDD input map[%d], keys: { %s }, thread: %s -------\n".format(batchIndex,rawRddMap.keys.mkString(", "), Thread.currentThread().getId ))
+//      val unifiedRDD = unifyRDDs(rawRddMap, kernelContext, requestCx, node)
+//      if( enableRegridding) { Some( unifyGrids(unifiedRDD, requestCx, kernelContext, node) ) }
+//      else { Some( unifiedRDD ) }
+//    }
+//  }
+
+
   def domainRDDPartition( opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+    kernelContext.addTimestamp( "Generating RDD for inputs: " + opInputs.keys.mkString(", "), true )
+    val opSection: Option[ma2.Section] = getOpSectionIntersection(dataInput.getGrid, node)
+    EDASDirectDataInput.getPartitioner( directInputs, node ) flatMap ( partMgr => {
+      val partitions = partMgr.partitions
+      val uid = directInputs(0).uid
+      val tgrid: TargetGrid = requestCx.getTargetGrid(uid).getOrElse(throw new Exception("Missing target grid for uid " + uid))
+      val batch= partitions.getBatch(batchIndex)
+      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, directInputs.map( input => input.getRDDVariableSpec(opSection)))) filterNot ( _.empty(uid) )
+      if (rddPartSpecs.length == 0) { None }
+      else {
+        logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions for node %s".format(batchIndex,rddPartSpecs.length,node.getNodeId))
+        val partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
+        //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
+        val parallelized_rddspecs = sparkContext parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy partitioner
+        Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition(kernelContext,batchIndex)) )
+      }
+    } )
+  }
+
+  def domainRDDPartition2( opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
     val enableRegridding = false
     kernelContext.addTimestamp( "Generating RDD for inputs: " + opInputs.keys.mkString(", "), true )
-    val rawRddMap: Map[String,RDD[(RecordKey,RDDRecord)]] = opInputs flatMap { case ( uid, opinput ) => opinput match {
-        case ( dataInput: PartitionedFragment) =>
-          val opSection: Option[ma2.Section] = getOpSectionIntersection( dataInput.getGrid, node )
-          executionMgr.serverContext.spark.getRDD( uid, dataInput, requestCx, opSection, node, batchIndex, kernelContext ) map ( result => uid -> result )
-        case ( directInput: EDASDirectDataInput ) =>
-          val opSection: Option[ma2.Section] = getOpSectionIntersection( directInput.getGrid, node )
-          executionMgr.serverContext.spark.getRDD( uid, directInput, requestCx, opSection, node, batchIndex, kernelContext ) map ( result => uid -> result )
-        case ( extInput: ExternalDataInput ) =>
-          if( batchIndex > 0 ) { None } else {
-            val opSection: Option[ma2.Section] = getOpSectionIntersection( extInput.getGrid, node )
-            executionMgr.serverContext.spark.getRDD(uid, extInput, requestCx, opSection, node, kernelContext, batchIndex ) map (result => uid -> result)
-          }
-        case ( kernelInput: DependencyOperationInput  ) =>
-          val keyValOpt = stream( kernelInput.inputNode, requestCx, batchIndex ) map ( result => uid -> result )
-          logger.info( "\n\n ----------------------- NODE %s => Stream DEPENDENCY Node: %s, batch = %d, rID = %s, nParts = %d -------\n".format(
-            node.getNodeId(), kernelInput.inputNode.getNodeId(), batchIndex, kernelInput.inputNode.getResultId, keyValOpt.map( _._2.partitions.length ).getOrElse(-1) ) )
-          keyValOpt
-        case (  x ) =>
-          throw new Exception( "Unsupported OperationInput class: " + x.getClass.getName )
+    val rddList: Iterable[RDD[(RecordKey,RDDRecord)] = opInputs.values.head match {
+      case dataInput: PartitionedFragment  => opInputs flatMap { case (uid, opinput) => {
+          val opSection: Option[ma2.Section] = getOpSectionIntersection(dataInput.getGrid, node)
+          executionMgr.serverContext.spark.getRDD(uid, dataInput, requestCx, opSection, node, batchIndex, kernelContext)
+      }}
+      case directInput: EDASDirectDataInput => {
+        val opSection: Option[ma2.Section] = getOpSectionIntersection(directInput.getGrid, node)
+        val inputs: List[EDASDirectDataInput]  = opInputs.values.toList.asInstanceOf[List[EDASDirectDataInput]]
+        val uid = inputs.map(_.uid).mkString("-")
+        ( executionMgr.serverContext.spark.getRDD( inputs, requestCx, opSection, node, batchIndex, kernelContext).flatten
       }
+      case extInput: ExternalDataInput  => opInputs flatMap { case (uid, opinput) => if (batchIndex > 0) { None } else {
+        val opSection: Option[ma2.Section] = getOpSectionIntersection(extInput.getGrid, node)
+        executionMgr.serverContext.spark.getRDD(uid, extInput, requestCx, opSection, node, kernelContext, batchIndex)
+      }}
+      case ( kernelInput: DependencyOperationInput  ) => opInputs flatMap { case (uid, opinput) =>
+        val keyValOpt = stream(kernelInput.inputNode, requestCx, batchIndex) map (result => uid -> result)
+        logger.info("\n\n ----------------------- NODE %s => Stream DEPENDENCY Node: %s, batch = %d, rID = %s, nParts = %d -------\n".format(
+          node.getNodeId(), kernelInput.inputNode.getNodeId(), batchIndex, kernelInput.inputNode.getResultId, keyValOpt.map(_._2.partitions.length).getOrElse(-1)))
+        keyValOpt
+      }
+      case (  x ) =>
+        throw new Exception( "Unsupported OperationInput class: " + x.getClass.getName )
     }
     if( rawRddMap.isEmpty ) {
       None
@@ -344,6 +402,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
       else { Some( unifiedRDD ) }
     }
   }
+
 
   def unifyRDDs(rddMap: Map[String,RDD[(RecordKey,RDDRecord)]], kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode ) : RDD[(RecordKey,RDDRecord)] = {
     logger.info( "unifyRDDs: " + rddMap.keys.mkString(", ") )
