@@ -373,9 +373,12 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
         else { CDSparkContext.coalesce(repart_result,kernelContext) }
       })
     }
-    logger.info( "Merge RDDs, unify time = %.4f sec".format( (System.nanoTime() - t0) / 1.0E9 ) )
-    if( convertedRdds.size == 1 ) convertedRdds.head
-    else convertedRdds.tail.foldLeft( convertedRdds.head )( CDSparkContext.merge )
+    val t1 = System.nanoTime
+    logger.info( "Merge RDDs, unify time = %.4f sec".format( (t1 - t0) / 1.0E9 ) )
+    val rv =  if( convertedRdds.size == 1 ) convertedRdds.head
+              else convertedRdds.tail.foldLeft( convertedRdds.head )( CDSparkContext.merge )
+    logger.info( "Completed MergeRDDs, time = %.4f sec".format( (System.nanoTime() - t1) / 1.0E9 ) )
+    rv
   }
 
   //  def domainRDDPartition( opInputs: Map[String,OperationInput], kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode ): RDD[(Int,RDDPartition)] = {
