@@ -553,7 +553,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
     val cacheStream = new FileToCacheStream( fragmentSpec, partsConfig, workflowNodeOpt, maskOpt )
     val partitions: CachePartitions = cacheStream.cacheFloatData
     val newFragSpec = fragmentSpec.reshape( partitions.roi )
-    val pfrag = new PartitionedFragment( partitions, maskOpt, newFragSpec )
+    val pfrag = new PartitionedFragment( partitions, maskOpt, newFragSpec, partsConfig )
     logger.info( "Persisting fragment %s with id %s".format( newFragSpec.getKey, partitions.id ) )
     FragmentPersistence.put( newFragSpec.getKey, partitions.id )
     pfrag

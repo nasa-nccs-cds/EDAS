@@ -899,6 +899,7 @@ class TransientDataCacheMgr extends Loggable {
     result
   }
 }
+
 class CollectionDataCacheMgr extends nasa.nccs.esgf.process.DataLoader with FragSpecKeySet {
   val K = 1000f
   private val fragmentCache: Cache[String, PartitionedFragment] = new FutureCache[String, PartitionedFragment]( "Store", "fragment" ) {

@@ -1,6 +1,6 @@
 package nasa.nccs.edas.engine
 
-import nasa.nccs.caching.{BatchSpec, RDDTransientVariable, collectionDataCache}
+import nasa.nccs.caching.{BatchSpec, EDASPartitioner, RDDTransientVariable, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{OperationInput, _}
 import nasa.nccs.cdapi.data.{DirectRDDPartSpec, RDDRecord, RDDRecord$}
 import nasa.nccs.cdapi.tensors.CDFloatArray
@@ -251,7 +251,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
       requestCx.getInputSpec(uid) match {
         case Some(inputSpec) =>
           logger.info("getInputSpec: %s -> %s ".format(uid, inputSpec.longname))
-           if( workflowNode.kernel.extInputs ) {  uid -> new ExternalDataInput( uid, inputSpec, workflowNode )                       }
+           if( workflowNode.kernel.extInputs ) {  uid -> new ExternalDataInput( uid, inputSpec, requestCx.getConfiguration, workflowNode )                       }
            else                                {  uid -> executionMgr.serverContext.getOperationInput(uid, inputSpec, requestCx.getConfiguration, workflowNode )  }
         case None =>
           nodes.find(_.getResultId.equals(uid)) match {
@@ -348,7 +348,25 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def domainRDDPartition( opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
     kernelContext.addTimestamp( "Generating RDD for inputs: " + opInputs.keys.mkString(", "), true )
-    val opSection: Option[ma2.Section] = getOpSectionIntersection(dataInput.getGrid, node)
+    val partsConfig = scala.collection.mutable.HashMap.empty[String,String]
+    val domains: Iterable[(DataFragmentSpec,ma2.Section)] = opInputs.flatMap { case ( uid, opInput ) => opInput match {
+      case dataInput: OperationDataInput =>
+        partsConfig ++= dataInput.partsConfig
+        val optSection: Option[ma2.Section] = getOpSectionIntersection(dataInput.getGrid, node)
+        dataInput.domainSection(optSection)
+      case _ => None
+    } }
+
+    val sections: Iterable[ma2.Section] = domains.map( _._2 )
+    val optPartitioner = if( sections.isEmpty ) { None } else {
+      val merged_section = sections.reduce(  _.intersect(_) )
+      val cut_domains = domains.flatMap( _._1.cutIntersection(merged_section) )
+      if( cut_domains.isEmpty ) { None } else {
+        val fragSpec: DataFragmentSpec = cut_domains.head
+        Some(new EDASPartitioner(merged_section, partsConfig.toMap, Some(node), fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles ) )
+      }
+    }
+
     EDASDirectDataInput.getPartitioner( directInputs, node ) flatMap ( partMgr => {
       val partitions = partMgr.partitions
       val uid = directInputs(0).uid

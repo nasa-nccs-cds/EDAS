@@ -1149,7 +1149,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
   }
 }
 
-class TransientFragment( val dataFrag: DataFragment, val request: RequestContext, val varMetadata: Map[String,nc2.Attribute] ) extends OperationDataInput( dataFrag.spec, varMetadata ) {
+class TransientFragment( val dataFrag: DataFragment, val request: RequestContext, val varMetadata: Map[String,nc2.Attribute] ) extends OperationDataInput( dataFrag.spec, request.getConfiguration, varMetadata ) {
   def toXml(id: String): xml.Elem = {
     val units = varMetadata.get("units") match { case Some(attr) => attr.getStringValue; case None => "" }
     val long_name = varMetadata.getOrElse("long_name",varMetadata.getOrElse("fullname",varMetadata.getOrElse("varname", new Attribute("varname","UNDEF")))).getStringValue

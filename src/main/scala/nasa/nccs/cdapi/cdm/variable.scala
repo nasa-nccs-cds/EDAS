@@ -100,7 +100,7 @@ class OperationTransientInput( val variable: RDDTransientVariable ) extends Oper
   }
 }
 
-abstract class OperationDataInput( val fragSpec: DataFragmentSpec, val metadata: Map[String,nc2.Attribute] = Map.empty ) extends OperationInput with Loggable {
+abstract class OperationDataInput( val fragSpec: DataFragmentSpec, val partsConfig: Map[String,String], val metadata: Map[String,nc2.Attribute] = Map.empty ) extends OperationInput with Loggable {
   def toBoundsString = fragSpec.toBoundsString
   def getKey: DataFragmentKey = fragSpec.getKey
   def getKeyString: String = fragSpec.getKeyString
@@ -114,14 +114,6 @@ abstract class OperationDataInput( val fragSpec: DataFragmentSpec, val metadata:
   }
   def data(partIndex: Int ): CDFloatArray
   def delete
-}
-
-class DirectOpDataInput( val uid: String, fragSpec: DataFragmentSpec, val workflowNode: WorkflowNode  )
-  extends OperationDataInput( fragSpec, workflowNode.operation.getConfiguration.map { case (key,value) => key -> new nc2.Attribute( key, value) } ) {
-
-  def data(partIndex: Int ): CDFloatArray = CDFloatArray.empty
-
-  def delete: Unit = Unit
 
   def domainSection( optSection: Option[ma2.Section] ): Option[ ( DataFragmentSpec, ma2.Section )] = {
     try {
@@ -144,6 +136,15 @@ class DirectOpDataInput( val uid: String, fragSpec: DataFragmentSpec, val workfl
     }
   }
 
+}
+
+class DirectOpDataInput( val uid: String, fragSpec: DataFragmentSpec, partsConfig: Map[String,String], val workflowNode: WorkflowNode  )
+  extends OperationDataInput( fragSpec, partsConfig, workflowNode.operation.getConfiguration.map { case (key,value) => key -> new nc2.Attribute( key, value) } ) {
+
+  def data(partIndex: Int ): CDFloatArray = CDFloatArray.empty
+
+  def delete: Unit = Unit
+
   def getRDDVariableSpec( optSection: Option[ma2.Section] ): DirectRDDVariableSpec  =
     domainSection(optSection) match {
       case Some( ( domFragSpec, section ) ) => new DirectRDDVariableSpec( uid, domFragSpec.getMetadata( Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.dataPath )
@@ -160,9 +161,9 @@ class DirectOpDataInput( val uid: String, fragSpec: DataFragmentSpec, val workfl
 }
 
 object EDASDirectDataInput {
-  def getPartitioner( inputs: List[EDASDirectDataInput], node: WorkflowNode ): Option[EDASPartitioner] = {
-    val domains: List[(DataFragmentSpec,ma2.Section)] = inputs.flatMap( input => {
-      val opSection: Option[ma2.Section] = getOpSectionIntersection(input.getGrid, node)
+  def getPartitioner( inputs: List[OperationDataInput], node: WorkflowNode ): Option[EDASPartitioner] = {
+    val domains: List[(DataFragmentSpec,ma2.Section)] = inputs.map( input => {
+      val optSection: Option[ma2.Section] = getOpSectionIntersection( input.getGrid, node)
       input.domainSection(optSection)
     })
     val sections: List[ma2.Section] = domains.map( _._2 )
@@ -172,13 +173,13 @@ object EDASDirectDataInput {
       val cut_domains = domains.flatMap( _._1.cutIntersection(merged_section) )
       if( cut_domains.isEmpty ) { None } else {
         val fragSpec: DataFragmentSpec = cut_domains(0)
-        Some(new EDASPartitioner(merged_section, inputs(0).partsConfig, Some(inputs(0).workflowNode), fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles ) )
+        Some(new EDASPartitioner(merged_section, inputs(0).partsConfig, Some(node), fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles ) )
       }
     }
   }
 }
 
-class EDASDirectDataInput( uid: String, fragSpec: DataFragmentSpec, val partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(uid,fragSpec,workflowNode) {
+class EDASDirectDataInput( uid: String, fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(uid,fragSpec,partsConfig,workflowNode) {
   val test = 1
   def getPartitioner( optSection: Option[ma2.Section] = None ): Option[EDASPartitioner] = domainSection( optSection ) map {
     case( frag1, section) => new EDASPartitioner( section, partsConfig, Some(workflowNode), fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
@@ -188,11 +189,11 @@ class EDASDirectDataInput( uid: String, fragSpec: DataFragmentSpec, val partsCon
   }
 }
 
-class ExternalDataInput(uid: String, fragSpec: DataFragmentSpec, workflowNode: WorkflowNode ) extends DirectOpDataInput(uid,fragSpec,workflowNode) {
+class ExternalDataInput(uid: String, fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(uid,fragSpec,partsConfig,workflowNode) {
   override def data(partIndex: Int ): CDFloatArray = CDFloatArray.empty
 }
 
-class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[CDByteArray], fragSpec: DataFragmentSpec, mdata: Map[String,nc2.Attribute] = Map.empty ) extends OperationDataInput(fragSpec,mdata) with Loggable {
+class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[CDByteArray], fragSpec: DataFragmentSpec, partsConfig: Map[String,String], mdata: Map[String,nc2.Attribute] = Map.empty ) extends OperationDataInput(fragSpec,partsConfig,mdata) with Loggable {
   def delete = partitions.delete
 
   def data(partIndex: Int ): CDFloatArray = partitions.getPartData(partIndex, fragSpec.missing_value )
