@@ -1173,7 +1173,9 @@ object OperationContext extends ContainerBase {
             metadata: Map[String, Any]): OperationContext = {
     val op_inputs: Iterable[String] = metadata.get("input") match {
       case Some(input_values: List[_]) =>
-        input_values.map(uid + _.toString.trim)
+        input_values.map( input_value => {
+          val sval = input_value.asInstanceOf[String]
+          if( sval.endsWith( uid.toString ) ) { sval } else { uid + sval.trim } } )
       case Some(input_value: String) =>
         if( input_value.isEmpty ) { uid_list } else { input_value.split(',').map(uid + _.trim) }
       case None => uid_list.map(uid + _.trim)

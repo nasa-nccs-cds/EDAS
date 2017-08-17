@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-datafile="http://esgf.nccs.nasa.gov/thredds/dodsC/CMIP5/NASA/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc"
+datafile="http://dataserver.nccs.nasa.gov/thredds/dodsC/CMIP5/ESGF/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc"
 datafile1="/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/DAILY/2005/JAN/MERRA300.prod.assim.inst3_3d_asm_Cp.20050101.SUB.nc"
 # mkdir -p out
 

@@ -273,7 +273,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       })
       new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
     case "agg" =>
-      val collectionNodes =  request.variableMap.values.map( ds => Collection.aggregate( ds.getSource ) )
+      val collectionNodes =  request.variableMap.values.flatMap( ds => if(ds.isSource) { Some( Collection.aggregate( ds.getSource ) ) } else { None } )
       new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
     case "clearCache" =>
       val fragIds = clearCache
