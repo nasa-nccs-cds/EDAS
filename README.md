@@ -53,7 +53,7 @@ _Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and 
     4) Build EDAS python pacakges:
     
         >> cd EDAS
-        >> python setup.py
+        >> python setup.py install
 
 ####  Code development:
 
