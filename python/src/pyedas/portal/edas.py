@@ -12,16 +12,13 @@ class ConnectionMode():
 
     @classmethod
     def bindSocket( cls, socket, server_address, port ):
-        if port > 0:
-            socket.bind("tcp://{0}:{1}".format(server_address,port))
-        else:
-            test_port = cls.DefaultPort
-            while( True ):
-                try:
-                    socket.bind( "tcp://{0}:{1}".format(server_address,test_port) )
-                    return test_port
-                except Exception as err:
-                    test_port = test_port + 1
+        test_port = port if( port > 0 ) else cls.DefaultPort
+        while( True ):
+            try:
+                socket.bind( "tcp://{0}:{1}".format(server_address,test_port) )
+                return test_port
+            except Exception as err:
+                test_port = test_port + 1
 
     @classmethod
     def connectSocket( cls, socket, host, port ):
@@ -198,8 +195,8 @@ class EDASPortal:
             if( connectionMode == ConnectionMode.BIND ):
                 self.request_port = ConnectionMode.bindSocket( self.request_socket, self.app_host, request_port )
                 self.response_port = ConnectionMode.bindSocket( self.response_socket, self.app_host, response_port )
-                self.logger.info( "Binding request socket to port: {0}".format( self.request_port ) )
-                self.logger.info( "Binding response socket to port: {0}".format( self.response_port ) )
+                self.logger.info( "Binding request socket to port: {0} (Requested {1})".format( self.request_port, request_port ) )
+                self.logger.info( "Binding response socket to port: {0} (Requested {1}".format( self.response_port, response_port ) )
             else:
                 self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
                 self.response_port = ConnectionMode.connectSocket(self.response_socket, self.app_host, response_port)

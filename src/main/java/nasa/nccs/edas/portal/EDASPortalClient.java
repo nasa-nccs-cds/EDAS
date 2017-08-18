@@ -138,23 +138,20 @@ public class EDASPortalClient {
     protected RandomString randomIds = new RandomString(8);
     protected int _request_port = -1;
     protected int _response_port = -1;
+    static int MAX_PORT = 65535;
 
 
     public static int bindSocket(ZMQ.Socket socket, int port) {
-        if (port > 0) {
-            socket.bind(String.format("tcp://*:%d", port));
-        } else {
-            int test_port = DefaultPort;
-            while (true) {
-                try {
-                    socket.bind(String.format("tcp://*:%d", port));
-                    return test_port;
-                } catch (Exception err) {
-                    test_port = test_port + 1;
-                }
+        int test_port = (port > 0) ? port : DefaultPort;
+        while (true) {
+            try {
+                socket.bind(String.format("tcp://*:%d", port));
+                return test_port;
+            } catch (Exception err) {
+                if( test_port >= MAX_PORT ) { return -1; }
+                test_port = test_port + 1;
             }
         }
-        return -1;
     }
 
     public static int connectSocket(ZMQ.Socket socket, String host, int port) {
