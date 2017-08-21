@@ -109,7 +109,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
-    throw new Exception("Not yet supported!")
+    throw new Exception("getResultFilePath: Not yet supported!")
   }
 
   def getResult( service: String, resultId: String ): xml.Node = {
@@ -118,7 +118,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def getResultStatus( service: String, resultId: String ): xml.Node = {
-    throw new Exception("Not yet supported!")
+    throw new Exception("getResultStatus: Not yet supported!")
   }
 }
 
