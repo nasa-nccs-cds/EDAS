@@ -103,9 +103,9 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def executeProcess(service: String, process_name: String, datainputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node = {
-    throw new Exception("Not yet supported!")
-//    val rId = portal.sendMessage( "execute", List( process_name, datainputs, runargs ).toArray )
-//    val responses: List[String] = response_manager.getResponses(rId,true).toList
+    val rId = portal.sendMessage( "execute", List( process_name, datainputs.toString(), runargs.toString() ).toArray )
+    val responses: List[String] = response_manager.getResponses(rId,true).toList
+    EDAS_XML.loadString( responses(0) )
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
