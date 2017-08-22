@@ -71,12 +71,12 @@ public class ResponseManager extends Thread {
             String[] toks = response.split("[!]");
             String rId = toks[0];
             String type = toks[1];
-            if ( type == "array" ) {
+            if ( type.equals("array") ) {
                 String header = toks[2];
                 byte[] data = socket.recv(0);
                 cacheArray(rId, new TransVar( header, data) );
 
-            } else if ( type =="response" ) {
+            } else if ( type.equals("response") ) {
                 cacheResult(rId, toks[2]);
                 logger.info(String.format("Received result: %s",toks[2]));
             } else {
