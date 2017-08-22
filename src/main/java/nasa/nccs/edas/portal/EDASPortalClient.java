@@ -52,46 +52,52 @@ public class EDASPortalClient {
     protected RandomString randomIds = new RandomString(8);
     protected int _request_port = -1;
     protected int _response_port = -1;
-    static int MAX_PORT = 65535;
 
 
-    public static int bindSocket(ZMQ.Socket socket, int port) {
-        int test_port = (port > 0) ? port : DefaultPort;
-        while (true) {
-            try {
-                socket.bind(String.format("tcp://*:%d", port));
-                return test_port;
-            } catch (Exception err) {
-                if( test_port >= MAX_PORT ) { return -1; }
-                test_port = test_port + 1;
-            }
-        }
-    }
+//    static int MAX_PORT = 65535;
+//    public static int bindSocket(ZMQ.Socket socket, String server, int port) {
+//        int test_port = (port > 0) ? port : DefaultPort;
+//        while (true) {
+//            try {
+//                socket.bind(String.format("tcp://%s:%d", server, port));
+//                return test_port;
+//            } catch (Exception err) {
+//                if( test_port >= MAX_PORT ) { return -1; }
+//                test_port = test_port + 1;
+//            }
+//        }
+//    }
 
     public static int connectSocket(ZMQ.Socket socket, String host, int port) {
         socket.connect(String.format("tcp://%s:%d", host, port));
         return port;
     }
 
-    public EDASPortalClient(ConnectionMode connectionMode , String host, int request_port, int response_port ) {
+    public EDASPortalClient( String server, int request_port, int response_port ) {
         try {
             _request_port = request_port;
             _response_port = response_port;
             zmqContext = ZMQ.context(1);
             request_socket = zmqContext.socket(ZMQ.PUSH);
             response_socket = zmqContext.socket(ZMQ.PULL);
-            app_host = host;
-            if (connectionMode == ConnectionMode.BIND) {
-                request_port = bindSocket(request_socket, request_port);
-                response_port = bindSocket(response_socket, response_port);
-                logger.info(String.format("Binding request socket to port: %d",request_port));
-                logger.info(String.format("Binding response socket to port: %d",response_port));
-            } else {
-                request_port = connectSocket(request_socket, app_host, request_port);
-                response_port = connectSocket(response_socket, app_host, response_port);
-                logger.info(String.format("Connected request socket to server %s on port: %d",app_host, request_port));
-                logger.info(String.format("Connected response socket on port: %d",response_port));
-            }
+            app_host = server;
+            request_port = connectSocket(request_socket, app_host, request_port);
+            response_port = connectSocket(response_socket, app_host, response_port);
+            logger.info(String.format("Connected request socket to server %s on port: %d",app_host, request_port));
+            logger.info(String.format("Connected response socket on port: %d",response_port));
+
+
+//            if (connectionMode == ConnectionMode.BIND) {
+//                request_port = bindSocket(request_socket, app_host, request_port);
+//                response_port = bindSocket(response_socket, app_host,  response_port);
+//                logger.info(String.format("Binding request socket to port: %d",request_port));
+//                logger.info(String.format("Binding response socket to port: %d",response_port));
+//            } else {
+//                request_port = connectSocket(request_socket, app_host, request_port);
+//                response_port = connectSocket(response_socket, app_host, response_port);
+//                logger.info(String.format("Connected request socket to server %s on port: %d",app_host, request_port));
+//                logger.info(String.format("Connected response socket on port: %d",response_port));
+//            }
 
 
         } catch(Exception err) {

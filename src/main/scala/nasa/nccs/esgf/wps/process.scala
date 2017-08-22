@@ -82,7 +82,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   val request_port = serverConfiguration.getOrElse("edas.server.port.request","5670").toInt
   val response_port = serverConfiguration.getOrElse("edas.server.port.response","5671").toInt
   logger.info( s"Starting EDASPortalClient with server='${server}', request_port=${request_port}, response_port=${response_port}" )
-  val portal = new EDASPortalClient( ConnectionMode.BIND, "localhost", request_port, response_port )
+  val portal = new EDASPortalClient( "localhost", request_port, response_port )
   val response_manager = portal.createResponseManager()
 
   def unacceptable(msg: String) = {
