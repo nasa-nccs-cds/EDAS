@@ -67,10 +67,11 @@ class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_
 
   override def execute( taskSpec: Array[String] ) = {
     val process_name = elem(taskSpec,2)
-    val datainputs = if( taskSpec.length > 3 ) wpsObjectParser.parseDataInputs( taskSpec(3) ) else Map.empty[String, Seq[Map[String, Any]]]
+    val dataInputsSpec = taskSpec(3)
+    val dataInputsObj = if( taskSpec.length > 3 ) wpsObjectParser.parseDataInputs( dataInputsSpec ) else Map.empty[String, Seq[Map[String, Any]]]
     val runargs = getRunArgs( taskSpec )
     val responseType = runargs.getOrElse("response","xml")
-    val response = processManager.executeProcess( process, process_name, datainputs, runargs )
+    val response = processManager.executeProcess( process, process_name, dataInputsSpec, dataInputsObj, runargs )
     if( responseType == "object" ) { sendDirectResponse( taskSpec(0), response ) }
     else if( responseType == "file" ) { sendFileResponse( taskSpec(0), response ) }
     sendResponse( taskSpec(0), printer.format( response ) )

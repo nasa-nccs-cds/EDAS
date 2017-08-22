@@ -9,7 +9,7 @@ import nasa.nccs.utilities.{Loggable, cdsutils}
 
 trait ServiceProvider extends Loggable {
 
-  def executeProcess(identifier: String, parsed_data_inputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem
+  def executeProcess(identifier: String, dataInputsSpec: String, parsed_data_inputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem
 
   //  def listProcesses(): xml.Elem
 
@@ -58,15 +58,15 @@ object cds2ServiceProvider extends ServiceProvider {
       key  + ": " + value.map( _.map { case (k1:String, v1:Any) => k1 + "=" + v1.toString  }.mkString(", ") ).mkString("{ ",", "," }")  }.mkString("{ ",", "," }")
   }
 
-  override def executeProcess(process_name: String, datainputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem = {
+  override def executeProcess(process_name: String, dataInputsSpec: String, dataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem = {
     try {
       logger.info( " @@cds2ServiceProvider: exec process: " + process_name )
-      cdsutils.time(logger, "\n\n-->> Process %s, datainputs: %s \n\n".format(process_name, datainputs2Str(datainputs))) {
+      cdsutils.time(logger, "\n\n-->> Process %s, datainputs: %s \n\n".format(process_name, dataInputsSpec ) ) {
         if (runargs.getOrElse("async", "false").toBoolean) {
-          val result = cds2ExecutionManager.asyncExecute(TaskRequest(process_name, datainputs), runargs)
+          val result = cds2ExecutionManager.asyncExecute(TaskRequest(process_name, dataInputs), runargs)
           result.toXml
         } else {
-          val result = cds2ExecutionManager.blockingExecute(TaskRequest(process_name, datainputs), runargs)
+          val result = cds2ExecutionManager.blockingExecute(TaskRequest(process_name, dataInputs), runargs)
           result.toXml
         }
       }

@@ -690,7 +690,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val t0 = System.nanoTime()
     val runargs = runArgs ++ Map("responseform" -> "", "storeexecuteresponse" -> "true", "unitTest" -> "true" )
     val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
-    val response: xml.Elem = webProcessManager.executeProcess(service, identifier, parsed_data_inputs, runargs)
+    val response: xml.Elem = webProcessManager.executeProcess(service, identifier, datainputs, parsed_data_inputs, runargs)
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
     println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
     response
@@ -729,7 +729,7 @@ class EDASDemoTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val t0 = System.nanoTime()
     val runargs = Map("responseform" -> "", "storeexecuteresponse" -> "true", "async" -> async.toString, "unitTest" -> "true" )
     val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
-    val response: xml.Elem = webProcessManager.executeProcess("cds2", identifier, parsed_data_inputs, runargs)
+    val response: xml.Elem = webProcessManager.executeProcess("cds2", identifier, datainputs, parsed_data_inputs, runargs)
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
     println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
     response

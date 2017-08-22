@@ -13,7 +13,7 @@ class NotAcceptableException(message: String = null, cause: Throwable = null) ex
 trait GenericProcessManager {
   def describeProcess(service: String, name: String): xml.Node;
   def getCapabilities(service: String, identifier: String): xml.Node;
-  def executeProcess(service: String, process_name: String, datainputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node
+  def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node
   def getResultFilePath( service: String, resultId: String ): Option[String]
   def getResult( service: String, resultId: String ): xml.Node
   def getResultStatus( service: String, resultId: String ): xml.Node
@@ -46,10 +46,10 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getWPSCapabilities( identifier )
   }
 
-  def executeProcess(service: String, process_name: String, datainputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem = {
+  def executeProcess(service: String, process_name: String, dataInputsSpec: String, dataInputsObj: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem = {
     val serviceProvider = apiManager.getServiceProvider(service)
     logger.info("Executing Service %s, Service provider = %s ".format( service, serviceProvider.getClass.getName ))
-    serviceProvider.executeProcess(process_name, datainputs, runargs)
+    serviceProvider.executeProcess(process_name, dataInputsSpec, dataInputsObj, runargs)
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
@@ -102,8 +102,8 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     EDAS_XML.loadString( responses(0) )
   }
 
-  def executeProcess(service: String, process_name: String, datainputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node = {
-    val rId = portal.sendMessage( "execute", List( process_name, datainputs.toString(), runargs.toString() ).toArray )
+  def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node = {
+    val rId = portal.sendMessage( "execute", List( process_name, dataInputsSpec, runargs.toString() ).toArray )
     val responses: List[String] = response_manager.getResponses(rId,true).toList
     EDAS_XML.loadString( responses(0) )
   }
