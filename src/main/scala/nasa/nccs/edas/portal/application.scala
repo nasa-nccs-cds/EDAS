@@ -61,8 +61,8 @@ class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_
   def getRunArgs( taskSpec: Array[String] ): Map[String,String] = {
     val runargs = if( taskSpec.length > 4 ) wpsObjectParser.parseMap( taskSpec(4) ) else Map.empty[String, Any]
     if( !runargs.keys.contains("response") ) {
-      val async = runargs.getOrElse("async","false").toString.toBoolean
-      val defaultResponseType = if( async ) { "file" } else { "xml" }
+      val status = runargs.getOrElse("status","false").toString.toBoolean
+      val defaultResponseType = if( status ) { "file" } else { "xml" }
       runargs.mapValues(_.toString) + ("response" -> defaultResponseType )
     } else runargs.mapValues(_.toString)
   }

@@ -57,7 +57,7 @@ object cds2ServiceProvider extends ServiceProvider {
     datainputs.map { case ( key:String, value:Seq[Map[String, Any]] ) =>
       key  + ": " + value.map( _.map { case (k1:String, v1:Any) => k1 + "=" + v1.toString  }.mkString(", ") ).mkString("{ ",", "," }")  }.mkString("{ ",", "," }")
   }
-  def getResponseSyntax( runargs: Map[String, String] ): ResponseSyntax.Value = runargs.getOrElse("syntax", "generic") match {
+  def getResponseSyntax( runargs: Map[String, String] ): ResponseSyntax.Value = runargs.getOrElse("responseForm", "generic") match {
     case x: String if x.toLowerCase ==  "generic" => ResponseSyntax.Generic
     case z => ResponseSyntax.WPS
   }
@@ -68,7 +68,7 @@ object cds2ServiceProvider extends ServiceProvider {
       logger.info( " @@cds2ServiceProvider: exec process: " + process_name )
 
       cdsutils.time(logger, "\n\n-->> Process %s, datainputs: %s \n\n".format(process_name, dataInputsSpec ) ) {
-        if (runargs.getOrElse("async", "false").toBoolean) {
+        if (runargs.getOrElse("status", "false").toBoolean) {
           val result = cds2ExecutionManager.asyncExecute(TaskRequest(process_name, dataInputs), runargs)
           result.toXml(syntax)
         } else {

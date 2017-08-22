@@ -17,7 +17,7 @@ object ResponseSyntax extends Enumeration {
 
 trait WPSResponse extends {
   val proxyAddress =  appParameters("wps.server.proxy.href","")
-  val default_syntax: ResponseSyntax.Value =  appParameters("wps.response.syntax","") match {
+  val default_syntax: ResponseSyntax.Value =  appParameters("wps.response.syntax","generic") match {
     case "generic" => ResponseSyntax.Generic
     case _ => ResponseSyntax.WPS
   }

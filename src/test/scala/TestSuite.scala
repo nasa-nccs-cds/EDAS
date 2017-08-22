@@ -29,7 +29,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
   val eps = 0.00001
   val service = "cds2"
-  val run_args = Map("async" -> "false")
+  val run_args = Map("status" -> "false")
   val printer = new scala.xml.PrettyPrinter(200, 3)
   val test_data_dir = sys.env.get("EDAS_HOME_DIR") match {
     case Some(edas_home) => Paths.get( edas_home, "src", "test", "resources", "data" )
@@ -688,7 +688,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
   def executeTest( datainputs: String, runArgs: Map[String,String]=Map.empty, identifier: String = "CDSpark.workflow"  ): xml.Elem = {
     val t0 = System.nanoTime()
-    val runargs = runArgs ++ Map("responseform" -> "", "storeexecuteresponse" -> "true", "unitTest" -> "true" )
+    val runargs = runArgs ++ Map( "responseform" -> "generic", "storeexecuteresponse" -> "true", "unitTest" -> "true", "status" -> "false" )
     val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
     val response: xml.Elem = webProcessManager.executeProcess(service, identifier, datainputs, parsed_data_inputs, runargs)
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
@@ -700,7 +700,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     webProcessManager.shutdown( service )
   }
 
-  def getCapabilities( identifier: String="", async: Boolean = false, runArgs: Map[String,String]=Map.empty[String,String] ): xml.Elem = {
+  def getCapabilities( identifier: String="", runArgs: Map[String,String]=Map.empty[String,String] ): xml.Elem = {
     val t0 = System.nanoTime()
     val response: xml.Elem = webProcessManager.getCapabilities(service, identifier, runArgs )
     webProcessManager.logger.info("Completed GetCapabilities '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
@@ -708,7 +708,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     response
   }
 
-  def describeProcess( identifier: String, async: Boolean = false, runArgs: Map[String,String]=Map.empty[String,String] ): xml.Elem = {
+  def describeProcess( identifier: String, runArgs: Map[String,String]=Map.empty[String,String] ): xml.Elem = {
     val t0 = System.nanoTime()
     val response: xml.Elem = webProcessManager.describeProcess(service, identifier, runArgs )
     webProcessManager.logger.info("Completed DescribeProcess '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
@@ -717,37 +717,37 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   }
 }
 
-class EDASDemoTestSuite extends FunSuite with Loggable with BeforeAndAfter {
-  EDASLogManager.testing
-  import nasa.nccs.cdapi.tensors.CDFloatArray
-  import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
-  import ucar.nc2.dataset.NetcdfDataset
-  val serverConfiguration = Map[String,String]()
-  val webProcessManager = new ProcessManager( serverConfiguration )
-  
-  def executeTest( datainputs: String, async: Boolean = false, identifier: String = "CDSpark.workflow" ): xml.Elem = {
-    val t0 = System.nanoTime()
-    val runargs = Map("responseform" -> "", "storeexecuteresponse" -> "true", "async" -> async.toString, "unitTest" -> "true" )
-    val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
-    val response: xml.Elem = webProcessManager.executeProcess("cds2", identifier, datainputs, parsed_data_inputs, runargs)
-    for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
-    println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
-    response
-  }
-
-  def getResultData( result_node: xml.Elem, print_result: Boolean = false ): CDFloatArray = {
-    val data_nodes: xml.NodeSeq = getDataNodes( result_node, print_result )
-    try{  CDFloatArray( data_nodes.head.text.split(',').map(_.toFloat), Float.MaxValue ) } catch { case err: Exception => CDFloatArray.empty }
-  }
-
-  def getDataNodes( result_node: xml.Elem, print_result: Boolean = false  ): xml.NodeSeq = {
-    if(print_result) { println( s"Result Node:\n${result_node.toString}\n" ) }
-    result_node.label match {
-      case "response" => result_node \\ "outputs" \\ "data"
-      case _ => result_node \\ "Output" \\ "LiteralData"
-    }
-  }
-}
+//class EDASDemoTestSuite extends FunSuite with Loggable with BeforeAndAfter {
+//  EDASLogManager.testing
+//  import nasa.nccs.cdapi.tensors.CDFloatArray
+//  import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
+//  import ucar.nc2.dataset.NetcdfDataset
+//  val serverConfiguration = Map[String,String]()
+//  val webProcessManager = new ProcessManager( serverConfiguration )
+//
+//  def executeTest( datainputs: String, status: Boolean = false, identifier: String = "CDSpark.workflow" ): xml.Elem = {
+//    val t0 = System.nanoTime()
+//    val runargs = Map("responseform" -> "", "storeexecuteresponse" -> "true", "status" -> status.toString, "unitTest" -> "true" )
+//    val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
+//    val response: xml.Elem = webProcessManager.executeProcess("cds2", identifier, datainputs, parsed_data_inputs, runargs)
+//    for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
+//    println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
+//    response
+//  }
+//
+//  def getResultData( result_node: xml.Elem, print_result: Boolean = false ): CDFloatArray = {
+//    val data_nodes: xml.NodeSeq = getDataNodes( result_node, print_result )
+//    try{  CDFloatArray( data_nodes.head.text.split(',').map(_.toFloat), Float.MaxValue ) } catch { case err: Exception => CDFloatArray.empty }
+//  }
+//
+//  def getDataNodes( result_node: xml.Elem, print_result: Boolean = false  ): xml.NodeSeq = {
+//    if(print_result) { println( s"Result Node:\n${result_node.toString}\n" ) }
+//    result_node.label match {
+//      case "response" => result_node \\ "outputs" \\ "data"
+//      case _ => result_node \\ "Output" \\ "LiteralData"
+//    }
+//  }
+//}
 /*
 
 @Ignore class EDASMainTestSuite extends TestSuite(0, 0, 0f, 0f ) with Loggable {
