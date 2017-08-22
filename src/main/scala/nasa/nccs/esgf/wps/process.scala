@@ -84,7 +84,8 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   logger.info( s"Starting EDASPortalClient with server='${server}', request_port=${request_port}, response_port=${response_port}" )
   val portal = new EDASPortalClient( "localhost", request_port, response_port )
   val response_manager = portal.createResponseManager()
-  def map2Str( inputs: Map[String, String] ): String = inputs.map { case ( key, value ) => key  + ": " + value }.mkString("{ ",", "," }")
+  def quote( input: String ): String = "\"" + input + "\""
+  def map2Str( inputs: Map[String, String] ): String = inputs.map { case ( key, value ) => quote(key) + ": " + quote(value) }.mkString("{ ",", "," }")
 
   def unacceptable(msg: String) = {
     logger.error(msg)
