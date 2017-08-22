@@ -84,6 +84,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   logger.info( s"Starting EDASPortalClient with server='${server}', request_port=${request_port}, response_port=${response_port}" )
   val portal = new EDASPortalClient( "localhost", request_port, response_port )
   val response_manager = portal.createResponseManager()
+  def map2Str( inputs: Map[String, String] ): String = inputs.map { case ( key, value ) => key  + ": " + value }.mkString("{ ",", "," }")
 
   def unacceptable(msg: String) = {
     logger.error(msg)
@@ -103,7 +104,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node = {
-    val rId = portal.sendMessage( "execute", List( process_name, dataInputsSpec, runargs.toString() ).toArray )
+    val rId = portal.sendMessage( "execute", List( process_name, dataInputsSpec, map2Str(runargs) ).toArray )
     val responses: List[String] = response_manager.getResponses(rId,true).toList
     EDAS_XML.loadString( responses(0) )
   }
