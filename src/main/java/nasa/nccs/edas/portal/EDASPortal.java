@@ -26,7 +26,7 @@ public abstract class EDASPortal {
     protected Logger logger = EDASLogManager.getCurrentLogger();
     private boolean active = true;
 
-    public abstract void sendErrorReport(  String id,  Exception err  );
+    public abstract void sendErrorReport( String[] taskSpec,  Exception err  );
 
     protected EDASPortal( ConnectionMode mode, String client_address, int _request_port, int _response_port ) {
         try {
@@ -140,7 +140,7 @@ public abstract class EDASPortal {
         } catch ( Exception ex ) {
             logger.error( "Error in Request: " + ex.toString() );
             ex.printStackTrace();
-            sendErrorReport( parts[0], ex );
+            sendErrorReport( parts, ex );
         }
     }
 

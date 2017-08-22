@@ -4,7 +4,7 @@ import java.io.{PrintWriter, StringWriter}
 import java.util.concurrent.ExecutionException
 
 import nasa.nccs.caching.RDDTransientVariable
-import nasa.nccs.wps.{BlockingExecutionResult, WPSExceptionReport, WPSResponse}
+import nasa.nccs.wps.{BlockingExecutionResult, ResponseSyntax, WPSExceptionReport, WPSResponse}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 
 trait ServiceProvider extends Loggable {
@@ -13,9 +13,9 @@ trait ServiceProvider extends Loggable {
 
   //  def listProcesses(): xml.Elem
 
-  def describeWPSProcess( identifier: String ): xml.Elem
+  def describeWPSProcess( identifier: String, runArgs: Map[String,String] ): xml.Elem
 
-  def getWPSCapabilities( identifier: String ): xml.Elem
+  def getWPSCapabilities( identifier: String, runArgs: Map[String,String] ): xml.Elem
 
   def getCause( e: Throwable ): Throwable = e match {
     case err: ExecutionException => err.getCause; case x => e
@@ -23,8 +23,8 @@ trait ServiceProvider extends Loggable {
 
   def getResultFilePath( resultId: String ): Option[String]
   def getResultVariable( resultId: String ): Option[RDDTransientVariable]
-  def getResult( resultId: String ): xml.Node
-  def getResultStatus( resultId: String ): xml.Node
+  def getResult( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
+  def getResultStatus( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
 
   def fatal( e: Throwable ): WPSExceptionReport = {
     val err = getCause( e )
@@ -57,38 +57,46 @@ object cds2ServiceProvider extends ServiceProvider {
     datainputs.map { case ( key:String, value:Seq[Map[String, Any]] ) =>
       key  + ": " + value.map( _.map { case (k1:String, v1:Any) => k1 + "=" + v1.toString  }.mkString(", ") ).mkString("{ ",", "," }")  }.mkString("{ ",", "," }")
   }
+  def getResponseSyntax( runargs: Map[String, String] ): ResponseSyntax.Value = runargs.getOrElse("syntax", "generic") match {
+    case x: String if x.toLowerCase ==  "generic" => ResponseSyntax.Generic
+    case z => ResponseSyntax.WPS
+  }
 
   override def executeProcess(process_name: String, dataInputsSpec: String, dataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem = {
+    val syntax = getResponseSyntax(runargs)
     try {
       logger.info( " @@cds2ServiceProvider: exec process: " + process_name )
+
       cdsutils.time(logger, "\n\n-->> Process %s, datainputs: %s \n\n".format(process_name, dataInputsSpec ) ) {
         if (runargs.getOrElse("async", "false").toBoolean) {
           val result = cds2ExecutionManager.asyncExecute(TaskRequest(process_name, dataInputs), runargs)
-          result.toXml
+          result.toXml(syntax)
         } else {
           val result = cds2ExecutionManager.blockingExecute(TaskRequest(process_name, dataInputs), runargs)
-          result.toXml
+          result.toXml(syntax)
         }
       }
     } catch {
-      case e: Exception => fatal(e).toXml
+      case e: Exception => fatal(e).toXml(syntax)
     }
   }
-  def describeWPSProcess(process_name: String): xml.Elem = {
+  def describeWPSProcess(process_name: String, runArgs: Map[String,String]): xml.Elem = {
+    val syntax = getResponseSyntax(runArgs)
     try {
-      cds2ExecutionManager.describeWPSProcess( process_name )
+      cds2ExecutionManager.describeWPSProcess( process_name, syntax )
 
-    } catch { case e: Exception => fatal(e).toXml }
+    } catch { case e: Exception => fatal(e).toXml(syntax) }
   }
-  def getWPSCapabilities(identifier: String): xml.Elem = {
+  def getWPSCapabilities(identifier: String, runArgs: Map[String,String]): xml.Elem = {
+    val syntax = getResponseSyntax(runArgs)
     try {
-      cds2ExecutionManager.getWPSCapabilities( if(identifier == null) "" else identifier )
+      cds2ExecutionManager.getWPSCapabilities( if(identifier == null) "" else identifier, syntax )
 
-    } catch { case e: Exception => fatal(e).toXml }
+    } catch { case e: Exception => fatal(e).toXml(syntax) }
   }
   override def getResultFilePath( resultId: String ): Option[String] = cds2ExecutionManager.getResultFilePath( resultId )
-  override def getResult( resultId: String ): xml.Node = cds2ExecutionManager.getResult( resultId )
+  override def getResult( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = cds2ExecutionManager.getResult( resultId, response_syntax )
   override def getResultVariable( resultId: String ): Option[RDDTransientVariable] = cds2ExecutionManager.getResultVariable( resultId )
-  override def getResultStatus( resultId: String ): xml.Node = cds2ExecutionManager.getResultStatus( resultId )
+  override def getResultStatus( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = cds2ExecutionManager.getResultStatus( resultId, response_syntax )
 
 }

@@ -4,6 +4,7 @@ import nasa.nccs.edas.loaders.EDAS_XML
 import nasa.nccs.edas.portal.EDASPortal.ConnectionMode
 import nasa.nccs.edas.portal.EDASPortalClient
 import nasa.nccs.utilities.Loggable
+import nasa.nccs.wps.ResponseSyntax
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConversions._
@@ -11,12 +12,12 @@ import scala.collection.JavaConversions._
 class NotAcceptableException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
 
 trait GenericProcessManager {
-  def describeProcess(service: String, name: String): xml.Node;
-  def getCapabilities(service: String, identifier: String): xml.Node;
+  def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node;
+  def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node;
   def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node
   def getResultFilePath( service: String, resultId: String ): Option[String]
-  def getResult( service: String, resultId: String ): xml.Node
-  def getResultStatus( service: String, resultId: String ): xml.Node
+  def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
+  def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
 }
 
 
@@ -34,16 +35,16 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.shutdown()
   }
 
-  def describeProcess(service: String, name: String): xml.Elem = {
+  def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Elem = {
     val serviceProvider = apiManager.getServiceProvider(service)
     //        logger.info("Executing Service %s, Service provider = %s ".format( service, serviceProvider.getClass.getName ))
-    serviceProvider.describeWPSProcess( name )
+    serviceProvider.describeWPSProcess( name, runArgs )
   }
 
-  def getCapabilities(service: String, identifier: String): xml.Elem = {
+  def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Elem = {
     val serviceProvider = apiManager.getServiceProvider(service)
         //        logger.info("Executing Service %s, Service provider = %s ".format( service, serviceProvider.getClass.getName ))
-    serviceProvider.getWPSCapabilities( identifier )
+    serviceProvider.getWPSCapabilities( identifier, runArgs )
   }
 
   def executeProcess(service: String, process_name: String, dataInputsSpec: String, dataInputsObj: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem = {
@@ -58,10 +59,10 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getResultFilePath(resultId)
   }
 
-  def getResult( service: String, resultId: String ): xml.Node = {
+  def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
     logger.info( "EDAS ProcessManager-> getResult: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
-    serviceProvider.getResult(resultId)
+    serviceProvider.getResult( resultId, response_syntax )
   }
 
   def getResultVariable( service: String, resultId: String ): Option[RDDTransientVariable] = {
@@ -70,10 +71,10 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getResultVariable(resultId)
   }
 
-  def getResultStatus( service: String, resultId: String ): xml.Node = {
+  def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
     logger.info( "EDAS ProcessManager-> getResult: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
-    serviceProvider.getResultStatus(resultId)
+    serviceProvider.getResultStatus(resultId,response_syntax)
   }
 }
 
@@ -92,13 +93,13 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     throw new NotAcceptableException(msg)
   }
 
-  def describeProcess(service: String, name: String): xml.Node  =  {
+  def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node  =  {
     val rId = portal.sendMessage( "describeProcess", List( name ).toArray )
     val responses = response_manager.getResponses(rId,true).toList
     EDAS_XML.loadString( responses(0) )
   }
 
-  def getCapabilities(service: String, identifier: String): xml.Node = {
+  def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node = {
     val rId = portal.sendMessage( "getCapabilities", List( "" ).toArray )
     val responses = response_manager.getResponses(rId,true).toList
     EDAS_XML.loadString( responses(0) )
@@ -114,12 +115,12 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     throw new Exception("getResultFilePath: Not yet supported!")
   }
 
-  def getResult( service: String, resultId: String ): xml.Node = {
+  def getResult( service: String, resultId: String, responseSyntax: ResponseSyntax.Value ): xml.Node = {
     val responses = response_manager.getResponses(resultId,true).toList
     EDAS_XML.loadString( responses(0) )
   }
 
-  def getResultStatus( service: String, resultId: String ): xml.Node = {
+  def getResultStatus( service: String, resultId: String, responseSyntax: ResponseSyntax.Value ): xml.Node = {
     throw new Exception("getResultStatus: Not yet supported!")
   }
 }

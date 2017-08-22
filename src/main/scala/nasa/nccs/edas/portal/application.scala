@@ -10,11 +10,13 @@ import nasa.nccs.edas.portal.EDASApplication.logger
 import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.portal.EDASPortal.ConnectionMode._
 import nasa.nccs.edas.utilities.appParameters
+import nasa.nccs.esgf.wps.cds2ServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
-import nasa.nccs.wps.WPSExceptionReport
+import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport}
 import org.apache.spark.SparkEnv
 import ucar.ma2.ArrayFloat
 import ucar.nc2.dataset.NetcdfDataset
+
 import scala.io.Source
 
 object EDASapp {
@@ -46,13 +48,13 @@ class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_
 
   }
 
-  def getResult( resultSpec: Array[String] ) = {
-    val result: xml.Node = processManager.getResult( process, resultSpec(0) )
+  def getResult( resultSpec: Array[String], response_syntax: ResponseSyntax.Value ) = {
+    val result: xml.Node = processManager.getResult( process, resultSpec(0),response_syntax )
     sendResponse( resultSpec(0), printer.format( result )  )
   }
 
-  def getResultStatus( resultSpec: Array[String] ) = {
-    val result: xml.Node = processManager.getResultStatus( process, resultSpec(0) )
+  def getResultStatus( resultSpec: Array[String], response_syntax: ResponseSyntax.Value ) = {
+    val result: xml.Node = processManager.getResultStatus( process, resultSpec(0), response_syntax )
     sendResponse( resultSpec(0), printer.format( result )  )
   }
 
@@ -77,9 +79,12 @@ class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_
     sendResponse( taskSpec(0), printer.format( response ) )
   }
 
-  def sendErrorReport( id: String, exc: Exception ) = {
+  def sendErrorReport( taskSpec: Array[String], exc: Exception ) = {
+    val id = taskSpec(0)
+    val runargs = getRunArgs( taskSpec )
+    val syntax = getResponseSyntax(runargs)
     val err = new WPSExceptionReport(exc)
-    sendResponse( id, printer.format( err.toXml ) )
+    sendResponse( id, printer.format( err.toXml(syntax) ) )
   }
 
   def shutdown = { processManager.shutdown( process ) }
@@ -124,12 +129,14 @@ class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_
   }
 
   override def getCapabilities(utilSpec: Array[String]) = {
-    val result: xml.Elem = processManager.getCapabilities( process, elem(utilSpec,2) )
+    val runargs: Map[String,String] = getRunArgs( utilSpec )
+    val result: xml.Elem = processManager.getCapabilities( process, elem(utilSpec,2), runargs )
     sendResponse( utilSpec(0), printer.format( result ) )
   }
 
   override def describeProcess(procSpec: Array[String]) = {
-    val result: xml.Elem = processManager.describeProcess( process, elem(procSpec,2) )
+    val runargs: Map[String,String] = getRunArgs( procSpec )
+    val result: xml.Elem = processManager.describeProcess( process, elem(procSpec,2), runargs )
     sendResponse( procSpec(0), printer.format( result )  )
   }
 }

@@ -700,17 +700,17 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     webProcessManager.shutdown( service )
   }
 
-  def getCapabilities( identifier: String="", async: Boolean = false ): xml.Elem = {
+  def getCapabilities( identifier: String="", async: Boolean = false, runArgs: Map[String,String]=Map.empty[String,String] ): xml.Elem = {
     val t0 = System.nanoTime()
-    val response: xml.Elem = webProcessManager.getCapabilities(service, identifier )
+    val response: xml.Elem = webProcessManager.getCapabilities(service, identifier, runArgs )
     webProcessManager.logger.info("Completed GetCapabilities '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
     webProcessManager.logger.info( printer.format(response) )
     response
   }
 
-  def describeProcess( identifier: String, async: Boolean = false ): xml.Elem = {
+  def describeProcess( identifier: String, async: Boolean = false, runArgs: Map[String,String]=Map.empty[String,String] ): xml.Elem = {
     val t0 = System.nanoTime()
-    val response: xml.Elem = webProcessManager.describeProcess(service, identifier )
+    val response: xml.Elem = webProcessManager.describeProcess(service, identifier, runArgs )
     webProcessManager.logger.info("Completed DescribeProcess '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
     webProcessManager.logger.info( printer.format(response) )
     response

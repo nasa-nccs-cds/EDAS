@@ -49,9 +49,10 @@ trait ScopeContext {
   def config( key: String ): Option[String] = __configuration__.get(key)
 }
 
-class RequestContext( val domains: Map[String,DomainContainer], val inputs: Map[String, Option[DataFragmentSpec]], request: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
+class RequestContext( val inputs: Map[String, Option[DataFragmentSpec]], val request: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
+  val domains: Map[String,DomainContainer] = request.domainMap
   def getConf( key: String, default: String ) = configuration.getOrElse(key,default)
   def missing_variable(uid: String) = throw new Exception("Can't find Variable '%s' in uids: [ %s ]".format(uid, inputs.keySet.mkString(", ")))
   def getDataSources: Map[String, Option[DataFragmentSpec]] = inputs
