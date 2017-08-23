@@ -438,7 +438,6 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         case x =>
           logger.info( "---------->>> Execute Workflows: " + request.operations.mkString(",") )
           val responses = request.workflow.executeRequest( requestCx )
-          logger.info( "---------->>> Done Executing Workflows " )
           new MergedWPSExecuteResponse( request.id.toString, responses )
       }
       case None => throw new Exception( "Error, no operation specified, cannot define workflow")

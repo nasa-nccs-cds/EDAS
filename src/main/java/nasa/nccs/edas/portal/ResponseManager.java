@@ -5,6 +5,12 @@ import nasa.nccs.utilities.EDASLogManager;
 import nasa.nccs.utilities.Logger;
 import org.zeromq.ZMQ;
 
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -15,14 +21,19 @@ public class ResponseManager extends Thread {
     Boolean active = true;
     Map<String, List<String>> cached_results = null;
     Map<String, List<TransVar>> cached_arrays = null;
+    Map<String, String> file_paths = null;
+    String cacheDir = null;
     protected Logger logger = EDASLogManager.getCurrentLogger();
 
     public ResponseManager(EDASPortalClient portalClient) {
         socket = portalClient.response_socket;
         cached_results = new HashMap<String, List<String>>();
         cached_arrays = new HashMap<String, List<TransVar>>();
+        file_paths = new HashMap<String,String>();
         setName("EDAS ResponseManager");
         setDaemon(true);
+        String EDAS_CACHE_DIR = System.getenv( "EDAS_CACHE_DIR" );
+        cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
     }
 
     public void cacheResult(String id, String result) { getResults(id).add(result); }
@@ -75,7 +86,12 @@ public class ResponseManager extends Thread {
                 String header = toks[2];
                 byte[] data = socket.recv(0);
                 cacheArray(rId, new TransVar( header, data) );
-
+            } else if ( type.equals("file") ) {
+                String header = toks[2];
+                byte[] data = socket.recv(0);
+                File filePath = saveFile( header, data );
+                file_paths.put( rId, filePath.toString() );
+                logger.info( String.format("Received file %s for rid %s",header,rId) );
             } else if ( type.equals("response") ) {
                 cacheResult(rId, toks[2]);
                 logger.info(String.format("Received result: %s",toks[2]));
@@ -86,6 +102,33 @@ public class ResponseManager extends Thread {
         } catch( Exception err ) {
             logger.error(String.format("EDAS error: %s\n%s\n", err, err.getStackTrace().toString() ) );
         }
+    }
+
+    File saveFile( String header, byte[] data ) {
+        String[] header_toks = header.split("|");
+        String id = header_toks[1];
+        String role = header_toks[2];
+        String fileName = header_toks[3];
+        Path fileCacheDir = getFileCacheDir(role);
+        File outFile = new File( fileCacheDir.toFile(), fileName);
+        try {
+            DataOutputStream os = new DataOutputStream(new FileOutputStream(outFile));
+            os.write(data, 0, data.length);
+        } catch( Exception err ) {
+            logger.error(String.format("Unable to write to file(%s): %s\n%s\n", id, outFile.toString(), err.getMessage() ) );
+        }
+        return outFile;
+    }
+
+
+    Path getFileCacheDir( String role ) {
+        Path filePath = Paths.get( cacheDir, "transfer", role );
+        try {
+            Files.createDirectories( filePath );
+        } catch( Exception err ) {
+            logger.error(String.format("Unable to create directory %s", filePath.toString() ) );
+        }
+        return filePath;
     }
 
     public List<String> getResponses( String rId, Boolean wait ) {
