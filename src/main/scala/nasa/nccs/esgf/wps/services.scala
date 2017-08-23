@@ -57,7 +57,7 @@ object cds2ServiceProvider extends ServiceProvider {
     datainputs.map { case ( key:String, value:Seq[Map[String, Any]] ) =>
       key  + ": " + value.map( _.map { case (k1:String, v1:Any) => k1 + "=" + v1.toString  }.mkString(", ") ).mkString("{ ",", "," }")  }.mkString("{ ",", "," }")
   }
-  def getResponseSyntax( runargs: Map[String, String] ): ResponseSyntax.Value = runargs.getOrElse("responseForm", "generic") match {
+  def getResponseSyntax( runargs: Map[String, String] ): ResponseSyntax.Value = runargs.getOrElse("responseform", "generic") match {
     case x: String if x.toLowerCase ==  "generic" => ResponseSyntax.Generic
     case z => ResponseSyntax.WPS
   }
