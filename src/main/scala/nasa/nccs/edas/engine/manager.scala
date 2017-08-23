@@ -251,7 +251,9 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         //            writer.write( dimvar, dimdata )
         //          }
         writer.close()
-        resultFile.getAbsolutePath
+        val path = resultFile.getAbsolutePath
+        logger.info("Done writing output to file %s".format(path))
+        path
       } catch {
         case ex: IOException =>
           logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
@@ -442,6 +444,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         case x =>
           logger.info( "---------->>> Execute Workflows: " + request.operations.mkString(",") )
           val responses = request.workflow.executeRequest( requestCx )
+          logger.info( "---------->>> Done Executing Workflows: " + responses.map( _.toString ).mkString("; ") )
           new MergedWPSExecuteResponse( request.id.toString, responses )
       }
       case None => throw new Exception( "Error, no operation specified, cannot define workflow")
