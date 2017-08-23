@@ -672,12 +672,12 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def verifyGrids( other: HeapFltArray ) = if( !sameGrid(other) ) throw new Exception( s"Error, attempt to combine arrays with different grids: $gridSpec vs ${other.gridSpec}")
   def append( other: HeapFltArray ): HeapFltArray = {
     verifyGrids( other )
-    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
+//    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
     HeapFltArray(toCDFloatArray.append(other.toCDFloatArray), origin, gridSpec, mergeMetadata("merge", other), toCDWeightsArray.map(_.append(other.toCDWeightsArray.get)))
   }
   def flex_append( other: HeapFltArray, checkContiguous: Boolean = false ): HeapFltArray = {
     verifyGrids( other )
-    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
+//    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
     if( origin(0) < other.origin(0) ) {
       if( checkContiguous && (origin(0) + shape(0) != other.origin(0)) ) throw new Exception( "Appending non-contiguous arrays" )
       HeapFltArray(toCDFloatArray.append(other.toCDFloatArray), origin, gridSpec, mergeMetadata("merge", other), toCDWeightsArray.map(_.append(other.toCDWeightsArray.get)))
@@ -758,7 +758,7 @@ class HeapDblArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def toCDDoubleArray: CDDoubleArray = CDDoubleArray( shape, data, getMissing() )
 
   def append( other: ArrayBase[Double] ): ArrayBase[Double]  = {
-    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
+//    logger.debug( "sAppending array: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
     if( origin(0) < other.origin(0) ) {
       assert( origin(0) + shape(0) == other.origin(0), "Appending non-contiguous arrays" )
       HeapDblArray(toCDDoubleArray.append(other.toCDDoubleArray), origin, mergeMetadata("merge", other))
@@ -785,7 +785,7 @@ class HeapLongArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=A
   def toCDDoubleArray: CDDoubleArray = CDDoubleArray( shape, data.map(_.toDouble), Double.MaxValue )
 
   def append( other: ArrayBase[Long] ): ArrayBase[Long]  = {
-    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
+//    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
     if( origin(0) < other.origin(0) ) {
       assert( origin(0) + shape(0) == other.origin(0), "Appending non-contiguous arrays" )
       HeapLongArray(toCDLongArray.append(other.toCDLongArray), origin, mergeMetadata("merge", other))

@@ -101,13 +101,14 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
 
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node = {
     val rId = portal.sendMessage( "getCapabilities", List( "" ).toArray )
-    val responses = response_manager.getResponses(rId,true).toList
+    val responses: List[String] = response_manager.getResponses(rId,true).toList
     EDAS_XML.loadString( responses(0) )
   }
 
   def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node = {
     val rId = portal.sendMessage( "execute", List( process_name, dataInputsSpec, map2Str(runargs) ).toArray )
     val responses: List[String] = response_manager.getResponses(rId,true).toList
+    logger.info( "Received responses:\n\t--> " + responses.mkString("\n\t--> "))
     EDAS_XML.loadString( responses(0) )
   }
 

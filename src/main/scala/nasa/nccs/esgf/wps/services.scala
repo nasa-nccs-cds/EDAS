@@ -65,7 +65,7 @@ object cds2ServiceProvider extends ServiceProvider {
   override def executeProcess(process_name: String, dataInputsSpec: String, dataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem = {
     val syntax = getResponseSyntax(runargs)
     try {
-      logger.info( " @@cds2ServiceProvider: exec process: " + process_name )
+      logger.info( " @@cds2ServiceProvider: exec process: " + process_name + ", runArgs = " + runargs.mkString("; ") )
 
       cdsutils.time(logger, "\n\n-->> Process %s, datainputs: %s \n\n".format(process_name, dataInputsSpec ) ) {
         if (runargs.getOrElse("status", "false").toBoolean) {
