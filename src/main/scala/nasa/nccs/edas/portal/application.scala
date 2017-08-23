@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
+import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.EDASApplication.logger
 import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
@@ -12,7 +13,7 @@ import nasa.nccs.edas.portal.EDASPortal.ConnectionMode._
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.wps.cds2ServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
-import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport}
+import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSMergedEventReport, WPSResponse}
 import org.apache.spark.SparkEnv
 import ucar.ma2.ArrayFloat
 import ucar.nc2.dataset.NetcdfDataset
@@ -73,9 +74,14 @@ class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_
     val dataInputsObj = if( taskSpec.length > 3 ) wpsObjectParser.parseDataInputs( dataInputsSpec ) else Map.empty[String, Seq[Map[String, Any]]]
     val runargs = getRunArgs( taskSpec )
     val responseType = runargs.getOrElse("response","xml")
-    val response = processManager.executeProcess( process, process_name, dataInputsSpec, dataInputsObj, runargs )
-    if( responseType == "object" ) { sendDirectResponse( taskSpec(0), response ) }
-    else if( responseType == "file" ) { sendFileResponse( taskSpec(0), response ) }
+    val executionCallback: ExecutionCallback = new ExecutionCallback {
+      override def execute(jobId: String, results: WPSResponse): Unit = {
+        val result = results.toXml(ResponseSyntax.Generic)
+        if( responseType == "object" ) { sendDirectResponse( taskSpec(0), result ) }
+        else if( responseType == "file" ) { sendFileResponse( taskSpec(0), result ) }
+      }
+    }
+    val response = processManager.executeProcess( process, process_name, dataInputsSpec, dataInputsObj, runargs, Some(executionCallback) )
     sendResponse( taskSpec(0), printer.format( response ) )
   }
 

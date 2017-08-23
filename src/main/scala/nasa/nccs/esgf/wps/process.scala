@@ -1,5 +1,6 @@
 package nasa.nccs.esgf.wps
 import nasa.nccs.caching.RDDTransientVariable
+import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.loaders.EDAS_XML
 import nasa.nccs.edas.portal.EDASPortal.ConnectionMode
 import nasa.nccs.edas.portal.EDASPortalClient
@@ -47,10 +48,10 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getWPSCapabilities( identifier, runArgs )
   }
 
-  def executeProcess(service: String, process_name: String, dataInputsSpec: String, dataInputsObj: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem = {
+  def executeProcess(service: String, process_name: String, dataInputsSpec: String, dataInputsObj: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
     val serviceProvider = apiManager.getServiceProvider(service)
     logger.info("Executing Service %s, Service provider = %s ".format( service, serviceProvider.getClass.getName ))
-    serviceProvider.executeProcess(process_name, dataInputsSpec, dataInputsObj, runargs)
+    serviceProvider.executeProcess(process_name, dataInputsSpec, dataInputsObj, runargs, executionCallback )
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {

@@ -37,6 +37,10 @@ class Counter(start: Int = 0) {
   }
 }
 
+trait ExecutionCallback {
+  def execute( jobId: String, results: WPSResponse  ) // WPSMergedEventReport
+}
+
 object CDS2ExecutionManager extends Loggable {
   val handler_type_key = "execution.handler.type"
 
@@ -304,7 +308,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     executeWorkflows( requestContext )
   }
 
-  def blockingExecute( request: TaskRequest, run_args: Map[String,String] ): WPSResponse =  {
+  def blockingExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSResponse =  {
     logger.info("Blocking Execute { runargs: " + run_args.toString + ", request: " + request.toString + " }")
     runtime.printMemoryUsage(logger)
     val t0 = System.nanoTime
@@ -319,6 +323,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
           val requestContext = createRequestContext (request, run_args)
           val response = executeWorkflows ( requestContext )
           requestContext.logTimingReport("Executed task request " + request.name)
+          executionCallback.foreach( _.execute( request.getJobRec(run_args).id, response ))
           response
       }
     } catch {
@@ -368,7 +373,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     new WPSExecuteStatus( "WPS", message, resId ).toXml( response_syntax )
   }
 
-  def asyncExecute( request: TaskRequest, run_args: Map[String,String] ): WPSReferenceExecuteResponse = {
+  def asyncExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSReferenceExecuteResponse = {
     logger.info("Execute { runargs: " + run_args.toString + ",  request: " + request.toString + " }")
     runtime.printMemoryUsage(logger)
     val jobId = collectionDataCache.addJob( request.getJobRec(run_args) )
@@ -381,15 +386,16 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         val futureResult = this.futureExecute(request, Map("jobId" -> jobId) ++ run_args)
         futureResult onSuccess { case results: WPSMergedEventReport =>
           println("Process Completed: " + results.toString)
-          processAsyncResult(jobId, results)
+          processAsyncResult( jobId, results, executionCallback )
         }
         futureResult onFailure { case e: Throwable => fatal(e); collectionDataCache.removeJob(jobId); throw e }
     }
     new AsyncExecutionResult( request.id.toString, request.getProcess, jobId )
   }
 
-  def processAsyncResult( jobId: String, results: WPSMergedEventReport ) = {
+  def processAsyncResult( jobId: String, results: WPSMergedEventReport, executionCallback: Option[ExecutionCallback] = None ): Unit = {
     collectionDataCache.removeJob( jobId )
+    executionCallback.foreach( _.execute(jobId,results) )
   }
 
 //  def execute( request: TaskRequest, runargs: Map[String,String] ): xml.Elem = {

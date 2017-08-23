@@ -4,12 +4,13 @@ import java.io.{PrintWriter, StringWriter}
 import java.util.concurrent.ExecutionException
 
 import nasa.nccs.caching.RDDTransientVariable
+import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.wps.{BlockingExecutionResult, ResponseSyntax, WPSExceptionReport, WPSResponse}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 
 trait ServiceProvider extends Loggable {
 
-  def executeProcess(identifier: String, dataInputsSpec: String, parsed_data_inputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem
+  def executeProcess(identifier: String, dataInputsSpec: String, parsed_data_inputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Elem
 
   //  def listProcesses(): xml.Elem
 
@@ -62,17 +63,17 @@ object cds2ServiceProvider extends ServiceProvider {
     case z => ResponseSyntax.WPS
   }
 
-  override def executeProcess(process_name: String, dataInputsSpec: String, dataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Elem = {
+  override def executeProcess(process_name: String, dataInputsSpec: String, dataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Elem = {
     val syntax = getResponseSyntax(runargs)
     try {
       logger.info( " @@cds2ServiceProvider: exec process: " + process_name + ", runArgs = " + runargs.mkString("; ") )
 
       cdsutils.time(logger, "\n\n-->> Process %s, datainputs: %s \n\n".format(process_name, dataInputsSpec ) ) {
         if (runargs.getOrElse("status", "false").toBoolean) {
-          val result = cds2ExecutionManager.asyncExecute(TaskRequest(process_name, dataInputs), runargs)
+          val result = cds2ExecutionManager.asyncExecute(TaskRequest(process_name, dataInputs), runargs, executionCallback )
           result.toXml(syntax)
         } else {
-          val result = cds2ExecutionManager.blockingExecute(TaskRequest(process_name, dataInputs), runargs)
+          val result = cds2ExecutionManager.blockingExecute(TaskRequest(process_name, dataInputs), runargs, executionCallback )
           result.toXml(syntax)
         }
       }
