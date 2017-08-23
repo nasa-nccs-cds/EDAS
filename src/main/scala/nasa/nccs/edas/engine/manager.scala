@@ -385,7 +385,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       case _ =>
         val futureResult = this.futureExecute(request, Map("jobId" -> jobId) ++ run_args)
         futureResult onSuccess { case results: WPSMergedEventReport =>
-          println("Process Completed: " + results.toString)
+          logger.info("\n --------------------------------------------- \n Process Completed: " + results.toString + "\n --------------------------------------------- \n")
           processAsyncResult( jobId, results, executionCallback )
         }
         futureResult onFailure { case e: Throwable => fatal(e); collectionDataCache.removeJob(jobId); throw e }
@@ -394,6 +394,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
   }
 
   def processAsyncResult( jobId: String, results: WPSMergedEventReport, executionCallback: Option[ExecutionCallback] = None ): Unit = {
+    logger.info("\n --------------------------------------------- \n *** processAsyncResult *** \n --------------------------------------------- \n")
     collectionDataCache.removeJob( jobId )
     executionCallback.foreach( _.execute(jobId,results) )
   }
