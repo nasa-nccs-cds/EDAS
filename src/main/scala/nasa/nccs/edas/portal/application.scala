@@ -76,6 +76,7 @@ class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_
     val responseType = runargs.getOrElse("response","xml")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
       override def execute(jobId: String, results: WPSResponse): Unit = {
+        logger.info( "ExecutionCallback.execute")
         val result = results.toXml(ResponseSyntax.Generic)
         if( responseType == "object" ) { sendDirectResponse( taskSpec(0), result ) }
         else if( responseType == "file" ) { sendFileResponse( taskSpec(0), result ) }

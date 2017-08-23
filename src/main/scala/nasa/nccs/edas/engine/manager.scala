@@ -37,7 +37,7 @@ class Counter(start: Int = 0) {
   }
 }
 
-trait ExecutionCallback {
+trait ExecutionCallback extends Loggable {
   def execute( jobId: String, results: WPSResponse  ) // WPSMergedEventReport
 }
 
@@ -304,10 +304,14 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     case x => throw new Exception( "Unrecognized Utility:" + x )
   }
 
-  def futureExecute( request: TaskRequest, run_args: Map[String,String] ): Future[WPSResponse] = Future {
+  def futureExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): Future[WPSResponse] = Future {
     logger.info("ASYNC Execute { runargs: " + run_args.toString + ",  request: " + request.toString + " }")
+    val jobId = run_args.getOrElse("jobId","")
     val requestContext = createRequestContext(request, run_args)
-    executeWorkflows( requestContext )
+    val results = executeWorkflows( requestContext )
+    executionCallback.foreach( _.execute( jobId, results ))
+    collectionDataCache.removeJob( jobId )
+    results
   }
 
   def blockingExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSResponse =  {
@@ -385,20 +389,10 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         val util_result = executeUtilityRequest(req_ids(1), request, Map("jobId" -> jobId) ++ run_args )
         Future(util_result)
       case _ =>
-        val futureResult = this.futureExecute(request, Map("jobId" -> jobId) ++ run_args)
-        futureResult onSuccess { case results: WPSMergedEventReport =>
-          logger.info("\n --------------------------------------------- \n Process Completed: " + results.toString + "\n --------------------------------------------- \n")
-          processAsyncResult( jobId, results, executionCallback )
-        }
+        val futureResult = this.futureExecute( request, Map("jobId" -> jobId) ++ run_args, executionCallback )
         futureResult onFailure { case e: Throwable => fatal(e); collectionDataCache.removeJob(jobId); throw e }
     }
     new AsyncExecutionResult( request.id.toString, request.getProcess, jobId )
-  }
-
-  def processAsyncResult( jobId: String, results: WPSMergedEventReport, executionCallback: Option[ExecutionCallback] = None ): Unit = {
-    logger.info("\n --------------------------------------------- \n *** processAsyncResult *** \n --------------------------------------------- \n")
-    collectionDataCache.removeJob( jobId )
-    executionCallback.foreach( _.execute(jobId,results) )
   }
 
 //  def execute( request: TaskRequest, runargs: Map[String,String] ): xml.Elem = {
@@ -444,7 +438,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         case x =>
           logger.info( "---------->>> Execute Workflows: " + request.operations.mkString(",") )
           val responses = request.workflow.executeRequest( requestCx )
-          logger.info( "---------->>> Done Executing Workflows: " + responses.map( _.toString ).mkString("; ") )
+          logger.info( "---------->>> Done Executing Workflows " )
           new MergedWPSExecuteResponse( request.id.toString, responses )
       }
       case None => throw new Exception( "Error, no operation specified, cannot define workflow")
