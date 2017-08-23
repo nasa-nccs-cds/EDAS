@@ -15,7 +15,7 @@ class NotAcceptableException(message: String = null, cause: Throwable = null) ex
 trait GenericProcessManager {
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node;
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node;
-  def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node
+  def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Node
   def getResultFilePath( service: String, resultId: String ): Option[String]
   def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
@@ -106,7 +106,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     EDAS_XML.loadString( responses(0) )
   }
 
-  def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String]): xml.Node = {
+  def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Node = {
     val rId = portal.sendMessage( "execute", List( process_name, dataInputsSpec, map2Str(runargs) ).toArray )
     val responses: List[String] = response_manager.getResponses(rId,true).toList
     logger.info( "Received responses:\n\t--> " + responses.mkString("\n\t--> "))
