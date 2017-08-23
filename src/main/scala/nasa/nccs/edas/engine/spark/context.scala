@@ -19,13 +19,13 @@ import java.lang.management.ManagementFactory
 
 import com.sun.management.OperatingSystemMXBean
 import nasa.nccs.cdapi.tensors.CDCoordMap
-import nasa.nccs.edas.portal.TestApplication.logger
 import ucar.nc2.dataset.CoordinateAxis1DTime
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 object CDSparkContext extends Loggable {
+  import org.apache.log4j.Logger
+  import org.apache.log4j.Level
   val mb = 1024 * 1024
   val totalRAM = ManagementFactory.getOperatingSystemMXBean.asInstanceOf[OperatingSystemMXBean].getTotalPhysicalMemorySize / mb
   val runtime = Runtime.getRuntime
@@ -43,9 +43,13 @@ object CDSparkContext extends Loggable {
 //    logger.info( "EDAS env: \n\t" +  ( System.getenv.map { case (k,v) => k + ": " + v } ).mkString("\n\t") )
 
     val sparkContext = new SparkContext( getSparkConf( appName, logConf, enableMetrics) )
-    sparkContext.setLogLevel( appParameters("spark.log.level", "WARN" ) )
     val rv = new CDSparkContext( sparkContext )
 
+    val log_level: Level = Level.toLevel( appParameters("spark.log.level", "WARN" ) )
+    sparkContext.setLogLevel( log_level.toString )
+    Logger.getLogger("org").setLevel(log_level)
+    Logger.getLogger("akka").setLevel(log_level)
+    logger.info( "Setting SparkContext Log level to " + log_level.toString )
     logger.info( "--------------------------------------------------------")
     logger.info( "   ****  CDSparkContext Creation FINISHED  **** ")
     logger.info( "--------------------------------------------------------")
