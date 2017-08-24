@@ -157,7 +157,7 @@ compile  <<= (compile in Compile).dependsOn(upscr)
 
 def getCondaLibDir(): Option[File] = sys.env.get("CONDA_PREFIX") match {
   case Some(ldir) => Some(file(ldir) / "lib")
-  case None => println( "Warning: Must activate the edas environment in Anaconda to run the EDAS server: '>> source activate edas' " ); None
+  case None => println( " ******* Warning: Must activate the edas environment in Anaconda to run the EDAS server: '>> source activate edas'  ******* " ); None
 }
 
 def getCacheDir(): File = {
