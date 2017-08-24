@@ -175,7 +175,7 @@ public abstract class Worker {
                 byte[] weight_data = ArrayUtils.addAll( Array.factory(DataType.FLOAT, shape, weights ).getDataAsByteBuffer().array(), byteBuffer.array() );
                 String[] idtoks =  id.split("-");
                 idtoks[0] = idtoks[0] + "_WEIGHTS_";
-                _sendArrayData( String.join("-", idtoks ), array.origin(), shape, weight_data, array.mdata()  );
+                _sendArrayData( StringUtils.join( idtoks, "-" ), array.origin(), shape, weight_data, array.mdata()  );
             }
         }
         else _sendArrayMetadata( id, array.origin(), array.shape(), array.mdata() );
