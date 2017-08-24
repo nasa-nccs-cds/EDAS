@@ -166,8 +166,12 @@ public abstract class Worker {
             scala.Option<float[]> weightsOpt = array.weights();
             if( weightsOpt.isDefined() ) {
                 float[] weights = weightsOpt.get();
-                int[] shape = Stream.of( array.attr("wshape").split(",") ).mapToInt( n -> Integer.parseInt(n) ).toArray();
-//                int[] shape = { weights.length };
+                String[] shapeStr = array.attr("wshape").split(",");
+                int[] shape = new int[shapeStr.length];
+                for (int i = 0; i < shapeStr.length; i++) {
+                    try { shape[i] = Integer.parseInt(shapeStr[i]); }
+                    catch ( NumberFormatException nfe ) { logger.error("Error parsing shape in sendRequestInput: " + array.attr("wshape") ); return; };
+                }
                 byte[] weight_data = ArrayUtils.addAll( Array.factory(DataType.FLOAT, shape, weights ).getDataAsByteBuffer().array(), byteBuffer.array() );
                 String[] idtoks =  id.split("-");
                 idtoks[0] = idtoks[0] + "_WEIGHTS_";
