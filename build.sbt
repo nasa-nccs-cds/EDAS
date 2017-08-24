@@ -76,7 +76,7 @@ lazy val edas_cache_dir = settingKey[File]("The EDAS cache directory.")
 lazy val edas_conf_dir = settingKey[File]("The EDAS conf directory.")
 lazy val edas_sbin_dir = settingKey[File]("The EDAS sbin directory.")
 lazy val edas_logs_dir = settingKey[File]("The EDAS logs directory.")
-lazy val conda_lib_dir = settingKey[File]("The Conda lib directory.")
+lazy val conda_lib_dir = settingKey[Option[File]]("The Conda lib directory.")
 val edasProperties = settingKey[Properties]("The edas properties map")
 
 edas_conf_dir := baseDirectory.value / "src" / "universal" / "conf"
@@ -105,8 +105,8 @@ unmanagedJars in Compile ++= {
 //  }
 //}
 
-unmanagedClasspath in Test ++= Seq( conda_lib_dir.value )
-unmanagedClasspath in (Compile, runMain) ++= Seq( conda_lib_dir.value )
+unmanagedClasspath in Test ++= conda_lib_dir.value.toSeq
+unmanagedClasspath in (Compile, runMain) ++= conda_lib_dir.value.toSeq
 classpathTypes += "dylib"
 classpathTypes += "so"
 
@@ -155,9 +155,9 @@ upscr := {
 
 compile  <<= (compile in Compile).dependsOn(upscr)
 
-def getCondaLibDir(): File = sys.env.get("CONDA_PREFIX") match {
-  case Some(ldir) => file(ldir) / "lib"
-  case None => throw new Exception( "Must activate the edas environment in Anaconda: '>> source activate edas' ")
+def getCondaLibDir(): Option[File] = sys.env.get("CONDA_PREFIX") match {
+  case Some(ldir) => Some(file(ldir) / "lib")
+  case None => println( "Warning: Must activate the edas environment in Anaconda to run the EDAS server: '>> source activate edas' " ); None
 }
 
 def getCacheDir(): File = {
