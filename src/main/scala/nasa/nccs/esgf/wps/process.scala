@@ -80,6 +80,7 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
 }
 
 class zmqProcessManager( serverConfiguration: Map[String,String] )  extends GenericProcessManager with Loggable {
+  logger.info( "Starting zmqProcessManager with serverConfiguration:\n\t ** " + serverConfiguration.mkString("\n\t ** "))
   val server = serverConfiguration.getOrElse("edas.server.address","localhost")
   val request_port = serverConfiguration.getOrElse("edas.server.port.request","5670").toInt
   val response_port = serverConfiguration.getOrElse("edas.server.port.response","5671").toInt
