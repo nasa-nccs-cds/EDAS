@@ -36,7 +36,7 @@ import scala.collection.mutable
 class Logger( val name: String, val test: Boolean, val master: Boolean ) extends Serializable {
   val LNAME = if( test ) name + "-test" else name + "-"
   val LID = if( master ) "master" else UID().uid
-  val logFilePath: Path = Paths.get( System.getProperty("user.home"), ".edas", "logs", LNAME + LID + ".log" )
+  val logFilePath: Path = Paths.get( "/tmp" /* System.getProperty("user.home") */, ".edas", "logs", LNAME + LID + ".log" )
   val writer = if(Files.exists(logFilePath)) {
     new PrintWriter(logFilePath.toString)
   } else {
