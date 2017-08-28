@@ -16,7 +16,7 @@ class Worker(object):
             self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.PULL)
             self.request_socket.connect("tcp://localhost:" + str(request_port) )
-            self.logger.info( "Connected request socket on port: {0}".format( request_port ) )
+            self.logger.info( "[4]Connected request socket on port: {0}".format( request_port ) )
             self.result_socket = self.context.socket(zmq.PUSH)
             self.result_socket.connect("tcp://localhost:" + str(result_port) )
             self.logger.info( "Connected result socket on port: {0}".format( result_port ) )

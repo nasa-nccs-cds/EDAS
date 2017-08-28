@@ -83,7 +83,7 @@ public class EDASPortalClient {
             app_host = server;
             request_port = connectSocket(request_socket, app_host, request_port);
             response_port = connectSocket(response_socket, app_host, response_port);
-            logger.info(String.format("Connected request socket to server %s on port: %d",app_host, request_port));
+            logger.info(String.format("[2]Connected request socket to server %s on port: %d",app_host, request_port));
             logger.info(String.format("Connected response socket on port: %d",response_port));
 
 

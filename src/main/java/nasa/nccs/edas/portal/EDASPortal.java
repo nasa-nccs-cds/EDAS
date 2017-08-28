@@ -38,7 +38,7 @@ public abstract class EDASPortal {
             if( mode == ConnectionMode.CONNECT ) {
                 try{
                     request_socket.connect(String.format("tcp://%s:%d", client_address, request_port));
-                    logger.info(String.format("Connected request socket to client at %s  on port: %d", client_address, request_port));
+                    logger.info(String.format("[1]Connected request socket to client at %s  on port: %d", client_address, request_port));
                 } catch (Exception err ) { logger.error( String.format("Error initializing request socket on port %d: %s", request_port, err ) ); }
                 try{
                     response_socket.connect(String.format("tcp://%s:%d", client_address, response_port));
