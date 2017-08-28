@@ -933,7 +933,6 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
   override def map ( context: KernelContext ) ( inputs: RDDRecord  ): RDDRecord = {
     val t0 = System.nanoTime
     val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
-    val async = context.config("async", "false").toBoolean
     val inputId = context.operation.inputs.headOption.getOrElse("NULL")
     val shape = inputs.elements.head._2.shape
     logger.debug(" ##### KERNEL [%s]: Map Op: combine, input shape = %s".format( name, shape.mkString(",") ) )

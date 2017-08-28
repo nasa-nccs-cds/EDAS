@@ -39,92 +39,6 @@ class RandomString {
     }
 }
 
-class ResponseManager extends Thread {
-    ZMQ.Socket socket = null;
-    Boolean active = true;
-    Map<String, List<String>> cached_results = null;
-    Map<String, List<TransVar>> cached_arrays = null;
-    protected Logger logger = EDASLogManager.getCurrentLogger();
-
-    public ResponseManager(EDASPortalClient portalClient) {
-        socket = portalClient.response_socket;
-        cached_results = new HashMap<String, List<String>>();
-        cached_arrays = new HashMap<String, List<TransVar>>();
-        setName("EDAS ResponseManager");
-        setDaemon(true);
-    }
-
-    public void cacheResult(String id, String result) { getResults(id).add(result); }
-
-    public List<String> getResults(String id) {
-        List<String> results = cached_results.get(id);
-        if( results == null ) {
-            results = new LinkedList<String>();
-            cached_results.put( id, results );
-        }
-        return results;
-    }
-
-    public void cacheArray( String id, TransVar array ) { getArrays(id).add(array); }
-
-    public List<TransVar> getArrays(String id) {
-        List<TransVar> arrays = cached_arrays.get(id);
-        if( arrays == null ) {
-            arrays = new LinkedList<TransVar>();
-            cached_arrays.put( id, arrays );
-        }
-        return arrays;
-    }
-
-    public void run() {
-        while (active) {
-            processNextResponse();
-        }
-    }
-
-    public void term() {
-        active = false;
-        try { socket.close(); }
-        catch( Exception err ) { ; }
-    }
-
-
-    public String getMessageField( String header, int index) {
-        String[] toks = header.split("[|]");
-        return toks[index];
-    }
-
-    public void processNextResponse() {
-        try {
-            String response = new String(socket.recv(0)).trim();
-            String[] toks = response.split("[!]");
-            String rId = toks[0];
-            String type = toks[1];
-            if ( type == "array" ) {
-                String header = toks[2];
-                byte[] data = socket.recv(0);
-                cacheArray(rId, new TransVar( header, data) );
-
-            } else if ( type =="response" ) {
-                cacheResult(rId, toks[2]);
-                logger.info(String.format("Received result: %s",toks[2]));
-            } else {
-                logger.error(String.format("EDASPortal.ResponseThread-> Received unrecognized message type: %s",type));
-            }
-
-        } catch( Exception err ) {
-            logger.error(String.format("EDAS error: %s\n%s\n", err, err.getStackTrace().toString() ) );
-        }
-    }
-
-    public List<String> getResponses( String rId, Boolean wait ) {
-        while (true) {
-            List<String> results = getResults(rId);
-            if (( results.size() > 0 ) || !wait) { return results; }
-            else { try{ sleep(250 ); } catch(Exception err) { ; } }
-        }
-    }
-}
 
 public class EDASPortalClient {
     protected int MB = 1024 * 1024;
@@ -138,46 +52,52 @@ public class EDASPortalClient {
     protected RandomString randomIds = new RandomString(8);
     protected int _request_port = -1;
     protected int _response_port = -1;
-    static int MAX_PORT = 65535;
 
 
-    public static int bindSocket(ZMQ.Socket socket, int port) {
-        int test_port = (port > 0) ? port : DefaultPort;
-        while (true) {
-            try {
-                socket.bind(String.format("tcp://*:%d", port));
-                return test_port;
-            } catch (Exception err) {
-                if( test_port >= MAX_PORT ) { return -1; }
-                test_port = test_port + 1;
-            }
-        }
-    }
+//    static int MAX_PORT = 65535;
+//    public static int bindSocket(ZMQ.Socket socket, String server, int port) {
+//        int test_port = (port > 0) ? port : DefaultPort;
+//        while (true) {
+//            try {
+//                socket.bind(String.format("tcp://%s:%d", server, port));
+//                return test_port;
+//            } catch (Exception err) {
+//                if( test_port >= MAX_PORT ) { return -1; }
+//                test_port = test_port + 1;
+//            }
+//        }
+//    }
 
     public static int connectSocket(ZMQ.Socket socket, String host, int port) {
         socket.connect(String.format("tcp://%s:%d", host, port));
         return port;
     }
 
-    public EDASPortalClient(ConnectionMode connectionMode , String host, int request_port, int response_port ) {
+    public EDASPortalClient( String server, int request_port, int response_port ) {
         try {
             _request_port = request_port;
             _response_port = response_port;
             zmqContext = ZMQ.context(1);
             request_socket = zmqContext.socket(ZMQ.PUSH);
             response_socket = zmqContext.socket(ZMQ.PULL);
-            app_host = host;
-            if (connectionMode == ConnectionMode.BIND) {
-                request_port = bindSocket(request_socket, request_port);
-                response_port = bindSocket(response_socket, response_port);
-                logger.info(String.format("Binding request socket to port: %d",request_port));
-                logger.info(String.format("Binding response socket to port: %d",response_port));
-            } else {
-                request_port = connectSocket(request_socket, app_host, request_port);
-                response_port = connectSocket(response_socket, app_host, response_port);
-                logger.info(String.format("Connected request socket to server %s on port: %d",app_host, request_port));
-                logger.info(String.format("Connected response socket on port: %d",response_port));
-            }
+            app_host = server;
+            request_port = connectSocket(request_socket, app_host, request_port);
+            response_port = connectSocket(response_socket, app_host, response_port);
+            logger.info(String.format("Connected request socket to server %s on port: %d",app_host, request_port));
+            logger.info(String.format("Connected response socket on port: %d",response_port));
+
+
+//            if (connectionMode == ConnectionMode.BIND) {
+//                request_port = bindSocket(request_socket, app_host, request_port);
+//                response_port = bindSocket(response_socket, app_host,  response_port);
+//                logger.info(String.format("Binding request socket to port: %d",request_port));
+//                logger.info(String.format("Binding response socket to port: %d",response_port));
+//            } else {
+//                request_port = connectSocket(request_socket, app_host, request_port);
+//                response_port = connectSocket(response_socket, app_host, response_port);
+//                logger.info(String.format("Connected request socket to server %s on port: %d",app_host, request_port));
+//                logger.info(String.format("Connected response socket on port: %d",response_port));
+//            }
 
 
         } catch(Exception err) {

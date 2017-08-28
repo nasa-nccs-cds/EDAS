@@ -487,7 +487,6 @@ class timeBin extends Kernel(Map.empty) {
     val mod = context.config("mod", "12" ).toInt
     val unit = context.config("unit", "month" )
     val offset = context.config("offset", "0" ).toInt
-    val async = context.config("async", "false").toBoolean
     val ( id, input_array ) = inputs.head
     val accumulation_index: CDIndexMap = input_array.toCDFloatArray.getIndex.getAccumulator( axes.args, List( getMontlyBinMap( id, context ) )  )  // TODO: Check range of getMontlyBinMap- subset by part?
     val (weighted_value_sum_masked, weights_sum_masked) = input_array.toCDFloatArray.weightedReduce( CDFloatArray.getOp("add"), 0f, accumulation_index )

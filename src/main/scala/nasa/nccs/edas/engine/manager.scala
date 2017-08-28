@@ -37,6 +37,10 @@ class Counter(start: Int = 0) {
   }
 }
 
+trait ExecutionCallback extends Loggable {
+  def execute( jobId: String, results: WPSResponse  ) // WPSMergedEventReport
+}
+
 object CDS2ExecutionManager extends Loggable {
   val handler_type_key = "execution.handler.type"
 
@@ -107,7 +111,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 //    Map(items:_*)
 //  }
 
-  def describeWPSProcess( process: String ): xml.Elem = DescribeProcess( process )
+  def describeWPSProcess( process: String, response_syntax: ResponseSyntax.Value ): xml.Elem = DescribeProcess( process, response_syntax  )
 
   def getProcesses: Map[String,WPSProcess] = kernelManager.getKernelMap
 
@@ -160,7 +164,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       yield serverContext.createInputSpec( data_container, domainOpt, request )
     val t2 = System.nanoTime
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
-    val rv = new RequestContext (request.domainMap, sourceMap, request, profiler, run_args )
+    val rv = new RequestContext ( sourceMap, request, profiler, run_args )
     val t3 = System.nanoTime
     profiler.timestamp( " LoadInputDataT: %.4f %.4f %.4f, MAXINT: %.2f G".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, Int.MaxValue/1.0E9 ), true )
     rv
@@ -247,7 +251,9 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         //            writer.write( dimvar, dimdata )
         //          }
         writer.close()
-        resultFile.getAbsolutePath
+        val path = resultFile.getAbsolutePath
+        logger.info("Done writing output to file %s".format(path))
+        path
       } catch {
         case ex: IOException =>
           logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
@@ -298,13 +304,17 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     case x => throw new Exception( "Unrecognized Utility:" + x )
   }
 
-  def futureExecute( request: TaskRequest, run_args: Map[String,String] ): Future[WPSResponse] = Future {
+  def futureExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): Future[WPSResponse] = Future {
     logger.info("ASYNC Execute { runargs: " + run_args.toString + ",  request: " + request.toString + " }")
+    val jobId = run_args.getOrElse("jobId","")
     val requestContext = createRequestContext(request, run_args)
-    executeWorkflows(request, requestContext)
+    val results = executeWorkflows( requestContext )
+    executionCallback.foreach( _.execute( jobId, results ))
+    collectionDataCache.removeJob( jobId )
+    results
   }
 
-  def blockingExecute( request: TaskRequest, run_args: Map[String,String] ): WPSResponse =  {
+  def blockingExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSResponse =  {
     logger.info("Blocking Execute { runargs: " + run_args.toString + ", request: " + request.toString + " }")
     runtime.printMemoryUsage(logger)
     val t0 = System.nanoTime
@@ -317,8 +327,9 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         case _ =>
           logger.info("Executing task request " + request.name )
           val requestContext = createRequestContext (request, run_args)
-          val response = executeWorkflows (request, requestContext )
+          val response = executeWorkflows ( requestContext )
           requestContext.logTimingReport("Executed task request " + request.name)
+          executionCallback.foreach( _.execute( request.getJobRec(run_args).id, response ))
           response
       }
     } catch {
@@ -349,26 +360,26 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       case None => None
     }
 
-  def getResult( resId: String ): xml.Node = {
+  def getResult( resId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
     logger.info( "Locating result: " + resId )
     collectionDataCache.getExistingResult( resId ) match {
       case None =>
-        new WPSMergedExceptionReport( List( new WPSExceptionReport( new Exception("Unrecognized resId: " + resId + ", existing resIds: " + collectionDataCache.getResultIdList.mkString(", ") )) ) ).toXml
+        new WPSMergedExceptionReport( List( new WPSExceptionReport( new Exception("Unrecognized resId: " + resId + ", existing resIds: " + collectionDataCache.getResultIdList.mkString(", ") )) ) ).toXml(response_syntax)
       case Some( tvar: RDDTransientVariable ) =>
-        new WPSExecuteResult( "WPS", tvar ).toXml
+        new WPSExecuteResult( "WPS", tvar ).toXml(response_syntax)
     }
   }
 
-  def getResultStatus( resId: String ): xml.Node = {
+  def getResultStatus( resId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
     logger.info( "Locating result: " + resId )
     val message = collectionDataCache.getExistingResult( resId ) match {
       case None => "EDAS Process has not yet completed"
       case Some( tvar: RDDTransientVariable ) => "EDAS Process successfully completed"
     }
-    new WPSExecuteStatus( "WPS", message, resId ).toXml
+    new WPSExecuteStatus( "WPS", message, resId ).toXml( response_syntax )
   }
 
-  def asyncExecute( request: TaskRequest, run_args: Map[String,String] ): WPSReferenceExecuteResponse = {
+  def asyncExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSReferenceExecuteResponse = {
     logger.info("Execute { runargs: " + run_args.toString + ",  request: " + request.toString + " }")
     runtime.printMemoryUsage(logger)
     val jobId = collectionDataCache.addJob( request.getJobRec(run_args) )
@@ -378,18 +389,10 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         val util_result = executeUtilityRequest(req_ids(1), request, Map("jobId" -> jobId) ++ run_args )
         Future(util_result)
       case _ =>
-        val futureResult = this.futureExecute(request, Map("jobId" -> jobId) ++ run_args)
-        futureResult onSuccess { case results: WPSMergedEventReport =>
-          println("Process Completed: " + results.toString)
-          processAsyncResult(jobId, results)
-        }
+        val futureResult = this.futureExecute( request, Map("jobId" -> jobId) ++ run_args, executionCallback )
         futureResult onFailure { case e: Throwable => fatal(e); collectionDataCache.removeJob(jobId); throw e }
     }
     new AsyncExecutionResult( request.id.toString, request.getProcess, jobId )
-  }
-
-  def processAsyncResult( jobId: String, results: WPSMergedEventReport ) = {
-    collectionDataCache.removeJob( jobId )
   }
 
 //  def execute( request: TaskRequest, runargs: Map[String,String] ): xml.Elem = {
@@ -397,7 +400,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 //    if(async) executeAsync( request, runargs ) else  blockingExecute( request, runargs )
 //  }
 
-  def getWPSCapabilities( identifier: String ): xml.Elem =
+  def getWPSCapabilities( identifier: String, response_syntax: ResponseSyntax.Value ): xml.Elem =
     identifier match {
       case x if x.startsWith("ker") => kernelManager.toXml
       case x if x.startsWith("frag") => FragmentPersistence.getFragmentListXml
@@ -415,7 +418,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         if( itToks.length < 2 )  <error message="Unspecified collection and variables" />
         else                     Collections.getVariableListXml( itToks(1).split(',') )
       }
-      case _ => GetCapabilities
+      case _ => GetCapabilities(response_syntax)
     }
 
   def attrToXml( attr: nc2.Attribute ): xml.Elem = {
@@ -427,7 +430,8 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     <attr id={attr.getFullName.split("--").last}> { sb.toString } </attr>
   }
 
-  def executeWorkflows( request: TaskRequest, requestCx: RequestContext ): WPSResponse = {
+  def executeWorkflows( requestCx: RequestContext ): WPSResponse = {
+    val request = requestCx.request
     val results = request.operations.headOption match {
       case Some(opContext) => opContext.moduleName match {
         case "util" =>  new WPSMergedEventReport( request.operations.map( utilityExecution( _, requestCx )))

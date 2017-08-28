@@ -9,7 +9,7 @@ trait WPSElement extends WPSResponse with Serializable {
   val description: String
   val keywords: List[String] = List.empty
 
-  def getHeader: List[xml.Node] = syntax match {
+  def getHeader(responseSyntax: ResponseSyntax.Value): List[xml.Node] = responseSyntax match {
     case ResponseSyntax.WPS =>
       List(<ows:Identifier>
         {identifier}
@@ -36,13 +36,16 @@ class WPSDataInput(_id: String, val minoccurs: Int, val maxoccurs: Int, _title: 
   val description = _abstract
   override val keywords = _keywords
 
-  def toXml: xml.Elem = syntax match {
-    case ResponseSyntax.WPS => <wps:Input minOccurs={minoccurs.toString} maxOccurs={maxoccurs.toString}>
-      {getHeader}
-    </wps:Input>
-    case ResponseSyntax.Generic => <input minOccurs={minoccurs.toString} maxOccurs={maxoccurs.toString}>
-      {getHeader}
-    </input>
+  def toXml( response_syntax: ResponseSyntax.Value): xml.Elem = {
+    val syntax = if (response_syntax == ResponseSyntax.Default) default_syntax else response_syntax
+    syntax match {
+      case ResponseSyntax.WPS => <wps:Input minOccurs={minoccurs.toString} maxOccurs={maxoccurs.toString}>
+        {getHeader(syntax)}
+      </wps:Input>
+      case ResponseSyntax.Generic => <input minOccurs={minoccurs.toString} maxOccurs={maxoccurs.toString}>
+        {getHeader(syntax)}
+      </input>
+    }
   }
 }
 
@@ -56,29 +59,32 @@ class WPSProcessOutput(_id: String, val mimeType: String, _title: String, _abstr
   val description = _abstract
   override val keywords = _keywords
 
-  def toXml: xml.Elem = syntax match {
-    case ResponseSyntax.WPS =>
-      <wps:Output>
-        {getHeader}<ComplexOutput>
-        <Default>
-          <Format>
-            <MimeType>
-              {mimeType}
-            </MimeType>
-          </Format>
-        </Default>
-        <Supported>
-          <Format>
-            <MimeType>
-              {mimeType}
-            </MimeType>
-          </Format>
-        </Supported>
-      </ComplexOutput>
-      </wps:Output>
-    case ResponseSyntax.Generic => <output>
-      {getHeader}
-    </output>
+  def toXml( response_syntax: ResponseSyntax.Value): xml.Elem = {
+    val syntax = if (response_syntax == ResponseSyntax.Default) default_syntax else response_syntax
+    syntax match {
+      case ResponseSyntax.WPS =>
+        <wps:Output>
+          {getHeader(syntax)}<ComplexOutput>
+          <Default>
+            <Format>
+              <MimeType>
+                {mimeType}
+              </MimeType>
+            </Format>
+          </Default>
+          <Supported>
+            <Format>
+              <MimeType>
+                {mimeType}
+              </MimeType>
+            </Format>
+          </Supported>
+        </ComplexOutput>
+        </wps:Output>
+      case ResponseSyntax.Generic => <output>
+        {getHeader(syntax)}
+      </output>
+    }
   }
 }
 
@@ -89,29 +95,42 @@ class WPSWorkflowProcess(val identifier: String, val description: String, val ti
 trait WPSProcess extends WPSElement {
   val outputs: List[WPSProcessOutput]
 
-  def GetCapabilities: xml.Elem = syntax match {
-    case ResponseSyntax.WPS =>      <wps:Process wps:processVersion="1"> {getHeader} </wps:Process>
-    case ResponseSyntax.Generic =>  <process>  {getHeader}  </process>
-  }
-
-  def toXml: xml.Elem = syntax match {
-    case ResponseSyntax.WPS =>
-      <wps:ProcessDescription wps:processVersion="2" storeSupported="true" statusSupported="false">
-        {getHeader}<wps:ProcessOutputs>
-        {outputs.map(_.toXml)}
-      </wps:ProcessOutputs>
-      </wps:ProcessDescription>
-    case ResponseSyntax.Generic =>
-      <process>
-        {getHeader}<outputs>
-        {outputs.map(_.toXml)}
-      </outputs>
+  def GetCapabilities( response_syntax: ResponseSyntax.Value): xml.Elem = {
+    val syntax = if (response_syntax == ResponseSyntax.Default) default_syntax else response_syntax
+    syntax match {
+      case ResponseSyntax.WPS => <wps:Process wps:processVersion="1">
+        {getHeader(syntax)}
+      </wps:Process>
+      case ResponseSyntax.Generic => <process>
+        {getHeader(syntax)}
       </process>
+    }
   }
 
-  def ExecuteHeader: xml.Elem = syntax match {
-    case ResponseSyntax.WPS => <wps:Process wps:processVersion="1">getHeader</wps:Process>
-    case ResponseSyntax.Generic => <process>getHeader</process>
+  def toXml( response_syntax: ResponseSyntax.Value): xml.Elem = {
+    val syntax = if (response_syntax == ResponseSyntax.Default) default_syntax else response_syntax
+    syntax match {
+      case ResponseSyntax.WPS =>
+        <wps:ProcessDescription wps:processVersion="2" storeSupported="true" statusSupported="false">
+          {getHeader(syntax)}<wps:ProcessOutputs>
+          {outputs.map(_.toXml(syntax))}
+        </wps:ProcessOutputs>
+        </wps:ProcessDescription>
+      case ResponseSyntax.Generic =>
+        <process>
+          {getHeader(syntax)}<outputs>
+          {outputs.map(_.toXml(syntax))}
+        </outputs>
+        </process>
+    }
+  }
+
+  def ExecuteHeader( response_syntax: ResponseSyntax.Value): xml.Elem = {
+    val syntax = if (response_syntax == ResponseSyntax.Default) default_syntax else response_syntax
+    syntax match {
+      case ResponseSyntax.WPS => <wps:Process wps:processVersion="1">getHeader</wps:Process>
+      case ResponseSyntax.Generic => <process>getHeader</process>
+    }
   }
 
 }
