@@ -2,8 +2,10 @@ package nasa.nccs.utilities
 
 import java.io.{File, PrintWriter}
 import java.lang.management.ManagementFactory
+import java.nio.file.attribute.{FileAttribute, PosixFilePermission, PosixFilePermissions}
 import java.util.jar.JarFile
 import java.nio.file.{Files, Path, Paths}
+
 import com.joestelmach.natty
 import ucar.nc2.time.CalendarDate
 import java.nio.file.{Files, Path}
@@ -36,12 +38,16 @@ import scala.collection.mutable
 class Logger( val name: String, val test: Boolean, val master: Boolean ) extends Serializable {
   val LNAME = if( test ) name + "-test" else name + "-"
   val LID = if( master ) "master" else UID().uid
-  val logFilePath: Path = Paths.get( "/tmp" /* System.getProperty("user.home") */, ".edas", "logs", LNAME + LID + ".log" )
+  val logFilePath: Path = Paths.get( "/tmp" /* System.getProperty("user.home") */, "edas", "logs", LNAME + LID + ".log" )
   val writer = if(Files.exists(logFilePath)) {
     new PrintWriter(logFilePath.toString)
   } else {
-    Files.createDirectories( logFilePath.getParent )
-    new PrintWriter( new File( logFilePath.toString ) )
+    val perms: java.util.Set[PosixFilePermission] = PosixFilePermissions.fromString("rwxrwxrwx")
+    val fileAttr = PosixFilePermissions.asFileAttribute(perms)
+    Files.createDirectories( logFilePath.getParent, fileAttr )
+    val logFile = new java.io.File(logFilePath.toString)
+    val existingLogFile: Path = Files.createFile( logFile.toPath, fileAttr )
+    new PrintWriter( existingLogFile.toFile )
   }
   def log( level: String, msg: String  ) = {
     val output = level + ": " + msg
