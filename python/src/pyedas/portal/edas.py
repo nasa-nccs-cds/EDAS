@@ -38,6 +38,7 @@ class ResponseManager(Thread):
         self.filePaths = {}
         self.setDaemon(True)
         self.cacheDir = os.environ.get( 'EDAS_CACHE_DIR','/tmp/' )
+        self.log("Created RM")
 
     def cacheResult(self, id, result ):
         self.logger.info( "Caching result array: " + id )
@@ -54,6 +55,7 @@ class ResponseManager(Thread):
         return self.cached_arrays.setdefault(id,[])
 
     def run(self):
+        self.log("Run RM thread")
         while( self.active ):
             self.processNextResponse()
 
