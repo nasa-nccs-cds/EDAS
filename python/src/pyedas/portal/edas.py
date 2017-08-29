@@ -76,40 +76,43 @@ class ResponseManager(Thread):
         toks = header.split('|')
         return toks[index]
 
+    def log(self, msg ):
+        self.logger.info( "[RM] " + msg )
+        print msg
+
 
     #    def getResponse(self, key, default = None ):
     #       return self.cached_results.get( key, default )
 
     def processNextResponse(self):
         try:
-            print "\n  ** ResponseManager Thread ** ---> Waiting for response on socket connection... "
+            self.log( "\n  ** ResponseManager Thread ** ---> Waiting for response on socket connection... " )
             response = self.socket.recv()
-            print "\n\n ------------------------->>> Received response: {0}".format(response)
+            self.log( "\n\n ------------------------->>> Received response: {0}".format(response) )
             self.logger.info( "Received response: {0}".format(response) )
             toks = response.split('!')
             rId = toks[0]
             type = toks[1]
             if type == "array":
-                print "\n\n #### Received array " + rId + ": " + toks[2]
+                self.log( "\n\n #### Received array " + rId + ": " + toks[2] )
                 header = toks[2]
                 data = self.socket.recv()
-                print "<-- ** Received array data ** -->"
+                self.log( "<-- ** Received array data ** -->" )
                 array = npArray.createInput(header,data)
-                print "<-- ** Created array wrapper ** -->"
+                self.log(  "<-- ** Created array wrapper ** -->" )
                 self.logger.info("Received array: {0}".format(rId))
                 self.cacheArray( rId, array )
-                print "<-- ** Cached array ** -->"
+                self.log(  "<-- ** Cached array ** -->" )
             elif type == "file":
-                print "\n\n #### Received file " + rId + ": " + toks[2]
+                self.log(  "\n\n #### Received file " + rId + ": " + toks[2] )
                 header = toks[2]
                 data = self.socket.recv()
                 filePath = self.saveFile( header, data )
                 self.filePaths[rId] = filePath
                 self.logger.info("Received file '{0}' for rid {1}".format(header,rId))
             elif type == "response":
-                print "\n\n #### Received response " + rId + ": " + toks[2]
+                self.log(  "\n\n #### Received response " + rId + ": " + toks[2] )
                 self.cacheResult( rId, toks[2] )
-                self.logger.info("Received result: {0}".format(toks[2]))
             else:
                 self.logger.error("EDASPortal.ResponseThread-> Received unrecognized message type: {0}".format(type))
             print "\n &&& Completed processNextResponse &&& "
@@ -123,7 +126,6 @@ class ResponseManager(Thread):
         return filePath
 
     def saveFile(self, header, data):
-        logger = logging.getLogger("portal")
         header_toks = header.split('|')
         id = header_toks[1]
         role = header_toks[2]
@@ -131,23 +133,24 @@ class ResponseManager(Thread):
         filePath = os.path.join( self.getFileCacheDir(role), fileName )
         with open( filePath, mode='wb') as file:
             file.write( bytearray(data) )
-            logger.info(" ***->> Saving File, path = {0}".format(filePath) )
+            self.log(" ***->> Saving File, path = {0}".format(filePath) )
         return filePath
 
 
     def getResponses( self, rId, wait=True ):
         import subprocess, sys
-        print "Waiting for a response from the server... "
-#        count = 0
+        self.log(  "Waiting for a response from the server... " )
+        count = 0
         while( True ):
             results = self.getResults(rId)
             if( (len(results) > 0) or not wait): return results
             else:
                 print ".",
                 time.sleep(0.25)
-#                if( count % 4 == 0 ):
+                if( count % 4 == 0 ):
+                    self.logger.info( " ** Waiting, secs: " + str(count) )
 #                    subprocess.call( [ 'free', '-h' ], stdout=sys.stdout )
-#                count = count + 1
+                count = count + 1
 
     def getResponseVariables(self, rId, wait=True):
         """  :rtype: list[DatasetVariable] """
@@ -155,13 +158,12 @@ class ResponseManager(Thread):
         gridFileDir = self.getFileCacheDir("gridfile")
         vars = []
         for response in responses:
-            print "Processing response node: " + response
+            self.log( "Processing response node: " + response )
             e = xml.etree.ElementTree.fromstring( response )
             for data_node in e.iter('data'):
                 resultUri = data_node.get("href","")
                 if resultUri:
-                    print "Processing response: " + resultUri
-                    self.logger.info("Processing response: " + resultUri )
+                    self.log( "Processing response: " + resultUri )
                     resultId = resultUri.split("/")[-1]
                     result_arrays = self.cached_arrays.get( resultId, [] )
                     if result_arrays:
@@ -171,7 +173,7 @@ class ResponseManager(Thread):
                     else:
                         from cdms2.dataset import Dataset
                         resultFilePath = self.filePaths.get( rId, data_node.get("file", "") )
-                        print "Processing file: " + resultFilePath
+                        self.log( "Processing file: " + resultFilePath )
                         if resultFilePath:
                             dset = cdms2.open( resultFilePath ); """:type : Dataset """
                             for fvar in dset.variables:
@@ -212,6 +214,10 @@ class EDASPortal:
             print err_msg
             self.shutdown()
 
+    def log(self, msg ):
+        self.logger.info( "[P] " + msg )
+        print msg
+
     def __del__(self): self.shutdown()
 
     def start_EDAS(self):  # Stage the EDAS app using the "{EDAS_HOME}>> sbt stage" command.
@@ -220,12 +226,12 @@ class EDASPortal:
 
     def createResponseManager(self):
         self.response_manager = ResponseManager(self)
-        print "Starting ResponseManager thread"
+        self.log( "Starting ResponseManager thread" )
         self.response_manager.start()
         return self.response_manager
 
     def shutdown(self):
-        self.logger.info(  " ############################## SHUT DOWN EDAS PORTAL ##############################"  )
+        self.log(  " ############################## SHUT DOWN EDAS PORTAL ##############################"  )
         try: self.request_socket.close()
         except Exception: pass
         if( self.application_thread ):
