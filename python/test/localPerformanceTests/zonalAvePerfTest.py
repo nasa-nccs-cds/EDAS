@@ -33,7 +33,7 @@ try:
         portal.start_EDAS()
         time.sleep(20)
     else:
-        portal = EDASPortal(ConnectionMode.CONNECT, server, request_port, response_port)
+        portal = EDASPortal(  server, request_port, response_port)
 
     response_manager = portal.createResponseManager()
     t0 = time.time()
