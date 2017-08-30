@@ -113,8 +113,12 @@ class ResponseManager(Thread):
                 self.filePaths[rId] = filePath
                 self.logger.info("Received file '{0}' for rid {1}".format(header,rId))
             elif type == "response":
-                self.log(  "\n\n #### Received response " + rId + ": " + toks[2] )
-                self.cacheResult( rId, toks[2] )
+                if rId == "status":
+                    self.log(  "\n\n #### Received status report " + rId + ": " + toks[2] )
+                    print "Status: " + toks[2]
+                else:
+                    self.log(  "\n\n #### Received response " + rId + ": " + toks[2] )
+                    self.cacheResult( rId, toks[2] )
             else:
                 self.logger.error("EDASPortal.ResponseThread-> Received unrecognized message type: {0}".format(type))
             print "\n &&& Completed processNextResponse &&& "
@@ -189,23 +193,25 @@ class ResponseManager(Thread):
 
 class EDASPortal:
 
-    def __init__( self, connectionMode = ConnectionMode.BIND, host="127.0.0.1", request_port=0, response_port=0, **kwargs ):
+    def __init__( self, host="127.0.0.1", request_port=0, response_port=0, **kwargs ):
         try:
             self.logger =  logging.getLogger("portal")
             self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.PUSH)
             self.response_socket = self.context.socket(zmq.PULL)
             self.app_host = host
-            if( connectionMode == ConnectionMode.BIND ):
-                self.request_port = ConnectionMode.bindSocket( self.request_socket, self.app_host, request_port )
-                self.response_port = ConnectionMode.bindSocket( self.response_socket, self.app_host, response_port )
-                self.logger.info( "Binding request socket to port: {0} (Requested {1})".format( self.request_port, request_port ) )
-                self.logger.info( "Binding response socket to port: {0} (Requested {1}".format( self.response_port, response_port ) )
-            else:
-                self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
-                self.response_port = ConnectionMode.connectSocket(self.response_socket, self.app_host, response_port)
-                self.logger.info("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
-                self.logger.info( "Connected response socket on port: {0}".format( self.response_port ) )
+
+            # if( connectionMode == ConnectionMode.BIND ):
+            #     self.request_port = ConnectionMode.bindSocket( self.request_socket, self.app_host, request_port )
+            #     self.response_port = ConnectionMode.bindSocket( self.response_socket, self.app_host, response_port )
+            #     self.logger.info( "Binding request socket to port: {0} (Requested {1})".format( self.request_port, request_port ) )
+            #     self.logger.info( "Binding response socket to port: {0} (Requested {1}".format( self.response_port, response_port ) )
+            # else:
+
+            self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
+            self.response_port = ConnectionMode.connectSocket(self.response_socket, self.app_host, response_port)
+            self.logger.info("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
+            self.logger.info( "Connected response socket on port: {0}".format( self.response_port ) )
 
             self.response_manager = None
             self.application_thread = None
