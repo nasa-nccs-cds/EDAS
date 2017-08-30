@@ -10,7 +10,7 @@ edas_server = "198.120.209.96"
 
 try:
 
-    portal = EDASPortal(ConnectionMode.CONNECT, edas_server, request_port, response_port)
+    portal = EDASPortal(  edas_server, request_port, response_port)
     response_manager = portal.createResponseManager()
 
     t0 = time.time()
