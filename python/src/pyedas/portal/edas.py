@@ -210,8 +210,8 @@ class EDASPortal:
 
             self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
             self.response_port = ConnectionMode.connectSocket(self.response_socket, self.app_host, response_port)
-            self.logger.info("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
-            self.logger.info( "Connected response socket on port: {0}".format( self.response_port ) )
+            self.log("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
+            self.log( "Connected response socket on port: {0}".format( self.response_port ) )
 
             self.response_manager = None
             self.application_thread = None
