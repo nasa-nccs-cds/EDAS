@@ -7,7 +7,7 @@ edas_server = "127.0.0.1"
 
 try:
     log_file  = open( '/tmp/EDAS_init.log', 'w' )
-    portal = EDASPortal( ConnectionMode.CONNECT, edas_server, request_port, response_port )
+    portal = EDASPortal( edas_server, request_port, response_port )
     response_manager = portal.createResponseManager()
     rId = portal.sendMessage("getCapabilities", [""])
     log_file.write( "getCapabilities request sent\n" ); log_file.flush()
