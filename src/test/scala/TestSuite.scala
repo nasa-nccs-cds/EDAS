@@ -5,6 +5,7 @@ import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.runtime
+import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 
 import scala.collection.JavaConversions._
@@ -690,7 +691,8 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val t0 = System.nanoTime()
     val runargs = runArgs ++ Map( "responseform" -> "generic", "storeexecuteresponse" -> "true", "unitTest" -> "true", "status" -> "false" )
     val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
-    val response: xml.Elem = webProcessManager.executeProcess(service, identifier, datainputs, parsed_data_inputs, runargs)
+    val request = TaskRequest( service, parsed_data_inputs)
+    val response: xml.Elem = webProcessManager.executeProcess( request, identifier, datainputs, runargs)
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
     println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
     response

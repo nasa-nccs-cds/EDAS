@@ -653,15 +653,15 @@ class bigDataTest extends Loggable {
     try{ data_nodes.head.text.toFloat } catch { case err: Exception => Float.NaN }
   }
 
-  def executeTest( datainputs: String, status: Boolean = true, identifier: String = "CDSpark.workflow" ): xml.Elem = {
-    val t0 = System.nanoTime()
-    val runargs = Map("responseform" -> "", "storeexecuteresponse" -> "true", "status" -> status.toString, "unitTest" -> "true" )
-    val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
-    val response: xml.Elem = webProcessManager.executeProcess(service, identifier, datainputs, parsed_data_inputs, runargs)
-    for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
-    println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
-    response
-  }
+//  def executeTest( datainputs: String, status: Boolean = true, identifier: String = "CDSpark.workflow" ): xml.Elem = {
+//    val t0 = System.nanoTime()
+//    val runargs = Map("responseform" -> "", "storeexecuteresponse" -> "true", "status" -> status.toString, "unitTest" -> "true" )
+//    val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
+//    val response: xml.Elem = webProcessManager.executeProcess(service, identifier, datainputs, parsed_data_inputs, runargs)
+//    for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
+//    println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
+//    response
+//  }
 
 }
 

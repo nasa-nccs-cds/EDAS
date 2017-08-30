@@ -4,7 +4,6 @@ import nasa.nccs.utilities.EDASLogManager;
 import nasa.nccs.utilities.Logger;
 import org.apache.commons.lang.StringUtils;
 import org.zeromq.ZMQ;
-import nasa.nccs.edas.portal.EDASPortal.ConnectionMode;
 import java.util.*;
 
 class RandomString {

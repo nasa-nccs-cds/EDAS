@@ -2,8 +2,8 @@ package nasa.nccs.esgf.wps
 import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.loaders.EDAS_XML
-import nasa.nccs.edas.portal.EDASPortal.ConnectionMode
 import nasa.nccs.edas.portal.EDASPortalClient
+import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.utilities.Loggable
 import nasa.nccs.wps.ResponseSyntax
 
@@ -15,7 +15,7 @@ class NotAcceptableException(message: String = null, cause: Throwable = null) ex
 trait GenericProcessManager {
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node;
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node;
-  def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Node
+  def executeProcess( request: TaskRequest, process_name: String, dataInputsSpec: String, runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Node
   def getResultFilePath( service: String, resultId: String ): Option[String]
   def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
@@ -48,10 +48,10 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getWPSCapabilities( identifier, runArgs )
   }
 
-  def executeProcess(service: String, process_name: String, dataInputsSpec: String, dataInputsObj: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
-    val serviceProvider = apiManager.getServiceProvider(service)
-    logger.info("Executing Service %s, Service provider = %s ".format( service, serviceProvider.getClass.getName ))
-    serviceProvider.executeProcess(process_name, dataInputsSpec, dataInputsObj, runargs, executionCallback )
+  def executeProcess( request: TaskRequest, process_name: String, dataInputsSpec: String, runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
+    val serviceProvider = apiManager.getServiceProvider(request.name)
+    logger.info("Executing Service %s, Service provider = %s ".format( request.name, serviceProvider.getClass.getName ))
+    serviceProvider.executeProcess(request, dataInputsSpec, runargs, executionCallback )
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
@@ -107,7 +107,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     EDAS_XML.loadString( responses(0) )
   }
 
-  def executeProcess(service: String, process_name: String, dataInputsSpec: String, parsedDataInputs: Map[String, Seq[Map[String, Any]]], runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Node = {
+  def executeProcess(request: TaskRequest, process_name: String, dataInputsSpec: String, runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Node = {
     val rId = portal.sendMessage( "execute", List( process_name, dataInputsSpec, map2Str(runargs) ).toArray )
     val responses: List[String] = response_manager.getResponses(rId,true).toList
     logger.info( "Received responses:\n\t--> " + responses.mkString("\n\t--> "))

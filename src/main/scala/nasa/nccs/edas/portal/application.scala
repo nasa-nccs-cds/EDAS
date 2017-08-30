@@ -9,8 +9,8 @@ import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.EDASApplication.logger
 import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
-import nasa.nccs.edas.portal.EDASPortal.ConnectionMode._
 import nasa.nccs.edas.utilities.appParameters
+import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.esgf.wps.cds2ServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSMergedEventReport, WPSResponse}
@@ -33,7 +33,7 @@ object EDASapp {
   }
 }
 
-class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_port: Int, response_port: Int, appConfiguration: Map[String,String] ) extends EDASPortal( mode, client_address, request_port, response_port ) {
+class EDASapp( client_address: String, request_port: Int, response_port: Int, appConfiguration: Map[String,String] ) extends EDASPortal( client_address, request_port, response_port ) {
   import EDASapp._
   val processManager = new ProcessManager( appConfiguration )
   val process = "edas"
@@ -81,8 +81,11 @@ class EDASapp( mode: EDASPortal.ConnectionMode, client_address: String, request_
         else if( responseType == "file" ) { sendFileResponse( taskSpec(0), result ) }
       }
     }
-    val response = processManager.executeProcess( process, process_name, dataInputsSpec, dataInputsObj, runargs, Some(executionCallback) )
+    val request: TaskRequest = TaskRequest(process_name, dataInputsObj )
+    setExeStatus( request.id.toString, "executing")
+    val response = processManager.executeProcess( request, process_name, dataInputsSpec, runargs, Some(executionCallback) )
     sendResponse( taskSpec(0), printer.format( response ) )
+    setExeStatus( request.id.toString, "completed" )
   }
 
   def sendErrorReport( taskSpec: Array[String], exc: Exception ) = {
@@ -152,14 +155,12 @@ object EDASApplication extends Loggable {
     import EDASapp._
     EDASLogManager.isMaster
     logger.info(s"Executing EDAS with args: ${args.mkString(",")}, nprocs: ${Runtime.getRuntime.availableProcessors()}")
-    val connect_mode = elem(args, 0, "bind")
-    val request_port = elem(args, 1, "0").toInt
-    val response_port = elem(args, 2, "0").toInt
-    val parameter_file = elem(args, 3, "")
+    val request_port = elem(args, 0, "0").toInt
+    val response_port = elem(args, 1, "0").toInt
+    val parameter_file = elem(args, 2, "")
     val appConfiguration = getConfiguration( parameter_file )
     val client_address: String = appConfiguration.getOrElse("client","*")
-    val cmode = if (connect_mode.toLowerCase.startsWith("c")) CONNECT else BIND
-    val app = new EDASapp( cmode, client_address, request_port, response_port, appConfiguration )
+    val app = new EDASapp( client_address, request_port, response_port, appConfiguration )
     sys.addShutdownHook( { app.term() } )
     app.run()
   }
