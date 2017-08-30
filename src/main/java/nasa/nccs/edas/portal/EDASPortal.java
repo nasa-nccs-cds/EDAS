@@ -24,6 +24,7 @@ class Message extends Response {
         id = _id;
         message = _message;
     }
+    public String toString() { return "Message[" + id + "]: " + message; }
 }
 
 class DataPacket extends Response {
@@ -34,6 +35,7 @@ class DataPacket extends Response {
         header = _header;
         data = _data;
     }
+    public String toString() { return "DataPacket[" + header + "]" }
 }
 
 
@@ -58,10 +60,12 @@ class Responder extends Thread {
     }
 
     public void sendMessage( Message msg ) {
+        logger.info( "Post Message to response queue: " + msg.toString() );
         response_queue.add( msg );
     }
 
     public void sendDataPacket( DataPacket data ) {
+        logger.info( "Post DataPacket to response queue: " + data.toString() );
         response_queue.add( data );
     }
 
@@ -139,6 +143,7 @@ public abstract class EDASPortal {
             zmqContext = ZMQ.context(1);
             request_socket = zmqContext.socket(ZMQ.PULL);
             responder = new Responder( zmqContext, client_address, _response_port);
+            responder.start();
 
 //                try{
 //                    request_socket.connect(String.format("tcp://%s:%d", client_address, request_port));
@@ -160,6 +165,7 @@ public abstract class EDASPortal {
     }
 
     public void sendResponse(  String id, String msg ) {
+        logger.info("-----> SendResponse[" + id + "]" );
         responder.sendMessage( new Message(id,msg) );
     }
 
