@@ -5,7 +5,7 @@ response_port = 5671
 edas_server = "10.71.9.11"
 # edas_server = "198.120.209.96"
 
-portal = EDASPortal( ConnectionMode.CONNECT, edas_server, request_port, response_port )
+portal = EDASPortal(  edas_server, request_port, response_port )
 response_manager = portal.createResponseManager()
 domain = {"name":"d0"}
 

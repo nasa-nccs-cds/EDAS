@@ -10,7 +10,7 @@ response_port = 5671
 edas_server = "10.71.9.11"
 
 try:
-    portal = EDASPortal( ConnectionMode.CONNECT, edas_server, request_port, response_port )
+    portal = EDASPortal(  edas_server, request_port, response_port )
     response_manager = portal.createResponseManager()
     datainputs = """[   domain=[
                             {"name":"d0","time":{"start":"1980-01-01T00:00:00","end":"1980-12-31T23:00:00","system":"values"}}

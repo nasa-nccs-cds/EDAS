@@ -5,7 +5,7 @@ request_port = 5670
 response_port = 5671
 
 try:
-    portal = EDASPortal( ConnectionMode.CONNECT, "10.71.9.11", request_port, response_port )
+    portal = EDASPortal(  "10.71.9.11", request_port, response_port )
     response_manager = portal.createResponseManager()
 
     datainputs = """[

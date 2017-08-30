@@ -8,7 +8,7 @@ edas_server = "localhost"
 test_collection = "cip_cfsr_6hr_ta"
 
 try:
-    portal = EDASPortal( ConnectionMode.CONNECT, edas_server, request_port, response_port )
+    portal = EDASPortal(  edas_server, request_port, response_port )
     response_manager = portal.createResponseManager()
     rId = portal.sendMessage("getCapabilities", ["coll"])
     responses = response_manager.getResponses(rId)

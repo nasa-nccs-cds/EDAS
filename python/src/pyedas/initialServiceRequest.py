@@ -3,7 +3,8 @@ import time, numpy as np
 
 request_port = 5670
 response_port = 5671
-edas_server = "127.0.0.1"
+# edas_server = "127.0.0.1"
+edas_server = "10.71.9.11"
 
 try:
     log_file  = open( '/tmp/EDAS_init.log', 'w' )

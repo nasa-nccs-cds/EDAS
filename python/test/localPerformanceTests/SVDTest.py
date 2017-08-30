@@ -11,7 +11,7 @@ edas_server = "localhost"
 # data_uri = "http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml"
 
 try:
-    portal = EDASPortal( ConnectionMode.CONNECT, edas_server, request_port, response_port )
+    portal = EDASPortal(  edas_server, request_port, response_port )
     response_manager = portal.createResponseManager()
     datainputs = ("""[domain=[{"name":"d0","lat":{"start":0,"end":80,"system":"values"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml","name":"tas:v1","domain":"d0"}]"""
                   """,operation=[{"name":"CDSpark.binAve","input":"v1","domain":"d0","axes":"yt","id":"v1ave"},{"name":"CDSpark.diff2","input":"v1,v1ave","domain":"d0"}]]""")
