@@ -35,7 +35,7 @@ class DataPacket extends Response {
         header = _header;
         data = _data;
     }
-    public String toString() { return "DataPacket[" + header + "]" }
+    public String toString() { return "DataPacket[" + header + "]"; }
 }
 
 
