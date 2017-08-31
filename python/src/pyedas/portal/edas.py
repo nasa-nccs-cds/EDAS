@@ -66,8 +66,6 @@ class ResponseManager(Thread):
     def term(self):
         if self.active:
             self.active = False;
-            try: self.socket.close()
-            except Exception: pass
 
     def popResponse(self):
         if( len( self.cached_results ) == 0 ):
