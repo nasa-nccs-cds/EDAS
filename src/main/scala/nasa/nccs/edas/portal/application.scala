@@ -73,7 +73,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val dataInputsSpec = taskSpec(3)
     val dataInputsObj = if( taskSpec.length > 3 ) wpsObjectParser.parseDataInputs( dataInputsSpec ) else Map.empty[String, Seq[Map[String, Any]]]
     val request: TaskRequest = TaskRequest(process_name, dataInputsObj )
-    setExeStatus( request.id.toString, "executing " + process_name + "-> " + dataInputsSpec )
+    setExeStatus( request.id.toString, "executing " + process_name + "-> " + dataInputsSpec )   
 
     val runargs = getRunArgs( taskSpec )
     val response_syntax = getResponseSyntax(runargs)
