@@ -64,9 +64,10 @@ class ResponseManager(Thread):
         return toks[index]
 
     def term(self):
-        self.active = False;
-        try: self.socket.close()
-        except Exception: pass
+        if self.active:
+            self.active = False;
+            try: self.socket.close()
+            except Exception: pass
 
     def popResponse(self):
         if( len( self.cached_results ) == 0 ):
@@ -190,6 +191,7 @@ class EDASPortal:
 
     def __init__( self, host="127.0.0.1", request_port=0, response_port=0, **kwargs ):
         try:
+            self.active = True
             self.logger =  logging.getLogger("portal")
             self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.PUSH)
@@ -234,14 +236,17 @@ class EDASPortal:
         return self.response_manager
 
     def shutdown(self):
-        self.log(  " ############################## Disconnect Portal Client from Server & shutdown Client ##############################"  )
-        try: self.request_socket.close()
-        except Exception: pass
-        if( self.application_thread ):
-            self.sendMessage("shutdown")
-            self.application_thread.term()
-        if self.response_manager != None:
-            self.response_manager.term()
+        if self.active:
+            self.active = False
+            self.log(  " ############################## Disconnect Portal Client from Server & shutdown Client ##############################"  )
+            try: self.request_socket.close()
+            except Exception: pass
+            if( self.application_thread ):
+                self.sendMessage("shutdown")
+                self.application_thread.term()
+            if self.response_manager != None:
+                self.log(  " Terminate Response Manager " )
+                self.response_manager.term()
 
     def randomId(self, length):
         sample = string.lowercase+string.digits+string.uppercase
