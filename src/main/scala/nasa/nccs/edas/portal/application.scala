@@ -73,15 +73,15 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val dataInputsSpec = taskSpec(3)
     val dataInputsObj = if( taskSpec.length > 3 ) wpsObjectParser.parseDataInputs( dataInputsSpec ) else Map.empty[String, Seq[Map[String, Any]]]
     val request: TaskRequest = TaskRequest(process_name, dataInputsObj )
-    setExeStatus( request.id.toString, "executing")
+    setExeStatus( request.id.toString, "executing " + process_name + "-> " + dataInputsSpec )
 
     val runargs = getRunArgs( taskSpec )
+    val response_syntax = getResponseSyntax(runargs)
     val responseType = runargs.getOrElse("response","xml")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
       override def execute(jobId: String, results: WPSResponse): Unit = {
-        val result = results.toXml(ResponseSyntax.Generic)
-        if( responseType == "object" ) { sendDirectResponse( taskSpec(0), result ) }
-        else if( responseType == "file" ) { sendFileResponse( taskSpec(0), result ) }
+        if( responseType == "object" ) { sendDirectResponse( response_syntax, taskSpec(0), results ) }
+        else if( responseType == "file" ) { sendFileResponse( response_syntax, taskSpec(0), results ) }
       }
     }
     val response = processManager.executeProcess( request, process_name, dataInputsSpec, runargs, Some(executionCallback) )
@@ -89,17 +89,18 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     setExeStatus( request.id.toString, "completed" )
   }
 
-  def sendErrorReport( taskSpec: Array[String], exc: Exception ) = {
-    val id = taskSpec(0)
-    val runargs = getRunArgs( taskSpec )
-    val syntax = getResponseSyntax(runargs)
+  def sendErrorReport( response_format: ResponseSyntax.Value, responseId: String, exc: Exception ) = {
     val err = new WPSExceptionReport(exc)
-    sendResponse( id, printer.format( err.toXml(syntax) ) )
+    sendResponse( responseId, printer.format( err.toXml(response_format) ) )
   }
 
-  def shutdown = { processManager.shutdown( process ) }
+  override def shutdown() = {
+    processManager.shutdown( process )
+    super.shutdown()
+  }
 
-  def sendDirectResponse( responseId: String, response: xml.Elem ): Unit =  {
+  def sendDirectResponse( response_format: ResponseSyntax.Value, responseId: String, results: WPSResponse ): Unit =  {
+    val response = results.toXml(ResponseSyntax.Generic)
     val refs: xml.NodeSeq = response \\ "data"
     val resultHref = refs.flatMap( _.attribute("href") ).find( _.nonEmpty ).map( _.text ) match {
       case Some( href ) =>
@@ -115,11 +116,13 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
               }
               sendArrayData(rid, data.origin, data.shape, data.toByteArray, data.metadata + ("gridfile" -> gridfilename) + ( "elem" -> key.split('.').last ) )
             }
-          case None => logger.error( "Can't find result variable " + rid)
+          case None =>
+            logger.error( "Can't find result variable " + rid)
+            sendErrorReport( response_format, rid, new Exception( "Can't find result variable " + rid + " in [ " + processManager.getResultVariables("edas").mkString(", ") + " ]") )
         }
-
       case None =>
         logger.error( "Can't find result Id in direct response: " + response.toString() )
+        sendErrorReport( response_format, responseId, new Exception( "Can't find result Id in direct response: " + response.toString()  ) )
     }
   }
 
@@ -127,14 +130,21 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     node.attribute( attrId ).flatMap( _.find( _.nonEmpty ).map( _.text ) )
   }
 
-  def sendFileResponse( responseId: String, response: xml.Elem ): Unit =  {
+  def getNodeAttributes( node: xml.Node ): String = node.attributes.toString()
+
+  def sendFileResponse( response_format: ResponseSyntax.Value, responseId: String, results: WPSResponse ): Unit =  {
+    val response = results.toXml( ResponseSyntax.Generic )
     val refs: xml.NodeSeq = response \\ "data"
-    for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file");
-         if hrefOpt.isDefined && fileOpt.isDefined; href = hrefOpt.get; filepath=fileOpt.get ) {
-      print( "Processing result node: " + node.toString() )
-      val rid = href.split("[/]").last
-      logger.info( "\n\n     **** Found result Id: " + rid + ": sending File: " + filepath + " ****** \n\n" )
-      sendFile( rid, "variable", filepath )
+    for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file") ) {
+      if (hrefOpt.isDefined && fileOpt.isDefined) {
+        val href = hrefOpt.get
+        val filepath = fileOpt.get
+        val rid = href.split("[/]").last
+        logger.info("\n\n     **** Found result Id: " + rid + ": sending File: " + filepath + " ****** \n\n")
+        sendFile(rid, "variable", filepath)
+      } else {
+        sendErrorReport( response_format, responseId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )
+      }
     }
   }
 

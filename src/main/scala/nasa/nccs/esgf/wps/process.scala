@@ -72,6 +72,11 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getResultVariable(resultId)
   }
 
+  def getResultVariables( service: String ): Iterable[String] = {
+    val serviceProvider = apiManager.getServiceProvider(service)
+    serviceProvider.getResultVariables
+  }
+
   def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
     logger.info( "EDAS ProcessManager-> getResult: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
