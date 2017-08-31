@@ -94,6 +94,14 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     sendResponse( responseId, printer.format( err.toXml(response_format) ) )
   }
 
+  def sendErrorReport( taskSpec: Array[String], exc: Exception ) = {
+    val id = taskSpec(0)
+    val runargs = getRunArgs( taskSpec )
+    val syntax = getResponseSyntax(runargs)
+    val err = new WPSExceptionReport(exc)
+    sendResponse( id, printer.format( err.toXml(syntax) ) )
+  }
+
   override def shutdown() = {
     processManager.shutdown( process )
     super.shutdown()
