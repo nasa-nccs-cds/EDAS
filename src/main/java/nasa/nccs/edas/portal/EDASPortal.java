@@ -12,26 +12,39 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-abstract class Response {
-    String rtype;
+class Response {
+    String id = null;
+    String rtype = null;
+
+    public Response( String _rtype, String _id )  {
+        rtype = _rtype;
+        id = _id;
+    }
 }
 
 class Message extends Response {
-    String id = null;
     String message = null;
     public Message( String _id, String _message ) {
-        rtype = "message";
-        id = _id;
+        super( "message", _id );
         message = _message;
     }
     public String toString() { return "Message[" + id + "]: " + message; }
 }
 
+class ErrorReport extends Response {
+    String message = null;
+    public ErrorReport( String _id, String _message ) {
+        super( "error", _id );
+        message = _message;
+    }
+    public String toString() { return "ErrorReport[" + id + "]: " + message; }
+}
+
 class DataPacket extends Response {
     String header = null;
     byte[] data = null;
-    public DataPacket( String _header, byte[] _data ) {
-        rtype = "data";
+    public DataPacket( String _id, String _header, byte[] _data ) {
+        super( "data", _id );
         header = _header;
         data = _data;
     }
@@ -72,14 +85,23 @@ class Responder extends Thread {
     void doSendResponse( Response r ) {
         if( r.rtype == "message") { doSendMessage( (Message)r ); }
         else if( r.rtype == "data") { doSendDataPacket( (DataPacket)r ); }
-        else { logger.error( "Error, unrecognized response type: " + r.rtype ); }
+        else if( r.rtype == "error") { doSendErrorReport( (ErrorReport)r ); }
+        else {
+            logger.error( "Error, unrecognized response type: " + r.rtype );
+            doSendErrorReport( new ErrorReport( r.id, "Error, unrecognized response type: " + r.rtype ) );
+        }
     }
-
 
     void doSendMessage( Message msg  ) {
         List<String> request_args = Arrays.asList( msg.id, "response", msg.message );
         response_socket.send( StringUtils.join( request_args,  "!" ).getBytes(), 0);
         logger.info( " Sent response: " + msg.id + ", content: " + msg.message.substring( 0, Math.min(300,msg.message.length()) ) );
+    }
+
+    void doSendErrorReport( ErrorReport msg  ) {
+        List<String> request_args = Arrays.asList( msg.id, "error", msg.message );
+        response_socket.send( StringUtils.join( request_args,  "!" ).getBytes(), 0);
+        logger.info( " Sent error report: " + msg.id + ", content: " + msg.message.substring( 0, Math.min(300,msg.message.length()) ) );
     }
 
     void doSendDataPacket( DataPacket dataPacket ) {
@@ -169,6 +191,11 @@ public abstract class EDASPortal {
         responder.sendMessage( new Message(id,msg) );
     }
 
+    public void sendErrorReport(  String id, String msg ) {
+        logger.info("-----> SendErrorReport[" + id + "]" );
+        responder.doSendErrorReport( new ErrorReport(id,msg) );
+    }
+
     public void setExeStatus( String rid, String status ) {
         responder.setExeStatus(rid,status);
     }
@@ -180,7 +207,7 @@ public abstract class EDASPortal {
         List<String> header_fields = Arrays.asList( rid,"array", array_header );
         String header = StringUtils.join(header_fields,"!");
         logger.debug("Sending header: " + header);
-        responder.sendDataPacket( new DataPacket( header, data ) );
+        responder.sendDataPacket( new DataPacket( rid, header, data ) );
     }
 
     public String sendFile( String rId, String name, String filePath ) {
@@ -192,7 +219,7 @@ public abstract class EDASPortal {
         String header = StringUtils.join(header_fields,"!");
         try {
             byte[] data = Files.toByteArray(file);
-            responder.sendDataPacket( new DataPacket( header, data ) );
+            responder.sendDataPacket( new DataPacket( rId, header, data ) );
             logger.debug("Done sending file data packet: " + header);
         } catch ( IOException ex ) {
             logger.info( "Error sending file : " + filePath + ": " + ex.toString() );
