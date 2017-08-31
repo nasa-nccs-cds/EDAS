@@ -113,7 +113,7 @@ class ResponseManager(Thread):
                 if rId == "status":
                     print " *** Execution Status Report: " + toks[2]
                 else:
-                    self.log(  "\n\n #### Received response " + rId + ": " + toks[2] )
+                    self.logger.info(  "\n\n #### Received response " + rId + ": " + toks[2] )
                     self.cacheResult( rId, toks[2] )
             else:
                 self.logger.error("EDASPortal.ResponseThread-> Received unrecognized message type: {0}".format(type))
