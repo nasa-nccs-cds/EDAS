@@ -89,17 +89,17 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     setExeStatus( request.id.toString, "completed" )
   }
 
-  def sendErrorReport( response_format: ResponseSyntax.Value, responseId: String, exc: Exception ) = {
+  def sendErrorReport( response_format: ResponseSyntax.Value, responseId: String, exc: Exception ): Unit = {
     val err = new WPSExceptionReport(exc)
-    sendResponse( responseId, printer.format( err.toXml(response_format) ) )
+    sendErrorReport( responseId, printer.format( err.toXml(response_format) ) )
   }
 
-  def sendErrorReport( taskSpec: Array[String], exc: Exception ) = {
+  def sendErrorReport( taskSpec: Array[String], exc: Exception ): Unit = {
     val id = taskSpec(0)
     val runargs = getRunArgs( taskSpec )
     val syntax = getResponseSyntax(runargs)
     val err = new WPSExceptionReport(exc)
-    sendResponse( id, printer.format( err.toXml(syntax) ) )
+    sendErrorReport( id, printer.format( err.toXml(syntax) ) )
   }
 
   override def shutdown() = {
