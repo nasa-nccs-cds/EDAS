@@ -204,7 +204,7 @@ public abstract class EDASPortal {
     public abstract void execUtility( String[] utilSpec );
 
     public abstract void execute( String[] taskSpec );
-    public abstract void shutdown();
+    public void shutdown() { responder.term(); }
     public abstract void getCapabilities( String[] utilSpec );
     public abstract void describeProcess( String[] utilSpec );
 

@@ -25,6 +25,7 @@ trait ServiceProvider extends Loggable {
 
   def getResultFilePath( resultId: String ): Option[String]
   def getResultVariable( resultId: String ): Option[RDDTransientVariable]
+  def getResultVariables: Iterable[String]
   def getResult( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
   def getResultStatus( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
 
@@ -99,6 +100,7 @@ object cds2ServiceProvider extends ServiceProvider {
   override def getResultFilePath( resultId: String ): Option[String] = cds2ExecutionManager.getResultFilePath( resultId )
   override def getResult( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = cds2ExecutionManager.getResult( resultId, response_syntax )
   override def getResultVariable( resultId: String ): Option[RDDTransientVariable] = cds2ExecutionManager.getResultVariable( resultId )
+  override def getResultVariables: Iterable[String] = cds2ExecutionManager.getResultVariables
   override def getResultStatus( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = cds2ExecutionManager.getResultStatus( resultId, response_syntax )
 
 }

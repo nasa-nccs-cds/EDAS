@@ -350,6 +350,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 //  }
 
   def getResultVariable( resId: String ): Option[RDDTransientVariable] = collectionDataCache.getExistingResult( resId )
+  def getResultVariables: Iterable[String] = collectionDataCache.getResultIdList
 
   def getResultFilePath( resId: String ): Option[String] = getResultVariable( resId ) match {
       case Some( tvar: RDDTransientVariable ) =>
