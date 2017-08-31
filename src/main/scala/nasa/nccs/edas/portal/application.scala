@@ -72,6 +72,9 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val process_name = elem(taskSpec,2)
     val dataInputsSpec = taskSpec(3)
     val dataInputsObj = if( taskSpec.length > 3 ) wpsObjectParser.parseDataInputs( dataInputsSpec ) else Map.empty[String, Seq[Map[String, Any]]]
+    val request: TaskRequest = TaskRequest(process_name, dataInputsObj )
+    setExeStatus( request.id.toString, "executing")
+
     val runargs = getRunArgs( taskSpec )
     val responseType = runargs.getOrElse("response","xml")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
@@ -81,8 +84,6 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         else if( responseType == "file" ) { sendFileResponse( taskSpec(0), result ) }
       }
     }
-    val request: TaskRequest = TaskRequest(process_name, dataInputsObj )
-    setExeStatus( request.id.toString, "executing")
     val response = processManager.executeProcess( request, process_name, dataInputsSpec, runargs, Some(executionCallback) )
     sendResponse( taskSpec(0), printer.format( response ) )
     setExeStatus( request.id.toString, "completed" )
