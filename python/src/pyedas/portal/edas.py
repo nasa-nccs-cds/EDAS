@@ -88,10 +88,7 @@ class ResponseManager(Thread):
 
     def processNextResponse(self):
         try:
-            self.log( "\n  ** ResponseManager Thread ** ---> Waiting for response on socket connection... " )
             response = self.socket.recv()
-            self.log( "\n\n ------------------------->>> Received response: {0}".format(response) )
-            self.logger.info( "Received response: {0}".format(response) )
             toks = response.split('!')
             rId = toks[0]
             type = toks[1]
@@ -99,29 +96,23 @@ class ResponseManager(Thread):
                 self.log( "\n\n #### Received array " + rId + ": " + toks[2] )
                 header = toks[2]
                 data = self.socket.recv()
-                self.log( "<-- ** Received array data ** -->" )
                 array = npArray.createInput(header,data)
-                self.log(  "<-- ** Created array wrapper ** -->" )
                 self.logger.info("Received array: {0}".format(rId))
                 self.cacheArray( rId, array )
-                self.log(  "<-- ** Cached array ** -->" )
             elif type == "file":
-                self.log(  "\n\n #### Received file " + rId + ": " + toks[2] )
                 header = toks[2]
                 data = self.socket.recv()
                 filePath = self.saveFile( header, data )
                 self.filePaths[rId] = filePath
-                self.logger.info("Received file '{0}' for rid {1}".format(header,rId))
+                self.log("Received file '{0}' for rid {1}".format(header,rId))
             elif type == "response":
                 if rId == "status":
-                    self.log(  "\n\n #### Received status report " + rId + ": " + toks[2] )
-                    print "Status: " + toks[2]
+                    print " *** Execution Status Report: " + toks[2]
                 else:
                     self.log(  "\n\n #### Received response " + rId + ": " + toks[2] )
                     self.cacheResult( rId, toks[2] )
             else:
                 self.logger.error("EDASPortal.ResponseThread-> Received unrecognized message type: {0}".format(type))
-            print "\n &&& Completed processNextResponse &&& "
 
         except Exception as err:
             self.logger.error( "EDAS error: {0}\n{1}\n".format(err, traceback.format_exc() ) )
