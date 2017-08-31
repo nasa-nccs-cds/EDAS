@@ -247,6 +247,7 @@ class EDASPortal:
             if self.response_manager != None:
                 self.log(  " Terminate Response Manager " )
                 self.response_manager.term()
+                self.log(  " Completed shutdown " )
 
     def randomId(self, length):
         sample = string.lowercase+string.digits+string.uppercase
