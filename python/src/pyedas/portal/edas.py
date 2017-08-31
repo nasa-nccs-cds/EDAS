@@ -105,6 +105,10 @@ class ResponseManager(Thread):
                 filePath = self.saveFile( header, data )
                 self.filePaths[rId] = filePath
                 self.log("Received file '{0}' for rid {1}".format(header,rId))
+            elif type == "error":
+                self.log(  "\n\n #### ERROR REPORT " + rId + ": " + toks[2] )
+                print " *** Execution Error Report: " + toks[2]
+                self.cacheResult( rId, toks[2] )
             elif type == "response":
                 if rId == "status":
                     print " *** Execution Status Report: " + toks[2]
@@ -230,7 +234,7 @@ class EDASPortal:
         return self.response_manager
 
     def shutdown(self):
-        self.log(  " ############################## SHUT DOWN EDAS PORTAL ##############################"  )
+        self.log(  " ############################## Disconnect Portal Client from Server & shutdown Client ##############################"  )
         try: self.request_socket.close()
         except Exception: pass
         if( self.application_thread ):

@@ -12,7 +12,7 @@ try:
 
     datainputs = """[domain=[{"name":"d0","time":{"start":0,"end":30,"system":"indices"}}],variable=[{"uri":"file:///dass/nobackup/tpmaxwel/.edas/cache/collections/NCML/CIP_MERRA2_6hr_tas.ncml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
 
-    rId = portal.sendMessage("execute", [ "WPS", datainputs, ""] )
+    rId = portal.sendMessage("execute", [ "WPS", datainputs, '{ "response":"xml" }' ] )
     responses = response_manager.getResponses(rId)
     print "Got responses:\n" + "\n".join(responses)
 
