@@ -1,7 +1,6 @@
 package nasa.nccs.edas.engine
 import java.io.{IOException, PrintWriter, StringWriter}
 import java.nio.file.{Files, Paths}
-
 import java.io.File
 
 import nasa.nccs.cdapi.cdm.{Collection, PartitionedFragment, _}
@@ -16,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.{Await, Future, Promise}
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDFloatArray}
 import nasa.nccs.caching._
+import nasa.nccs.edas.engine.CDS2ExecutionManager.logger
 import ucar.{ma2, nc2}
 import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
 
@@ -55,13 +55,16 @@ object CDS2ExecutionManager extends Loggable {
     val slaves_file = Paths.get( sys.env("SPARK_HOME"), "conf", "slaves" ).toFile
     val shutdown_script = Paths.get( sys.env("HOME"), ".edas", "sbin", "shutdown_python_worker.sh" ).toFile
     if( slaves_file.exists && slaves_file.canRead ) {
-      val shutdown_futures = for (slave <- Source.fromFile(slaves_file).getLines(); if !slave.isEmpty && !slave.startsWith("#") ) yield  {
-          Future { "ssh %s \"%s\"".format(slave.trim,shutdown_script.toString) !! }
+      val shutdown_futures = for (slave <- Source.fromFile(slaves_file).getLines(); if !slave.isEmpty && !slave.startsWith("#"); slave_node = slave.trim ) yield  {
+          Future {  try { "ssh %s \"%s\"".format(slave_node,shutdown_script.toString) !! }
+                    catch { case err: Exception => print( "Error shutting down python workers on slave_node '" + slave_node + "' using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
+          }
       }
       Future.sequence( shutdown_futures )
     } else try {
       logger.info( "No slaves file found, shutting down python workers locally:")
-      shutdown_script.toString !!
+      try { shutdown_script.toString !! }
+      catch { case err: Exception => print( "Error shutting down local python workers using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
     } catch {
       case err: Exception => logger.error( "Error shutting down python workers: " + err.toString )
     }
