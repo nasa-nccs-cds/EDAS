@@ -57,6 +57,7 @@ class ResponseManager(Thread):
     def run(self):
         self.log("Run RM thread")
         while( self.active ):
+            print "."
             self.processNextResponse()
 
     def getMessageField(self, header, index ):
@@ -77,48 +78,52 @@ class ResponseManager(Thread):
         toks = header.split('|')
         return toks[index]
 
-    def log(self, msg ):
+    def log(self, msg, maxPrintLen = 300 ):
         self.logger.info( "[RM] " + msg )
-        print msg
+        print "[RM] " + msg[0:maxPrintLen]
 
 
     #    def getResponse(self, key, default = None ):
     #       return self.cached_results.get( key, default )
 
+    def getItem(self, str_array, itemIndex, default_val="NULL" ):
+        try: return str_array[itemIndex]
+        except Exception as err: return default_val
+
     def processNextResponse(self):
         try:
             response = self.socket.recv()
             toks = response.split('!')
-            rId = toks[0]
-            type = toks[1]
+            rId = self.getItem( toks, 0 )
+            type = self.getItem( toks, 1 )
+            msg = self.getItem(toks, 2)
+            self.log(" #### Received response, rid: " + rId + ", type: " + type )
             if type == "array":
-                self.log( "\n\n #### Received array " + rId + ": " + toks[2] )
-                header = toks[2]
+                self.log( "\n\n #### Received array " + rId + ": " + msg )
                 data = self.socket.recv()
-                array = npArray.createInput(header,data)
+                array = npArray.createInput(msg,data)
                 self.logger.info("Received array: {0}".format(rId))
                 self.cacheArray( rId, array )
             elif type == "file":
-                header = toks[2]
                 data = self.socket.recv()
-                filePath = self.saveFile( header, data )
+                filePath = self.saveFile( msg, data )
                 self.filePaths[rId] = filePath
-                self.log("Received file '{0}' for rid {1}".format(header,rId))
+                self.log("Received file '{0}' for rid {1}".format(msg,rId))
             elif type == "error":
-                self.log(  "\n\n #### ERROR REPORT " + rId + ": " + toks[2] )
-                print " *** Execution Error Report: " + toks[2]
-                self.cacheResult( rId, toks[2] )
+                self.log(  "\n\n #### ERROR REPORT " + rId + ": " + msg )
+                print " *** Execution Error Report: " + msg
+                self.cacheResult( rId, msg )
             elif type == "response":
                 if rId == "status":
-                    print " *** Execution Status Report: " + toks[2]
+                    print " *** Execution Status Report: " + msg
                 else:
-                    self.log(  " #### Received response " + rId  )
-                    self.cacheResult( rId, toks[2] )
+                    self.log(  " Caching response message " + rId  + ", sample: " + msg[0:300] )
+                    self.cacheResult( rId, msg )
             else:
                 self.log(" #### EDASPortal.ResponseThread-> Received unrecognized message type: {0}".format(type))
 
         except Exception as err:
-            self.logger.error( "EDAS error: {0}\n{1}\n".format(err, traceback.format_exc() ) )
+            self.log( "EDAS error: {0}\n{1}\n".format(err, traceback.format_exc() ), 1000 )
 
     def getFileCacheDir(self,role):
         filePath = os.path.join( self.cacheDir, "transfer", role )
