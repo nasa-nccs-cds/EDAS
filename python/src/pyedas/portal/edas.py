@@ -158,7 +158,6 @@ class ResponseManager(Thread):
                 else:
                     print ".",
                     time.sleep(0.25)
-                    count = count + 1
         except KeyboardInterrupt:
             self.log("Terminating wait for response")
 
