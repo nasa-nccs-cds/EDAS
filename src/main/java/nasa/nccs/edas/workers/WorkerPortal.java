@@ -17,7 +17,7 @@ public abstract class WorkerPortal {
     protected Logger logger = EDASLogManager.getCurrentLogger();
 
     protected WorkerPortal(){
-        zmqContext = ZMQ.context(1);
+        zmqContext = ZMQ.context(2);
         availableWorkers = new ConcurrentLinkedQueue<Worker>();
         busyWorkers = new ConcurrentLinkedQueue<Worker>();
     }

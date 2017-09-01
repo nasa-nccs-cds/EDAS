@@ -76,7 +76,7 @@ public class EDASPortalClient {
         try {
             _request_port = request_port;
             _response_port = response_port;
-            zmqContext = ZMQ.context(1);
+            zmqContext = ZMQ.context(2);
             request_socket = zmqContext.socket(ZMQ.PUSH);
             response_socket = zmqContext.socket(ZMQ.PULL);
             app_host = server;

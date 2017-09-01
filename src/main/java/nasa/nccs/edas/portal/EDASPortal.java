@@ -70,7 +70,7 @@ class Responder extends Thread {
     }
 
     public void sendResponse( Response msg ) {
-        logger.info( "Post Message to response queue: " + msg.toString() );
+        logger.info( "Post Message to response queue: " + msg.id );
         response_queue.add( msg );
     }
 
@@ -165,7 +165,7 @@ public abstract class EDASPortal {
     protected EDASPortal( String client_address, int _request_port, int _response_port ) {
         try {
             request_port = _request_port;
-            zmqContext = ZMQ.context(1);
+            zmqContext = ZMQ.context(2);
             request_socket = zmqContext.socket(ZMQ.PULL);
             responder = new Responder( zmqContext, client_address, _response_port);
             responder.start();

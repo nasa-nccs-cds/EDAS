@@ -150,19 +150,17 @@ class ResponseManager(Thread):
 
 
     def getResponses( self, rId, wait=True ):
-        import subprocess, sys
         self.log(  "Waiting for a response from the server... " )
-        count = 0
-        while( True ):
-            results = self.getResults(rId)
-            if( (len(results) > 0) or not wait): return results
-            else:
-                print ".",
-                time.sleep(0.25)
-                if( count % 4 == 0 ):
-                    self.logger.info( " ** Waiting, secs: " + str(count) )
-#                    subprocess.call( [ 'free', '-h' ], stdout=sys.stdout )
-                count = count + 1
+        try :
+            while( True ):
+                results = self.getResults(rId)
+                if( (len(results) > 0) or not wait): return results
+                else:
+                    print ".",
+                    time.sleep(0.25)
+                    count = count + 1
+        except KeyboardInterrupt:
+            self.log("Terminating wait for response")
 
     def getResponseVariables(self, rId, wait=True):
         """  :rtype: list[DatasetVariable] """
@@ -205,7 +203,7 @@ class EDASPortal:
             self.app_host = host
             self.application_thread = None
             self.logger =  logging.getLogger("portal")
-            self.context = zmq.Context()
+            self.context = zmq.Context(2)
             self.request_socket = self.context.socket(zmq.PUSH)
 
             # if( connectionMode == ConnectionMode.BIND ):
