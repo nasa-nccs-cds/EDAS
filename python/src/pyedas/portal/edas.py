@@ -202,10 +202,11 @@ class EDASPortal:
     def __init__( self, host="127.0.0.1", request_port=0, response_port=0, **kwargs ):
         try:
             self.active = True
+            self.app_host = host
+            self.application_thread = None
             self.logger =  logging.getLogger("portal")
             self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.PUSH)
-            self.app_host = host
 
             # if( connectionMode == ConnectionMode.BIND ):
             #     self.request_port = ConnectionMode.bindSocket( self.request_socket, self.app_host, request_port )
@@ -217,10 +218,9 @@ class EDASPortal:
             self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
             self.log("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
 
-
             self.response_manager = ResponseManager(self.context)
             self.response_manager.start()
-            self.application_thread = None
+
 
         except Exception as err:
             err_msg =  "\n-------------------------------\nWorker Init error: {0}\n{1}-------------------------------\n".format(err, traceback.format_exc() )
