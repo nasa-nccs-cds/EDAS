@@ -56,15 +56,15 @@ object CDS2ExecutionManager extends Loggable {
     val shutdown_script = Paths.get( sys.env("HOME"), ".edas", "sbin", "shutdown_python_worker.sh" ).toFile
     if( slaves_file.exists && slaves_file.canRead ) {
       val shutdown_futures = for (slave <- Source.fromFile(slaves_file).getLines(); if !slave.isEmpty && !slave.startsWith("#"); slave_node = slave.trim ) yield  {
-          Future {  try { "ssh %s \"%s\"".format(slave_node,shutdown_script.toString) !! }
-                    catch { case err: Exception => print( "Error shutting down python workers on slave_node '" + slave_node + "' using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
+          Future {  try { "ssh %s \"%s\"".format(slave_node,shutdown_script.toString) ! }
+                    catch { case err: Exception => println( "Error shutting down python workers on slave_node '" + slave_node + "' using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
           }
       }
       Future.sequence( shutdown_futures )
     } else try {
       logger.info( "No slaves file found, shutting down python workers locally:")
-      try { shutdown_script.toString !! }
-      catch { case err: Exception => print( "Error shutting down local python workers using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
+      try { shutdown_script.toString ! }
+      catch { case err: Exception => println( "Error shutting down local python workers using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
     } catch {
       case err: Exception => logger.error( "Error shutting down python workers: " + err.toString )
     }
