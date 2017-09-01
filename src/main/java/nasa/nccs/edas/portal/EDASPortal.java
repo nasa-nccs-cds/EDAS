@@ -280,12 +280,16 @@ public abstract class EDASPortal {
     }
 
     public void term() {
-        logger.info( "EDAS Shutdown");
+        logger.info( "\n\nEDAS Shutdown\n\n");
         active = false;
         PythonWorkerPortal.getInstance().quit();
+        logger.info( "\n\nQUIT PythonWorkerPortal\n\n");
         try { request_socket.close(); }  catch ( Exception ex ) { ; }
+        logger.info( "\n\nCLOSE request_socket\n\n");
         responder.term();
+        logger.info( "\n\nTERM responder\n\n");
         shutdown();
+        logger.info( "\n\nshutdown complete\n\n");
     }
 
     public String ia2s( int[] array ) { return Arrays.toString(array).replaceAll("\\[|\\]|\\s", ""); }
