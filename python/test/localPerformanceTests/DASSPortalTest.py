@@ -10,7 +10,7 @@ try:
     portal = EDASPortal( server, request_port, response_port )
     response_manager = portal.getResponseManager()
 
-    datainputs = """[domain=[{"name":"d0","time":{"start":0,"end":100,"system":"indices"}}],variable=[{"uri":"file:///dass/nobackup/tpmaxwel/.edas/cache/collections/NCML/CIP_MERRA2_6hr_tas.ncml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
+    datainputs = """[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"file:///dass/nobackup/tpmaxwel/.edas/cache/collections/NCML/CIP_MERRA2_6hr_tas.ncml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
 
     rId = portal.sendMessage("execute", [ "WPS", datainputs, '{ "response":"xml" }' ] )
     responses = response_manager.getResponses(rId)

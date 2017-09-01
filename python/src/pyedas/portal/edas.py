@@ -3,6 +3,7 @@ from threading import Thread
 from pyedas.edasArray import npArray
 from cdms2.variable import DatasetVariable
 import random, string, os
+from enum import Enum
 MB = 1024 * 1024
 
 class ConnectionMode():
@@ -25,6 +26,11 @@ class ConnectionMode():
         socket.connect("tcp://{0}:{1}".format( host, port ) )
         return port
 
+class MessageState(Enum):
+    ARRAY = 0
+    FILE = 1
+    RESULT = 2
+
 class ResponseManager(Thread):
 
     def __init__(self, host, port ):
@@ -34,6 +40,7 @@ class ResponseManager(Thread):
         self.host = host
         self.port = port
         self.active = True
+        self.mstate = MessageState.RESULT
         self.setName('EDAS Response Thread')
         self.cached_results = {}
         self.cached_arrays = {}
@@ -97,7 +104,7 @@ class ResponseManager(Thread):
         try: return str_array[itemIndex]
         except Exception as err: return default_val
 
-    def processNextResponse(self,socket):
+    def processNextResponse(self, socket ):
         try:
             response = socket.recv()
             toks = response.split('!')
@@ -112,10 +119,11 @@ class ResponseManager(Thread):
                 self.logger.info("Received array: {0}".format(rId))
                 self.cacheArray( rId, array )
             elif type == "file":
+                self.log("\n\n #### Received file " + rId + ": " + msg)
                 data = socket.recv()
                 filePath = self.saveFile( msg, data )
                 self.filePaths[rId] = filePath
-                self.log("Received file '{0}' for rid {1}".format(msg,rId))
+                self.log("Saved file '{0}' for rid {1}".format(filePath,rId))
             elif type == "error":
                 self.log(  "\n\n #### ERROR REPORT " + rId + ": " + msg )
                 print " *** Execution Error Report: " + msg
