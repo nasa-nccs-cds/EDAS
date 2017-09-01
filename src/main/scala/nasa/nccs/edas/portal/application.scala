@@ -85,8 +85,9 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
       }
     }
     val response = processManager.executeProcess( request, process_name, dataInputsSpec, runargs, Some(executionCallback) )
-    sendResponse( taskSpec(0), printer.format( response ) )
-    setExeStatus( request.id.toString, "completed" )
+    val rId = request.id.toString
+    sendResponse( rId, printer.format( response ) )
+    setExeStatus( rId, "completed" )
   }
 
   def sendErrorReport( response_format: ResponseSyntax.Value, responseId: String, exc: Exception ): Unit = {

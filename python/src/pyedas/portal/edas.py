@@ -69,7 +69,6 @@ class ResponseManager(Thread):
         response_port = ConnectionMode.connectSocket( response_socket, self.host, self.port )
         self.log("Connected response socket on port: {0}".format( response_port ) )
         while( self.active ):
-            print "#"
             self.processNextResponse( response_socket )
         try: response_socket.close()
         except Exception: pass
@@ -111,7 +110,7 @@ class ResponseManager(Thread):
             rId = self.getItem( toks, 0 )
             type = self.getItem( toks, 1 )
             msg = self.getItem(toks, 2)
-            self.log(" #### Received response, rid: " + rId + ", type: " + type )
+            self.logger.info(" #### Received response, rid: " + rId + ", type: " + type )
             if type == "array":
                 self.log( "\n\n #### Received array " + rId + ": " + msg )
                 data = socket.recv()
