@@ -149,10 +149,13 @@ public abstract class Worker {
     }
 
     public void quit() {
-        logger.debug("Sending Quit request" );
+        logger.debug("Worker: Sending Quit request" );
         request_socket.send( "util|quit".getBytes(), 0 );
+        logger.debug("Worker: TERM resultThread" );
         try { resultThread.term();  }  catch ( Exception ex ) { ; }
+        logger.debug("Worker: CLOSE request_socket" );
         try { request_socket.close(); }  catch ( Exception ex ) { ; }
+        logger.debug("Worker shutdown complete" );
     }
 
     public void getCapabilites() {

@@ -10,7 +10,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public abstract class WorkerPortal {
+public abstract class WorkerPortal extends Thread {
     protected ZMQ.Context zmqContext = null;
     protected ConcurrentLinkedQueue<Worker> availableWorkers = null;
     protected ConcurrentLinkedQueue<Worker> busyWorkers = null;
@@ -44,7 +44,9 @@ public abstract class WorkerPortal {
 
     int getNumWorkers() { return availableWorkers.size() + busyWorkers.size(); }
 
-    public void shutdown() {
+    public void shutdown() { start(); }
+
+    public void run() {
         logger.info( "\t   ***!! WorkerPortal SHUTDOWN !!*** " );
         while( !availableWorkers.isEmpty() ) try { availableWorkers.poll().quit(); } catch ( Exception ex ) {;}
         while( !busyWorkers.isEmpty() ) try { busyWorkers.poll().quit(); } catch ( Exception ex ) {;}
