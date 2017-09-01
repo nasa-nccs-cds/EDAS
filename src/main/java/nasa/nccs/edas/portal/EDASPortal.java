@@ -94,19 +94,21 @@ class Responder extends Thread {
 
     void doSendMessage( Message msg  ) {
         List<String> request_args = Arrays.asList( msg.id, "response", msg.message );
-        response_socket.send( StringUtils.join( request_args,  "!" ).getBytes(), 0);
-        logger.info( " Sent response: " + msg.id + ", content: " + msg.message.substring( 0, Math.min(300,msg.message.length()) ) );
+        String packaged_msg = StringUtils.join( request_args,  "!" );
+        response_socket.send( packaged_msg.getBytes() );
+        logger.info( " Sent response: " + msg.id + ", content sample: " + packaged_msg.substring( 0, Math.min(300,msg.message.length()) ) );
     }
 
     void doSendErrorReport( ErrorReport msg  ) {
         List<String> request_args = Arrays.asList( msg.id, "error", msg.message );
-        response_socket.send( StringUtils.join( request_args,  "!" ).getBytes(), 0);
-        logger.info( " Sent error report: " + msg.id + ", content: " + msg.message.substring( 0, Math.min(300,msg.message.length()) ) );
+        response_socket.send( StringUtils.join( request_args,  "!" ).getBytes() );
+        logger.info( " Sent error report: " + msg.id + ", content sample: " + msg.message.substring( 0, Math.min(300,msg.message.length()) ) );
     }
 
     void doSendDataPacket( DataPacket dataPacket ) {
-        response_socket.send( dataPacket.header.getBytes(), 0 );
-        response_socket.send( dataPacket.data, 0 );
+        response_socket.send( dataPacket.header.getBytes() );
+        response_socket.send( dataPacket.data );
+        logger.info( " Sent data packet " + dataPacket.id + ", header: " + dataPacket.header );
     }
 
     public void setExeStatus( String rid, String status ) {
