@@ -14,7 +14,7 @@ object Library {
   val sparkCore      = "org.apache.spark"  %% "spark-core"      % Versions.spark
   val sparkStreaming = "org.apache.spark"  %% "spark-streaming" % Versions.spark
   val commonsIO      = "commons-io"         % "commons-io"      % "2.5"
-  val zeromq         = "org.zeromq"         % "jeromq"          % "0.3.5"
+  val zeromq         = "org.zeromq"         % "jeromq"          % "0.4.1"
   val cdm            = "edu.ucar"           % "cdm"             % Versions.ucar
   val clcommon       = "edu.ucar"           % "clcommon"        % Versions.ucar
   val netcdf4        = "edu.ucar"           % "netcdf4"         % Versions.ucar

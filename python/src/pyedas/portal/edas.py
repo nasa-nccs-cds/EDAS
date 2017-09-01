@@ -33,9 +33,9 @@ class MessageState(Enum):
 
 class ResponseManager(Thread):
 
-    def __init__(self, host, port ):
+    def __init__(self, context, host, port ):
         Thread.__init__(self)
-        self.context = zmq.Context()
+        self.context = context
         self.logger = logging.getLogger("portal")
         self.host = host
         self.port = port
@@ -211,7 +211,7 @@ class EDASPortal:
             self.app_host = host
             self.application_thread = None
             self.logger =  logging.getLogger("portal")
-            self.context = zmq.Context()
+            self.context = zmq.Context(2)
             self.request_socket = self.context.socket(zmq.PUSH)
 
             # if( connectionMode == ConnectionMode.BIND ):
@@ -224,7 +224,7 @@ class EDASPortal:
             self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
             self.log("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
 
-            self.response_manager = ResponseManager(host,response_port)
+            self.response_manager = ResponseManager(self.context, host, response_port)
             self.response_manager.start()
 
 
