@@ -53,26 +53,23 @@ class DataPacket extends Response {
 
 
 class Responder extends Thread {
-    ZMQ.Socket response_socket = null;
+    ZMQ.Context context = null;
     Boolean active = true;
-    protected int response_port = -1;
-    protected Logger logger = EDASLogManager.getCurrentLogger();
+    int response_port = -1;
+    Logger logger = EDASLogManager.getCurrentLogger();
+    String client_address = null;
     ConcurrentLinkedQueue<Response> response_queue = null;
     HashMap<String,String> status_reports = null;
 
-    public Responder(ZMQ.Context zmqContext, String client_address, int _response_port ) {
-        response_socket = zmqContext.socket(ZMQ.PUSH);
+    public Responder(ZMQ.Context zmqContext, String _client_address, int _response_port ) {
+        context = zmqContext;
         response_port = _response_port;
         response_queue = new ConcurrentLinkedQueue<Response>();
         status_reports = new HashMap<String,String>();
-        try{
-            response_socket.bind(String.format("tcp://%s:%d", client_address, response_port));
-            logger.info( String.format("Bound response socket to client at %s on port: %d", client_address, response_port) );
-        } catch (Exception err ) { logger.error( String.format("Error initializing response socket on port %d: %s", response_port, err ) ); }
-
+        client_address = _client_address;
     }
 
-    public void sendMessage( Message msg ) {
+    public void sendResponse( Response msg ) {
         logger.info( "Post Message to response queue: " + msg.toString() );
         response_queue.add( msg );
     }
@@ -82,32 +79,32 @@ class Responder extends Thread {
         response_queue.add( data );
     }
 
-    void doSendResponse( Response r ) {
-        if( r.rtype == "message") { doSendMessage( (Message)r ); }
-        else if( r.rtype == "data") { doSendDataPacket( (DataPacket)r ); }
-        else if( r.rtype == "error") { doSendErrorReport( (ErrorReport)r ); }
+    void doSendResponse( ZMQ.Socket socket, Response r ) {
+        if( r.rtype == "message") { doSendMessage( socket, (Message)r ); }
+        else if( r.rtype == "data") { doSendDataPacket( socket, (DataPacket)r ); }
+        else if( r.rtype == "error") { doSendErrorReport( socket, (ErrorReport)r ); }
         else {
             logger.error( "Error, unrecognized response type: " + r.rtype );
-            doSendErrorReport( new ErrorReport( r.id, "Error, unrecognized response type: " + r.rtype ) );
+            doSendErrorReport( socket, new ErrorReport( r.id, "Error, unrecognized response type: " + r.rtype ) );
         }
     }
 
-    void doSendMessage( Message msg  ) {
+    void doSendMessage( ZMQ.Socket socket, Message msg  ) {
         List<String> request_args = Arrays.asList( msg.id, "response", msg.message );
         String packaged_msg = StringUtils.join( request_args,  "!" );
-        response_socket.send( packaged_msg.getBytes() );
-        logger.info( " Sent response: " + msg.id + ", content sample: " + packaged_msg.substring( 0, Math.min(300,msg.message.length()) ) );
+        socket.send( packaged_msg.getBytes() );
+        logger.info( " Sent response: " + msg.id + ", content sample: " + packaged_msg.substring( 0, Math.min( 300, packaged_msg.length() ) ) );
     }
 
-    void doSendErrorReport( ErrorReport msg  ) {
+    void doSendErrorReport( ZMQ.Socket socket, ErrorReport msg  ) {
         List<String> request_args = Arrays.asList( msg.id, "error", msg.message );
-        response_socket.send( StringUtils.join( request_args,  "!" ).getBytes() );
-        logger.info( " Sent error report: " + msg.id + ", content sample: " + msg.message.substring( 0, Math.min(300,msg.message.length()) ) );
+        socket.send( StringUtils.join( request_args,  "!" ).getBytes() );
+        logger.info( " Sent error report: " + msg.id + ", content: " + msg.message );
     }
 
-    void doSendDataPacket( DataPacket dataPacket ) {
-        response_socket.send( dataPacket.header.getBytes() );
-        response_socket.send( dataPacket.data );
+    void doSendDataPacket( ZMQ.Socket socket, DataPacket dataPacket ) {
+        socket.send( dataPacket.header.getBytes() );
+        socket.send( dataPacket.data );
         logger.info( " Sent data packet " + dataPacket.id + ", header: " + dataPacket.header );
     }
 
@@ -115,15 +112,20 @@ class Responder extends Thread {
         status_reports.put(rid,status);
     }
 
-    void heartbeat() {
+    void heartbeat(ZMQ.Socket socket) {
         Message hb_msg = new Message( "status", status_reports.toString() );
-        doSendMessage( hb_msg );
+        doSendMessage( socket, hb_msg );
     }
 
     public void run()  {
         int pause_time = 100;
         int accum_sleep_time = 0;
         int heartbeat_interval = 2000;
+        ZMQ.Socket socket  = context.socket(ZMQ.PUSH);
+        try{
+            socket.bind(String.format("tcp://%s:%d", client_address, response_port));
+            logger.info( String.format("Bound response socket to client at %s on port: %d", client_address, response_port) );
+        } catch (Exception err ) { logger.error( String.format("Error initializing response socket on port %d: %s", response_port, err ) ); }
         try {
             while (active) {
                 Response response = response_queue.poll();
@@ -131,22 +133,21 @@ class Responder extends Thread {
                     Thread.sleep(pause_time);
                     accum_sleep_time += pause_time;
                     if( accum_sleep_time >= heartbeat_interval ) {
-                        heartbeat();
+                        heartbeat( socket );
                         accum_sleep_time = 0;
                     }
                 } else {
-                    doSendResponse(response);
+                    doSendResponse(socket,response);
                     accum_sleep_time = 0;
                 }
             }
         } catch ( InterruptedException ex ) {;}
-    }
 
-    public void term() {
-        active = false;
-        try { response_socket.close(); }
+        try { socket.close(); }
         catch( Exception err ) { ; }
     }
+
+    public void term() { active = false; }
 
 }
 
@@ -190,12 +191,12 @@ public abstract class EDASPortal {
 
     public void sendResponse(  String id, String msg ) {
         logger.info("-----> SendResponse[" + id + "]" );
-        responder.sendMessage( new Message(id,msg) );
+        responder.sendResponse( new Message(id,msg) );
     }
 
     public void sendErrorReport(  String id, String msg ) {
         logger.info("-----> SendErrorReport[" + id + "]" );
-        responder.doSendErrorReport( new ErrorReport(id,msg) );
+        responder.sendResponse( new ErrorReport(id,msg) );
     }
 
     public void setExeStatus( String rid, String status ) {
@@ -233,7 +234,7 @@ public abstract class EDASPortal {
     public abstract void execUtility( String[] utilSpec );
 
     public abstract void execute( String[] taskSpec );
-    public void shutdown() { responder.term(); }
+    public abstract void shutdown();
     public abstract void getCapabilities( String[] utilSpec );
     public abstract void describeProcess( String[] utilSpec );
 
@@ -283,6 +284,7 @@ public abstract class EDASPortal {
         active = false;
         PythonWorkerPortal.getInstance().quit();
         try { request_socket.close(); }  catch ( Exception ex ) { ; }
+        responder.term();
         shutdown();
     }
 

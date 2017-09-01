@@ -11,7 +11,7 @@ edas_server = "localhost"
 try:
     log_file  = open( '/tmp/EDAS_init.log', 'w' )
     portal = EDASPortal( edas_server, request_port, response_port )
-    response_manager = portal.createResponseManager()
+    response_manager = portal.getResponseManager()
     rId = portal.sendMessage("getCapabilities", [""])
     log_file.write( "getCapabilities request sent\n" ); log_file.flush()
     responses = response_manager.getResponses(rId)

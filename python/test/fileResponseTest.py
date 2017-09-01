@@ -11,7 +11,7 @@ edas_server = "198.120.209.96"
 try:
 
     portal = EDASPortal(  edas_server, request_port, response_port)
-    response_manager = portal.createResponseManager()
+    response_manager = portal.getResponseManager()
 
     t0 = time.time()
     datainputs = '[domain=[{"name":"d0","lat":{"start":0,"end":90,"system":"values"},"lon":{"start":30,"end":120,"system":"values"},"level":{"start":20,"end":20,"system":"indices"}}],variable=[{"uri":"collection:/merra2_local3d_6hr","name":"T:v1","domain":"d0"}]]'

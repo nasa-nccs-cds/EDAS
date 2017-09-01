@@ -15,7 +15,7 @@ try:
     else:
         portal = EDASPortal(  "localhost", request_port, response_port)
 
-    response_manager = portal.createResponseManager()
+    response_manager = portal.getResponseManager()
 
     t0 = time.time()
 #    datainputs = """[domain=[{"name":"d0"}],variable=[{"uri":"file:/Users/tpmaxwel/.edas/cache/collections/NCML/giss_r1i1p1.xml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"tz"}]]"""

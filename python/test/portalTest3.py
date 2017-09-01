@@ -3,7 +3,7 @@ import time
 
 try:
     portal = EDASPortal()
-    response_manager = portal.createResponseManager()
+    response_manager = portal.getResponseManager()
     portal.start_EDAS()
     time.sleep(4)
     rId = portal.sendMessage("getCapabilities", [ "WPS" ] )

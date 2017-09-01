@@ -35,7 +35,7 @@ try:
     else:
         portal = EDASPortal(  server, request_port, response_port)
 
-    response_manager = portal.createResponseManager()
+    response_manager = portal.getResponseManager()
     t0 = time.time()
     datainputs = '[domain=[{"name":"d0","lat":{"start":20,"end":20,"system":"values"},"lon":{"start":78,"end":78,"system":"values"}}],variable=[{"uri":"' + cldraMERRAdset + '","name":"'+merraVar+':v1","domain":"d0","cache":"false"}],operation=[{"name":"CDSpark.binAve","input":"v1","domain":"d0","cycle":"diurnal","bin":"month"}]]'
 #    ,"lev":{"start":0,"end":12,"system":"indices"}

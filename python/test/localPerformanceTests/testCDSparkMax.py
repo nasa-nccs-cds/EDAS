@@ -16,7 +16,7 @@ try:
     else:
         portal = EDASPortal(  server, request_port, response_port)
 
-    response_manager = portal.createResponseManager()
+    response_manager = portal.getResponseManager()
 
     t0 = time.time()
     datainputs = '[domain=[{"name":"d0","time":{"start":50,"end":150,"system":"indices"},"lon":{"start":100,"end":100,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"} }],variable=[{"uri":"file:///home/tpmaxwel/.edas/cache/collections/NCML/GISS_E2H_r1i1p1.ncml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"t"}]]'

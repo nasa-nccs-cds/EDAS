@@ -6,7 +6,7 @@ response_port = 5671
 
 try:
     portal = EDASPortal(  "10.71.9.11", request_port, response_port )
-    response_manager = portal.createResponseManager()
+    response_manager = portal.getResponseManager()
 
     datainputs = """[
         domain=[{

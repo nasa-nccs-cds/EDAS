@@ -104,7 +104,6 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   override def shutdown() = {
     processManager.shutdown( process )
-    super.shutdown()
   }
 
   def sendDirectResponse( response_format: ResponseSyntax.Value, responseId: String, results: WPSResponse ): Unit =  {

@@ -14,7 +14,7 @@ server = "localhost"
 try:
 
     portal = EDASPortal(  server, request_port, response_port)
-    response_manager = portal.createResponseManager()
+    response_manager = portal.getResponseManager()
 
     t0 = time.time()
     datainputs = '[domain=[{"name":"d0","lat":{"start":5,"end":40,"system":"values"},"lon":{"start":80,"end":120,"system":"values"}}],variable=[{"uri":"http://esgf.nccs.nasa.gov/thredds/dodsC/CMIP5/NASA/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"xy"}]]'

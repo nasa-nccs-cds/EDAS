@@ -27,10 +27,12 @@ class ConnectionMode():
 
 class ResponseManager(Thread):
 
-    def __init__(self, edasPortal ):
+    def __init__(self, context, host, port ):
         Thread.__init__(self)
-        self.socket = edasPortal.response_socket
-        self.logger = edasPortal.logger
+        self.context = context
+        self.logger = logging.getLogger("portal")
+        self.host = host
+        self.port = port
         self.active = True
         self.setName('EDAS Response Thread')
         self.cached_results = {}
@@ -56,9 +58,14 @@ class ResponseManager(Thread):
 
     def run(self):
         self.log("Run RM thread")
+        response_socket = self.context.socket( zmq.PULL )
+        response_port = ConnectionMode.connectSocket( response_socket, self.host, self.port )
+        self.log("Connected response socket on port: {0}".format( response_port ) )
         while( self.active ):
-            print "."
-            self.processNextResponse()
+            print "#"
+            self.processNextResponse( response_socket )
+        try: response_socket.close()
+        except Exception: pass
 
     def getMessageField(self, header, index ):
         toks = header.split('|')
@@ -90,9 +97,9 @@ class ResponseManager(Thread):
         try: return str_array[itemIndex]
         except Exception as err: return default_val
 
-    def processNextResponse(self):
+    def processNextResponse(self,socket):
         try:
-            response = self.socket.recv()
+            response = socket.recv()
             toks = response.split('!')
             rId = self.getItem( toks, 0 )
             type = self.getItem( toks, 1 )
@@ -100,12 +107,12 @@ class ResponseManager(Thread):
             self.log(" #### Received response, rid: " + rId + ", type: " + type )
             if type == "array":
                 self.log( "\n\n #### Received array " + rId + ": " + msg )
-                data = self.socket.recv()
+                data = socket.recv()
                 array = npArray.createInput(msg,data)
                 self.logger.info("Received array: {0}".format(rId))
                 self.cacheArray( rId, array )
             elif type == "file":
-                data = self.socket.recv()
+                data = socket.recv()
                 filePath = self.saveFile( msg, data )
                 self.filePaths[rId] = filePath
                 self.log("Received file '{0}' for rid {1}".format(msg,rId))
@@ -198,7 +205,6 @@ class EDASPortal:
             self.logger =  logging.getLogger("portal")
             self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.PUSH)
-            self.response_socket = self.context.socket(zmq.PULL)
             self.app_host = host
 
             # if( connectionMode == ConnectionMode.BIND ):
@@ -209,11 +215,11 @@ class EDASPortal:
             # else:
 
             self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
-            self.response_port = ConnectionMode.connectSocket(self.response_socket, self.app_host, response_port)
             self.log("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
-            self.log( "Connected response socket on port: {0}".format( self.response_port ) )
 
-            self.response_manager = None
+
+            self.response_manager = ResponseManager(self.context)
+            self.response_manager.start()
             self.application_thread = None
 
         except Exception as err:
@@ -232,10 +238,7 @@ class EDASPortal:
         self.application_thread = AppThread( self.app_host, self.request_port, self.response_port )
         self.application_thread.start()
 
-    def createResponseManager(self):
-        self.response_manager = ResponseManager(self)
-        self.log( "Starting ResponseManager thread" )
-        self.response_manager.start()
+    def getResponseManager(self):
         return self.response_manager
 
     def shutdown(self):
@@ -247,9 +250,11 @@ class EDASPortal:
             if( self.application_thread ):
                 self.sendMessage("shutdown")
                 self.application_thread.term()
+                self.application_thread = None
             if self.response_manager != None:
                 self.log(  " Terminate Response Manager " )
                 self.response_manager.term()
+                self.response_manager = None
                 self.log(  " Completed shutdown " )
 
     def randomId(self, length):
