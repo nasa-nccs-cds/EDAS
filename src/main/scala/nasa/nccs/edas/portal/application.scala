@@ -179,8 +179,10 @@ object EDASApplication extends Loggable {
     val appConfiguration = getConfiguration( parameter_file )
     val client_address: String = appConfiguration.getOrElse("client","*")
     val app = new EDASapp( client_address, request_port, response_port, appConfiguration )
-    sys.addShutdownHook( { app.term() } )
+//    sys.addShutdownHook( { app.term() } )
     app.run()
+    logger.info(s"EXIT EDASApplication");
+    sys.exit();
   }
 
 }

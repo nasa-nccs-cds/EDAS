@@ -61,8 +61,8 @@ class Responder extends Thread {
     ConcurrentLinkedQueue<Response> response_queue = null;
     HashMap<String,String> status_reports = null;
 
-    public Responder(ZMQ.Context zmqContext, String _client_address, int _response_port ) {
-        context = zmqContext;
+    public Responder( String _client_address, int _response_port ) {
+        context =  ZMQ.context(1);
         response_port = _response_port;
         response_queue = new ConcurrentLinkedQueue<Response>();
         status_reports = new HashMap<String,String>();
@@ -80,9 +80,9 @@ class Responder extends Thread {
     }
 
     void doSendResponse( ZMQ.Socket socket, Response r ) {
-        if( r.rtype == "message") { doSendMessage( socket, (Message)r ); }
-        else if( r.rtype == "data") { doSendDataPacket( socket, (DataPacket)r ); }
-        else if( r.rtype == "error") { doSendErrorReport( socket, (ErrorReport)r ); }
+        if( r.rtype == "message" ) { doSendMessage( socket, (Message)r ); }
+        else if( r.rtype == "data" ) { doSendDataPacket( socket, (DataPacket)r ); }
+        else if( r.rtype == "error" ) { doSendErrorReport( socket, (ErrorReport)r ); }
         else {
             logger.error( "Error, unrecognized response type: " + r.rtype );
             doSendErrorReport( socket, new ErrorReport( r.id, "Error, unrecognized response type: " + r.rtype ) );
@@ -137,6 +137,7 @@ class Responder extends Thread {
                         accum_sleep_time = 0;
                     }
                 } else {
+                    Thread.sleep(pause_time);
                     doSendResponse(socket,response);
                     accum_sleep_time = 0;
                 }
@@ -165,9 +166,9 @@ public abstract class EDASPortal {
     protected EDASPortal( String client_address, int _request_port, int _response_port ) {
         try {
             request_port = _request_port;
-            zmqContext = ZMQ.context(2);
+            zmqContext = ZMQ.context(1);
             request_socket = zmqContext.socket(ZMQ.PULL);
-            responder = new Responder( zmqContext, client_address, _response_port);
+            responder = new Responder( client_address, _response_port);
             responder.start();
 
 //                try{
@@ -277,6 +278,7 @@ public abstract class EDASPortal {
             ex.printStackTrace();
             sendErrorReport( parts, ex );
         }
+        logger.info( "\n\nEXIT EDASPortal\n\n");
     }
 
     public void term() {

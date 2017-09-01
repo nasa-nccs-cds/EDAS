@@ -27,9 +27,9 @@ class ConnectionMode():
 
 class ResponseManager(Thread):
 
-    def __init__(self, context, host, port ):
+    def __init__(self, host, port ):
         Thread.__init__(self)
-        self.context = context
+        self.context = zmq.Context()
         self.logger = logging.getLogger("portal")
         self.host = host
         self.port = port
@@ -160,6 +160,7 @@ class ResponseManager(Thread):
                     time.sleep(0.25)
         except KeyboardInterrupt:
             self.log("Terminating wait for response")
+            return []
 
     def getResponseVariables(self, rId, wait=True):
         """  :rtype: list[DatasetVariable] """
@@ -202,7 +203,7 @@ class EDASPortal:
             self.app_host = host
             self.application_thread = None
             self.logger =  logging.getLogger("portal")
-            self.context = zmq.Context(2)
+            self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.PUSH)
 
             # if( connectionMode == ConnectionMode.BIND ):
@@ -215,7 +216,7 @@ class EDASPortal:
             self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
             self.log("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
 
-            self.response_manager = ResponseManager(self.context,host,response_port)
+            self.response_manager = ResponseManager(host,response_port)
             self.response_manager.start()
 
 
