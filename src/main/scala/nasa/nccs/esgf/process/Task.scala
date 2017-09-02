@@ -11,10 +11,11 @@ import nasa.nccs.utilities.Loggable
 import java.util.UUID
 
 import nasa.nccs.cdapi.data.RDDVariableSpec
-import nasa.nccs.edas.engine.spark.{RecordKey}
+import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.engine.{CDS2ExecutionManager, Workflow}
 import nasa.nccs.edas.kernels.AxisIndices
 import nasa.nccs.esgf.process.OperationContext.OpResultType
+import nasa.nccs.esgf.process.UID.ndigits
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -191,19 +192,17 @@ class TaskRequest(val id: UID,
 
 object UID {
   def ndigits = 6
-  def apply() = new UID()
+  def apply( rId: String = RandomStringUtils.random(ndigits, true, true) ) = new UID(rId)
 }
-class UID {
-  import UID._
-  val uid = RandomStringUtils.random(ndigits, true, true)
+class UID( val uid: String  ) {
   def +(id: String): String = id + "-" + uid.toString
   override def toString = uid
 }
 
 object TaskRequest extends Loggable {
-  def apply(process_name: String, datainputs: Map[String, Seq[Map[String, Any]]]) = {
+  def apply(rId: String, process_name: String, datainputs: Map[String, Seq[Map[String, Any]]]) = {
     logger.info( "TaskRequest--> process_name: %s, datainputs: %s".format(process_name, datainputs.toString))
-    val uid = UID()
+    val uid = UID(rId)
     val op_spec_list: Seq[Map[String, Any]] = datainputs .getOrElse("operation", List())
     val data_list: List[DataContainer] = datainputs.getOrElse("variable", List()).flatMap(DataContainer.factory(uid, _, op_spec_list.isEmpty )).toList
     val domain_list: List[DomainContainer] = datainputs.getOrElse("domain", List()).map(DomainContainer(_)).toList

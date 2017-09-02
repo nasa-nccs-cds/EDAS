@@ -69,11 +69,12 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   }
 
   override def execute( taskSpec: Array[String] ) = {
+    val rId = elem(taskSpec,0)
     val process_name = elem(taskSpec,2)
     val dataInputsSpec = taskSpec(3)
     val dataInputsObj = if( taskSpec.length > 3 ) wpsObjectParser.parseDataInputs( dataInputsSpec ) else Map.empty[String, Seq[Map[String, Any]]]
-    val request: TaskRequest = TaskRequest(process_name, dataInputsObj )
-    setExeStatus( request.id.toString, "executing " + process_name + "-> " + dataInputsSpec )
+    val request: TaskRequest = TaskRequest( rId, process_name, dataInputsObj )
+    setExeStatus( rId, "executing " + process_name + "-> " + dataInputsSpec )
 
     val runargs = getRunArgs( taskSpec )
     val response_syntax = getResponseSyntax(runargs)
@@ -85,7 +86,6 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
       }
     }
     val response = processManager.executeProcess( request, process_name, dataInputsSpec, runargs, Some(executionCallback) )
-    val rId = request.id.toString
     sendResponse( rId, printer.format( response ) )
     setExeStatus( rId, "completed" )
   }
