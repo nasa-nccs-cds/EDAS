@@ -693,7 +693,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val t0 = System.nanoTime()
     val runargs = runArgs ++ Map( "responseform" -> "generic", "storeexecuteresponse" -> "true", "unitTest" -> "true", "status" -> "false" )
     val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
-    val rId: String = RandomStringUtils.random( 6, true, true)
+    val rId: String = RandomStringUtils.random( 6, true, true )
     val request = TaskRequest( rId, service, parsed_data_inputs)
     val response: xml.Elem = webProcessManager.executeProcess( request, identifier, datainputs, runargs)
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
