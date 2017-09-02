@@ -80,7 +80,10 @@ class Responder extends Thread {
     }
 
     void doSendResponse( ZMQ.Socket socket, Response r ) {
-        if( r.rtype == "message" ) { doSendMessage( socket, (Message)r ); }
+        if( r.rtype == "message" ) {
+             String packaged_msg = doSendMessage( socket, (Message)r );
+            logger.info( " Sent response: " + r.id + ", content sample: " + packaged_msg.substring( 0, Math.min( 300, packaged_msg.length() ) ) );
+        }
         else if( r.rtype == "data" ) { doSendDataPacket( socket, (DataPacket)r ); }
         else if( r.rtype == "error" ) { doSendErrorReport( socket, (ErrorReport)r ); }
         else {
@@ -89,11 +92,11 @@ class Responder extends Thread {
         }
     }
 
-    void doSendMessage( ZMQ.Socket socket, Message msg  ) {
+    String doSendMessage( ZMQ.Socket socket, Message msg  ) {
         List<String> request_args = Arrays.asList( msg.id, "response", msg.message );
         String packaged_msg = StringUtils.join( request_args,  "!" );
         socket.send( packaged_msg.getBytes() );
-        logger.info( " Sent response: " + msg.id + ", content sample: " + packaged_msg.substring( 0, Math.min( 300, packaged_msg.length() ) ) );
+        return packaged_msg;
     }
 
     void doSendErrorReport( ZMQ.Socket socket, ErrorReport msg  ) {
