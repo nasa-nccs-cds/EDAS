@@ -318,12 +318,17 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
   test("ESGF_subDemo2") {
     val unverified_result: CDFloatArray = CDFloatArray(  Array( 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841, 243.85841 ).map(_.toFloat), Float.MaxValue )
-    val GISS_H_vids = ( 1 to nExp ) map { index => s"vH$index" }
-    val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
+//    val GISS_H_vids = ( 1 to nExp ) map { index => s"vH$index" }
+//    val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
+//    val CIP_vids = ( 1 to cip_collections.length ) map { index => s"vC$index" }
+//    val CIP_variables     = ( ( 0 until cip_collections.length ) map { index =>  s"""{"uri":"collection:/${cip_collections(index)}","name":"tas:${CIP_vids(index)}","domain":"d0"}""" } ).mkString(",")
+    val variable1 = """{"uri":"collection:/cip_cfsr_6hr_ta","name":"ta:v0","domain":"d0"}"""
+    val variable2 = """{"uri":"collection:/merra2-6hr-ana_np.200001","name":"T:v1","domain":"d0"}"""
+    val variable3 = """{"uri":"collection:/cip_merra2_mon_ta","name":"ta:v2","domain":"d0"}"""
     val datainputs = s"""[
-             variable=[$GISS_H_variables],
-             domain=[       {"name":"d0","time":{"start":"1985-01-01T00:00:00Z","end":"1985-04-04T00:00:00Z","system":"values"}},{"name":"d1","crs":"gaussian~128"}],
-             operation=[    {"name":"CDSpark.multiAverage","input":"${GISS_H_vids.mkString(",")}","domain":"d1","id":"eaGISS-H"} ]
+             variable=[$variable1,$variable2,$variable3],
+             domain=[       {"name":"d0","time":{"start":"1985-01-01T00:00:00Z","end":"2015-04-04T00:00:00Z","system":"values"}}],
+             operation=[    {"name":"CDSpark.multiAverage","input":"v0","domain":"d0","id":"eaCFSR"},{"name":"CDSpark.multiAverage","input":"v1,v2","domain":"d0","id":"eaMERRA"}]
             ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node, false ).slice(0,0,10) )

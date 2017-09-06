@@ -97,20 +97,20 @@ class Partitions( private val _section: ma2.Section, val parts: Array[Partition]
 }
 
 object CachePartition {
-  def apply(index: Int, path: String, dimIndex: Int, startIndex: Int, partSize: Int, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], fragShape: Array[Int]): CachePartition = {
+  def apply(index: Int, path: String, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], fragShape: Array[Int]): CachePartition = {
     val partShape = getPartitionShape(partSize, fragShape)
-    new CachePartition(index, path, dimIndex, startIndex, partSize, recordSize, sliceMemorySize, origin, partShape)
+    new CachePartition(index, path, dimIndex, startIndex, partSize, start_date, end_date, recordSize, sliceMemorySize, origin, partShape)
   }
   def apply(path: String, partition: RegularPartition ): CachePartition = {
     val partShape = getPartitionShape( partition.partSize, partition.shape )
-    new CachePartition( partition.index, path, partition.dimIndex, partition.startIndex, partition.partSize, partition.recordSize, partition.sliceMemorySize, partition.origin, partShape )
+    new CachePartition( partition.index, path, partition.dimIndex, partition.startIndex, partition.partSize, partition.start_date, partition.end_date, partition.recordSize, partition.sliceMemorySize, partition.origin, partShape )
   }
   def getPartitionShape(partSize: Int, fragShape: Array[Int]): Array[Int] = {
     var shape = fragShape.clone(); shape(0) = partSize; shape
   }
 }
 
-class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: Int, partSize: Int, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int]) extends RegularPartition(index, dimIndex, startIndex, partSize, recordSize, sliceMemorySize, origin, shape) {
+class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int]) extends RegularPartition(index, dimIndex, startIndex, partSize, start_date, end_date, recordSize, sliceMemorySize, origin, shape) {
 
   def data(missing_value: Float): CDFloatArray = {
     val file = new RandomAccessFile(path, "r")
@@ -137,7 +137,7 @@ class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: I
     }
 }
 
-abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int, val partSize: Int, val sliceMemorySize: Long, val origin: Array[Int], val shape: Array[Int]) extends Loggable with Serializable {
+abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int, val partSize: Int, val start_date: Long, val end_date: Long, val sliceMemorySize: Long, val origin: Array[Int], val shape: Array[Int]) extends Loggable with Serializable {
   val partitionOrigin: Array[Int] = origin.zipWithIndex map { case (value, ival) => if( ival== 0 ) value + startIndex else value }
   val endIndex: Int = startIndex + partSize - 1
 
@@ -181,16 +181,16 @@ abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int,
 
 
 object RegularPartition {
-  def apply(index: Int, dimIndex: Int, startIndex: Int, partSize: Int, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], fragShape: Array[Int]): RegularPartition = {
+  def apply(index: Int, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], fragShape: Array[Int]): RegularPartition = {
     val partShape = getPartitionShape(partSize, fragShape)
-    new RegularPartition( index, dimIndex, startIndex, partSize, recordSize, sliceMemorySize, origin, partShape )
+    new RegularPartition( index, dimIndex, startIndex, partSize, start_date, end_date, recordSize, sliceMemorySize, origin, partShape )
   }
   def getPartitionShape(partSize: Int, fragShape: Array[Int]): Array[Int] = {
     var shape = fragShape.clone(); shape(0) = partSize; shape
   }
 
 }
-class RegularPartition( index: Int,  dimIndex: Int,  startIndex: Int,  partSize: Int,  val recordSize: Int,  sliceMemorySize: Long,  origin: Array[Int],  shape: Array[Int]) extends Partition(index, dimIndex, startIndex, partSize, sliceMemorySize, origin, shape) {
+class RegularPartition( index: Int,  dimIndex: Int,  startIndex: Int,  partSize: Int, start_date: Long, end_date: Long,  val recordSize: Int,  sliceMemorySize: Long,  origin: Array[Int],  shape: Array[Int]) extends Partition(index, dimIndex, startIndex, partSize, start_date, end_date, sliceMemorySize, origin, shape) {
 
   override val toString: String = s"Part[$index]{dim:$dimIndex start:$startIndex partSize:$partSize recordSize:$recordSize sliceMemorySize:$sliceMemorySize origin:${origin.mkString(",")} shape:${shape.mkString(",")})"
   override def nRecords: Int = math.ceil(partSize / recordSize.toDouble).toInt
@@ -216,7 +216,7 @@ class RegularPartition( index: Int,  dimIndex: Int,  startIndex: Int,  partSize:
   def recordIndexArray: IndexedSeq[Int] = (0 until nRecords)
 }
 
-class FilteredPartition(index: Int, dimIndex: Int, startIndex: Int, partSize: Int, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int], val records: IndexedSeq[FilteredRecordSpec] ) extends Partition( index, dimIndex, startIndex, partSize, sliceMemorySize, origin, shape ) {
+class FilteredPartition(index: Int, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int], val records: IndexedSeq[FilteredRecordSpec] ) extends Partition( index, dimIndex, startIndex, partSize, start_date, end_date, sliceMemorySize, origin, shape ) {
   override def recordStartIndex( iRecord: Int ) = records(iRecord).first
   override def recordRange(iRecord: Int): ma2.Range = {
     val start = recordStartIndex(iRecord);
@@ -280,7 +280,7 @@ object EDASPartitioner {
   val nCoresPerPart = 1
 }
 
-class EDASCachePartitioner(val cache_id: String, _section: ma2.Section, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], numDataFiles: Int, dataType: ma2.DataType = ma2.DataType.FLOAT, cacheType: String = "fragment") extends EDASPartitioner(_section,partsConfig,workflowNodeOpt,timeAxisOpt,numDataFiles,dataType,cacheType) {
+class EDASCachePartitioner( uid: String,  val cache_id: String, _section: ma2.Section, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], numDataFiles: Int, dataType: ma2.DataType = ma2.DataType.FLOAT, cacheType: String = "fragment") extends EDASPartitioner(uid,_section,partsConfig,timeAxisOpt,numDataFiles,dataType,cacheType) {
 
   def getCacheFilePath(partIndex: Int): String = {
     val cache_file = cache_id + "-" + partIndex.toString
@@ -352,15 +352,14 @@ case class PartitionConstraints( partsConfig: Map[String,String] ) {
   override val toString = { s"{ numDataFiles: ${_numDataFiles.toString}, numParts: ${_numParts.toString}, period: ${period}, nSlicesPerRecord: ${nSlicesPerRecord.toString}, oneRecPerSlice: ${oneRecPerSlice.toString} , numParts: ${numParts.toString} }"}
 }
 
-class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[String,String], val workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], val numDataFiles: Int, dataType: ma2.DataType = ma2.DataType.FLOAT, val cacheType: String = "fragment") extends Loggable {
+class EDASPartitioner( val uid: String, private val _section: ma2.Section, val partsConfig: Map[String,String], timeAxisOpt: Option[CoordinateAxis1DTime], val numDataFiles: Int, dataType: ma2.DataType = ma2.DataType.FLOAT, val cacheType: String = "fragment") extends Loggable {
   import EDASPartitioner._
 
   val elemSize = dataType.getSize
   val baseShape = _section.getShape
   val sectionMemorySize = getMemorySize()
   val sliceMemorySize: Long = getMemorySize(1)
-  val kernelConfig = workflowNodeOpt.map( _.operation.getConfiguration ).getOrElse( Map.empty )
-  val filters = kernelConfig.getOrElse("filter","").split(",").filter( !_.isEmpty )
+  val filters = partsConfig.getOrElse("filter","").split(",").filter( !_.isEmpty )
   val sectionRange: ma2.Range = _section.getRange(0)
   lazy val spec = computeRecordSizes()
   lazy val partitions = new Partitions( _section, getPartitions )
@@ -453,7 +452,9 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
           val parts = (0 until pSpecs.nPartitions) map (partIndex => {
             val startIndex = partIndex * pSpecs.nSlicesPerPart
             val partSize = Math.min(pSpecs.nSlicesPerPart, baseShape(0) - startIndex)
-            RegularPartition(partIndex, 0, startIndex, partSize, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
+            val start_date: Long = timeAxis.getCalendarDate(startIndex).getMillis
+            val end_date: Long = timeAxis.getCalendarDate(startIndex+partSize).getMillis
+            RegularPartition(partIndex, 0, startIndex, partSize, start_date, end_date, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
           })
           logger.info(  s"\n---------------------------------------------\n ~~~~ Generating regular batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
@@ -461,7 +462,9 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
         case cpSpecs: CustomPartitionSpecs => {
           val parts = for (partIndex <- 0 until cpSpecs.nPartitions; pRange = cpSpecs.parts(partIndex)) yield {
             val nSlicesPerRec = math.min(cpSpecs.nSlicesPerRecord, pRange.length)
-            RegularPartition(partIndex, 0, pRange.first, pRange.length, nSlicesPerRec, sliceMemorySize, _section.getOrigin, baseShape)
+            val start_date: Long = timeAxis.getCalendarDate(pRange.first).getMillis
+            val end_date: Long = timeAxis.getCalendarDate(pRange.first+pRange.length).getMillis
+            RegularPartition(partIndex, 0, pRange.first, pRange.length, start_date, end_date, nSlicesPerRec, sliceMemorySize, _section.getOrigin, baseShape)
           }
           logger.info(  s"\n---------------------------------------------\n ~~~~ Generating custom batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${cpSpecs.nSlicesPerRecord}, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
@@ -477,7 +480,9 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
       val all_records = for( seasonFilter <- seasonFilters; record <- seasonFilter.getRecords ) yield { record }
       val partitions: IndexedSeq[Partition] = if( all_records.length <= BatchSpec.nParts ) {
         for( ( record, partIndex ) <- all_records.zipWithIndex ) yield {
-          new FilteredPartition(partIndex, 0, record.first, record.length, sliceMemorySize, _section.getOrigin, baseShape, Array(record))
+          val start_date: Long = timeAxis.getCalendarDate(record.first).getMillis
+          val end_date: Long = timeAxis.getCalendarDate(record.first+record.length).getMillis
+          new FilteredPartition(partIndex, 0, record.first, record.length, start_date, end_date, sliceMemorySize, _section.getOrigin, baseShape, Array(record))
         }
       } else {
         val nRecs = seasonFilters(0).getNRecords
@@ -487,7 +492,9 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
         ( 0 until nParts ) map ( partIndex => {
           val iRecStart = partIndex*seasonRecsPerPartition
           val records = seasonFilters flatMap ( _.getPartitionRecords(iRecStart,seasonRecsPerPartition) )
-          new FilteredPartition(partIndex, 0, records.head.first, partSize, sliceMemorySize, _section.getOrigin, baseShape, records )
+          val start_date: Long = timeAxis.getCalendarDate(records.head.first).getMillis
+          val end_date: Long = timeAxis.getCalendarDate(records.head.first+partSize).getMillis
+          new FilteredPartition(partIndex, 0, records.head.first, partSize, start_date, end_date, sliceMemorySize, _section.getOrigin, baseShape, records )
         } )
       }
       logger.info(  s"\n---------------------------------------------\n ~~~~ Generating partitions for ${BatchSpec.nParts} procs: \n ${partitions.map( _.toString ).mkString( "\n\t" )}  \n---------------------------------------------\n")
@@ -609,7 +616,7 @@ class EDASPartitioner( private val _section: ma2.Section, val partsConfig: Map[S
   }
 }
 
-class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], val maskOpt: Option[CDByteArray], val cacheType: String = "fragment") extends Loggable {
+class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], val partitioner: EDASCachePartitioner, val maskOpt: Option[CDByteArray], val cacheType: String = "fragment") extends Loggable {
   val attributes = fragmentSpec.getVariableMetadata
   val _section = fragmentSpec.roi
   val missing_value: Float = getAttributeValue("missing_value", "") match { case "" => Float.MaxValue; case x => x.toFloat }
@@ -618,7 +625,7 @@ class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[Str
   val sType = getAttributeValue("dtype", "FLOAT")
   val dType = ma2.DataType.getType( sType )
   def roi: ma2.Section = new ma2.Section(_section.getRanges)
-  val partitioner = new EDASCachePartitioner(cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, dType)
+//  val partitioner = new EDASCachePartitioner(cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, dType)
   def getAttributeValue(key: String, default_value: String) =
     attributes.get(key) match {
       case Some(attr_val) => attr_val.toString.split('=').last.replace('"',' ').trim
@@ -742,7 +749,7 @@ object FragmentPersistence extends DiskCachable with FragSpecKeySet {
 //    }
 //  }\\
 
-  def restore( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode]): Option[Future[PartitionedFragment]] = {
+  def restore( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], partitioner: EDASCachePartitioner): Option[Future[PartitionedFragment]] = {
     val fragKey = fragSpec.getKey
 //    logger.info("FragmentPersistence.restore: fragKey: " + fragKey)
     findEnclosingFragmentData(fragSpec) match {
@@ -754,7 +761,7 @@ object FragmentPersistence extends DiskCachable with FragSpecKeySet {
               case Some(cache_id_fut) =>
                 Some(cache_id_fut.map((cache_id: String) => {
                   val roi = DataFragmentKey(foundFragKey).getRoi
-                  val partitioner = new EDASCachePartitioner( cache_id, roi, partsConfig, workflowNodeOpt, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
+//                  val partitioner = new EDASCachePartitioner( cache_id, roi, partsConfig, workflowNodeOpt, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
                   fragSpec.cutIntersection(roi) match {
                     case Some(section) =>
                       new PartitionedFragment( new CachePartitions( cache_id, roi, partitioner.getCachePartitions ), None, section)
@@ -1161,11 +1168,11 @@ class CollectionDataCacheMgr extends nasa.nccs.esgf.process.DataLoader with Frag
   def getFragment(fragKey: String): Option[Future[PartitionedFragment]] =
     fragmentCache.get(fragKey)
 
-  def getExistingFragment( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode] ): Option[Future[PartitionedFragment]] = {
+  def getExistingFragment( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], partitioner: EDASCachePartitioner ): Option[Future[PartitionedFragment]] = {
     val fkey = fragSpec.getKey.toStrRep
     if (!fragmentCache.keys.contains(fkey)) {
 //      logger.info("Restoring frag from cache: " + fkey.toString )
-      FragmentPersistence.restore(fragSpec, partsConfig, workflowNodeOpt) match {
+      FragmentPersistence.restore(fragSpec, partsConfig, workflowNodeOpt, partitioner ) match {
         case Some(partFragFut) =>
           val partFrag = Await.result(partFragFut, Duration.Inf)
           logger.info(" fragmentCache.put, fkey = " + fkey)

@@ -150,6 +150,9 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
       case _ => new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath )
     }
 
+  def getRDDVariableSpec: DirectRDDVariableSpec  =
+    new DirectRDDVariableSpec( fragmentSpec.uid, fragmentSpec.getMetadata( Some(fragmentSpec.roi)), fragmentSpec.missing_value, CDSection(fragmentSpec.roi), fragmentSpec.varname, fragmentSpec.collection.dataPath )
+
   def getKeyedRDDVariableSpec( uid: String, optSection: Option[ma2.Section] ): ( RecordKey, DirectRDDVariableSpec ) =
     domainSection(optSection) match {
       case Some( ( domFragSpec, section ) ) =>
@@ -162,7 +165,7 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
 class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {
   val test = 1
   def getPartitioner( optSection: Option[ma2.Section] = None ): Option[EDASPartitioner] = domainSection( optSection ) map {
-    case( frag1, section) => new EDASPartitioner( section, partsConfig, Some(workflowNode), fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
+    case( frag1, section) => new EDASPartitioner( fragSpec.uid, section, partsConfig, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
   }
   override def data(partIndex: Int ): CDFloatArray = {
     CDFloatArray.empty

@@ -895,10 +895,10 @@ class RDDPartSpec(val partition: CachePartition, val timeRange: RecordKey, val v
 }
 
 object DirectRDDPartSpec {
-  def apply(partition: Partition, tgrid: TargetGrid, varSpecs: List[ DirectRDDVariableSpec ] ): DirectRDDPartSpec = new DirectRDDPartSpec( partition, partition.getPartitionRecordKey(tgrid), varSpecs )
+  def apply(partition: Partition, tgrid: TargetGrid, varSpecs: Iterable[ DirectRDDVariableSpec ] ): DirectRDDPartSpec = new DirectRDDPartSpec( partition, partition.getPartitionRecordKey(tgrid), varSpecs )
 }
 
-class DirectRDDPartSpec(val partition: Partition, val timeRange: RecordKey, val varSpecs: List[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
+class DirectRDDPartSpec(val partition: Partition, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
 
   def getRDDRecordSpecs(): IndexedSeq[DirectRDDRecordSpec] = ( 0 until partition.nRecords ) map ( DirectRDDRecordSpec( this, _ ) )
 
@@ -915,11 +915,11 @@ object DirectRDDRecordSpec {
   def apply( partSpec: DirectRDDPartSpec, iRecord: Int ): DirectRDDRecordSpec = new DirectRDDRecordSpec( partSpec.partition, iRecord, partSpec.timeRange, partSpec.varSpecs )
 }
 
-class DirectRDDRecordSpec(val partition: Partition, iRecord: Int, val timeRange: RecordKey, val varSpecs: List[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
+class DirectRDDRecordSpec(val partition: Partition, iRecord: Int, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
 
   def getRDDPartition(kernelContext: KernelContext, batchIndex: Int ): RDDRecord = {
     val t0 = System.nanoTime()
-    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition,iRecord)) ): _* )
+    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition,iRecord)) ).toSeq: _* )
     val rv = RDDRecord( elements, Map( "partIndex" -> partition.index.toString, "startIndex" -> timeRange.elemStart.toString, "recIndex" -> iRecord.toString, "batchIndex" -> batchIndex.toString ) )
     val dt = (System.nanoTime() - t0) / 1.0E9
     logger.debug( "DirectRDDRecordSpec{ partition = %s, record = %d }: completed data input in %.4f sec".format( partition.toString, iRecord, dt) )

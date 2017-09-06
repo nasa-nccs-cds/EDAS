@@ -494,6 +494,20 @@ class DataFragmentSpec(val uid: String = "",
   }
   def getMetadata( key: String ): Option[String] = _metadata.get( key )
 
+  def domainSection: Option[ DataFragmentSpec ] = {
+    try {
+      val domain_section = domainSectOpt match {
+        case Some(dsect) => roi.intersect(dsect)
+        case None => roi
+      }
+      cutIntersection( domain_section )
+    } catch {
+      case ex: Exception =>
+        logger.warn( s"Failed getting data fragment: " + ex.toString )
+        None
+    }
+  }
+
   def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = targetGridOpt flatMap ( _.getTimeCoordinateAxis )
 
   def getPartitionKey: RecordKey = targetGridOpt match {
