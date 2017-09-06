@@ -31,7 +31,7 @@ try:
     else:
         portal = EDASPortal(  server, request_port, response_port)
 
-    response_manager = portal.getResponseManager()
+    response_manager = portal.createResponseManager()
 
     t0 = time.time()
     datainputs = '[domain=[{"name":"d0","lat":{"start":30,"end":40,"system":"indices"},"lon":{"start":30,"end":40,"system":"indices"},"lev":{"start":10,"end":10,"system":"indices"},"time":{"start":0,"end":100,"system":"indices"}}],variable=[{"uri":"' + currentGISSDataset + '","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","axes":"xt","filter":"DJF"}]]'

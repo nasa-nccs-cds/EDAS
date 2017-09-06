@@ -8,7 +8,7 @@ response_port = 5671
 
 try:
     portal = EDASPortal(  "cldralogin101", request_port, response_port )
-    response_manager = portal.getResponseManager()
+    response_manager = portal.createResponseManager()
 
     datainputs = """[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
 

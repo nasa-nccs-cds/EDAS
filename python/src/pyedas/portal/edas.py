@@ -243,7 +243,7 @@ class EDASPortal:
         self.application_thread = AppThread( self.app_host, self.request_port, self.response_port )
         self.application_thread.start()
 
-    def getResponseManager(self):
+    def createResponseManager(self):
         return self.response_manager
 
     def shutdown(self):
