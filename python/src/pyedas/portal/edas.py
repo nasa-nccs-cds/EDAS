@@ -110,7 +110,7 @@ class ResponseManager(Thread):
             rId = self.getItem( toks, 0 )
             type = self.getItem( toks, 1 )
             msg = self.getItem(toks, 2)
-            self.logger.info(" #### Received response, rid: " + rId + ", type: " + type )
+            self.log("Received response, rid: " + rId + ", type: " + type )
             if type == "array":
                 self.log( "\n\n #### Received array " + rId + ": " + msg )
                 data = socket.recv()
