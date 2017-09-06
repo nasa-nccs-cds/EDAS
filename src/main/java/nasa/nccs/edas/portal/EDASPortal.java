@@ -118,7 +118,6 @@ class Responder extends Thread {
     void heartbeat(ZMQ.Socket socket) {
         Message hb_msg = new Message( "status", status_reports.toString() );
         doSendMessage( socket, hb_msg );
-        logger.info( "." );
     }
 
     public void run()  {
