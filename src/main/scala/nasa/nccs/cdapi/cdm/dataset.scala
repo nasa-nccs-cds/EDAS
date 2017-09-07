@@ -7,7 +7,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, _}
 import java.net.URI
 import java.nio._
-import java.util.Formatter
+import java.util.{Formatter, Locale}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
@@ -951,6 +951,19 @@ object NetcdfDatasetMgr extends Loggable {
 //  NetcdfDataset.initNetcdfFileCache(10,1000,3600)   // Bugs in Netcdf file caching cause NullPointerExceptions on MERRA2 npana datasets (var T): ( 3/3/2017 )
   val datasetCache = new ConcurrentLinkedHashMap.Builder[String, NetcdfDataset].initialCapacity(64).maximumWeightedCapacity(1000).build()
   val MB = 1024*1024
+  val formatter = new Formatter(Locale.US)
+
+  def getTimeAxis( dataPath: String ): CoordinateAxis1DTime = {
+    val ncDataset: NetcdfDataset = open( dataPath )
+    val axes = ncDataset.getCoordinateAxes.toList
+    val result = axes.find( _.getAxisType == AxisType.Time ) match {
+      case Some( time_axis ) => CoordinateAxis1DTime.factory(ncDataset, time_axis, formatter )
+      case None => throw new Exception( "Can't find time axis in dataset: " + dataPath )
+    }
+    close( dataPath )
+    result
+  }
+
 
   def readVariableData(varShortName: String, dataPath: String, section: ma2.Section): ma2.Array = {
     val ncDataset: NetcdfDataset = open( dataPath )

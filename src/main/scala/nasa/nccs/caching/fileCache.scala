@@ -24,8 +24,10 @@ import nasa.nccs.utilities.{Loggable, cdsutils}
 import org.apache.commons.io.{FileUtils, IOUtils}
 import ucar.ma2.Range
 import ucar.nc2.dataset.CoordinateAxis1DTime
+import ucar.nc2.time.CalendarDate
 import ucar.nc2.time.CalendarPeriod.Field.{Month, Year}
 import ucar.{ma2, nc2}
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -137,19 +139,20 @@ class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: I
     }
 }
 
-abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int, val partSize: Int, val start_date: Long, val end_date: Long, val sliceMemorySize: Long, val origin: Array[Int], val shape: Array[Int]) extends Loggable with Serializable {
-  val partitionOrigin: Array[Int] = origin.zipWithIndex map { case (value, ival) => if( ival== 0 ) value + startIndex else value }
-  val endIndex: Int = startIndex + partSize - 1
+abstract class Partition( val index: Int, val start_time: Long, val end_time: Long ) extends Loggable with Serializable {
+  val start_date: CalendarDate = CalendarDate.of(start_time)
+  val end_date: CalendarDate = CalendarDate.of(end_time)
 
-  def recordSection( section: ma2.Section, iRecord: Int ): ma2.Section = {
-    val rec_range = recordRange(iRecord)
-    val rv = new ma2.Section(section.getRanges).replaceRange(dimIndex, rec_range ).intersect(section)
-    logger.info( " *** RecordSection[%d]: dim=%d, range=[ %d, %d ]: %s -> %s ".format(iRecord,dimIndex,rec_range.first,rec_range.last, section.toString, rv.toString ) )
+  def recordSection( section: ma2.Section, iRecord: Int, timeAxis: CoordinateAxis1DTime, start_time: Long, end_time: Long ): ma2.Section = {
+    val start_index = timeAxis.findTimeIndexFromCalendarDate(start_date)
+    val end_index = timeAxis.findTimeIndexFromCalendarDate(end_date)
+    val rv = new ma2.Section(section.getRanges).replaceRange(0, new Range(start_index,end_index) )
+    logger.info( " *** RecordSection[%d]: dim=%d, range=[ %d, %d ]: %s -> %s ".format(iRecord,0,start_index,end_index, section.toString, rv.toString ) )
     rv
   }
-  override def toString() = s"Part[$index]{ start=$startIndex, size=$partSize, origin=(${origin.mkString(",")}), shape=(${shape.mkString(",")}) ]"
+  override def toString() = s"Part[$index]{ start=${start_date.toString}, end=${end_date.toString} }"
   def partSection(section: ma2.Section): ma2.Section = {
-    new ma2.Section(section.getRanges).replaceRange(dimIndex, partRange)
+    new ma2.Section(section.getRanges).replaceRange(0, partRange)
   }
   def partRange: ma2.Range = { new ma2.Range( origin(0)+startIndex, origin(0)+endIndex) }
 
@@ -616,7 +619,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
   }
 }
 
-class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], val partitioner: EDASCachePartitioner, val maskOpt: Option[CDByteArray], val cacheType: String = "fragment") extends Loggable {
+class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], val maskOpt: Option[CDByteArray], val cacheType: String = "fragment") extends Loggable {
   val attributes = fragmentSpec.getVariableMetadata
   val _section = fragmentSpec.roi
   val missing_value: Float = getAttributeValue("missing_value", "") match { case "" => Float.MaxValue; case x => x.toFloat }
@@ -625,7 +628,7 @@ class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[Str
   val sType = getAttributeValue("dtype", "FLOAT")
   val dType = ma2.DataType.getType( sType )
   def roi: ma2.Section = new ma2.Section(_section.getRanges)
-//  val partitioner = new EDASCachePartitioner(cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, dType)
+  val partitioner = new EDASCachePartitioner(fragmentSpec.uid, cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, dType)
   def getAttributeValue(key: String, default_value: String) =
     attributes.get(key) match {
       case Some(attr_val) => attr_val.toString.split('=').last.replace('"',' ').trim
@@ -749,7 +752,7 @@ object FragmentPersistence extends DiskCachable with FragSpecKeySet {
 //    }
 //  }\\
 
-  def restore( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], partitioner: EDASCachePartitioner): Option[Future[PartitionedFragment]] = {
+  def restore( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode] ): Option[Future[PartitionedFragment]] = {
     val fragKey = fragSpec.getKey
 //    logger.info("FragmentPersistence.restore: fragKey: " + fragKey)
     findEnclosingFragmentData(fragSpec) match {
@@ -761,7 +764,7 @@ object FragmentPersistence extends DiskCachable with FragSpecKeySet {
               case Some(cache_id_fut) =>
                 Some(cache_id_fut.map((cache_id: String) => {
                   val roi = DataFragmentKey(foundFragKey).getRoi
-//                  val partitioner = new EDASCachePartitioner( cache_id, roi, partsConfig, workflowNodeOpt, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
+                  val partitioner = new EDASCachePartitioner( fragSpec.uid, cache_id, roi, partsConfig, workflowNodeOpt, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles )
                   fragSpec.cutIntersection(roi) match {
                     case Some(section) =>
                       new PartitionedFragment( new CachePartitions( cache_id, roi, partitioner.getCachePartitions ), None, section)
@@ -1168,11 +1171,11 @@ class CollectionDataCacheMgr extends nasa.nccs.esgf.process.DataLoader with Frag
   def getFragment(fragKey: String): Option[Future[PartitionedFragment]] =
     fragmentCache.get(fragKey)
 
-  def getExistingFragment( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], partitioner: EDASCachePartitioner ): Option[Future[PartitionedFragment]] = {
+  def getExistingFragment( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode] ): Option[Future[PartitionedFragment]] = {
     val fkey = fragSpec.getKey.toStrRep
     if (!fragmentCache.keys.contains(fkey)) {
 //      logger.info("Restoring frag from cache: " + fkey.toString )
-      FragmentPersistence.restore(fragSpec, partsConfig, workflowNodeOpt, partitioner ) match {
+      FragmentPersistence.restore(fragSpec, partsConfig, workflowNodeOpt ) match {
         case Some(partFragFut) =>
           val partFrag = Await.result(partFragFut, Duration.Inf)
           logger.info(" fragmentCache.put, fkey = " + fkey)

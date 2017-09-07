@@ -5,7 +5,7 @@ import nasa.nccs.cdapi.cdm.{NetcdfDatasetMgr, RemapElem, TimeConversionSpec}
 import nasa.nccs.cdapi.tensors.{CDFloatArray, _}
 import nasa.nccs.edas.engine.spark.{RangePartitioner, RecordKey}
 import nasa.nccs.edas.workers.TransVar
-import nasa.nccs.esgf.process.{CDSection, GridContext, TargetGrid}
+import nasa.nccs.esgf.process.{CDSection, GridContext, RequestContext, TargetGrid}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import org.apache.spark.rdd.RDD
 import ucar.nc2.constants.AxisType
@@ -24,7 +24,8 @@ import nasa.nccs.edas.portal.TestReadApplication.logger
 import ucar.ma2.{ArrayFloat, Index, IndexIterator}
 import ucar.nc2.dataset.{CoordinateAxis1DTime, NetcdfDataset}
 import ucar.nc2.time.{CalendarDate, CalendarPeriod}
-import scala.xml.{Elem,Node}
+
+import scala.xml.{Elem, Node}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.{SortedMap, TreeMap}
@@ -917,13 +918,12 @@ object DirectRDDRecordSpec {
 
 class DirectRDDRecordSpec(val partition: Partition, iRecord: Int, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
 
-  def getRDDPartition(kernelContext: KernelContext, batchIndex: Int ): RDDRecord = {
+  def getRDDPartition( requestCx: RequestContext, batchIndex: Int ): RDDRecord = {
     val t0 = System.nanoTime()
     val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition,iRecord)) ).toSeq: _* )
     val rv = RDDRecord( elements, Map( "partIndex" -> partition.index.toString, "startIndex" -> timeRange.elemStart.toString, "recIndex" -> iRecord.toString, "batchIndex" -> batchIndex.toString ) )
     val dt = (System.nanoTime() - t0) / 1.0E9
     logger.debug( "DirectRDDRecordSpec{ partition = %s, record = %d }: completed data input in %.4f sec".format( partition.toString, iRecord, dt) )
-    kernelContext.addTimestamp( "Created input RDD { partition = %s, record = %d, batch = %d } in %.4f sec".format( partition.toString, iRecord, batchIndex, dt) )
     rv
   }
 
@@ -955,9 +955,10 @@ class ExtRDDPartSpec(val timeRange: RecordKey, val varSpecs: List[ RDDVariableSp
 
 }
 
-class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, section: CDSection, val varShortName: String, val dataPath: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
+class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, val varShortName: String, val dataPath: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
   def toHeapArray(partition: Partition, iRecord: Int ) = {
-    val recordSection = partition.recordSection( section.toSection, iRecord )
+    val timeAxis: CoordinateAxis1DTime = NetcdfDatasetMgr.getTimeAxis(dataPath)
+    val recordSection: ma2.Section = partition.recordSection( timeAxis, partition.start_date, partition.end_date )
     val part_size = recordSection.getShape.product
     if( part_size > 0 ) {
       val fltData: CDFloatArray = CDFloatArray.factory(readVariableData(recordSection), missing)

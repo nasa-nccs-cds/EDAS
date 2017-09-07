@@ -53,6 +53,7 @@ class RequestContext( val inputs: Map[String, Option[DataFragmentSpec]], val req
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = request.domainMap
+  val partitioner: EDASPartitioner = generatePartitioning
   def getConf( key: String, default: String ) = configuration.getOrElse(key,default)
   def missing_variable(uid: String) = throw new Exception("Can't find Variable '%s' in uids: [ %s ]".format(uid, inputs.keySet.mkString(", ")))
   def getDataSources: Map[String, Option[DataFragmentSpec]] = inputs
@@ -67,6 +68,7 @@ class RequestContext( val inputs: Map[String, Option[DataFragmentSpec]], val req
     case Some(optInputSpec) => optInputSpec map { _.roi }
     case None =>inputs.head._2 map { _.roi }
   }
+
   def getTargetGridSpec( kernelContext: KernelContext ) : String = {
     if( kernelContext.crsOpt.getOrElse("").indexOf('~') > 0 ) { "gspec:" + kernelContext.crsOpt.get }
     else {
@@ -81,6 +83,14 @@ class RequestContext( val inputs: Map[String, Option[DataFragmentSpec]], val req
   def getDomain(domain_id: String): DomainContainer = domains.get(domain_id) match {
     case Some(domain_container) => domain_container
     case None => throw new Exception("Undefined domain in ExecutionContext: " + domain_id)
+  }
+  def generatePartitioning: EDASPartitioner = {
+    val fragments: Iterable[DataFragmentSpec] = inputs.values.flatten.flatMap( _.domainSection )
+    if( fragments.isEmpty ) { throw new Exception( "No Inputs for request + " + request.name + " ( " + request.id + " )" )  }
+    else {
+      val largestInput: DataFragmentSpec = fragments.foldLeft(fragments.head)((x, y) => if(x.getSize > y.getSize) x else y )
+      new EDASPartitioner( largestInput.uid, largestInput.roi, getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles )
+    }
   }
   def getTargetGrid( uid: String  ): Option[TargetGrid] = request.getTargetGrid( uid )
 //  def getAxisIndices( axisConf: String ): AxisIndices = targetGrid.getAxisIndices( axisConf  )

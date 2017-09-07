@@ -1,7 +1,6 @@
 package nasa.nccs.edas.engine.spark
-import nasa.nccs.cdapi.data.RDDRecord$
 import nasa.nccs.utilities.Loggable
-import org.apache.spark.Partitioner
+import org.apache.spark
 import org.apache.spark.rdd.RDD
 import ucar.nc2.time.CalendarDate
 
@@ -128,7 +127,7 @@ object RangePartitioner {
 }
 
 
-class RangePartitioner( val partitions: Map[Int,RecordKey] ) extends Partitioner with Loggable {
+class RangePartitioner( val partitions: Map[Int,RecordKey] ) extends spark.Partitioner with Loggable {
   val range = RecordKey(partitions.values)
   val numParts = partitions.size
   val numElems = range.numElems

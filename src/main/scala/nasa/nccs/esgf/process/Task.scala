@@ -212,7 +212,9 @@ object TaskRequest extends Loggable {
     val domainMap = buildDomainMap(domain_list)
     val gridId = datainputs.getOrElse("grid", data_list.headOption.map(dc => dc.uid).getOrElse("#META")).toString
     val gridSpec = Map("id" -> gridId.toString)
-    new TaskRequest( uid, process_name, variableMap, domainMap, operation_list, gridSpec )
+    val rv = new TaskRequest( uid, process_name, variableMap, domainMap, operation_list, gridSpec )
+    logger.info( " -> Generated TaskRequest, uid = " + uid.toString )
+    rv
   }
 
   def getEmptyOpSpecs( data_list: List[DataContainer] ): Seq[Map[String, Any]] = {

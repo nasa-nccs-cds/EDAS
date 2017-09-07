@@ -113,6 +113,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def executeProcess(request: TaskRequest, process_name: String, dataInputsSpec: String, runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Node = {
+    logger.info( "zmqProcessManager executeProcess: " + request.id.toString )
     val rId = portal.sendMessage( "execute", List( process_name, dataInputsSpec, map2Str(runargs) ).toArray )
     val responses: List[String] = response_manager.getResponses(rId,true).toList
     logger.info( "Received responses:\n\t--> " + responses.mkString("\n\t--> "))
