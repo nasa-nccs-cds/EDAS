@@ -8,7 +8,7 @@ import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
 import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.EDASApplication.logger
-import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
+import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.esgf.wps.cds2ServiceProvider.getResponseSyntax
@@ -85,7 +85,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         else if( responseType == "file" ) { sendFileResponse( response_syntax, taskSpec(0), results ) }
       }
     }
-    val response = processManager.executeProcess( request, process_name, dataInputsSpec, runargs, Some(executionCallback) )
+    val response = processManager.executeProcess( Job( request, process_name, dataInputsSpec, runargs), Some(executionCallback) )
     sendResponse( rId, printer.format( response ) )
     setExeStatus( rId, "completed" )
   }

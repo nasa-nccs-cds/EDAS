@@ -7,6 +7,7 @@ import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.esgf.process.UID.ndigits
+import nasa.nccs.esgf.wps.Job
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import org.apache.commons.lang.RandomStringUtils
 
@@ -695,7 +696,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
     val rId: String = RandomStringUtils.random( 6, true, true )
     val request = TaskRequest( rId, service, parsed_data_inputs)
-    val response: xml.Elem = webProcessManager.executeProcess( request, identifier, datainputs, runargs)
+    val response: xml.Elem = webProcessManager.executeProcess( Job( request, identifier, datainputs, runargs ) )
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
     println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
     response

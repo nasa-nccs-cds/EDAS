@@ -12,10 +12,12 @@ import scala.collection.JavaConversions._
 
 class NotAcceptableException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
 
+case class Job( request: TaskRequest, identifier: String, datainputs: String, runargs: Map[String,String] ) {}
+
 trait GenericProcessManager {
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node;
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node;
-  def executeProcess( request: TaskRequest, process_name: String, dataInputsSpec: String, runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Node
+  def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node
   def getResultFilePath( service: String, resultId: String ): Option[String]
   def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
@@ -48,10 +50,10 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getWPSCapabilities( identifier, runArgs )
   }
 
-  def executeProcess( request: TaskRequest, process_name: String, dataInputsSpec: String, runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
-    val serviceProvider = apiManager.getServiceProvider(request.name)
-    logger.info("Executing Service %s, Service provider = %s ".format( request.name, serviceProvider.getClass.getName ))
-    serviceProvider.executeProcess(request, dataInputsSpec, runargs, executionCallback )
+  def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
+    val serviceProvider = apiManager.getServiceProvider(job.request.name)
+    logger.info("Executing Service %s, Service provider = %s ".format( job.request.name, serviceProvider.getClass.getName ))
+    serviceProvider.executeProcess(job.request, job.datainputs, job.runargs, executionCallback )
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
@@ -112,9 +114,9 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     EDAS_XML.loadString( responses(0) )
   }
 
-  def executeProcess(request: TaskRequest, process_name: String, dataInputsSpec: String, runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Node = {
-    logger.info( "zmqProcessManager executeProcess: " + request.id.toString )
-    val rId = portal.sendMessage( "execute", List( process_name, dataInputsSpec, map2Str(runargs) ).toArray )
+  def executeProcess(job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node = {
+    logger.info( "zmqProcessManager executeProcess: " + job.request.id.toString )
+    val rId = portal.sendMessage( "execute", List( job.identifier, job.datainputs, map2Str(job.runargs) ).toArray )
     val responses: List[String] = response_manager.getResponses(rId,true).toList
     logger.info( "Received responses:\n\t--> " + responses.mkString("\n\t--> "))
     EDAS_XML.loadString( responses(0) )
