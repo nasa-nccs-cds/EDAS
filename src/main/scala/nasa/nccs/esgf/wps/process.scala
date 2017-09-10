@@ -12,7 +12,11 @@ import scala.collection.JavaConversions._
 
 class NotAcceptableException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
 
-case class Job( request: TaskRequest, identifier: String, datainputs: String, runargs: Map[String,String] ) {}
+case class Job( request: TaskRequest, identifier: String, datainputs: String, runargs: Map[String,String], default_priority: Float = 1f ) extends Comparable[Job] {
+  def sign(f: Float): Int = if( f > 0f ) { 1 } else if( f < 0f ) { -1 } else { 0 }
+  def priority: Float = { default_priority }
+  def compareTo( job: Job ): Int = sign( priority - job.priority )
+}
 
 trait GenericProcessManager {
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node;
@@ -22,8 +26,6 @@ trait GenericProcessManager {
   def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
 }
-
-
 
 class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericProcessManager with Loggable {
   def apiManager = new APIManager( serverConfiguration )
