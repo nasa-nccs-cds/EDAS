@@ -41,6 +41,7 @@ object Collection extends Loggable {
     val ctype = dataPath match {
       case url if(url.startsWith("http:")) => "dap"
       case url if(url.startsWith("file:")) => "file"
+      case col if(col.startsWith("collection:")) => "collection"
       case dpath if(dpath.toLowerCase.endsWith(".csv")) => "csv"
       case fpath if(new File(fpath).isFile) => "file"
       case dir if(new File(dir).isDirectory) => "file"
