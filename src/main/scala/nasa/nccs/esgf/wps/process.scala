@@ -12,7 +12,7 @@ import scala.collection.JavaConversions._
 
 class NotAcceptableException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
 
-case class Job( request: TaskRequest, identifier: String, datainputs: String, runargs: Map[String,String], default_priority: Float = 1f ) extends Comparable[Job] {
+case class Job( requestId: String, process: String, datainputs: String, runargs: Map[String,String], default_priority: Float = 1f ) extends Comparable[Job] {
   def sign(f: Float): Int = if( f > 0f ) { 1 } else if( f < 0f ) { -1 } else { 0 }
   def priority: Float = { default_priority }
   def compareTo( job: Job ): Int = sign( priority - job.priority )
@@ -53,9 +53,10 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
   }
 
   def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
-    val serviceProvider = apiManager.getServiceProvider(job.request.name)
-    logger.info("Executing Service %s, Service provider = %s ".format( job.request.name, serviceProvider.getClass.getName ))
-    serviceProvider.executeProcess(job.request, job.datainputs, job.runargs, executionCallback )
+    val dataInputsObj = if( !job.datainputs.isEmpty ) wpsObjectParser.parseDataInputs( job.datainputs ) else Map.empty[String, Seq[Map[String, Any]]]
+    val request: TaskRequest = TaskRequest( job.requestId, job.process, dataInputsObj )
+    val serviceProvider = apiManager.getServiceProvider("edas")
+    serviceProvider.executeProcess( request, job.datainputs, job.runargs, executionCallback )
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
@@ -117,8 +118,8 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def executeProcess(job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node = {
-    logger.info( "zmqProcessManager executeProcess: " + job.request.id.toString )
-    val rId = portal.sendMessage( "execute", List( job.identifier, job.datainputs, map2Str(job.runargs) ).toArray )
+    logger.info( "zmqProcessManager executeProcess: " + job.requestId.toString )
+    val rId = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
     val responses: List[String] = response_manager.getResponses(rId,true).toList
     logger.info( "Received responses:\n\t--> " + responses.mkString("\n\t--> "))
     EDAS_XML.loadString( responses(0) )

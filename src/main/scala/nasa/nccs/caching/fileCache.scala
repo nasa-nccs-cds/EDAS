@@ -19,7 +19,7 @@ import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.TransientFragment
 import nasa.nccs.edas.loaders.Masks
 import nasa.nccs.esgf.process.{DataFragmentKey, _}
-import nasa.nccs.esgf.wps.cds2ServiceProvider
+import nasa.nccs.esgf.wps.edasServiceProvider
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import org.apache.commons.io.{FileUtils, IOUtils}
 import ucar.ma2.Range
@@ -56,7 +56,7 @@ class CacheChunk(val offset: Int,
 }
 
 object BatchSpec extends Loggable {
-  lazy val serverContext = cds2ServiceProvider.cds2ExecutionManager.serverContext
+  lazy val serverContext = edasServiceProvider.cds2ExecutionManager.serverContext
   lazy val nCores = appParameters( "parts.per.node", "1" ).toInt
   lazy val nNodes = appParameters( "num.cluster.nodes", "1" ).toInt
   lazy val nParts = nCores * nNodes

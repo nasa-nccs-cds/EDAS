@@ -42,7 +42,7 @@ trait ServiceProvider extends Loggable {
 
 }
 
-object cds2ServiceProvider extends ServiceProvider {
+object edasServiceProvider extends ServiceProvider {
   import nasa.nccs.edas.engine.CDS2ExecutionManager
   import nasa.nccs.esgf.process.TaskRequest
 
@@ -68,7 +68,7 @@ object cds2ServiceProvider extends ServiceProvider {
   override def executeProcess(request: TaskRequest, dataInputsSpec: String, runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Elem = {
     val syntax = getResponseSyntax(runargs)
     try {
-      logger.info( " @@cds2ServiceProvider: exec process: " + request.name + ", runArgs = " + runargs.mkString("; ") )
+      logger.info( " @@edasServiceProvider: exec process: " + request.name + ", runArgs = " + runargs.mkString("; ") )
 
       cdsutils.time(logger, "\n\n-->> Process %s, datainputs: %s \n\n".format(request.name, dataInputsSpec ) ) {
         if (runargs.getOrElse("status", "false").toBoolean) {

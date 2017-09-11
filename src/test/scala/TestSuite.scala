@@ -690,15 +690,13 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     variables.toList
   }
 
-  def executeTest( datainputs: String, runArgs: Map[String,String]=Map.empty, identifier: String = "CDSpark.workflow"  ): xml.Elem = {
+  def executeTest( datainputs: String, runArgs: Map[String,String]=Map.empty, process_name: String = "CDSpark.workflow"  ): xml.Elem = {
     val t0 = System.nanoTime()
     val runargs = runArgs ++ Map( "responseform" -> "generic", "storeexecuteresponse" -> "true", "unitTest" -> "true", "status" -> "false" )
-    val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
     val rId: String = RandomStringUtils.random( 6, true, true )
-    val request = TaskRequest( rId, service, parsed_data_inputs)
-    val response: xml.Elem = webProcessManager.executeProcess( Job( request, identifier, datainputs, runargs ) )
+    val response: xml.Elem = webProcessManager.executeProcess( Job( rId, process_name, datainputs, runargs ) )
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
-    println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
+    println("Completed test '%s' in %.4f sec".format(process_name, (System.nanoTime() - t0) / 1.0E9))
     response
   }
 

@@ -11,7 +11,7 @@ import nasa.nccs.edas.portal.EDASApplication.logger
 import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.TaskRequest
-import nasa.nccs.esgf.wps.cds2ServiceProvider.getResponseSyntax
+import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSMergedEventReport, WPSResponse}
 import org.apache.spark.SparkEnv
@@ -71,9 +71,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   override def execute( taskSpec: Array[String] ) = {
     val rId = elem(taskSpec,0)
     val process_name = elem(taskSpec,2)
-    val dataInputsSpec = taskSpec(3)
-    val dataInputsObj = if( taskSpec.length > 3 ) wpsObjectParser.parseDataInputs( dataInputsSpec ) else Map.empty[String, Seq[Map[String, Any]]]
-    val request: TaskRequest = TaskRequest( rId, process_name, dataInputsObj )
+    val dataInputsSpec = elem(taskSpec,3)
     setExeStatus( rId, "executing " + process_name + "-> " + dataInputsSpec )
 
     val runargs = getRunArgs( taskSpec )
@@ -85,7 +83,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         else if( responseType == "file" ) { sendFileResponse( response_syntax, taskSpec(0), results ) }
       }
     }
-    val response = processManager.executeProcess( Job( request, process_name, dataInputsSpec, runargs), Some(executionCallback) )
+    val response = processManager.executeProcess( Job( rId, process_name, dataInputsSpec, runargs), Some(executionCallback) )
     sendResponse( rId, printer.format( response ) )
     setExeStatus( rId, "completed" )
   }

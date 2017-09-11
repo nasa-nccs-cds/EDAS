@@ -25,7 +25,7 @@ import scala.collection.mutable.HashSet
 import mutable.ListBuffer
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.esgf.utilities.wpsNameMatchers
-import nasa.nccs.esgf.wps.cds2ServiceProvider
+import nasa.nccs.esgf.wps.edasServiceProvider
 import nasa.nccs.wps._
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2.dataset.CoordinateAxis1DTime
@@ -55,7 +55,7 @@ class TaskRequest(val id: UID,
   validate()
   logger.info(s"TaskRequest: name= $name, workflows= " + operations.mkString(
     ",") + ", variableMap= " + variableMap.toString + ", domainMap= " + domainMap.toString)
-  val workflow = Workflow(this, cds2ServiceProvider.cds2ExecutionManager);
+  val workflow = Workflow(this, edasServiceProvider.cds2ExecutionManager);
 
   def addErrorReport(severity: String, message: String) = {
     val error_rep = ErrorReport(severity, message)
