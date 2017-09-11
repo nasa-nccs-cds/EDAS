@@ -857,20 +857,8 @@ object DataContainer extends ContainerBase {
       metadata: Map[String, Any]): (Option[Collection], Option[String]) = {
     val uri = metadata.getOrElse("uri", "").toString
     val varsList: List[String] =
-      if (metadata.keySet.contains("id"))
-        metadata
-          .getOrElse("id", "")
-          .toString
-          .split(",")
-          .map(item => stripQuotes(vid(item, false)))
-          .toList
-      else
-        metadata
-          .getOrElse("name", "")
-          .toString
-          .split(",")
-          .map(item => stripQuotes(vid(item, false)))
-          .toList
+      if (metadata.keySet.contains("id")) metadata.getOrElse("id", "").toString.split(",").map(item => stripQuotes(vid(item, false))).toList
+      else metadata.getOrElse("name", "").toString.split(",").map(item => stripQuotes(vid(item, false))).toList
     val path = metadata.getOrElse("path", "").toString
     val collection = metadata.getOrElse("collection", "").toString
     val title = metadata.getOrElse("title", "").toString
@@ -892,17 +880,14 @@ object DataContainer extends ContainerBase {
         if (colId.equals("")) {
           (None, None)
         } else if (path.isEmpty && !collection.isEmpty) {
-          (Some(Collections.addCollection(colId, path, title, varsList)),
-           fragIdOpt)
+          (Some(Collections.addCollection(colId, path, title, varsList)), fragIdOpt)
         } else {
-          if (path.isEmpty)
-            throw new Exception(
-              s"Unrecognized collection: '$colId', current collections: " + Collections.idSet
-                .mkString(", "))
-          (Some(
-             Collections
-               .addCollection(colId, path, fileFilter, title, varsList)),
-           fragIdOpt)
+          if (path.isEmpty) {
+            logger.warn( s"Unrecognized collection: '$colId', current collections: " + Collections.idSet.mkString(", "))
+            ( None, fragIdOpt )
+          } else {
+            ( Some(Collections.addCollection(colId, path, fileFilter, title, varsList)), fragIdOpt )
+          }
         }
     }
   }
