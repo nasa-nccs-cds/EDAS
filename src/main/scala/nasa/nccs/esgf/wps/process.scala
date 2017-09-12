@@ -12,9 +12,10 @@ import scala.collection.JavaConversions._
 
 class NotAcceptableException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
 
-case class Job( requestId: String, process: String, datainputs: String, runargs: Map[String,String], default_priority: Float = 1f ) extends Comparable[Job] {
+case class Job( requestId: String, identifier: String, datainputs: String, runargs: Map[String,String], _priority: Float = 0.1f ) extends Comparable[Job] {
+  def this( requestId: String, identifier: String, __priority: Float = 1f ) { this(requestId, identifier, "", Map.empty[String,String], __priority ); }
   def sign(f: Float): Int = if( f > 0f ) { 1 } else if( f < 0f ) { -1 } else { 0 }
-  def priority: Float = { default_priority }
+  def priority: Float = { _priority }
   def compareTo( job: Job ): Int = sign( priority - job.priority )
 }
 
@@ -54,7 +55,7 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
 
   def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
     val dataInputsObj = if( !job.datainputs.isEmpty ) wpsObjectParser.parseDataInputs( job.datainputs ) else Map.empty[String, Seq[Map[String, Any]]]
-    val request: TaskRequest = TaskRequest( job.requestId, job.process, dataInputsObj )
+    val request: TaskRequest = TaskRequest( job.requestId, job.identifier, dataInputsObj )
     val serviceProvider = apiManager.getServiceProvider("edas")
     serviceProvider.executeProcess( request, job.datainputs, job.runargs, executionCallback )
   }

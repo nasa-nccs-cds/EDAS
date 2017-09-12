@@ -695,7 +695,9 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val runargs = runArgs ++ Map( "responseform" -> "generic", "storeexecuteresponse" -> "true", "unitTest" -> "true", "status" -> "false" )
     val rId: String = RandomStringUtils.random( 6, true, true )
     val response: xml.Elem = webProcessManager.executeProcess( Job( rId, process_name, datainputs, runargs ) )
-    for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
+    for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) {
+      throw new Exception( child_node.toString )
+    }
     println("Completed test '%s' in %.4f sec".format(process_name, (System.nanoTime() - t0) / 1.0E9))
     response
   }

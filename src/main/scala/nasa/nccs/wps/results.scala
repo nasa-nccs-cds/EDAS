@@ -1,11 +1,13 @@
 package nasa.nccs.wps
 
 import nasa.nccs.caching.RDDTransientVariable
-import nasa.nccs.cdapi.data.{RDDRecord}
+import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.{DataFragmentSpec, TargetGrid}
+import nasa.nccs.esgf.wps.CDSecurity
 import nasa.nccs.utilities.Loggable
+import nasa.nccs.wps.ResponseSyntax.Value
 
 object WPSProcessExecuteResponse {
   def merge(  serviceInstance: String, responses: List[WPSProcessExecuteResponse] ): WPSProcessExecuteResponse = new MergedWPSExecuteResponse( serviceInstance, responses )
@@ -13,7 +15,17 @@ object WPSProcessExecuteResponse {
 
 object ResponseSyntax extends Enumeration {
   val WPS, Generic, Default = Value
+  def fromString( syntax: String ): Value = {
+    syntax.toLowerCase match {
+      case "wps" => WPS
+      case "generic" => Generic
+      case "default" => Default
+      case x => throw new Exception( "Error, unrecognizable response syntax: " + syntax )
+    }
+  }
 }
+
+
 
 trait WPSResponse extends {
   val proxyAddress =  appParameters("wps.server.proxy.href","")
@@ -21,6 +33,7 @@ trait WPSResponse extends {
     case "generic" => ResponseSyntax.Generic
     case _ => ResponseSyntax.WPS
   }
+
   def toXml( syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem
 }
 
@@ -134,7 +147,7 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
 
 }
 
-abstract class WPSReferenceExecuteResponse( serviceInstance: String, val process: WPSProcess, val resultId: String )  extends WPSProcessExecuteResponse( serviceInstance, process )  {
+abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: List[WPSProcess], val resultId: String )  extends WPSProcessExecuteResponse( serviceInstance, processes )  {
   val statusHref: String = proxyAddress + s"/wps/status?id=$resultId"
   val fileHref: String = proxyAddress + s"/wps/file?id=$resultId"
   val resultHref: String = proxyAddress + s"/wps/result?id=$resultId"
@@ -191,7 +204,7 @@ class MergedWPSExecuteResponse( serviceInstance: String, responses: List[WPSProc
   }
 }
 
-class RDDExecutionResult(serviceInstance: String, process: WPSProcess, id: String, val result: RDDRecord, resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, process, resultId )  with Loggable {
+class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], id: String, val result: RDDRecord, resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  with Loggable {
   def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
     result.elements map { case (id, array) => getData( syntax, id, array.toCDFloatArray, array.metadata.getOrElse("units","") ) }
@@ -206,7 +219,7 @@ class RefExecutionResult(serviceInstance: String, process: WPSProcess, id: Strin
 }
 
 
-class ExecutionErrorReport( serviceInstance: String, process: WPSProcess, id: String, val err: Throwable ) extends WPSReferenceExecuteResponse( serviceInstance, process, "" )  with Loggable {
+class ExecutionErrorReport( serviceInstance: String, processes: List[WPSProcess], id: String, val err: Throwable ) extends WPSReferenceExecuteResponse( serviceInstance, processes, "" )  with Loggable {
   print_error
   override def toXml( response_syntax: ResponseSyntax.Value ): xml.Elem = {
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
@@ -220,11 +233,12 @@ class ExecutionErrorReport( serviceInstance: String, process: WPSProcess, id: St
   }
   def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] =  {
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
+    val error_mesage = CDSecurity.sanitize(err.getMessage + ":\n\t" + err.getStackTrace.map(_.toString).mkString("\n\t"))
     syntax match {
       case ResponseSyntax.WPS =>
-        List(<ows:Exception exceptionCode={err.getClass.getName}> <ows:ExceptionText>  {err.getMessage} </ows:ExceptionText> </ows:Exception>)
+        List(<ows:Exception exceptionCode={err.getClass.getName}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
       case ResponseSyntax.Generic =>
-        List(<exception name={err.getClass.getName}> {err.getMessage} </exception>)
+        List(<exception name={err.getClass.getName}>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </exception>)
     }
   }
   def print_error = {
@@ -261,11 +275,12 @@ class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) 
   }
   def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] =  {
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
+    val error_mesage = CDSecurity.sanitize(err.getMessage + ":\n\t" + err.getStackTrace.map(_.toString).mkString("\n\t"))
     syntax match {
       case ResponseSyntax.WPS =>
-        List(<ows:Exception exceptionCode={err.getClass.getName}> <ows:ExceptionText>  {err.getMessage} </ows:ExceptionText> </ows:Exception>)
+        List(<ows:Exception exceptionCode={err.getClass.getName}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
       case ResponseSyntax.Generic =>
-        List(<exception name={err.getClass.getName}> {err.getMessage} </exception>)
+        List(<exception name={err.getClass.getName}> {"<![CDATA[\n " + error_mesage + "\n]]>"} </exception>)
     }
   }
   def print_error = {
@@ -279,7 +294,7 @@ class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) 
 }
 
 
-class AsyncExecutionResult( serviceInstance: String, process: WPSProcess, resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, process, resultId )  {
+class AsyncExecutionResult( serviceInstance: String, processes: List[WPSProcess], resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  {
   def getProcessOutputs( syntax: ResponseSyntax.Value, process_id: String, output_id: String ): Iterable[xml.Elem] = List()
 }
 
@@ -291,8 +306,8 @@ class WPSMergedExceptionReport( val exceptions: List[WPSExceptionReport] ) exten
   def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] = exceptions.flatMap( _.getReport(response_syntax) )
 }
 
-class BlockingExecutionResult( serviceInstance: String, process: WPSProcess, id: String, val intputSpecs: List[DataFragmentSpec], val gridSpec: TargetGrid, val result_tensor: CDFloatArray,
-                               resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, process, resultId )  with Loggable {
+class BlockingExecutionResult( serviceInstance: String, processes: List[WPSProcess], id: String, val intputSpecs: List[DataFragmentSpec], val gridSpec: TargetGrid, val result_tensor: CDFloatArray,
+                               resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  with Loggable {
   //  def toXml_old = {
   //    val idToks = id.split('-')
   //    logger.info( "BlockingExecutionResult-> result_tensor(" + id + "): \n" + result_tensor.toString )

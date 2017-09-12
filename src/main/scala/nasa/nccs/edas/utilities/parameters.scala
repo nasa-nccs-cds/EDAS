@@ -47,7 +47,7 @@ object appParameters extends Serializable with Loggable {
       _map = _map ++ Map(params.filter(_.length > 1).map(a => a.head.trim -> a.last.trim).toSeq: _*)
     }
     else { logger.warn("Can't find default parameter file: " + parmFile); }
-    map;
+    _map;
   }
 }
 

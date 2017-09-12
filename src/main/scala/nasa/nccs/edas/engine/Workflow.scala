@@ -274,7 +274,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
         case "object" =>
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, None) )
         case "xml" =>
-          Some( new RDDExecutionResult("WPS", node.kernel, node.operation.identifier, result, resultId) )// TODO: serviceInstance
+          Some( new RDDExecutionResult("WPS", List(node.kernel), node.operation.identifier, result, resultId) )// TODO: serviceInstance
         case "file" =>
           val resultFileOpt: Option[String] = executionMgr.getResultFilePath(resultId)
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFileOpt) )

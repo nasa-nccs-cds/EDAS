@@ -396,7 +396,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         val futureResult = this.futureExecute( request, Map("jobId" -> jobId) ++ run_args, executionCallback )
         futureResult onFailure { case e: Throwable => fatal(e); collectionDataCache.removeJob(jobId); throw e }
     }
-    new AsyncExecutionResult( request.id.toString, request.getProcess, jobId )
+    new AsyncExecutionResult( request.id.toString, List(request.getProcess), jobId )
   }
 
 //  def execute( request: TaskRequest, runargs: Map[String,String] ): xml.Elem = {
