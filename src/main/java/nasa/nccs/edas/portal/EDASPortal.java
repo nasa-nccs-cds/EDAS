@@ -5,6 +5,7 @@ import nasa.nccs.utilities.Logger;
 import org.apache.commons.lang.StringUtils;
 import org.zeromq.ZMQ;
 import nasa.nccs.utilities.EDASLogManager;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.io.File;
@@ -79,7 +80,7 @@ class Responder extends Thread {
         response_queue.add( data );
     }
 
-    void doSendResponse( ZMQ.Socket socket, Response r ) {
+    void doSendResponse(ZMQ.Socket socket, Response r ) {
         if( r.rtype == "message" ) {
              String packaged_msg = doSendMessage( socket, (Message)r );
             logger.info( " Sent response: " + r.id + ", content sample: " + packaged_msg.substring( 0, Math.min( 300, packaged_msg.length() ) ) );

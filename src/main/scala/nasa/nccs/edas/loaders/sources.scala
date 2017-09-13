@@ -309,7 +309,8 @@ object Collections extends XmlResource {
     Collection( attr(n,"id"), attr(n,"path"), attr(n,"fileFilter"), scope, attr(n,"title"), n.text.split(";").toList )
   }
 
-  def findCollection( collectionId: String ): Option[Collection] = Option( datasets.get( collectionId.toLowerCase ) )
+  def findCollection( collectionId: String ): Option[Collection] =
+    Option( datasets.get( collectionId.toLowerCase ) )
 
   def getCollectionXml( collectionId: String ): xml.Elem = {
     Option( datasets.get( collectionId.toLowerCase ) ) match {
@@ -338,7 +339,7 @@ object Collections extends XmlResource {
 //    }
 //  }
 
-  def getCollectionKeys(): Array[String] = datasets.keys.toArray
+  def getCollectionKeys: Array[String] = datasets.keys.toArray
 }
 
 

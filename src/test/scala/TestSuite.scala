@@ -370,6 +370,13 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
   }
 
+  test("anomaly-collection") {
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":40,"end":50,"system":"values"},"lon":{"start":10,"end":10,"system":"values"}}],variable=[{"uri":"collection://cip_merra2_mon_ta","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.binAve","input":"v1","domain":"d0","axes":"yt","id":"v1ave"},{"name":"CDSpark.diff2","input":"v1,v1ave","domain":"d0"}]]"""
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
+  }
+
   test("pyMaximum-cache") {
       val nco_verified_result = 309.7112
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"xy"}]]"""
