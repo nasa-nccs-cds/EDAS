@@ -53,7 +53,8 @@ public class EDASPortalClient {
     protected int request_port = -1;
     protected int response_port = -1;
 
-    public String getConfiguration( String key, String default_value ) { return configuration.getOrDefault(key,default_value ); }
+    String getOrDefault( Map<String,String> map, String key, String defvalue ) { String result = map.get(key); return (result == null) ? defvalue : result; }
+    public String getConfiguration( String key, String default_value ) { return getOrDefault(configuration,key,default_value ); }
     public String getConfiguration( String key ) { return configuration.get(key); }
     public void del() {
         shutdown();
@@ -81,12 +82,12 @@ public class EDASPortalClient {
     public EDASPortalClient( Map<String,String> portal_config ) {
         try {
             configuration = portal_config;
-            int _request_port = Integer.parseInt( configuration.getOrDefault("edas.server.port.request","5670" ) );
-            int _response_port = Integer.parseInt( configuration.getOrDefault("edas.server.port.response","5671" ) );
+            int _request_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.request","5670" ) );
+            int _response_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.response","5671" ) );
             zmqContext = ZMQ.context(2);
             request_socket = zmqContext.socket(ZMQ.PUSH);
             response_socket = zmqContext.socket(ZMQ.PULL);
-            app_host = configuration.getOrDefault("edas.server.address","localhost" );
+            app_host = getOrDefault(configuration,"edas.server.address","localhost" );
             request_port = connectSocket(request_socket, app_host, _request_port );
             response_port = connectSocket(response_socket, app_host, _response_port );
             logger.info( String.format("[2]Connected request socket to server %s on port: %d",app_host, request_port) );
