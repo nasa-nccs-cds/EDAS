@@ -47,11 +47,17 @@ public class EDASPortalClient {
     protected ZMQ.Socket request_socket = null;
     protected ZMQ.Socket response_socket = null;
     protected String app_host = null;
+    protected Map<String,String> configuration = null;
     protected ResponseManager response_manager = null;
     protected RandomString randomIds = new RandomString(8);
-    protected int _request_port = -1;
-    protected int _response_port = -1;
+    protected int request_port = -1;
+    protected int response_port = -1;
 
+    public String getConfiguration( String key, String default_value ) { return configuration.getOrDefault(key,default_value ); }
+    public String getConfiguration( String key ) { return configuration.get(key); }
+    public void del() {
+        shutdown();
+    }
 
 //    static int MAX_PORT = 65535;
 //    public static int bindSocket(ZMQ.Socket socket, String server, int port) {
@@ -72,18 +78,20 @@ public class EDASPortalClient {
         return port;
     }
 
-    public EDASPortalClient( String server, int request_port, int response_port ) {
+    public EDASPortalClient( Map<String,String> portal_config ) {
         try {
-            _request_port = request_port;
-            _response_port = response_port;
+            configuration = portal_config;
+            int _request_port = Integer.parseInt( configuration.getOrDefault("edas.server.port.request","5670" ) );
+            int _response_port = Integer.parseInt( configuration.getOrDefault("edas.server.port.response","5671" ) );
             zmqContext = ZMQ.context(2);
             request_socket = zmqContext.socket(ZMQ.PUSH);
             response_socket = zmqContext.socket(ZMQ.PULL);
-            app_host = server;
-            request_port = connectSocket(request_socket, app_host, request_port);
-            response_port = connectSocket(response_socket, app_host, response_port);
-            logger.info(String.format("[2]Connected request socket to server %s on port: %d",app_host, request_port));
-            logger.info(String.format("Connected response socket on port: %d",response_port));
+            app_host = configuration.getOrDefault("edas.server.address","localhost" );
+            request_port = connectSocket(request_socket, app_host, _request_port );
+            response_port = connectSocket(response_socket, app_host, _response_port );
+            logger.info( String.format("[2]Connected request socket to server %s on port: %d",app_host, request_port) );
+            logger.info( String.format("Connected response socket on port: %d", response_port ) );
+            logger.info( String.format("Starting EDASPortalClient with server = %s", app_host ) );
 
 
 //            if (connectionMode == ConnectionMode.BIND) {
@@ -104,10 +112,6 @@ public class EDASPortalClient {
             logger.error(err_msg);
             shutdown();
         }
-    }
-
-    public void del() {
-        shutdown();
     }
 
     public ResponseManager createResponseManager() {
@@ -134,7 +138,7 @@ public class EDASPortalClient {
         for (int i = 0; i < mDataList.length; i++) { msgElems[i+2] = mDataList[i].replace("'", "\"" ); }
         try {
             message = StringUtils.join( msgElems, "!");
-            logger.info( String.format( "Sending %s request '%s' on port %d.", type, message, _request_port ) );
+            logger.info( String.format( "Sending %s request '%s' on port %d.", type, message, request_port ) );
             request_socket.send(message.getBytes(),0);
         } catch ( Exception err ) { logger.error( String.format( "Error sending message %s on request socket: %s", message, err.getMessage() )); }
         return msgId;

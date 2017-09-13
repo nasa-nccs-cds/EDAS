@@ -23,6 +23,7 @@ public class ResponseManager extends Thread {
     Map<String, List<TransVar>> cached_arrays = null;
     Map<String, String> file_paths = null;
     String cacheDir = null;
+    String publishDir = null;
     String latest_result = "";
     protected Logger logger = EDASLogManager.getCurrentLogger();
 
@@ -35,6 +36,7 @@ public class ResponseManager extends Thread {
         setDaemon(true);
         String EDAS_CACHE_DIR = System.getenv( "EDAS_CACHE_DIR" );
         cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
+        publishDir = portalClient.getConfiguration( "edas.publish.dir", getFileCacheDir("publish" ).toString() );
     }
 
     public void cacheResult(String id, String result) { getResults(id).add(result); }

@@ -6,8 +6,6 @@ import nasa.nccs.edas.portal.EDASPortalClient
 import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.utilities.Loggable
 import nasa.nccs.wps.ResponseSyntax
-
-import scala.collection.JavaConversions._
 import scala.collection.JavaConversions._
 
 class NotAcceptableException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
@@ -92,11 +90,7 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
 
 class zmqProcessManager( serverConfiguration: Map[String,String] )  extends GenericProcessManager with Loggable {
   logger.info( "Starting zmqProcessManager with serverConfiguration:\n\t ** " + serverConfiguration.mkString("\n\t ** "))
-  val server = serverConfiguration.getOrElse("edas.server.address","localhost")
-  val request_port = serverConfiguration.getOrElse("edas.server.port.request","5670").toInt
-  val response_port = serverConfiguration.getOrElse("edas.server.port.response","5671").toInt
-  logger.info( s"Starting EDASPortalClient with server='${server}', request_port=${request_port}, response_port=${response_port}" )
-  val portal = new EDASPortalClient( server, request_port, response_port )
+  val portal = new EDASPortalClient( serverConfiguration )
   val response_manager = portal.createResponseManager()
   def quote( input: String ): String = "\"" + input + "\""
   def map2Str( inputs: Map[String, String] ): String = inputs.map { case ( key, value ) => quote(key) + ": " + quote(value) }.mkString("{ ",", "," }")
