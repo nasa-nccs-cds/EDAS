@@ -120,7 +120,7 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
     syntax match {
       case ResponseSyntax.WPS =>
-        <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" serviceInstance={serviceInstance} statusLocation={proxyAddress+"wps/cwt/status"}>
+        <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" serviceInstance={serviceInstance}>
           {processes.map(_.ExecuteHeader(syntax))}<wps:Status>
           <wps:ProcessStarted>EDAS Process executing</wps:ProcessStarted>
         </wps:Status>
