@@ -201,13 +201,12 @@ class multiAverage extends Kernel(Map.empty) {
   override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
 }
 
-object BinKeyUtils {
-  implicit object BinKeyOrdering extends Ordering[String] {
-    def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
-  }
-}
-
 class bin extends Kernel(Map.empty) {
+  object BinKeyUtils {
+    implicit object BinKeyOrdering extends Ordering[String] {
+      def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
+    }
+  }
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Binning"
@@ -267,9 +266,13 @@ class binAve extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Binning"
   override val description = "Aggregates data into bins using specified reduce function and binning specifications"
+  object BinKeyUtils {
+    implicit object BinKeyOrdering extends Ordering[String] {
+      def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
+    }
+  }
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
-    import BinKeyUtils.BinKeyOrdering
     val t0 = System.nanoTime
     val axes = context.config("axes","")
     val binParm = context.config( "bin", "month" )
