@@ -14,17 +14,23 @@ _Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and 
 
         >> cd <prefix>
         >> git clone https://github.com/nasa-nccs-cds/EDAS.git 
+        
+    2) Configure the EDAS server:
+    
+        >> cd EDAS/project
+        >> cp edas.properties.template edas.properties
+        >> emacs edas.properties
 
-    2) Build the application (for a clean build one can execute "sbt clean" before "sbt package"):
+    3) Build the application (for a clean build one can execute "sbt clean" before "sbt package"):
 
         >> cd EDAS
         >> sbt package
 
-     3) Run unit tests:
+     4) Run unit tests:
 
         >> sbt test
 
-     4) Source the setup file to configure the runtime environment:
+     5) Source the setup file to configure the runtime environment:
 
         >> source <prefix>/EDAS/bin/setup_runtime.sh
 

@@ -410,7 +410,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       case x if x.startsWith("frag") => FragmentPersistence.getFragmentListXml
       case x if x.startsWith("res") => collectionDataCache.getResultListXml // collectionDataCache
       case x if x.startsWith("job") => collectionDataCache.getJobListXml
-      case x if x.startsWith("coll") => {
+      case x if x.startsWith("col") => {
         val itToks = x.split(Array(':','|'))
         if( itToks.length < 2 ) Collections.toXml
         else <collection id={itToks(0)}> { Collections.getCollectionMetadata( itToks(1) ).map( attr => attrToXml( attr ) ) } </collection>

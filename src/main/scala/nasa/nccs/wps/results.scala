@@ -38,7 +38,7 @@ trait WPSResponse extends {
 }
 
 class WPSExecuteStatus( val serviceInstance: String,  val statusMessage: String, val resId: String  ) extends WPSResponse {
-  val resultHref: String = proxyAddress + s"/wps/file?id=$resId"
+  val resultHref: String = proxyAddress + s"wps/file?id=$resId"
 
   def toXml( response_syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem =  { if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax } match {
     case ResponseSyntax.WPS =>
@@ -49,7 +49,7 @@ class WPSExecuteStatus( val serviceInstance: String,  val statusMessage: String,
         <wps:Reference encoding="UTF-8" mimeType="application/x-netcdf" href={resultHref}/>
       </wps:ExecuteResponse>
     case ResponseSyntax.Generic =>
-      <response serviceInstance={serviceInstance} statusLocation={proxyAddress} status={statusMessage} href={resultHref}/>
+      <response serviceInstance={serviceInstance} statusLocation={proxyAddress+"/wps/cwt/status?id="+resId} status={statusMessage} href={resultHref}/>
   }
 }
 
@@ -75,7 +75,7 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
         </wps:ProcessOutputs>
       </wps:ExecuteResponse>
     case ResponseSyntax.Generic =>
-      <response  serviceInstance={serviceInstance} statusLocation={proxyAddress} status="Success">
+      <response  serviceInstance={serviceInstance} status="Success">
         <outputs>
           {tvar.result.elements.map { case (id, result) =>
           <output id={id} uom={result.metadata.getOrElse("units", "")} shape={result.shape.mkString(",")} >
@@ -120,7 +120,7 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
     syntax match {
       case ResponseSyntax.WPS =>
-        <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" serviceInstance={serviceInstance} statusLocation={proxyAddress}>
+        <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" serviceInstance={serviceInstance} statusLocation={proxyAddress+"wps/cwt/status"}>
           {processes.map(_.ExecuteHeader(syntax))}<wps:Status>
           <wps:ProcessStarted>EDAS Process executing</wps:ProcessStarted>
         </wps:Status>
@@ -148,7 +148,7 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
 }
 
 abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: List[WPSProcess], val resultId: String )  extends WPSProcessExecuteResponse( serviceInstance, processes )  {
-  val statusHref: String = proxyAddress + s"/wps/status?id=$resultId"
+  val statusHref: String = proxyAddress + s"wps/cwt/status?id=$resultId"
   val fileHref: String = proxyAddress + s"/wps/file?id=$resultId"
   val resultHref: String = proxyAddress + s"/wps/result?id=$resultId"
   def getReference(response_syntax: ResponseSyntax.Value): xml.Elem = { if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax } match {
