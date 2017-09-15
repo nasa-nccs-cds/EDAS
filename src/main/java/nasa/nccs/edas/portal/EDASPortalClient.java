@@ -4,6 +4,8 @@ import nasa.nccs.utilities.EDASLogManager;
 import nasa.nccs.utilities.Logger;
 import org.apache.commons.lang.StringUtils;
 import org.zeromq.ZMQ;
+
+import java.nio.file.Path;
 import java.util.*;
 
 class RandomString {
@@ -119,6 +121,10 @@ public class EDASPortalClient {
         response_manager = new ResponseManager(this);
         response_manager.start();
         return response_manager;
+    }
+
+    public Path getFileCacheDir(String role) {
+        return response_manager.getFileCacheDir(role);
     }
 
     public void shutdown() {

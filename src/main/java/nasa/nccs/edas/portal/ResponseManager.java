@@ -127,7 +127,7 @@ public class ResponseManager extends Thread {
     }
 
 
-    Path getFileCacheDir( String role ) {
+    public Path getFileCacheDir( String role ) {
         Path filePath = Paths.get( cacheDir, "transfer", role );
         try {
             Files.createDirectories( filePath );

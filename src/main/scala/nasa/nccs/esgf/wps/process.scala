@@ -122,7 +122,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
-    throw new Exception("getResultFilePath: Not yet supported!")
+    Some( response_manager.getFileCacheDir("publish").toString + s"/$resultId.nc" )
   }
 
   def getResult( service: String, resultId: String, responseSyntax: ResponseSyntax.Value ): xml.Node = {
