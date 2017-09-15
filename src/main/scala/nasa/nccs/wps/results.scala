@@ -1,5 +1,8 @@
 package nasa.nccs.wps
 
+import java.text.SimpleDateFormat
+import java.util.Calendar
+
 import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.cdapi.tensors.CDFloatArray
@@ -29,27 +32,30 @@ object ResponseSyntax extends Enumeration {
 
 trait WPSResponse extends {
   val proxyAddress =  appParameters("wps.server.proxy.href","")
+  val timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy")
   val default_syntax: ResponseSyntax.Value =  appParameters("wps.response.syntax","generic") match {
     case "generic" => ResponseSyntax.Generic
     case _ => ResponseSyntax.WPS
   }
+  def currentTime = timeFormat.format( Calendar.getInstance().getTime() )
 
   def toXml( syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem
 }
 
 class WPSExecuteStatus( val serviceInstance: String,  val statusMessage: String, val resId: String  ) extends WPSResponse {
-  val resultHref: String = proxyAddress + s"wps/file?id=$resId"
+  val resultHref: String = proxyAddress + s"/file?id=$resId"
 
   def toXml( response_syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem =  { if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax } match {
     case ResponseSyntax.WPS =>
-      <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA">
+      <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                           xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" creation_time={currentTime}>
         <wps:Status>
           <wps:ProcessStarted>{statusMessage}</wps:ProcessStarted>
         </wps:Status>
         <wps:Reference encoding="UTF-8" mimeType="application/x-netcdf" href={resultHref}/>
       </wps:ExecuteResponse>
     case ResponseSyntax.Generic =>
-      <response serviceInstance={serviceInstance} statusLocation={proxyAddress+"/wps/cwt/status?id="+resId} status={statusMessage} href={resultHref}/>
+      <response serviceInstance={serviceInstance} status={statusMessage}  creation_time={currentTime} href={resultHref}/>
   }
 }
 
@@ -58,7 +64,8 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
 
   def toXml( response_syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem = { if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax } match {
     case ResponseSyntax.WPS =>
-      <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA">
+      <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                           xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" creation_time={currentTime}>
         <wps:Status>
           <wps:ProcessSucceeded>EDAS Process successfully calculated</wps:ProcessSucceeded>
         </wps:Status>
@@ -75,7 +82,7 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
         </wps:ProcessOutputs>
       </wps:ExecuteResponse>
     case ResponseSyntax.Generic =>
-      <response  serviceInstance={serviceInstance} status="Success">
+      <response  serviceInstance={serviceInstance}  creation_time={currentTime} status="Success">
         <outputs>
           {tvar.result.elements.map { case (id, result) =>
           <output id={id} uom={result.metadata.getOrElse("units", "")} shape={result.shape.mkString(",")} >
@@ -120,7 +127,8 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
     syntax match {
       case ResponseSyntax.WPS =>
-        <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" serviceInstance={serviceInstance}>
+        <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                             xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" serviceInstance={serviceInstance}  creation_time={currentTime}>
           {processes.map(_.ExecuteHeader(syntax))}<wps:Status>
           <wps:ProcessStarted>EDAS Process executing</wps:ProcessStarted>
         </wps:Status>
@@ -129,7 +137,7 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
           </wps:ProcessOutputs>
         </wps:ExecuteResponse>
       case ResponseSyntax.Generic =>
-        <response>  {getOutputs(syntax)} </response>
+        <response creation_time={currentTime}>  {getOutputs(syntax)} </response>
     }
   }
 
@@ -137,20 +145,22 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
     syntax match {
       case ResponseSyntax.Generic =>
-        processes.flatMap(p => p.outputs.map(output => <outputs> {getProcessOutputs(syntax, p.identifier, output.identifier)} </outputs>))
+        val outlist: List[xml.Elem]  = processes.flatMap(p => p.outputs.map(output => <outputs> {getProcessOutputs(syntax, p.identifier, output.identifier)} </outputs>))
+        outlist  ++ getReferenceOutputs(syntax)
       case ResponseSyntax.WPS =>
-        processes.flatMap(p => p.outputs.map(output => <wps:Output> {output.getHeader(syntax)}{getProcessOutputs(syntax,p.identifier, output.identifier)} </wps:Output>))
+        val outlist = processes.flatMap(p => p.outputs.map(output => <wps:Output> {output.getHeader(syntax)}{getProcessOutputs(syntax,p.identifier, output.identifier)} </wps:Output>))
+        outlist ++ getReferenceOutputs(syntax)
     }
   }
 
-  def getProcessOutputs(response_syntax: ResponseSyntax.Value, process_id: String, output_id: String ): Iterable[xml.Elem]
-
+  def getProcessOutputs(response_syntax: ResponseSyntax.Value, process_id: String, output_id: String ): Iterable[xml.Elem] = Iterable.empty[xml.Elem]
+  def getReferenceOutputs(response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] = Iterable.empty[xml.Elem]
 }
 
 abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: List[WPSProcess], val resultId: String )  extends WPSProcessExecuteResponse( serviceInstance, processes )  {
-  val statusHref: String = proxyAddress + s"wps/cwt/status?id=$resultId"
-  val fileHref: String = proxyAddress + s"/wps/file?id=$resultId"
-  val resultHref: String = proxyAddress + s"/wps/result?id=$resultId"
+  val statusHref: String = proxyAddress + s"/status?id=$resultId"
+  val fileHref: String = proxyAddress + s"/file?id=$resultId"
+  val resultHref: String = proxyAddress + s"/result?id=$resultId"
   def getReference(response_syntax: ResponseSyntax.Value): xml.Elem = { if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax } match {
     case ResponseSyntax.WPS => <wps:Reference id="status" encoding="UTF-8" mimeType="text/xml" href={statusHref}/>
     case ResponseSyntax.Generic => <reference id="status" href={statusHref}/>
@@ -196,7 +206,7 @@ class MergedWPSExecuteResponse( serviceInstance: String, responses: List[WPSProc
   def getResultReference(response_syntax: ResponseSyntax.Value): xml.Elem = responses.head.getResultReference(response_syntax)
   if( process_ids.distinct.size != process_ids.size ) { logger.warn( "Error, non unique process IDs in process list: " + processes.mkString(", ") ) }
   val responseMap: Map[String,WPSProcessExecuteResponse] = Map( responses.flatMap( response => response.processes.map( process => ( process.identifier -> response ) ) ): _* )
-  def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, response_id: String ): Iterable[xml.Elem] = responseMap.get( process_id ) match {
+  override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, response_id: String ): Iterable[xml.Elem] = responseMap.get( process_id ) match {
     case Some( response ) =>
       val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
       response.getProcessOutputs( syntax, process_id, response_id );
@@ -205,14 +215,14 @@ class MergedWPSExecuteResponse( serviceInstance: String, responses: List[WPSProc
 }
 
 class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], id: String, val result: RDDRecord, resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  with Loggable {
-  def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
+  override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
     result.elements map { case (id, array) => getData( syntax, id, array.toCDFloatArray, array.metadata.getOrElse("units","") ) }
   }
 }
 
 class RefExecutionResult(serviceInstance: String, process: WPSProcess, id: String, resultId: String, resultFileOpt: Option[String] ) extends WPSDirectExecuteResponse( serviceInstance, process, resultId, resultFileOpt )  with Loggable {
-  def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
+  override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
     val syntax = if(response_syntax == ResponseSyntax.Default) default_syntax  else response_syntax
     Seq( getDataRef( syntax, id, resultId, resultFileOpt ) )
   }
@@ -248,7 +258,6 @@ class ExecutionErrorReport( serviceInstance: String, processes: List[WPSProcess]
     if (err.getCause != null) { logger.error( "\nTriggered at: \n" + err.getStackTrace.mkString("\n") ) }
     logger.error( "\n-------------------------------------------\n\n")
   }
-  def getProcessOutputs( syntax: ResponseSyntax.Value, process_id: String, response_id: String ): Iterable[xml.Elem] = Iterable.empty[xml.Elem]
 }
 
 
@@ -290,12 +299,17 @@ class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) 
     if (err.getCause != null) { logger.error( "\nTriggered at: \n" + err.getStackTrace.mkString("\n") ) }
     logger.error( "\n-------------------------------------------\n\n")
   }
-  def getProcessOutputs( syntax: ResponseSyntax.Value, process_id: String, response_id: String ): Iterable[xml.Elem] = Iterable.empty[xml.Elem]
 }
 
 
-class AsyncExecutionResult( serviceInstance: String, processes: List[WPSProcess], resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  {
-  def getProcessOutputs( syntax: ResponseSyntax.Value, process_id: String, output_id: String ): Iterable[xml.Elem] = List()
+class AsyncExecutionResult( serviceInstance: String, processes: List[WPSProcess], resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId ) {
+  override def getReferenceOutputs( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] = {
+    val syntax = if (response_syntax == ResponseSyntax.Default) default_syntax else response_syntax
+    syntax match {
+      case ResponseSyntax.WPS =>     List( <wps:Output>  {getReference(syntax)}  {getFileReference(syntax)} </wps:Output> )
+      case ResponseSyntax.Generic => List( <output> {getReference(syntax)}  {getFileReference(syntax)}  </output> )
+    }
+  }
 }
 
 class WPSMergedEventReport( val reports: List[WPSEventReport] ) extends WPSEventReport {
@@ -316,6 +330,6 @@ class BlockingExecutionResult( serviceInstance: String, processes: List[WPSProce
   //    val results = result_tensor.mkDataString(",")
   //    <result id={id} op={idToks.head} rid={resultId.getOrElse("")}> { inputs } { grid } <data undefined={result_tensor.getInvalid.toString}> {results}  </data>  </result>
   //  }
-  def getProcessOutputs( syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = List( getData( syntax, output_id, result_tensor, intputSpecs.head.units, 250 ) )
+  override def getProcessOutputs( syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = List( getData( syntax, output_id, result_tensor, intputSpecs.head.units, 250 ) )
 }
 

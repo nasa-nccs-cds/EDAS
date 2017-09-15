@@ -59,9 +59,10 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
-    logger.info( "EDAS ProcessManager-> getResultFile: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
-    serviceProvider.getResultFilePath(resultId)
+    val path = serviceProvider.getResultFilePath(resultId)
+    logger.info( "EDAS ProcessManager-> getResultFile: " + resultId + ", path = " + path.getOrElse("NULL") )
+    path
   }
 
   def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
