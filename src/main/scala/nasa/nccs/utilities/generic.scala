@@ -49,16 +49,18 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
     val existingLogFile: Path = Files.createFile( logFile.toPath, fileAttr )
     new PrintWriter( existingLogFile.toFile )
   }
-  def log( level: String, msg: String  ) = {
+  def log( level: String, msg: String, newline: Boolean  ) = {
     val output = level + ": " + msg
-    writer.println( output )
+    if(newline) { writer.println( output ) } else { writer.print( output ) }
     writer.flush()
     if(!test) { println( output ) }
   }
-  def info( msg: String ) = { log( "info", msg ) }
-  def debug( msg: String ) = { log( "debug", msg ) }
-  def error( msg: String ) = { log( "error", msg ) }
-  def warn( msg: String ) = { log( "warn", msg ) }
+  def info( msg: String ) = { log( "info", msg, true ) }
+  def debug( msg: String ) = { log( "debug", msg, true ) }
+  def info( msg: String, newline: Boolean ) = { log( "info", msg, newline ) }
+  def debug( msg: String, newline: Boolean ) = { log( "debug", msg, newline ) }
+  def error( msg: String ) = { log( "error", msg, true ) }
+  def warn( msg: String ) = { log( "warn", msg, true ) }
 }
 
 
