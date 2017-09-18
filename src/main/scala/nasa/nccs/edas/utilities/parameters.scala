@@ -1,6 +1,7 @@
 package nasa.nccs.edas.utilities
 import java.nio.file.{Files, Paths}
 
+import nasa.nccs.caching.EDASPartitioner.defaultPartSize
 import nasa.nccs.utilities.Loggable
 
 import scala.io.Source
@@ -29,15 +30,17 @@ object appParameters extends Serializable with Loggable {
 
   def keySet: Set[String] = map.keySet
 
-  def getCacheDirectory: String = customCacheDir match {
-    case None =>
-      sys.env.get("EDAS_CACHE_DIR") match {
-        case Some(cache_path) => cache_path
-        case None =>
-          val home = System.getProperty("user.home")
-          Paths.get(home, ".edas", "cache").toString
-      }
-    case Some(cache_dir) => cache_dir
+  def getCacheDirectory: String = {
+    val cacheDir = customCacheDir match {
+      case None =>
+        sys.env.get("EDAS_CACHE_DIR") match {
+          case Some(cache_path) =>  cache_path
+          case None =>              configParams.getOrElse( "edas.cache.dir", Paths.get( System.getProperty("user.home"), ".edas", "cache").toString )
+        }
+      case Some(cache_dir) => cache_dir
+    }
+    logger.info( "appParameters--> Get Cache Directory: " + cacheDir )
+    cacheDir
   }
 
   private def buildParameterMap: Map[String, String] = {
