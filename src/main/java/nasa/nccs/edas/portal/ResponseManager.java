@@ -97,10 +97,11 @@ public class ResponseManager extends Thread {
                 logger.info( String.format("Received file %s for rid %s",header,rId) );
             } else if ( type.equals("response") ) {
                 cacheResult(rId, toks[2]);
-                if( !latest_result.equals(toks[2]) ) {
-                    logger.info(String.format("Received result: %s", toks[2]));
-                    latest_result = toks[2];
-                }
+                logger.info(String.format("Received result[%s]: %s", rId, response ) );
+//                if( !latest_result.equals(toks[2]) ) {
+//                    logger.info(String.format("Received result: %s", response ) );
+//                    latest_result = toks[2];
+//                }
             } else {
                 logger.error(String.format("EDASPortal.ResponseThread-> Received unrecognized message type: %s",type));
             }
