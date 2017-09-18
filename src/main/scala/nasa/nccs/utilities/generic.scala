@@ -38,6 +38,7 @@ import scala.collection.mutable
 class Logger( val name: String, val test: Boolean, val master: Boolean ) extends Serializable {
   val LNAME = if( test ) name + "-test" else name + "-"
   val LID = if( master ) "master" else UID().uid
+  var newline_state = true
   val logFilePath: Path = Paths.get( "/tmp" /* System.getProperty("user.home") */, "edas", "logs", LNAME + LID + ".log" )
   val writer = if(Files.exists(logFilePath)) {
     new PrintWriter(logFilePath.toString)
@@ -50,10 +51,12 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
     new PrintWriter( existingLogFile.toFile )
   }
   def log( level: String, msg: String, newline: Boolean  ) = {
-    val output = level + ": " + msg
+    var output = if(newline) { level + ": " + msg } else { msg }
+    if( newline && !newline_state) { output = "\n" + output }
     if(newline) { writer.println( output ) } else { writer.print( output ) }
     writer.flush()
     if(!test) { println( output ) }
+    newline_state = newline
   }
   def info( msg: String ) = { log( "info", msg, true ) }
   def debug( msg: String ) = { log( "debug", msg, true ) }

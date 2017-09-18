@@ -3,8 +3,10 @@ import com.google.common.io.Files;
 import nasa.nccs.edas.workers.python.PythonWorkerPortal;
 import nasa.nccs.utilities.Logger;
 import org.apache.commons.lang.StringUtils;
+import org.joda.time.DateTime;
 import org.zeromq.ZMQ;
 import nasa.nccs.utilities.EDASLogManager;
+import ucar.nc2.time.CalendarDate;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -82,8 +84,9 @@ class Responder extends Thread {
 
     void doSendResponse(ZMQ.Socket socket, Response r ) {
         if( r.rtype == "message" ) {
-             String packaged_msg = doSendMessage( socket, (Message)r );
-            logger.info( " Sent response: " + r.id + ", content sample: " + packaged_msg.substring( 0, Math.min( 300, packaged_msg.length() ) ) );
+            String packaged_msg = doSendMessage( socket, (Message)r );
+            DateTime dateTime = new DateTime( CalendarDate.present().toDate() );
+            logger.info( " Sent response: " + r.id + " (" + dateTime.toString("MM/dd HH:mm:ss") + "), content sample: " + packaged_msg.substring( 0, Math.min( 300, packaged_msg.length() ) ) );
         }
         else if( r.rtype == "data" ) { doSendDataPacket( socket, (DataPacket)r ); }
         else if( r.rtype == "error" ) { doSendErrorReport( socket, (ErrorReport)r ); }
@@ -194,7 +197,6 @@ public abstract class EDASPortal {
     }
 
     public void sendResponse(  String id, String msg ) {
-        logger.info("-----> SendResponse[" + id + "]" );
         responder.sendResponse( new Message(id,msg) );
     }
 

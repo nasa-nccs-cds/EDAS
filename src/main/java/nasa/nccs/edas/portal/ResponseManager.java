@@ -11,10 +11,8 @@ import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 public class ResponseManager extends Thread {
     ZMQ.Socket socket = null;
@@ -25,6 +23,7 @@ public class ResponseManager extends Thread {
     String cacheDir = null;
     String publishDir = null;
     String latest_result = "";
+    SimpleDateFormat timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy");
     protected Logger logger = EDASLogManager.getCurrentLogger();
 
     public ResponseManager(EDASPortalClient portalClient) {
@@ -97,7 +96,8 @@ public class ResponseManager extends Thread {
                 logger.info( String.format("Received file %s for rid %s",header,rId) );
             } else if ( type.equals("response") ) {
                 cacheResult(rId, toks[2]);
-                logger.info(String.format("Received result[%s]: %s", rId, response ) );
+                String currentTime = timeFormat.format( Calendar.getInstance().getTime() );
+                logger.info(String.format("Received result[%s] (%s): %s", rId, currentTime, response ) );
 //                if( !latest_result.equals(toks[2]) ) {
 //                    logger.info(String.format("Received result: %s", response ) );
 //                    latest_result = toks[2];
