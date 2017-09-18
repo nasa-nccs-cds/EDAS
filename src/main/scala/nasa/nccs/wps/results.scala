@@ -32,7 +32,7 @@ object ResponseSyntax extends Enumeration {
 
 trait WPSResponse extends {
   val proxyAddress =  appParameters("wps.server.proxy.href","")
-  val timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy")
+  val timeFormat = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss")
   val default_syntax: ResponseSyntax.Value =  appParameters("wps.response.syntax","generic") match {
     case "generic" => ResponseSyntax.Generic
     case _ => ResponseSyntax.WPS
