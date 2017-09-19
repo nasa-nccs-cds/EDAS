@@ -144,6 +144,8 @@ public class EDASPortalClient {
         }
     }
 
+    public String timestamp() { return timeFormatter.format( Calendar.getInstance().getTime() ); }
+
     public String sendMessage( String type, String[] mDataList ) {
         String[] msgElems = new String[ mDataList.length + 2 ];
         String response = "";
@@ -153,10 +155,10 @@ public class EDASPortalClient {
         for (int i = 0; i < mDataList.length; i++) { msgElems[i+2] = mDataList[i].replace("'", "\"" ); }
         try {
             message = StringUtils.join( msgElems, "!");
-            String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
-            logger.info( String.format( "Sending %s request '%s' on port %d @(%s)", type, message, request_port, timeStamp ) );
+            logger.info( String.format( "Sending %s request '%s' on port %d @(%s)", type, message, request_port, timestamp() ) );
             request_socket.send(message.getBytes(),0);
             response = new String( request_socket.recv(0) );
+            logger.info( String.format( "Received request response, sample: { %s } @(%s)", response.substring(0,Math.min(100,response.length())), timestamp() ) );
         } catch ( Exception err ) { logger.error( String.format( "Error sending message %s on request socket: %s", message, err.getMessage() )); }
         return response;
     }
