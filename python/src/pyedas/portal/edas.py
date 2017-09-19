@@ -210,7 +210,7 @@ class EDASPortal:
             self.app_host = host
             self.application_thread = None
             self.logger =  logging.getLogger("portal")
-            self.context = zmq.Context(2)
+            self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.PUSH)
 
             # if( connectionMode == ConnectionMode.BIND ):

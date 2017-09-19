@@ -172,7 +172,7 @@ public abstract class EDASPortal {
     protected EDASPortal( String client_address, int _request_port, int _response_port ) {
         try {
             request_port = _request_port;
-            zmqContext = ZMQ.context(2);
+            zmqContext = ZMQ.context(1);
             request_socket = zmqContext.socket(ZMQ.PULL);
             responder = new Responder( zmqContext, client_address, _response_port);
             responder.start();

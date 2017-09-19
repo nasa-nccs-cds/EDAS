@@ -86,7 +86,7 @@ public class EDASPortalClient {
             configuration = portal_config;
             int _request_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.request","5670" ) );
             int _response_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.response","5671" ) );
-            zmqContext = ZMQ.context(2);
+            zmqContext = ZMQ.context(1);
             request_socket = zmqContext.socket(ZMQ.PUSH);
             response_socket = zmqContext.socket(ZMQ.PULL);
             app_host = getOrDefault(configuration,"edas.server.address","localhost" );
