@@ -8,6 +8,7 @@ import org.zeromq.ZMQ;
 import nasa.nccs.utilities.EDASLogManager;
 import ucar.nc2.time.CalendarDate;
 
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.io.File;
@@ -172,6 +173,7 @@ public abstract class EDASPortal {
     protected ZMQ.Socket request_socket = null;
     protected int request_port = -1;
     protected Responder responder = null;
+    protected SimpleDateFormat timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss");
 
     protected Logger logger = EDASLogManager.getCurrentLogger();
     private boolean active = true;
@@ -271,7 +273,8 @@ public abstract class EDASPortal {
             logger.info( String.format( "Listening for requests on port: %d, host: %s",  request_port, getHostInfo() ) );
             String request_header = new String(request_socket.recv(0)).trim();
             parts = request_header.split("[!]");
-            logger.info( String.format( "  ###  Processing %s request: %s",  parts[1], request_header ) );
+            String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
+            logger.info( String.format( "  ###  Processing %s request: %s @(%s)",  parts[1], request_header, timeStamp ) );
             if( parts[1].equals("execute") ) {
                 sendResponseMessage(  execute( parts ) );
             } else if( parts[1].equals("util") ) {
@@ -279,9 +282,9 @@ public abstract class EDASPortal {
             } else if( parts[1].equals("quit") || parts[1].equals("shutdown") ) {
                 sendResponseMessage( new Message(parts[0],"quit", "Terminating") );
                 term();
-            } else if( parts[1].equals("getCapabilities") ) {
+            } else if( parts[1].toLowerCase().equals("getcapabilities") ) {
                 sendResponseMessage(  getCapabilities( parts ) );
-            } else if( parts[1].equals("describeProcess") ) {
+            } else if( parts[1].toLowerCase().equals("describeprocess") ) {
                 sendResponseMessage(  describeProcess( parts ) );
             } else {
                 String msg = "Unknown request header type: " + parts[1];

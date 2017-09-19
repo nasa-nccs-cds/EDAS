@@ -6,6 +6,7 @@ import org.apache.commons.lang.StringUtils;
 import org.zeromq.ZMQ;
 
 import java.nio.file.Path;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 class RandomString {
@@ -54,6 +55,7 @@ public class EDASPortalClient {
     protected RandomString randomIds = new RandomString(8);
     protected int request_port = -1;
     protected int response_port = -1;
+    protected SimpleDateFormat timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss");
 
     String getOrDefault( Map<String,String> map, String key, String defvalue ) { String result = map.get(key); return (result == null) ? defvalue : result; }
     public String getConfiguration( String key, String default_value ) { return getOrDefault(configuration,key,default_value ); }
@@ -151,7 +153,8 @@ public class EDASPortalClient {
         for (int i = 0; i < mDataList.length; i++) { msgElems[i+2] = mDataList[i].replace("'", "\"" ); }
         try {
             message = StringUtils.join( msgElems, "!");
-            logger.info( String.format( "Sending %s request '%s' on port %d.", type, message, request_port ) );
+            String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
+            logger.info( String.format( "Sending %s request '%s' on port %d @(%s)", type, message, request_port, timeStamp ) );
             request_socket.send(message.getBytes(),0);
             response = new String( request_socket.recv(0) );
         } catch ( Exception err ) { logger.error( String.format( "Error sending message %s on request socket: %s", message, err.getMessage() )); }

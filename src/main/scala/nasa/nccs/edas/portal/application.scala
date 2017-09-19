@@ -1,6 +1,7 @@
 package nasa.nccs.edas.portal
 import java.lang.management.ManagementFactory
 import java.nio.file.{Files, Path, Paths}
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
@@ -154,12 +155,14 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   override def getCapabilities(utilSpec: Array[String]): Message = {
     val runargs: Map[String,String] = getRunArgs( utilSpec )
+    logger.info(s"Processing getCapabilities request with args ${runargs.toList.mkString(",")}" )
     val result: xml.Elem = processManager.getCapabilities( process, elem(utilSpec,2), runargs )
     new Message( utilSpec(0), "capabilities", printer.format( result ) )
   }
 
   override def describeProcess(procSpec: Array[String]): Message = {
     val runargs: Map[String,String] = getRunArgs( procSpec )
+    logger.info(s"Processing describeProcess request with args ${runargs.toList.mkString(",")}" )
     val result: xml.Elem = processManager.describeProcess( process, elem(procSpec,2), runargs )
     new Message( procSpec(0), "preocesses", printer.format( result ) )
   }
