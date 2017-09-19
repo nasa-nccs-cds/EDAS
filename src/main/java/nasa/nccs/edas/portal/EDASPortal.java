@@ -256,7 +256,9 @@ public abstract class EDASPortal {
     public String sendResponseMessage( Message msg ) {
         List<String> request_args = Arrays.asList( msg.id(), msg.message );
         String packaged_msg = StringUtils.join( request_args,  "!" );
-        request_socket.send( packaged_msg.getBytes() );
+        String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
+        logger.info( String.format( "Sending response %s on request_socket @(%t)", msg.id(), timeStamp ) );
+        request_socket.send( packaged_msg.getBytes(),0 );
         return packaged_msg;
     }
 
