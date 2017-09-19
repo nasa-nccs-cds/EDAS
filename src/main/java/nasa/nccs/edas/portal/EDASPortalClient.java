@@ -48,6 +48,7 @@ public class EDASPortalClient {
     protected ZMQ.Context zmqContext = null;
     protected ZMQ.Socket request_socket = null;
     protected String app_host = null;
+    protected String clientId = null;
     protected Map<String,String> configuration = null;
     protected ResponseManager response_manager = null;
     protected RandomString randomIds = new RandomString(8);
@@ -81,18 +82,20 @@ public class EDASPortalClient {
     }
 
     public ZMQ.Socket getResponseSocket( ) {
-        ZMQ.Socket response_socket = zmqContext.socket(ZMQ.PULL);
+        ZMQ.Socket response_socket = zmqContext.socket(ZMQ.SUB);
         connectSocket(response_socket, app_host, response_port );
+        response_socket.subscribe(clientId);
         return response_socket;
     }
 
     public EDASPortalClient( Map<String,String> portal_config ) {
         try {
             configuration = portal_config;
+            clientId = randomIds.nextString();
             request_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.request","5670" ) );
             response_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.response","5671" ) );
             zmqContext = ZMQ.context(1);
-            request_socket = zmqContext.socket(ZMQ.PUSH);
+            request_socket = zmqContext.socket(ZMQ.REQ);
             app_host = getOrDefault(configuration,"edas.server.address","localhost" );
             request_port = connectSocket(request_socket, app_host, request_port );
             logger.info( String.format("[2]Connected request socket to server %s on port: %d",app_host, request_port) );
@@ -140,9 +143,9 @@ public class EDASPortalClient {
     }
 
     public String sendMessage( String type, String[] mDataList ) {
-        String msgId = randomIds.nextString();
         String[] msgElems = new String[ mDataList.length + 2 ];
-        msgElems[0] = msgId;
+        String response = "";
+        msgElems[0] = clientId;
         msgElems[1] = type;
         String message = null;
         for (int i = 0; i < mDataList.length; i++) { msgElems[i+2] = mDataList[i].replace("'", "\"" ); }
@@ -150,8 +153,9 @@ public class EDASPortalClient {
             message = StringUtils.join( msgElems, "!");
             logger.info( String.format( "Sending %s request '%s' on port %d.", type, message, request_port ) );
             request_socket.send(message.getBytes(),0);
+            response = new String( request_socket.recv(0) );
         } catch ( Exception err ) { logger.error( String.format( "Error sending message %s on request socket: %s", message, err.getMessage() )); }
-        return msgId;
+        return response;
     }
 }
 
