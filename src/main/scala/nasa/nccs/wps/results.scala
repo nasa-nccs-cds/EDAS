@@ -43,8 +43,8 @@ trait WPSResponseElement {
 }
 
 trait WPSResponse extends WPSResponseElement {
-  val wpsProxyAddress =  appParameters("wps.server.proxy.href","")
-  val dapProxyAddress =  appParameters("wps.dap.proxy.href","")
+  val wpsProxyAddress =  appParameters("wps.server.proxy.href","${wps.server.proxy.href}")
+  val dapProxyAddress =  appParameters("wps.dap.proxy.href","${wps.dap.proxy.href}")
 }
 
 class WPSExecuteStatus( val serviceInstance: String,  val statusMessage: String, val resId: String  ) extends WPSResponse {
