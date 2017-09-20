@@ -87,6 +87,7 @@ public class EDASPortalClient {
         ZMQ.Socket response_socket = zmqContext.socket(ZMQ.SUB);
         connectSocket(response_socket, app_host, response_port );
         response_socket.subscribe(clientId);
+        logger.info( "EDASPortalClient subscribing to EDASServer publisher channel " + clientId );
         return response_socket;
     }
 
