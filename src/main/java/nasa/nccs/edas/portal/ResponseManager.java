@@ -35,7 +35,7 @@ public class ResponseManager extends Thread {
         setDaemon(true);
         String EDAS_CACHE_DIR = System.getenv( "EDAS_CACHE_DIR" );
         cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
-        publishDir = portalClient.getConfiguration( "edas.publish.dir", getFileCacheDir("publish" ).toString() );
+        publishDir = portalClient.getConfiguration( "edas.publish.dir", cacheDir );
     }
 
     public void cacheResult(String id, String result) { getResults(id).add(result); }
@@ -112,7 +112,7 @@ public class ResponseManager extends Thread {
         String id = header_toks[1];
         String role = header_toks[2];
         String fileName = header_toks[3];
-        Path fileCacheDir = getFileCacheDir(role);
+        Path fileCacheDir = getFileCacheDir( role );
         File outFile = new File( fileCacheDir.toFile(), fileName);
         try {
             DataOutputStream os = new DataOutputStream(new FileOutputStream(outFile));
@@ -125,7 +125,7 @@ public class ResponseManager extends Thread {
 
 
     public Path getFileCacheDir( String role ) {
-        Path filePath = Paths.get( cacheDir, "transfer", role );
+        Path filePath = Paths.get( publishDir, role );
         try {
             Files.createDirectories( filePath );
         } catch( Exception err ) {
