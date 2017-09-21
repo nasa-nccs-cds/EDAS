@@ -61,6 +61,7 @@ public class ResponseManager extends Thread {
     }
 
     public void run() {
+        logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s", publishDir, cacheDir ) );
         ZMQ.Socket socket = portalClient.getResponseSocket();
         while (active) { processNextResponse( socket ); }
         try { socket.close(); }

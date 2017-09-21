@@ -127,6 +127,7 @@ public class EDASPortalClient {
     }
 
     public ResponseManager createResponseManager() {
+        logger.info("Creating ResponseManager");
         response_manager = new ResponseManager(this);
         response_manager.start();
         return response_manager;
