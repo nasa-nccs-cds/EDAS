@@ -61,11 +61,16 @@ public class ResponseManager extends Thread {
     }
 
     public void run() {
-        logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s", publishDir, cacheDir ) );
-        ZMQ.Socket socket = portalClient.getResponseSocket();
-        while (active) { processNextResponse( socket ); }
-        try { socket.close(); }
-        catch( Exception err ) { ; }
+        try {
+            String socket_address = String.format("tcp://%s:%d", portalClient.app_host, portalClient.response_port );
+            logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
+            ZMQ.Socket socket = portalClient.zmqContext.socket(ZMQ.SUB);
+            socket.connect(socket_address);
+            socket.subscribe(portalClient.clientId);
+            logger.info( "EDASPortalClient subscribing to EDASServer publisher channel " + portalClient.clientId );
+            while (active) { processNextResponse( socket ); }
+            socket.close();
+        } catch( Exception err ) { logger.error( "ResponseManager ERROR: " + err.getMessage() ); }
     }
 
     public void term() { active = false; }

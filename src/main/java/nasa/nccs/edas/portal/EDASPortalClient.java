@@ -83,14 +83,6 @@ public class EDASPortalClient {
         return port;
     }
 
-    public ZMQ.Socket getResponseSocket( ) {
-        ZMQ.Socket response_socket = zmqContext.socket(ZMQ.SUB);
-        connectSocket(response_socket, app_host, response_port );
-        response_socket.subscribe(clientId);
-        logger.info( "EDASPortalClient subscribing to EDASServer publisher channel " + clientId );
-        return response_socket;
-    }
-
     public EDASPortalClient( Map<String,String> portal_config ) {
         try {
             configuration = portal_config;
