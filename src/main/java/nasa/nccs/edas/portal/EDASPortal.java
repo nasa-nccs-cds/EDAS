@@ -186,6 +186,7 @@ public abstract class EDASPortal {
             zmqContext = ZMQ.context(1);
             request_socket = zmqContext.socket(ZMQ.REP);
             responder = new Responder( zmqContext, client_address, _response_port);
+            responder.setDaemon(true);
             responder.start();
 
 //                try{
