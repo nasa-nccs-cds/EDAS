@@ -4,7 +4,7 @@ import nasa.nccs.edas.workers.TransVar;
 import nasa.nccs.utilities.EDASLogManager;
 import nasa.nccs.utilities.Logger;
 import org.zeromq.ZMQ;
-
+import org.apache.commons.lang.exception.ExceptionUtils;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -70,7 +70,10 @@ public class ResponseManager extends Thread {
             logger.info( "EDASPortalClient subscribing to EDASServer publisher channel " + portalClient.clientId );
             while (active) { processNextResponse( socket ); }
             socket.close();
-        } catch( Exception err ) { logger.error( "ResponseManager ERROR: " + err.getMessage() ); }
+        } catch( Exception err ) {
+            logger.error( "ResponseManager ERROR: " + err.toString() );
+            logger.error( ExceptionUtils.getStackTrace(err) );
+        }
     }
 
     public void term() { active = false; }
