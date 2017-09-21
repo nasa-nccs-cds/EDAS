@@ -49,11 +49,12 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   val writer = if(Files.exists(logFilePath)) {
     new PrintWriter(logFilePath.toString)
   } else {
-    val perms: java.util.Set[PosixFilePermission] = PosixFilePermissions.fromString("rwxrwxrwx")
-    val fileAttr = PosixFilePermissions.asFileAttribute(perms)
-    Files.createDirectories( logFilePath.getParent, fileAttr )
-    val logFile = Files.createFile( logFilePath, fileAttr )
-    new PrintWriter( logFile.toFile )
+    if( !logFilePath.getParent().toFile.exists() ) {
+      val perms: java.util.Set[PosixFilePermission] = PosixFilePermissions.fromString("rwxrwxrwx")
+      val fileAttr = PosixFilePermissions.asFileAttribute(perms)
+      Files.createDirectories(logFilePath.getParent, fileAttr)
+    }
+    new PrintWriter( logFilePath.toFile )
   }
   def log( level: String, msg: String, newline: Boolean  ) = {
     var output = if(newline) { level + timeStr + ": " + msg } else { msg }
