@@ -101,7 +101,7 @@ public class ResponseManager extends Thread {
                 byte[] data = socket.recv(0);
                 File filePath = saveFile( header, data, 8 );
                 file_paths.put( rId, filePath.toString() );
-                logger.info( String.format("Received file %s for rid %s",header,rId) );
+                logger.info( String.format("Received file %s for rid %s, saved to: %s", header, rId, filePath.toString() ) );
             } else if ( type.equals("response") ) {
                 cacheResult(rId, toks[2]);
                 String currentTime = timeFormat.format( Calendar.getInstance().getTime() );
