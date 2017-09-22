@@ -110,23 +110,25 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node  =  {
-    val rId = portal.sendMessage( "describeProcess", List( name ).toArray )
-    val responses = response_manager.getResponses(rId,true).toList
-    EDAS_XML.loadString( responses(0) )
+    val response = portal.sendMessage( "describeProcess", List( name ).toArray )
+    val message = response.split('!').last
+    logger.info( "Received 'describeProcess' response, Sample:: " + message.substring(0,Math.min(100,message.length)) )
+    EDAS_XML.loadString( message )
   }
 
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node = {
-    val rId = portal.sendMessage( "getCapabilities", List( "" ).toArray )
-    val responses: List[String] = response_manager.getResponses(rId,true).toList
-    EDAS_XML.loadString( responses(0) )
+    val response = portal.sendMessage( "getCapabilities", List( "" ).toArray )
+    val message = response.split('!').last
+    logger.info( "Received 'getCapabilities' response, Sample:: " + message.substring(0,Math.min(100,message.length)) )
+    EDAS_XML.loadString( message )
   }
 
   def executeProcess(job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node = {
     logger.info( "zmqProcessManager executeProcess: " + job.requestId.toString )
-    val rId = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
-    val responses: List[String] = response_manager.getResponses(rId,true).toList
-    logger.info( "Received responses:\n\t--> " + responses.mkString("\n\t--> "))
-    EDAS_XML.loadString( responses(0) )
+    val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
+    val message = response.split('!').last
+    logger.info( "Received 'execute' response, Sample:: " + message.substring(0,Math.min(100,message.length)) )
+    EDAS_XML.loadString( message )
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {

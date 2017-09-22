@@ -132,6 +132,7 @@ public abstract class Worker {
         request_socket = context.socket(ZMQ.PUSH);
         request_port = bindSocket( request_socket, BASE_PORT );
         resultThread = new ResultThread( request_port + 1, context );
+        resultThread.setDaemon(true);
         resultThread.start();
         result_port = resultThread.port;
         logger.info( String.format("Starting Worker, ports: %d %d",  request_port, result_port ) );

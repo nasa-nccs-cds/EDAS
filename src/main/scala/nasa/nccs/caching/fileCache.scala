@@ -864,8 +864,7 @@ class RDDTransientVariable(val result: RDDRecord,
                            val operation: OperationContext,
                            val request: RequestContext) {
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
-  val timestamp = Calendar.getInstance().getTime
-
+  def timestamp = Calendar.getInstance().getTime
   def getTimestamp = timeFormatter.format(timestamp)
 
   def getGridId = result.metadata.get("gid") match {
