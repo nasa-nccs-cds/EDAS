@@ -123,7 +123,7 @@ public class EDASPortalClient {
     public ResponseManager createResponseManager() {
         String socket_address = String.format("tcp://%s:%d", app_host, response_port );
         logger.info("Creating ResponseManager, socket_address = " + socket_address );
-        response_manager = new ResponseManager( zmqContext, clientId, socket_address, configuration );
+        response_manager = new ResponseManager( zmqContext, socket_address, clientId, configuration );
         response_manager.setDaemon(true);
         response_manager.start();
         return response_manager;
