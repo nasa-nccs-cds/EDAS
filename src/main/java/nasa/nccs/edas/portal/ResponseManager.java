@@ -28,7 +28,7 @@ public class ResponseManager extends Thread {
     SimpleDateFormat timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy");
     protected Logger logger = EDASLogManager.getCurrentLogger();
 
-    public ResponseManager( ZMQ.Context _zmqContext, String _socket_address, String _client_id ) {
+    public ResponseManager( ZMQ.Context _zmqContext, String _socket_address, String _client_id, Map<String,String> configuration ) {
         socket_address = _socket_address;
         client_id = _client_id;
         zmqContext = _zmqContext;
@@ -39,7 +39,7 @@ public class ResponseManager extends Thread {
         setDaemon(true);
         String EDAS_CACHE_DIR = System.getenv( "EDAS_CACHE_DIR" );
         cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
-        publishDir = portalClient.getConfiguration( "edas.publish.dir", cacheDir );
+        publishDir =  EDASPortalClient.getOrDefault( configuration, "edas.publish.dir", cacheDir );
         logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
     }
 
