@@ -15,7 +15,9 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class ResponseManager extends Thread {
-    EDASPortalClient portalClient = null;
+    String socket_address = "";
+    String client_id = "";
+    protected ZMQ.Context zmqContext = null;
     Boolean active = true;
     Map<String, List<String>> cached_results = null;
     Map<String, List<TransVar>> cached_arrays = null;
@@ -26,8 +28,10 @@ public class ResponseManager extends Thread {
     SimpleDateFormat timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy");
     protected Logger logger = EDASLogManager.getCurrentLogger();
 
-    public ResponseManager(EDASPortalClient _portalClient) {
-        EDASPortalClient portalClient = _portalClient;
+    public ResponseManager( ZMQ.Context _zmqContext, String _socket_address, String _client_id ) {
+        socket_address = _socket_address;
+        client_id = _client_id;
+        zmqContext = _zmqContext;
         cached_results = new HashMap<String, List<String>>();
         cached_arrays = new HashMap<String, List<TransVar>>();
         file_paths = new HashMap<String,String>();
@@ -36,6 +40,7 @@ public class ResponseManager extends Thread {
         String EDAS_CACHE_DIR = System.getenv( "EDAS_CACHE_DIR" );
         cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
         publishDir = portalClient.getConfiguration( "edas.publish.dir", cacheDir );
+        logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
     }
 
     public void cacheResult(String id, String result) { getResults(id).add(result); }
@@ -62,12 +67,10 @@ public class ResponseManager extends Thread {
 
     public void run() {
         try {
-            String socket_address = String.format("tcp://%s:%d", portalClient.app_host, portalClient.response_port );
-            logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
-            ZMQ.Socket socket = portalClient.zmqContext.socket(ZMQ.SUB);
+            ZMQ.Socket socket = zmqContext.socket(ZMQ.SUB);
             socket.connect(socket_address);
-            socket.subscribe(portalClient.clientId);
-            logger.info( "EDASPortalClient subscribing to EDASServer publisher channel " + portalClient.clientId );
+            socket.subscribe(client_id);
+            logger.info( "EDASPortalClient subscribing to EDASServer publisher channel " + client_id );
             while (active) { processNextResponse( socket ); }
             socket.close();
         } catch( Exception err ) {
