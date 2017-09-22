@@ -11,13 +11,11 @@ import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 public class ResponseManager extends Thread {
-    ZMQ.Socket socket = null;
+    EDASPortalClient portalClient = null;
     Boolean active = true;
     Map<String, List<String>> cached_results = null;
     Map<String, List<TransVar>> cached_arrays = null;
@@ -25,10 +23,11 @@ public class ResponseManager extends Thread {
     String cacheDir = null;
     String publishDir = null;
     String latest_result = "";
+    SimpleDateFormat timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy");
     protected Logger logger = EDASLogManager.getCurrentLogger();
 
-    public ResponseManager(EDASPortalClient portalClient) {
-        socket = portalClient.response_socket;
+    public ResponseManager(EDASPortalClient _portalClient) {
+        EDASPortalClient portalClient = _portalClient;
         cached_results = new HashMap<String, List<String>>();
         cached_arrays = new HashMap<String, List<TransVar>>();
         file_paths = new HashMap<String,String>();
@@ -62,24 +61,20 @@ public class ResponseManager extends Thread {
     }
 
     public void run() {
-        while (active) {
-            processNextResponse();
-        }
-    }
-
-    public void term() {
-        active = false;
+        ZMQ.Socket socket = portalClient.getResponseSocket();
+        while (active) { processNextResponse( socket ); }
         try { socket.close(); }
         catch( Exception err ) { ; }
     }
 
+    public void term() { active = false; }
 
     public String getMessageField( String header, int index) {
         String[] toks = header.split("[|]");
         return toks[index];
     }
 
-    public void processNextResponse() {
+    public void processNextResponse( ZMQ.Socket socket ) {
         try {
             String response = new String(socket.recv(0)).trim();
             String[] toks = response.split("[!]");
@@ -97,10 +92,12 @@ public class ResponseManager extends Thread {
                 logger.info( String.format("Received file %s for rid %s",header,rId) );
             } else if ( type.equals("response") ) {
                 cacheResult(rId, toks[2]);
-                if( !latest_result.equals(toks[2]) ) {
-                    logger.info(String.format("Received result: %s", toks[2]));
-                    latest_result = toks[2];
-                }
+                String currentTime = timeFormat.format( Calendar.getInstance().getTime() );
+                logger.info(String.format("Received result[%s] (%s): %s", rId, currentTime, response ) );
+//                if( !latest_result.equals(toks[2]) ) {
+//                    logger.info(String.format("Received result: %s", response ) );
+//                    latest_result = toks[2];
+//                }
             } else {
                 logger.error(String.format("EDASPortal.ResponseThread-> Received unrecognized message type: %s",type));
             }

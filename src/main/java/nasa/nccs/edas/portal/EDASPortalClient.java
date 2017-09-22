@@ -47,7 +47,6 @@ public class EDASPortalClient {
     protected Logger logger = EDASLogManager.getCurrentLogger();
     protected ZMQ.Context zmqContext = null;
     protected ZMQ.Socket request_socket = null;
-    protected ZMQ.Socket response_socket = null;
     protected String app_host = null;
     protected Map<String,String> configuration = null;
     protected ResponseManager response_manager = null;
@@ -81,17 +80,21 @@ public class EDASPortalClient {
         return port;
     }
 
+    public ZMQ.Socket getResponseSocket( ) {
+        ZMQ.Socket response_socket = zmqContext.socket(ZMQ.PULL);
+        connectSocket(response_socket, app_host, response_port );
+        return response_socket;
+    }
+
     public EDASPortalClient( Map<String,String> portal_config ) {
         try {
             configuration = portal_config;
-            int _request_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.request","5670" ) );
-            int _response_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.response","5671" ) );
-            zmqContext = ZMQ.context(2);
+            request_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.request","5670" ) );
+            response_port = Integer.parseInt( getOrDefault(configuration,"edas.server.port.response","5671" ) );
+            zmqContext = ZMQ.context(1);
             request_socket = zmqContext.socket(ZMQ.PUSH);
-            response_socket = zmqContext.socket(ZMQ.PULL);
             app_host = getOrDefault(configuration,"edas.server.address","localhost" );
-            request_port = connectSocket(request_socket, app_host, _request_port );
-            response_port = connectSocket(response_socket, app_host, _response_port );
+            request_port = connectSocket(request_socket, app_host, request_port );
             logger.info( String.format("[2]Connected request socket to server %s on port: %d",app_host, request_port) );
             logger.info( String.format("Connected response socket on port: %d", response_port ) );
             logger.info( String.format("Starting EDASPortalClient with server = %s", app_host ) );

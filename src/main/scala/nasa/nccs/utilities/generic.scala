@@ -38,6 +38,7 @@ import scala.collection.mutable
 class Logger( val name: String, val test: Boolean, val master: Boolean ) extends Serializable {
   val LNAME = if( test ) name + "-test" else name + "-"
   val LID = if( master ) "master" else UID().uid
+  var newline_state = true
   val logFilePath: Path = Paths.get( "/tmp" /* System.getProperty("user.home") */, "edas", "logs", LNAME + LID + ".log" )
   val writer = if(Files.exists(logFilePath)) {
     new PrintWriter(logFilePath.toString)
@@ -49,23 +50,24 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
     val existingLogFile: Path = Files.createFile( logFile.toPath, fileAttr )
     new PrintWriter( existingLogFile.toFile )
   }
-  def log( level: String, msg: String  ) = {
-    try {
-      val output = level + ": " + msg
-      writer.println(output)
-      writer.flush()
-      if (!test) {
-        println(output)
-      }
-    } catch {
-      case ex: Exception =>  println( "Logging exception: " + ex.toString )
-    }
-  }
-  def info( msg: String ) = { log( "info", msg ) }
-  def debug( msg: String ) = { log( "debug", msg ) }
-  def error( msg: String ) = { log( "error", msg ) }
-  def warn( msg: String ) = { log( "warn", msg ) }
+
+  def log( level: String, msg: String, newline: Boolean  ) = try {
+    var output = if(newline) { level + ": " + msg } else { msg }
+    if( newline && !newline_state) { output = "\n" + output }
+    if(newline) { writer.println( output ) } else { writer.print( output ) }
+    writer.flush()
+    if(!test) { println( output ) }
+    newline_state = newline
+  } catch { case ex: Exception =>  println( "Logging exception: " + ex.toString ) }
+
   def close() { writer.close(); }
+  def info( msg: String ) = { log( "info", msg, true ) }
+  def debug( msg: String ) = { log( "debug", msg, true ) }
+  def info( msg: String, newline: Boolean ) = { log( "info", msg, newline ) }
+  def debug( msg: String, newline: Boolean ) = { log( "debug", msg, newline ) }
+  def error( msg: String ) = { log( "error", msg, true ) }
+  def warn( msg: String ) = { log( "warn", msg, true ) }
+
 }
 
 
