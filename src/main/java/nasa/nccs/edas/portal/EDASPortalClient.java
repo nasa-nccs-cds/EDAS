@@ -129,10 +129,6 @@ public class EDASPortalClient {
         return response_manager;
     }
 
-    public Path getFileCacheDir(String role) {
-        return response_manager.getFileCacheDir(role);
-    }
-
     public void shutdown() {
         logger.info(" ############################## SHUT DOWN EDAS PORTAL ##############################");
         try { request_socket.close(); }

@@ -132,7 +132,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
-    Some( response_manager.getFileCacheDir("publish").toString + s"/$resultId.nc" )
+    Some( response_manager.getPublishFile( "publish", resultId + ".nc" ).toString )
   }
 
   def getResult( service: String, resultId: String, responseSyntax: ResponseSyntax.Value ): xml.Node = {

@@ -8,9 +8,13 @@ import org.apache.commons.lang.exception.ExceptionUtils;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -97,11 +101,15 @@ public class ResponseManager extends Thread {
                 byte[] data = socket.recv(0);
                 cacheArray(rId, new TransVar( header, data, 8) );
             } else if ( type.equals("file") ) {
-                String header = toks[2];
-                byte[] data = socket.recv(0);
-                File filePath = saveFile( header, data, 8 );
-                file_paths.put( rId, filePath.toString() );
-                logger.info( String.format("Received file %s for rid %s, saved to: %s", header, rId, filePath.toString() ) );
+                try {
+                    String header = toks[2];
+                    byte[] data = socket.recv(0);
+                    Path outFilePath = saveFile( header, data, 8 );
+                    file_paths.put( rId, outFilePath.toString() );
+                    logger.info( String.format("Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
+                } catch( Exception err ) {
+                    logger.error(String.format("Unable to write to output file: %s", err.getMessage() ) );
+                }
             } else if ( type.equals("response") ) {
                 cacheResult(rId, toks[2]);
                 String currentTime = timeFormat.format( Calendar.getInstance().getTime() );
@@ -119,31 +127,25 @@ public class ResponseManager extends Thread {
         }
     }
 
-    File saveFile( String header, byte[] data, int offset ) {
-        String[] header_toks = header.split("|");
+    Path saveFile( String header, byte[] data, int offset ) throws IOException {
+        String[] header_toks = header.split("[|]");
         String id = header_toks[1];
         String role = header_toks[2];
         String fileName = header_toks[3];
-        Path fileCacheDir = getFileCacheDir( role );
-        File outFile = new File( fileCacheDir.toFile(), fileName);
-        try {
-            DataOutputStream os = new DataOutputStream(new FileOutputStream(outFile));
-            os.write(data, offset, data.length-offset );
-        } catch( Exception err ) {
-            logger.error(String.format("Unable to write to file(%s): %s\n%s\n", id, outFile.toString(), err.getMessage() ) );
-        }
-        return outFile;
+        Path outFilePath = getPublishFile( role, fileName );
+        DataOutputStream os = new DataOutputStream(new FileOutputStream(outFilePath.toFile()));
+        os.write(data, offset, data.length-offset );
+        return outFilePath;
     }
 
 
-    public Path getFileCacheDir( String role ) {
-        Path filePath = Paths.get( publishDir, role );
-        try {
-            Files.createDirectories( filePath );
-        } catch( Exception err ) {
-            logger.error(String.format("Unable to create directory %s", filePath.toString() ) );
-        }
-        return filePath;
+    public Path getPublishFile( String role, String fileName  ) throws IOException {
+        java.util.Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrwx");
+        FileAttribute<Set<PosixFilePermission>> fileAttr = PosixFilePermissions.asFileAttribute(perms);
+        Path directory = Paths.get( publishDir, role );
+        Path filePath = Paths.get( publishDir, role, fileName );
+        Files.createDirectories( directory, fileAttr );
+        return  Files.createFile( filePath, fileAttr );
     }
 
     public List<String> getResponses( String rId, Boolean wait ) {
