@@ -17,11 +17,13 @@ public class TransVar {
     byte[] _data;
     int[] _origin = null;
     int[] _shape = null;
+    int _offset = 0;
     Map<String, String> _metadata;
 
-    public TransVar( String header, byte[] data ) {
+    public TransVar( String header, byte[] data, int offset ) {
         _header = header;
         _data = data;
+        _offset = offset;
         String[] header_items = header.split("[|]");
         _nodeId = header_items[0].split("[-]")[1];
         _id = header_items[1];
@@ -36,9 +38,8 @@ public class TransVar {
 
     public int[] getOrigin() { return _origin; }
     public int[] getShape() { return _shape; }
-    public byte[] getData() { return _data; }
     public String id() { return _id; }
-    public ByteBuffer getDataBuffer() { return ByteBuffer.wrap(_data); }
+    public ByteBuffer getDataBuffer() { return ByteBuffer.wrap( _data, _offset,_data.length-_offset ); }
     public Map<String, String> getMetaData() { return _metadata; }
 
     public float getInvalid() throws IOException {

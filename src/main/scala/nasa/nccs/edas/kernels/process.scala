@@ -1166,7 +1166,7 @@ class SerializeTest {
   val ucar_array = CDFloatArray.toUcarArray( input_array )
   val byte_data = ucar_array.getDataAsByteBuffer().array()
   println( "Byte data: %x %x %x %x".format( byte_data(0),byte_data(1), byte_data(2), byte_data(3) ))
-  val tvar = new TransVar( " | |0|4| ", byte_data )
+  val tvar = new TransVar( " | |0|4| ", byte_data, 0 )
   val result = HeapFltArray( tvar, None )
   println( "Float data: %f %f %f %f".format( result.data(0), result.data(1), result.data(2), result.data(3) ))
 }

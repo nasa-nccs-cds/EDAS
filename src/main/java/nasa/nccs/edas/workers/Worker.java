@@ -51,7 +51,7 @@ public abstract class Worker {
     private void addResult( String result_header, byte[] data ) {
         String elapsedTime = String.valueOf( ( System.currentTimeMillis() - requestTime )/1000.0 );
         logger.info( "*********************************\n Caching result from worker: " + result_header+ ", data size = " + data.length  + ", Worker time = " + elapsedTime + "\n*********************************\n");
-        results.add( new TransVar( result_header, data ) );
+        results.add( new TransVar( result_header, data, 0 ) );
     }
 
     private void invalidateRequest( String errorMsg ) { errorCondition = errorMsg; }

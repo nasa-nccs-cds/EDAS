@@ -95,11 +95,11 @@ public class ResponseManager extends Thread {
             if ( type.equals("array") ) {
                 String header = toks[2];
                 byte[] data = socket.recv(0);
-                cacheArray(rId, new TransVar( header, data) );
+                cacheArray(rId, new TransVar( header, data, 8) );
             } else if ( type.equals("file") ) {
                 String header = toks[2];
                 byte[] data = socket.recv(0);
-                File filePath = saveFile( header, data );
+                File filePath = saveFile( header, data, 8 );
                 file_paths.put( rId, filePath.toString() );
                 logger.info( String.format("Received file %s for rid %s",header,rId) );
             } else if ( type.equals("response") ) {
@@ -115,11 +115,11 @@ public class ResponseManager extends Thread {
             }
 
         } catch( Exception err ) {
-            logger.error(String.format("EDAS error: %s\n%s\n", err, err.getStackTrace().toString() ) );
+            logger.error(String.format("EDAS error: %s\n%s\n", err, ExceptionUtils.getStackTrace(err) ) );
         }
     }
 
-    File saveFile( String header, byte[] data ) {
+    File saveFile( String header, byte[] data, int offset ) {
         String[] header_toks = header.split("|");
         String id = header_toks[1];
         String role = header_toks[2];
@@ -128,7 +128,7 @@ public class ResponseManager extends Thread {
         File outFile = new File( fileCacheDir.toFile(), fileName);
         try {
             DataOutputStream os = new DataOutputStream(new FileOutputStream(outFile));
-            os.write(data, 0, data.length);
+            os.write(data, offset, data.length-offset );
         } catch( Exception err ) {
             logger.error(String.format("Unable to write to file(%s): %s\n%s\n", id, outFile.toString(), err.getMessage() ) );
         }

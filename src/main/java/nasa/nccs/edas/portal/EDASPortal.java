@@ -48,14 +48,26 @@ class ErrorReport extends Response {
 }
 
 class DataPacket extends Response {
-    String header = null;
-    byte[] data = null;
-    public DataPacket( String _clientId, String _responseId, String _header, byte[] _data ) {
-        super( "data",  _clientId, _responseId );
-        header = _header;
-        data = _data;
+    private String _header = null;
+    private byte[] _data = null;
+    public DataPacket( String client_id, String response_id, String header, byte[] data ) {
+        super( "data",  client_id, response_id );
+        _header =  header;
+        _data = data;
     }
-    public String toString() { return "DataPacket[" + header + "]"; }
+    byte[] getTransferHeader() { return (clientId + ":" + _header).getBytes(); }
+    String getHeaderString() { return _header; }
+
+    byte[] getTransferData() { return concat(clientId.getBytes(), _data ); }
+    byte[] getRawData() { return _data; }
+    public String toString() { return "DataPacket[" + _header + "]"; }
+
+    static byte[] concat( byte[] a, byte[] b ) {
+        byte[] c = new byte[a.length + b.length];
+        System.arraycopy(a, 0, c, 0, a.length);
+        System.arraycopy(b, 0, c, a.length, b.length);
+        return c;
+    }
 }
 
 
@@ -107,6 +119,7 @@ class Responder extends Thread {
     String doSendMessage( ZMQ.Socket socket, Message msg  ) {
         List<String> request_args = Arrays.asList( msg.id(), "response", msg.message );
         String packaged_msg = StringUtils.join( request_args,  "!" );
+        logger.info( " Sending message to client, msgId=" + msg.id() + ", content: " + packaged_msg );
         socket.send( packaged_msg.getBytes() );
         return packaged_msg;
     }
@@ -118,9 +131,9 @@ class Responder extends Thread {
     }
 
     void doSendDataPacket( ZMQ.Socket socket, DataPacket dataPacket ) {
-        socket.send( dataPacket.header.getBytes() );
-        socket.send( dataPacket.data );
-        logger.info( " Sent data packet " + dataPacket.id() + ", header: " + dataPacket.header );
+        socket.send( dataPacket.getTransferHeader() );
+        socket.send( dataPacket.getTransferData() );
+        logger.info( " Sent data packet " + dataPacket.id() + ", header: " + dataPacket.getHeaderString() );
     }
 
     public void setExeStatus( String rid, String status ) {
@@ -225,7 +238,7 @@ public abstract class EDASPortal {
         logger.debug( String.format("Portal: Sending response data to client for rid %s, nbytes=%d", rid, data.length ));
         List<String> array_header_fields = Arrays.asList( "array", rid, ia2s(origin), ia2s(shape), m2s(metadata), "1" );
         String array_header = StringUtils.join(array_header_fields,"|");
-        List<String> header_fields = Arrays.asList( rid,"array", array_header );
+        List<String> header_fields = Arrays.asList( rid, "array", array_header );
         String header = StringUtils.join(header_fields,"!");
         logger.debug("Sending header: " + header);
         responder.sendDataPacket( new DataPacket( clientId, rid, header, data ) );
