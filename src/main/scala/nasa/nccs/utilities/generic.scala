@@ -50,15 +50,22 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
     new PrintWriter( existingLogFile.toFile )
   }
   def log( level: String, msg: String  ) = {
-    val output = level + ": " + msg
-    writer.println( output )
-    writer.flush()
-    if(!test) { println( output ) }
+    try {
+      val output = level + ": " + msg
+      writer.println(output)
+      writer.flush()
+      if (!test) {
+        println(output)
+      }
+    } catch {
+      case ex: Exception =>  println( "Logging exception: " + ex.toString )
+    }
   }
   def info( msg: String ) = { log( "info", msg ) }
   def debug( msg: String ) = { log( "debug", msg ) }
   def error( msg: String ) = { log( "error", msg ) }
   def warn( msg: String ) = { log( "warn", msg ) }
+  def close() { writer.close(); }
 }
 
 

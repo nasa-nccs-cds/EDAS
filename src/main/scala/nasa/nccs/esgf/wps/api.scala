@@ -12,4 +12,6 @@ class APIManager( serverConfiguration: Map[String,String] ) extends Loggable {
   def getServiceProvider(service: String = ""): ServiceProvider = {
     providers.getOrElse(service,default_service)
   }
+
+  def shutdown() = { providers.values.map( _.shutdown() ) }
 }

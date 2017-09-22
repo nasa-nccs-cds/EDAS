@@ -24,6 +24,7 @@ trait GenericProcessManager {
   def getResultFilePath( service: String, resultId: String ): Option[String]
   def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
+  def term();
 }
 
 class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericProcessManager with Loggable {
@@ -33,6 +34,8 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     logger.error(msg)
     throw new NotAcceptableException(msg)
   }
+
+  def term() {  apiManager.shutdown() }
 
   def shutdown(service: String) = {
     val serviceProvider = apiManager.getServiceProvider(service)
@@ -95,6 +98,11 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   val response_manager = portal.createResponseManager()
   def quote( input: String ): String = "\"" + input + "\""
   def map2Str( inputs: Map[String, String] ): String = inputs.map { case ( key, value ) => quote(key) + ": " + quote(value) }.mkString("{ ",", "," }")
+
+  def term() {
+    response_manager.term()
+    portal.shutdown()
+  }
 
   def unacceptable(msg: String) = {
     logger.error(msg)
