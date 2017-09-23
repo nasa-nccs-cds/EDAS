@@ -269,6 +269,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def createResponse(result: RDDRecord, context: RequestContext, node: WorkflowNode ): Option[WPSProcessExecuteResponse] = {
     val resultId = cacheResult( result, context, node )
+    logger.info( s"Create result ${resultId}: req-context metadata: ${context.request.metadata.mkString("; ")}" )
     if( node.isRoot ) {
       context.getConf("response", "xml") match {
         case "object" =>
