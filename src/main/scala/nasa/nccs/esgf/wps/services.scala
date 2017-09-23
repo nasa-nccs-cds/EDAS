@@ -71,7 +71,7 @@ object edasServiceProvider extends ServiceProvider {
       logger.info( " @@edasServiceProvider: exec process: " + request.name + ", runArgs = " + runargs.mkString("; ") )
 
       cdsutils.time(logger, "\n\n-->> Process %s, datainputs: %s \n\n".format(request.name, dataInputsSpec ) ) {
-        if (runargs.getOrElse("status", "false").toBoolean) {
+        if (runargs.getOrElse("status", "true").toBoolean) {
           val result = cds2ExecutionManager.asyncExecute( request, runargs, executionCallback )
           result.toXml(syntax)
         } else {

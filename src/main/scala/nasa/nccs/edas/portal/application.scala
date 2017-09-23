@@ -66,13 +66,14 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   override def execute( taskSpec: Array[String] ): Message = {
     val clientId = elem(taskSpec,0)
-    val rId = randomIds.nextString
+    val runargs = getRunArgs( taskSpec )
+    val rId = runargs.getOrElse("jobId",randomIds.nextString)
     val process_name = elem(taskSpec,2)
     val dataInputsSpec = elem(taskSpec,3)
     setExeStatus( rId, "executing " + process_name + "-> " + dataInputsSpec )
     responder.setClientId(clientId)
 
-    val runargs = getRunArgs( taskSpec )
+
     val response_syntax = getResponseSyntax(runargs)
     val responseType = runargs.getOrElse("response","xml")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
