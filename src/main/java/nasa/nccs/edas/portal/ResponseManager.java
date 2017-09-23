@@ -104,7 +104,7 @@ public class ResponseManager extends Thread {
                 try {
                     String header = toks[2];
                     byte[] data = socket.recv(0);
-                    Path outFilePath = saveFile( header, data, 8 );
+                    Path outFilePath = saveFile( header, rId, data, 8 );
                     file_paths.put( rId, outFilePath.toString() );
                     logger.info( String.format("Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
                 } catch( Exception err ) {
@@ -127,11 +127,12 @@ public class ResponseManager extends Thread {
         }
     }
 
-    Path saveFile( String header, byte[] data, int offset ) throws IOException {
+    Path saveFile( String header, String response_id, byte[] data, int offset ) throws IOException {
         String[] header_toks = header.split("[|]");
         String id = header_toks[1];
         String role = header_toks[2];
-        String fileName = header_toks[3];
+        String variable_id = header_toks[3];
+        String fileName = response_id + ".nc";
         Path outFilePath = getPublishFile( role, fileName );
         DataOutputStream os = new DataOutputStream(new FileOutputStream(outFilePath.toFile()));
         os.write(data, offset, data.length-offset );

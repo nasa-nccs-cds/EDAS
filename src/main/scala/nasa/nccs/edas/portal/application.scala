@@ -146,7 +146,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         val filepath = fileOpt.get
         val rid = href.split("[/]").last
         logger.info("\n\n     **** Found result Id: " + rid + ": sending File: " + filepath + " ****** \n\n")
-        sendFile( clientId, rid, "variable", filepath )
+        sendFile( clientId, rid, "publish", filepath )
       } else {
         sendErrorReport( response_format, clientId, responseId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )
       }
