@@ -71,6 +71,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val process_name = elem(taskSpec,2)
     val dataInputsSpec = elem(taskSpec,3)
     setExeStatus( rId, "executing " + process_name + "-> " + dataInputsSpec )
+    logger.info( "\n\nExecuting " + process_name + "-> " + dataInputsSpec + ", rId = " + rId + ", runargs = " + runargs.mkString("; ") + "\n\n")
     responder.setClientId(clientId)
 
 
