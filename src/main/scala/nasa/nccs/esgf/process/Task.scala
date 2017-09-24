@@ -50,11 +50,9 @@ class TaskRequest(val id: UID,
                   val metadata: Map[String, String] = Map("id" -> "#META"))
     extends Loggable {
   val errorReports = new ListBuffer[ErrorReport]()
-  val targetGridMap =
-    scala.collection.mutable.HashMap.empty[String, TargetGrid]
+  val targetGridMap = scala.collection.mutable.HashMap.empty[String, TargetGrid]
   validate()
-  logger.info(s"TaskRequest: name= $name, workflows= " + operations.mkString(
-    ",") + ", variableMap= " + variableMap.toString + ", domainMap= " + domainMap.toString)
+  logger.info(s"TaskRequest: name= $name, workflows= " + operations.mkString(",") + ", variableMap= " + variableMap.toString + ", domainMap= " + domainMap.toString)
   val workflow = Workflow(this, edasServiceProvider.cds2ExecutionManager);
 
   def addErrorReport(severity: String, message: String) = {
@@ -97,9 +95,13 @@ class TaskRequest(val id: UID,
   def getOutputs: List[WPSProcessOutput] =
     List(WPSProcessOutput(id.toString, "text/xml", "Workflow Output"))
 
-  def getJobRec(run_args: Map[String, String]): JobRecord = {
+  def getJobRec1(run_args: Map[String, String]): JobRecord = {
     val jobIds = for (node <- workflow.roots) yield node.operation.rid
     new JobRecord(jobIds.mkString(";"))
+  }
+
+  def getJobRec(run_args: Map[String, String]): JobRecord = {
+    new JobRecord(name)
   }
 
   def isMetadataRequest: Boolean =

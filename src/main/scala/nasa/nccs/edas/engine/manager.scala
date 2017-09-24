@@ -312,7 +312,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
   }
 
   def futureExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): Future[WPSResponse] = Future {
-    logger.info("ASYNC Execute { runargs: " + run_args.toString + ",  request: " + request.toString + " }")
+    logger.info("ASYNC Execute { runargs: " + run_args.toString + ",  request: " + request.toString+ ",  jobId: " + jobId + " }")
     val requestContext = createRequestContext( jobId, request, run_args )
     val results = executeWorkflows( requestContext )
     executionCallback.foreach( _.execute( jobId, results ))

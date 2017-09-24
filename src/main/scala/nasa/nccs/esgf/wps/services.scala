@@ -3,7 +3,7 @@ package nasa.nccs.esgf.wps
 import java.io.{PrintWriter, StringWriter}
 import java.util.concurrent.ExecutionException
 
-import nasa.nccs.caching.{RDDTransientVariable, collectionDataCache}
+import nasa.nccs.caching.{JobRecord, RDDTransientVariable, collectionDataCache}
 import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.wps.{BlockingExecutionResult, ResponseSyntax, WPSExceptionReport, WPSResponse}

@@ -73,8 +73,6 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     setExeStatus( rId, "executing " + process_name + "-> " + dataInputsSpec )
     logger.info( "\n\nExecuting " + process_name + "-> " + dataInputsSpec + ", rId = " + rId + ", runargs = " + runargs.mkString("; ") + "\n\n")
     responder.setClientId(clientId)
-
-
     val response_syntax = getResponseSyntax(runargs)
     val responseType = runargs.getOrElse("response","xml")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
@@ -139,7 +137,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   def getNodeAttributes( node: xml.Node ): String = node.attributes.toString()
 
-  def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, responseId: String, results: WPSResponse ): Unit =  {
+  def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, jobId: String, results: WPSResponse ): Unit =  {
     val response = results.toXml( ResponseSyntax.Generic )
     val refs: xml.NodeSeq = response \\ "data"
     for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file") ) {
@@ -147,10 +145,10 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 //        val href = hrefOpt.get
 //        val rid = href.split("[/]").last
         val filepath = fileOpt.get
-        logger.info("\n\n     **** Found result Id: " + responseId + ": sending File: " + filepath + " ****** \n\n")
-        sendFile( clientId, responseId, "publish", filepath )
+        logger.info("\n\n     **** Found file node for jobId: " + jobId + ": sending File: " + filepath + " ****** \n\n")
+        sendFile( clientId, jobId, "publish", filepath )
       } else {
-        sendErrorReport( response_format, clientId, responseId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )
+        sendErrorReport( response_format, clientId, jobId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )
       }
     }
   }
