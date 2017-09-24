@@ -284,9 +284,9 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def cacheResult(result: RDDRecord, context: RequestContext, node: WorkflowNode ): String = {
-    collectionDataCache.putResult( node.operation.rid, new RDDTransientVariable( result, node.operation, context ) )
-    logger.info( " ^^^^## Cached result, rid = " + node.operation.rid + ", head elem metadata = " + result.elements.head._2.metadata )
-    node.operation.rid
+    collectionDataCache.putResult( context.jobId, new RDDTransientVariable( result, node.operation, context ) )
+    logger.info( " ^^^^## Cached result, rid = " + context.jobId + ", head elem metadata = " + result.elements.head._2.metadata )
+    context.jobId
   }
 
   def needsRegrid(rdd: RDD[(RecordKey,RDDRecord)], requestCx: RequestContext, kernelContext: KernelContext ): Boolean = {
