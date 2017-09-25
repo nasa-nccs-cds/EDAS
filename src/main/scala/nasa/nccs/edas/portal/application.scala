@@ -67,16 +67,16 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   override def execute( taskSpec: Array[String] ): Message = {
     val clientId = elem(taskSpec,0)
     val runargs = getRunArgs( taskSpec )
-    val rId = runargs.getOrElse("jobId",randomIds.nextString)
+    val jobId = runargs.getOrElse("jobId",randomIds.nextString)
     val process_name = elem(taskSpec,2)
     val dataInputsSpec = elem(taskSpec,3)
-    setExeStatus( rId, "executing " + process_name + "-> " + dataInputsSpec )
-    logger.info( "\n\nExecuting " + process_name + "-> " + dataInputsSpec + ", rId = " + rId + ", runargs = " + runargs.mkString("; ") + "\n\n")
+    setExeStatus( jobId, "executing " + process_name + "-> " + dataInputsSpec )
+    logger.info( "\n\nExecuting " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; ") + "\n\n")
     responder.setClientId(clientId)
     val response_syntax = getResponseSyntax(runargs)
     val responseType = runargs.getOrElse("response","xml")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
-      override def execute(jobId: String, results: WPSResponse): Unit = {
+      override def execute( results: WPSResponse ): Unit = {
         logger.info( s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType} *** \n\n")
         if( responseType == "object" ) { sendDirectResponse( response_syntax, clientId, jobId, results ) }
         else if( responseType == "file" ) { sendFileResponse( response_syntax, clientId, jobId, results ) }
@@ -84,8 +84,8 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         responder.clearClientId()
       }
     }
-    val responseElem = processManager.executeProcess( Job( rId, process_name, dataInputsSpec, runargs), Some(executionCallback) )
-    new Message(clientId,rId, printer.format( responseElem ) )
+    val responseElem = processManager.executeProcess( Job( jobId, process_name, dataInputsSpec, runargs), Some(executionCallback) )
+    new Message( clientId, jobId, printer.format( responseElem ) )
   }
 
   def sendErrorReport( response_format: ResponseSyntax.Value, clientId: String, responseId: String, exc: Exception ): Unit = {
@@ -146,7 +146,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 //        val href = hrefOpt.get
 //        val rid = href.split("[/]").last
         val filepath = fileOpt.get
-        logger.info("\n\n     **** Found file node for jobId: " + jobId + ": sending File: " + filepath + " ****** \n\n")
+        logger.info("\n\n     ****>> Found file node for jobId: " + jobId + ", clientId: " + clientId + ", sending File: " + filepath + " ****** \n\n")
         sendFile( clientId, jobId, "publish", filepath )
       } else {
         sendErrorReport( response_format, clientId, jobId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )

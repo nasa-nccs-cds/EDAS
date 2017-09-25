@@ -38,7 +38,7 @@ class Counter(start: Int = 0) {
 }
 
 trait ExecutionCallback extends Loggable {
-  def execute( jobId: String, results: WPSResponse  ) // WPSMergedEventReport
+  def execute( results: WPSResponse  ) // WPSMergedEventReport
 }
 
 object CDS2ExecutionManager extends Loggable {
@@ -315,7 +315,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     logger.info("ASYNC Execute { runargs: " + run_args.toString + ",  request: " + request.toString+ ",  jobId: " + jobId + " }")
     val requestContext = createRequestContext( jobId, request, run_args )
     val results = executeWorkflows( requestContext )
-    executionCallback.foreach( _.execute( jobId, results ))
+    executionCallback.foreach( _.execute( results ))
     collectionDataCache.removeJob( jobId )
     results
   }
@@ -335,7 +335,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
           val requestContext = createRequestContext ( jobId, request, run_args )
           val response = executeWorkflows ( requestContext )
           requestContext.logTimingReport("Executed task request " + request.name)
-          executionCallback.foreach( _.execute( jobId, response ))
+          executionCallback.foreach( _.execute( response ))
           collectionDataCache.removeJob( jobId )
           response
       }
