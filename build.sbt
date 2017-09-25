@@ -91,9 +91,11 @@ unmanagedJars in Compile ++= {
       val classpath_file = edas_cache_dir.value / "classpath.txt"
       val pw = new PrintWriter( classpath_file )
       val jars_list = customJars.getPaths.mkString("\n")
+      println("Custom jars: " + jars_list + ", dir: " + jars_dir )
       pw.write( jars_list )
       customJars.classpath
     case None =>
+      println(" Custom jars: UNDEF " )
       PathFinder.empty.classpath
   }
 }
