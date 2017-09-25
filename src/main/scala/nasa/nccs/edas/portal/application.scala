@@ -78,9 +78,9 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val executionCallback: ExecutionCallback = new ExecutionCallback {
       override def execute(jobId: String, results: WPSResponse): Unit = {
         logger.info( s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType} *** \n\n")
-        if( responseType == "object" ) { sendDirectResponse( response_syntax, clientId, rId, results ) }
-        else if( responseType == "file" ) { sendFileResponse( response_syntax, clientId, rId, results ) }
-        setExeStatus( rId, "completed" )
+        if( responseType == "object" ) { sendDirectResponse( response_syntax, clientId, jobId, results ) }
+        else if( responseType == "file" ) { sendFileResponse( response_syntax, clientId, jobId, results ) }
+        setExeStatus( jobId, "completed" )
         responder.clearClientId()
       }
     }

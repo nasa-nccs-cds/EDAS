@@ -244,16 +244,16 @@ public abstract class EDASPortal {
         responder.sendDataPacket( new DataPacket( clientId, rid, header, data ) );
     }
 
-    public String sendFile( String clientId, String rId, String name, String filePath ) {
+    public String sendFile( String clientId, String jobId, String name, String filePath ) {
         logger.debug( String.format("Portal: Sending file data to client for %s, filePath=%s", name, filePath ));
         File file = new File(filePath);
-        String[] file_header_fields = { "array", rId, name, file.getName() };
+        String[] file_header_fields = { "array", jobId, name, file.getName() };
         String file_header = StringUtils.join( file_header_fields, "|" );
-        List<String> header_fields = Arrays.asList( rId,"file", file_header );
+        List<String> header_fields = Arrays.asList( jobId,"file", file_header );
         String header = StringUtils.join(header_fields,"!");
         try {
             byte[] data = Files.toByteArray(file);
-            responder.sendDataPacket( new DataPacket( clientId, rId, header, data ) );
+            responder.sendDataPacket( new DataPacket( clientId, jobId, header, data ) );
             logger.debug("Done sending file data packet: " + header);
         } catch ( IOException ex ) {
             logger.info( "Error sending file : " + filePath + ": " + ex.toString() );
