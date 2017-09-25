@@ -19,11 +19,11 @@ import ucar.ma2.ArrayFloat
 import ucar.nc2.dataset.NetcdfDataset
 import scala.io.Source
 
-import gov.nasa.gsfc.cisto.cds.sia.scala.climatespark.core.EDASDriver
-
-object TestImportApp extends EDASDriver {
-
-}
+//import gov.nasa.gsfc.cisto.cds.sia.scala.climatespark.core.EDASDriver
+//
+//object TestImportApp extends EDASDriver {
+//
+//}
 
 object EDASapp {
   def elem( array: Array[String], index: Int, default: String = "" ): String = if( array.length > index ) array(index) else default
