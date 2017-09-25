@@ -17,8 +17,13 @@ import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSMergedEventReport, 
 import org.apache.spark.SparkEnv
 import ucar.ma2.ArrayFloat
 import ucar.nc2.dataset.NetcdfDataset
+import gov.nasa.gsfc.cisto.cds.sia.scala.climatespark.core.EDASDriver
 
 import scala.io.Source
+
+object TestImportApp extends EDASDriver {
+
+}
 
 object EDASapp {
   def elem( array: Array[String], index: Int, default: String = "" ): String = if( array.length > index ) array(index) else default
