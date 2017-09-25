@@ -45,6 +45,7 @@ trait WPSResponseElement {
 trait WPSResponse extends WPSResponseElement {
   val wpsProxyAddress =  appParameters("wps.server.proxy.href","${wps.server.proxy.href}")
   val dapProxyAddress =  appParameters("wps.dap.proxy.href","${wps.dap.proxy.href}")
+  val fileProxyAddress =  appParameters("wps.file.proxy.href","${wps.file.proxy.href}")
 }
 
 class WPSExecuteStatus( val serviceInstance: String,  val statusMessage: String, val resId: String  ) extends WPSResponse {
@@ -169,24 +170,18 @@ case class WPSReference( id: String, href: String ) extends WPSResponseElement {
 
 abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: List[WPSProcess], val resultId: String, resultFileOpt: Option[String] = None )  extends WPSProcessExecuteResponse( serviceInstance, processes ) {
   val statusHref: String = wpsProxyAddress + s"/cwt/status?id=$resultId"
-  val fileHref: String =  resultFileOpt match {
-    case Some(resultFile) => "file://" + resultFile;
-    case None => wpsProxyAddress + s"/cwt/file?id=$resultId"
-  }
   val resultHref: String = wpsProxyAddress + s"/cwt/result?id=$resultId"
   val dapHrefOpt: Option[String] = if (dapProxyAddress.isEmpty) None else Some(dapProxyAddress + s"/publish/$resultId.nc")
+  val fileHrefOpt: Option[String] = if (fileProxyAddress.isEmpty) None else Some(fileProxyAddress + s"/publish/$resultId.nc")
 
   def getOutputTag(response_syntax: ResponseSyntax.Value): String = getSyntax(response_syntax)  match {
     case ResponseSyntax.WPS => "Output"
     case ResponseSyntax.Generic => "output"
   }
   def getReference: Option[WPSReference] = Some( WPSReference("status",statusHref) )
-  def getFileReference: Option[WPSReference] = Some( WPSReference("file",fileHref) )
   def getResultReference: Option[WPSReference] =  Some( WPSReference("result",resultHref) )
-  def getDapResultReference: Option[WPSReference] = dapHrefOpt match {
-    case Some(dapHref) => Some( WPSReference("dap",dapHref) )
-    case None => None
-  }
+  def getDapResultReference: Option[WPSReference] = dapHrefOpt.map ( WPSReference("dap",_) )
+  def getFileReference: Option[WPSReference] = fileHrefOpt.map ( WPSReference("file",_ ) )
   def getResultId: String = resultId
 }
 
