@@ -1,5 +1,6 @@
 package nasa.nccs.edas.portal;
 
+import nasa.nccs.edas.engine.ExecutionCallback;
 import nasa.nccs.edas.workers.TransVar;
 import nasa.nccs.utilities.EDASLogManager;
 import nasa.nccs.utilities.Logger;
@@ -26,6 +27,7 @@ public class ResponseManager extends Thread {
     Map<String, List<String>> cached_results = null;
     Map<String, List<TransVar>> cached_arrays = null;
     Map<String, String> file_paths = null;
+    Map<String, ExecutionCallback> callbacks = null;
     String cacheDir = null;
     String publishDir = null;
     String latest_result = "";
@@ -38,6 +40,7 @@ public class ResponseManager extends Thread {
         zmqContext = _zmqContext;
         cached_results = new HashMap<String, List<String>>();
         cached_arrays = new HashMap<String, List<TransVar>>();
+        callbacks = new HashMap<String, ExecutionCallback>();
         file_paths = new HashMap<String,String>();
         setName("EDAS ResponseManager");
         setDaemon(true);
@@ -45,6 +48,10 @@ public class ResponseManager extends Thread {
         cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
         publishDir =  EDASPortalClient.getOrDefault( configuration, "edas.publish.dir", cacheDir );
         logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
+    }
+
+    public void registerCallback( String jobId, ExecutionCallback callback ) {
+        callbacks.put( jobId, callback );
     }
 
     public void cacheResult(String id, String result) { getResults(id).add(result); }
@@ -107,6 +114,8 @@ public class ResponseManager extends Thread {
                     Path outFilePath = saveFile( header, rId, data, 8 );
                     file_paths.put( rId, outFilePath.toString() );
                     logger.info( String.format("Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
+//                    ExecutionCallback callback = callbacks.get( jobId );
+//                    callback.execute( );
                 } catch( Exception err ) {
                     logger.error(String.format("Unable to write to output file: %s", err.getMessage() ) );
                 }
