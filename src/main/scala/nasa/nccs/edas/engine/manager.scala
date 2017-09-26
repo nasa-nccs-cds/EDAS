@@ -24,6 +24,7 @@ import scala.collection.JavaConverters._
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.wps._
 import ucar.nc2.Attribute
+import ucar.nc2.dataset.CoordinateAxis
 import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingDefault, Nc4ChunkingStrategyNone}
 
 import scala.io.Source
@@ -218,7 +219,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker )
       writer.setLargeFile(true)
       assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
-      val coordAxes = collection.grid.getCoordinateAxes
+      val coordAxes: List[CoordinateAxis] = collection.grid.getCoordinateAxes
       val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, maskedTensor.getShape(idim)))
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
       val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec => inputSpec.getRange(coordAxis.getFullName) match {
@@ -229,7 +230,8 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
             case None => range;
             case Some(dim) => if (dim.getLength < range.length) new ma2.Range(dim.getLength) else range
           }
-          Some(coordVar, coordAxis.read(List(newRange)))
+          val data = coordAxis.read( List(newRange) )
+          Some( coordVar, data )
         case None => None
       } }).flatten
       logger.info("Writing result %s to file '%s', varname=%s, dims=(%s), shape=[%s], coords = [%s]".format(
@@ -244,7 +246,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         for (newCoordVar <- newCoordVars) {
           newCoordVar match {
             case (coordVar, coordData) =>
-              logger.info("Writing cvar %s: shape = [%s]".format(coordVar.getFullName, coordData.getShape.mkString(",")))
+              logger.info("Writing cvar %s: shape = [%s], dataType = %s".format(coordVar.getFullName, coordData.getShape.mkString(","), coordVar.getDataType.toString ))
               writer.write(coordVar, coordData)
           }
         }
