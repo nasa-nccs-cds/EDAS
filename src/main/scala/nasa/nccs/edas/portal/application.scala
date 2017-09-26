@@ -79,9 +79,9 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     logger.info( "\n\nExecuting " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; ") + "\n\n")
     responder.setClientId(clientId)
     val response_syntax = getResponseSyntax(runargs)
-    val responseType = runargs.getOrElse("response","xml")
+    val responseType = runargs.getOrElse("response","file")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
-      override def execute( results: WPSResponse ): Unit = {
+      override def execute( results: xml.Node ): Unit = {
         logger.info( s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType} *** \n\n")
         if( responseType == "object" ) { sendDirectResponse( response_syntax, clientId, jobId, results ) }
         else if( responseType == "file" ) { sendFileResponse( response_syntax, clientId, jobId, results ) }
@@ -110,8 +110,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     processManager.shutdown( process )
   }
 
-  def sendDirectResponse( response_format: ResponseSyntax.Value, clientId: String, responseId: String, results: WPSResponse ): Unit =  {
-    val response = results.toXml(ResponseSyntax.Generic)
+  def sendDirectResponse( response_format: ResponseSyntax.Value, clientId: String, responseId: String, response: xml.Node ): Unit =  {
     val refs: xml.NodeSeq = response \\ "data"
     val resultHref = refs.flatMap( _.attribute("href") ).find( _.nonEmpty ).map( _.text ) match {
       case Some( href ) =>
@@ -143,8 +142,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   def getNodeAttributes( node: xml.Node ): String = node.attributes.toString()
 
-  def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, jobId: String, results: WPSResponse ): Unit =  {
-    val response = results.toXml( ResponseSyntax.Generic )
+  def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, jobId: String, response: xml.Node ): Unit =  {
     val refs: xml.NodeSeq = response \\ "data"
     for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file") ) {
       if (hrefOpt.isDefined && fileOpt.isDefined) {

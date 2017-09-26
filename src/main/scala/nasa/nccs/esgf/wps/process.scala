@@ -5,8 +5,11 @@ import nasa.nccs.edas.loaders.EDAS_XML
 import nasa.nccs.edas.portal.EDASPortalClient
 import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.utilities.Loggable
-import nasa.nccs.wps.ResponseSyntax
+
 import scala.collection.JavaConversions._
+import nasa.nccs.wps
+
+import scala.xml.XML
 
 class NotAcceptableException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
 
@@ -23,8 +26,8 @@ trait GenericProcessManager {
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node;
   def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node
   def getResultFilePath( service: String, resultId: String ): Option[String]
-  def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
-  def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
+  def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
+  def getResultStatus( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def term();
 }
 
@@ -69,7 +72,7 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     path
   }
 
-  def getResult( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
+  def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node = {
     logger.info( "EDAS ProcessManager-> getResult: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
     serviceProvider.getResult( resultId, response_syntax )
@@ -86,7 +89,7 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getResultVariables
   }
 
-  def getResultStatus( service: String, resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
+  def getResultStatus( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node = {
     logger.info( "EDAS ProcessManager-> getResult: " + resultId)
     val serviceProvider = apiManager.getServiceProvider(service)
     serviceProvider.getResultStatus(resultId,response_syntax)
@@ -129,19 +132,21 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
     val message = response.split('!').last
     logger.info( "Received 'execute' response, Sample:: " + message.substring(0,Math.min(100,message.length)) )
-    EDAS_XML.loadString( message )
+    val xmlResults: xml.Node = EDAS_XML.loadString( message )
+    executionCallback.map( _.execute( xmlResults ) )
+    xmlResults
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
     Some( response_manager.getPublishFile( "publish", resultId + ".nc" ).toString )
   }
 
-  def getResult( service: String, resultId: String, responseSyntax: ResponseSyntax.Value ): xml.Node = {
+  def getResult( service: String, resultId: String, responseSyntax: wps.ResponseSyntax.Value ): xml.Node = {
     val responses = response_manager.getResponses(resultId,true).toList
     EDAS_XML.loadString( responses(0) )
   }
 
-  def getResultStatus( service: String, resultId: String, responseSyntax: ResponseSyntax.Value ): xml.Node = {
+  def getResultStatus( service: String, resultId: String, responseSyntax: wps.ResponseSyntax.Value ): xml.Node = {
     throw new Exception("getResultStatus: Not yet supported!")
   }
 }
