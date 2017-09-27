@@ -121,7 +121,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   }
 
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node = {
-    val response = portal.sendMessage( "getCapabilities", List( "" ).toArray )
+    val response = portal.sendMessage( "getCapabilities", List( identifier ).toArray )
     val message = response.split('!').last
     logger.info( "Received 'getCapabilities' response, Sample:: " + message.substring(0,Math.min(100,message.length)) )
     EDAS_XML.loadString( message )
