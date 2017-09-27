@@ -39,7 +39,7 @@ class Counter(start: Int = 0) {
 }
 
 trait ExecutionCallback extends Loggable {
-  def execute( results: xml.Node  )
+  def execute( results: xml.Node, success: Boolean  )
 }
 
 object CDS2ExecutionManager extends Loggable {
@@ -318,7 +318,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     val requestContext = createRequestContext( jobId, request, run_args )
     val results = executeWorkflows( requestContext )
     val response = results.toXml( ResponseSyntax.Generic )
-    executionCallback.foreach( _.execute( response ))
+    executionCallback.foreach( _.execute( response, true ))
     collectionDataCache.removeJob( jobId )
     results
   }
@@ -339,7 +339,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
           val results = executeWorkflows ( requestContext )
           val response = results.toXml( ResponseSyntax.Generic )
           requestContext.logTimingReport("Executed task request " + request.name)
-          executionCallback.foreach( _.execute( response ) )
+          executionCallback.foreach( _.execute( response, true ) )
           collectionDataCache.removeJob( jobId )
           results
       }
@@ -403,7 +403,11 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         Future(util_result)
       case _ =>
         val futureResult = this.futureExecute( jobId, request, run_args, executionCallback )
-        futureResult onFailure { case e: Throwable => fatal(e); collectionDataCache.removeJob(jobId); throw e }
+        futureResult onFailure { case e: Throwable =>
+          fatal(e);
+          collectionDataCache.removeJob(jobId);
+          throw e
+        }
     }
     new AsyncExecutionResult( request.id.toString, List(request.getProcess), jobId )
   }

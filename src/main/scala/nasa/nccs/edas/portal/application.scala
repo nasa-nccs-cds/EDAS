@@ -81,10 +81,12 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val response_syntax = getResponseSyntax(runargs)
     val responseType = runargs.getOrElse("response","file")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
-      override def execute( results: xml.Node ): Unit = {
-        logger.info( s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType} *** \n\n")
-        if( responseType == "object" ) { sendDirectResponse( response_syntax, clientId, jobId, results ) }
-        else if( responseType == "file" ) { sendFileResponse( response_syntax, clientId, jobId, results ) }
+      override def execute( results: xml.Node, success: Boolean ): Unit = {
+        logger.info( s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType}, success = ${success} *** \n\n")
+        if( success ) {
+          if (responseType == "object") { sendDirectResponse(response_syntax, clientId, jobId, results) }
+          else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
+        }
         setExeStatus( jobId, "completed" )
         responder.clearClientId()
       }

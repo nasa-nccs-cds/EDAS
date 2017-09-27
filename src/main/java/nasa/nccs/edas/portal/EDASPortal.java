@@ -187,12 +187,10 @@ public abstract class EDASPortal {
     protected int request_port = -1;
     protected Responder responder = null;
     protected SimpleDateFormat timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss");
-
     protected Logger logger = EDASLogManager.getCurrentLogger();
     private boolean active = true;
 
     public abstract void sendErrorReport( String[] taskSpec,  Exception err  );
-
     protected EDASPortal( String client_address, int _request_port, int _response_port ) {
         try {
             request_port = _request_port;
@@ -314,9 +312,11 @@ public abstract class EDASPortal {
             logger.error( "Error in Request: " + ex.toString() );
             ex.printStackTrace();
             sendResponseMessage( new Message( parts[0], "error", ex.getClass().getName() + ": " + ex.getMessage() ) );
+            responder.clearClientId();
         }
         logger.info( "EXIT EDASPortal");
     }
+
 
     public void term() {
         logger.info( "EDAS Shutdown");
