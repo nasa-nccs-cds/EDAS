@@ -140,7 +140,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     logger.info( "zmqProcessManager executeProcess: " + job.requestId.toString )
     val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
     val message = response.split('!').last
-    logger.info( "Received 'execute' response, Sample:: " + message.substring(0,Math.min(100,message.length)) )
+    logger.info( "Received 'execute' response, Sample: " + response.substring(0,Math.min(250,message.length)) )
     val xmlResults: xml.Node = EDAS_XML.loadString( message )
     executionCallback.map( _.execute( xmlResults, true ) )
     xmlResults
