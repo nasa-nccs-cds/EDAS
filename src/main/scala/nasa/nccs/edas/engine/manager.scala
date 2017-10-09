@@ -22,7 +22,7 @@ import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.wps._
+import nasa.nccs.wps.{WPSExecuteStatusStarted, _}
 import ucar.nc2.Attribute
 import ucar.nc2.dataset.CoordinateAxis
 import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingDefault, Nc4ChunkingStrategyNone}
@@ -387,10 +387,10 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
   def getResultStatus( resId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
     logger.info( "Locating result: " + resId )
     val message = collectionDataCache.getExistingResult( resId ) match {
-      case None => "EDAS Process has not yet completed"
-      case Some( tvar: RDDTransientVariable ) => "EDAS Process successfully completed"
+      case None => new WPSExecuteStatusStarted( "WPS", "", resId ).toXml( response_syntax )
+      case Some( tvar: RDDTransientVariable ) => new WPSExecuteStatusCompleted( "WPS", "", resId ).toXml( response_syntax )
     }
-    new WPSExecuteStatus( "WPS", message, resId ).toXml( response_syntax )
+    message
   }
 
   def asyncExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSReferenceExecuteResponse = {

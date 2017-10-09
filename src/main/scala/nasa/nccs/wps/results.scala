@@ -48,7 +48,7 @@ trait WPSResponse extends WPSResponseElement {
   val fileProxyAddress =  appParameters("wps.file.proxy.href","${wps.file.proxy.href}")
 }
 
-class WPSExecuteStatus( val serviceInstance: String,  val statusMessage: String, val resId: String  ) extends WPSResponse {
+class WPSExecuteStatusStarted( val serviceInstance: String,  val statusMessage: String, val resId: String  ) extends WPSResponse {
   def toXml( response_syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem =  getSyntax(response_syntax) match {
     case ResponseSyntax.WPS =>
       <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -58,9 +58,45 @@ class WPSExecuteStatus( val serviceInstance: String,  val statusMessage: String,
         </wps:Status>
       </wps:ExecuteResponse>
     case ResponseSyntax.Generic =>
-      <response serviceInstance={serviceInstance} status={statusMessage}  creation_time={currentTime}/>
+      <response serviceInstance={serviceInstance} status="ProcessStarted" message={statusMessage}  creation_time={currentTime}/>
   }
 }
+
+class WPSExecuteStatusCompleted( val serviceInstance: String,  val statusMessage: String, val resId: String  ) extends WPSResponse {
+  def toXml( response_syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem =  getSyntax(response_syntax) match {
+    case ResponseSyntax.WPS =>
+      <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                           xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" creation_time={currentTime}>
+        <wps:Status>
+          <wps:ProcessFinished>{statusMessage}</wps:ProcessFinished>
+        </wps:Status>
+      </wps:ExecuteResponse>
+    case ResponseSyntax.Generic =>
+        <response serviceInstance={serviceInstance} status="ProcessFinished" message={statusMessage}  creation_time={currentTime}/>
+  }
+}
+
+
+class WPSExecuteStatusError( val serviceInstance: String,  val errorName: String, val errorMessage: String, val resId: String  ) extends WPSResponse {
+  def toXml( response_syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem =  getSyntax(response_syntax) match {
+    case ResponseSyntax.WPS =>
+      <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                           xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" creation_time={currentTime}>
+        <wps:Status>
+          <wps:ProcessFailed>
+            <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">
+              <ows:Exception exceptionCode={errorName}>
+                <ows:ExceptionText> {errorMessage} </ows:ExceptionText>
+            </ows:Exception>
+            </ows:ExceptionReport>
+          </wps:ProcessFailed>
+        </wps:Status>
+      </wps:ExecuteResponse>
+    case ResponseSyntax.Generic =>
+        <response serviceInstance={serviceInstance} status="ERROR" error={errorName} message={errorMessage}  creation_time={currentTime}/>
+  }
+}
+
 
 
 class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVariable ) extends WPSResponse {

@@ -13,10 +13,11 @@ import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
-import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSMergedEventReport, WPSResponse}
+import nasa.nccs.wps._
 import org.apache.spark.SparkEnv
 import ucar.ma2.ArrayFloat
 import ucar.nc2.dataset.NetcdfDataset
+
 import scala.io.Source
 
 //import gov.nasa.gsfc.cisto.cds.sia.scala.climatespark.core.EDASDriver
@@ -86,13 +87,22 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         if( success ) {
           if (responseType == "object") { sendDirectResponse(response_syntax, clientId, jobId, results) }
           else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
+          setExeStatus( jobId, "completed" )
+        } else {
+          setExeStatus( jobId, "error" )
         }
-        setExeStatus( jobId, "completed" )
         responder.clearClientId()
       }
     }
-    val responseElem = processManager.executeProcess( Job( jobId, process_name, dataInputsSpec, runargs), Some(executionCallback) )
-    new Message( clientId, jobId, printer.format( responseElem ) )
+    try {
+      val responseElem = processManager.executeProcess(Job(jobId, process_name, dataInputsSpec, runargs), Some(executionCallback))
+      new Message(clientId, jobId, printer.format(responseElem))
+    } catch  {
+      case e: Throwable =>
+        e.printStackTrace()
+        val errorReport = new WPSExecuteStatusError( "cds2",  e.getClass.getSimpleName, e.getMessage, jobId  )
+        new Message(clientId, jobId, printer.format( errorReport.toXml(response_syntax) ) )
+    }
   }
 
   def sendErrorReport( response_format: ResponseSyntax.Value, clientId: String, responseId: String, exc: Exception ): Unit = {
