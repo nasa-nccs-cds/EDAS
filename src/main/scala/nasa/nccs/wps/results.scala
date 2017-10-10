@@ -96,18 +96,22 @@ class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: Str
     case ResponseSyntax.WPS =>
       <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                            xsi:schemaLocation="http://www.opengis.net/wps/1.0.0 ../wpsExecute_response.xsd" service="WPS" version="1.0.0" xml:lang="en-CA" creation_time={currentTime}>
-        <wps:Status>
-          <wps:ProcessFailed>
-            <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">
-              <ows:Exception>
-                <ows:ExceptionText> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </ows:ExceptionText>
-            </ows:Exception>
-            </ows:ExceptionReport>
-          </wps:ProcessFailed>
-        </wps:Status>
+        <wps:Status> <wps:ProcessFailed> { getExceptionReport(errorMessage) } </wps:ProcessFailed> </wps:Status>
       </wps:ExecuteResponse>
     case ResponseSyntax.Generic =>
         <response serviceInstance={serviceInstance} status="ERROR" creation_time={currentTime}> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </response>
+  }
+  
+  def getExceptionReport( errorMessage: String ): xml.Node = try {
+    val reportNodes: xml.NodeSeq = scala.xml.XML.loadString(errorMessage) \\ "ExceptionReport"
+    reportNodes.headOption.getOrElse( throw new Exception( "No ExceptionReport") )
+  } catch {
+    case ex: Exception =>
+      <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">
+        <ows:Exception>
+          <ows:ExceptionText> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </ows:ExceptionText>
+        </ows:Exception>
+      </ows:ExceptionReport>
   }
 }
 
