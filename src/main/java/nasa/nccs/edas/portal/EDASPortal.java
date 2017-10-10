@@ -305,6 +305,7 @@ public abstract class EDASPortal {
                 logger.info( msg );
                 sendResponseMessage( new Message( parts[0],"error",msg ) );
             }
+            System.exit(0);
         } catch ( java.nio.channels.ClosedSelectorException ex ) {
             logger.info( "Request Socket closed." );
             active = false;
