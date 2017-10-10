@@ -91,7 +91,7 @@ class WPSExecuteStatusQueued( val serviceInstance: String,  val statusMessage: S
 }
 
 
-class WPSExecuteStatusError( val serviceInstance: String,  val errorName: String, val errorMessage: String, val resId: String  ) extends WPSResponse {
+class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: String, val resId: String  ) extends WPSResponse {
   def toXml( response_syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem =  getSyntax(response_syntax) match {
     case ResponseSyntax.WPS =>
       <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -99,15 +99,15 @@ class WPSExecuteStatusError( val serviceInstance: String,  val errorName: String
         <wps:Status>
           <wps:ProcessFailed>
             <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">
-              <ows:Exception exceptionCode={errorName}>
-                <ows:ExceptionText> {errorMessage} </ows:ExceptionText>
+              <ows:Exception>
+                <ows:ExceptionText> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </ows:ExceptionText>
             </ows:Exception>
             </ows:ExceptionReport>
           </wps:ProcessFailed>
         </wps:Status>
       </wps:ExecuteResponse>
     case ResponseSyntax.Generic =>
-        <response serviceInstance={serviceInstance} status="ERROR" error={errorName} message={errorMessage}  creation_time={currentTime}/>
+        <response serviceInstance={serviceInstance} status="ERROR" creation_time={currentTime}> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </response>
   }
 }
 
