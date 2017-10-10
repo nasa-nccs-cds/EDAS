@@ -177,7 +177,10 @@ class Responder extends Thread {
         catch( Exception err ) { ; }
     }
 
-    public void term() { active = false; }
+    public void term() {
+        logger.info("Terminating responder thread");
+        active = false;
+    }
 
 }
 

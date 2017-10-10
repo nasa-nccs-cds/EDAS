@@ -70,7 +70,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   def getTargetGridSpec( kernelContext: KernelContext ) : String = {
     if( kernelContext.crsOpt.getOrElse("").indexOf('~') > 0 ) { "gspec:" + kernelContext.crsOpt.get }
     else {
-        val targetGrid: TargetGrid = getTargetGrid (kernelContext.grid.uid).getOrElse (throw new Exception ("Undefined Grid in domain partition for kernel " + kernelContext.operation.identifier) )
+        val targetGrid: TargetGrid = getTargetGridOpt(kernelContext.grid.uid).getOrElse (throw new Exception ("Undefined Grid in domain partition for kernel " + kernelContext.operation.identifier) )
         targetGrid.getGridFile
     }
   }
@@ -82,8 +82,11 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
     case Some(domain_container) => domain_container
     case None => throw new Exception("Undefined domain in ExecutionContext: " + domain_id)
   }
-  def getTargetGrid( uid: String  ): Option[TargetGrid] = request.getTargetGrid( uid )
-//  def getAxisIndices( axisConf: String ): AxisIndices = targetGrid.getAxisIndices( axisConf  )
+  def getTargetGridOpt( uid: String  ): Option[TargetGrid] = request.getTargetGrid( uid )
+  def getTargetGridIds: Iterable[String] = getTargetGrids flatMap { case ( key, valOpt ) => valOpt map ( _ => key ) }
+  def getTargetGrid( uid: String  ) = getTargetGridOpt(uid).getOrElse( throw new Exception("Missing target grid for kernel input " + uid + ", grids: " + getTargetGridIds.mkString( ", " ) ) )
+
+  //  def getAxisIndices( axisConf: String ): AxisIndices = targetGrid.getAxisIndices( axisConf  )
 }
 
 class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: CoordinateAxis1D, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {

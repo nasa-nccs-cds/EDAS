@@ -211,7 +211,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 
   def saveResultToFile( resultId: String, gridUid: String, maskedTensor: CDFloatArray, request: RequestContext, server: ServerContext, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute] ): Option[String] = {
     val optInputSpec: Option[DataFragmentSpec] = request.getInputSpec()
-    val targetGrid = request.getTargetGrid( gridUid ).getOrElse( throw new Exception( "Undefined Target Grid when saving result " + resultId ))
+    val targetGrid = request.getTargetGridOpt( gridUid ).getOrElse( throw new Exception( "Undefined Target Grid when saving result " + resultId ))
     request.getCollection(server) map { collection =>
       val varname = searchForValue(varMetadata, List("varname", "fullname", "standard_name", "original_name", "long_name"), "Nd4jMaskedTensor")
       val resultFile = Kernel.getResultFile( resultId, true )

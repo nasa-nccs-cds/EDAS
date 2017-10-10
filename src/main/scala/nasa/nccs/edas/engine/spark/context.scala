@@ -202,7 +202,7 @@ class CDSparkContext( @transient val sparkContext: SparkContext ) extends Loggab
   def getRDD(uid: String, directInput: EDASDirectDataInput, requestCx: RequestContext, opSection: Option[ma2.Section], node: WorkflowNode, batchIndex: Int, kernelContext: KernelContext ): Option[RDD[(RecordKey,RDDRecord)]] = {
     directInput.getPartitioner(opSection) flatMap ( partMgr => {
       val partitions = partMgr.partitions
-      val tgrid: TargetGrid = requestCx.getTargetGrid(uid).getOrElse(throw new Exception("Missing target grid for uid " + uid))
+      val tgrid: TargetGrid = requestCx.getTargetGridOpt(uid).getOrElse(throw new Exception("Missing target grid for uid " + uid))
       val batch= partitions.getBatch(batchIndex)
       val rddPartSpecs: Array[DirectRDDPartSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, List(directInput.getRDDVariableSpec(uid, opSection)))) filterNot (_.empty(uid))
       if (rddPartSpecs.length == 0) { None }
