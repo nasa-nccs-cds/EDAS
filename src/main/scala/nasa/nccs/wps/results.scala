@@ -101,7 +101,7 @@ class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: Str
     case ResponseSyntax.Generic =>
         <response serviceInstance={serviceInstance} status="ERROR" creation_time={currentTime}> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </response>
   }
-  
+
   def getExceptionReport( errorMessage: String ): xml.Node = try {
     val reportNodes: xml.NodeSeq = scala.xml.XML.loadString(errorMessage) \\ "ExceptionReport"
     reportNodes.headOption.getOrElse( throw new Exception( "No ExceptionReport") )
