@@ -224,7 +224,7 @@ class EDASPortal:
             # else:
 
             self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
-            self.log("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
+            self.log("[1]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
 
             self.response_manager = ResponseManager(self.context, self.clientID, host, response_port)
             self.response_manager.start()
@@ -257,7 +257,7 @@ class EDASPortal:
             except Exception: pass
             if( self.application_thread ):
                 response = self.sendMessage("shutdown")
-                self.logger.error( "Shutdown Response: " + response )
+                self.log( "Shutdown Response: " + response )
                 self.application_thread.term()
                 self.application_thread = None
             if self.response_manager != None:
@@ -272,7 +272,7 @@ class EDASPortal:
 
     def sendMessage( self, type, mDataList = [""] ):
         msgStrs = [ str(mData).replace("'",'"') for mData in mDataList ]
-        self.logger.info( "Sending {0} request {1} on port {2}.".format( type, msgStrs, self.request_port )  )
+        self.log( "Sending {0} request {1} on port {2}.".format( type, msgStrs, self.request_port )  )
         try:
             message = "!".join( [self.clientID,type] + msgStrs )
             self.request_socket.send( message )
