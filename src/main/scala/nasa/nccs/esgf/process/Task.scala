@@ -150,7 +150,7 @@ class TaskRequest(val id: UID,
 
   override def toString = {
     var taskStr =
-      s"TaskRequest { name='$name', variables = '$variableMap', domains='$domainMap', workflows='$operations' }"
+      s"TaskRequest { \n\tname='$name', \n\tvariables = ${variableMap.mkString("\n\t\t","\n\t\t","\n\t\t")}, \n\tdomains=${domainMap.mkString("\n\t\t","\n\t\t","\n\t\t")}, \n\tworkflows=${operations.mkString("\n\t\t","\n\t\t","\n\t\t")} }"
     if (errorReports.nonEmpty) {
       taskStr += errorReports.mkString("\nError Reports: {\n\t", "\n\t", "\n}")
     }
@@ -311,7 +311,7 @@ class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) 
 class DataSource(val name: String, val collection: Collection, val domain: String, val autoCache: Boolean, val fragIdOpt: Option[String] = None) {
   val debug = 1
   def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.domain, dsource.autoCache )
-  override def toString = s"DataSource { name = $name, collection = %s, domain = $domain, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
+  override def toString = s"DataSource { name = $name, \n\t\t\tcollection = %s, domain = $domain, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
   def toXml =  <dataset name={name} domain={domain}> {collection.toXml} </dataset>
   def isDefined = (!collection.isEmpty && !name.isEmpty)
   def isReadable = (!collection.isEmpty && !name.isEmpty && !domain.isEmpty)
@@ -807,7 +807,7 @@ class DataContainer(val uid: String, private val source: Option[DataSource] = No
   override def toString = {
     val embedded_val: String =
       if (source.isDefined) source.get.toString else operation.get.toString
-    s"DataContainer ( $uid ) { $embedded_val }"
+    s"DataContainer ( $uid ) { \n\t\t\t$embedded_val }"
   }
   override def toXml = {
     val embedded_xml =
@@ -987,7 +987,7 @@ class DomainContainer(val name: String,
     extends ContainerBase
     with Serializable {
   override def toString = {
-    s"DomainContainer { name = $name, axes = $axes }"
+    s"DomainContainer { name = $name, axes = ${axes.mkString("\n\t\t\t","\n\t\t\t","\n\t\t\t")} }"
   }
   def toDataInput: Map[String, Any] =
     Map(axes.map(_.toDataInput): _*) ++ Map(("name" -> name))

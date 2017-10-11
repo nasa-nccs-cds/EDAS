@@ -394,7 +394,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
   }
 
   def asyncExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSReferenceExecuteResponse = {
-    logger.info("Execute { runargs: " + run_args.toString + ",  request: " + request.toString+ ",  jobId: " + jobId + " }")
+    logger.info("Execute { runargs: " + run_args.toString + ",  request: " + request.toString + ",  jobId: " + jobId + " }")
     runtime.printMemoryUsage(logger)
     val req_ids = request.name.split('.')
     req_ids(0) match {
