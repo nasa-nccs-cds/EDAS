@@ -236,7 +236,7 @@ public abstract class EDASPortal {
     }
 
     public void sendArrayData( String clientId, String rid, int[] origin, int[] shape, byte[] data, Map<String, String> metadata ) {
-        logger.debug( String.format("Portal: Sending response data to client for rid %s, nbytes=%d", rid, data.length ));
+        logger.debug( String.format("@@ Portal: Sending response data to client for rid %s, nbytes=%d", rid, data.length ));
         List<String> array_header_fields = Arrays.asList( "array", rid, ia2s(origin), ia2s(shape), m2s(metadata), "1" );
         String array_header = StringUtils.join(array_header_fields,"|");
         List<String> header_fields = Arrays.asList( rid, "array", array_header );
@@ -272,7 +272,7 @@ public abstract class EDASPortal {
         List<String> request_args = Arrays.asList( msg.id(), msg.message );
         String packaged_msg = StringUtils.join( request_args,  "!" );
         String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
-        logger.info( String.format( "Sending response %s on request_socket @(%s)", msg.id(), timeStamp ) );
+        logger.info( String.format( "@@ Sending response %s on request_socket @(%s)", msg.id(), timeStamp ) );
         request_socket.send( packaged_msg.getBytes(),0 );
         return packaged_msg;
     }
