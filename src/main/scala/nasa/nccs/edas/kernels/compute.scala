@@ -71,7 +71,13 @@ class KernelModule( val name: String, val kernels: Map[String,Option[Kernel]] ) 
   def getKernel(name: String): Option[Kernel] = kernels.get(name).flatten
   def getKernels: Iterable[Kernel] = kernels.values.flatten
   def getKernelNames: List[String] = kernels.keys.toList
-  def getName = name
+  def getName: String = name
+  def empty: Boolean = ( kernels.size == 0 )
+  def nonEmpty: Boolean = ( kernels.size > 0 )
+
+  def filter( visibility: Int ): KernelModule = {
+    new KernelModule( name, kernels.filter { case ( _, kerOpt ) => kerOpt.exists( _.status >= visibility ) } )
+  }
 
   def toXml: xml.Elem = {
     <kernelModule name={name}>

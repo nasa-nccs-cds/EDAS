@@ -40,7 +40,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     case None => Paths.get("")
   }
   after {
-    if(shutdown_after) { cleanup() }
+    if(shutdown_after) { cleanup }
   }
 
   test("RemoveCollections") {
