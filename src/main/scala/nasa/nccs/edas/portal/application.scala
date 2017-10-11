@@ -118,9 +118,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     sendErrorReport( clientId, "requestError", printer.format( err.toXml(syntax) ) )
   }
 
-  override def shutdown() = {
-    processManager.shutdown( process )
-  }
+  override def shutdown = processManager.term
 
   def sendDirectResponse( response_format: ResponseSyntax.Value, clientId: String, responseId: String, response: xml.Node ): Unit =  {
     val refs: xml.NodeSeq = response \\ "data"

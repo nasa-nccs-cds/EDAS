@@ -41,12 +41,7 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     throw new NotAcceptableException(msg)
   }
 
-  def term() {  apiManager.shutdown() }
-
-  def shutdown(service: String) = {
-    val serviceProvider = apiManager.getServiceProvider(service)
-    serviceProvider.shutdown()
-  }
+  def term = apiManager.shutdown
 
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Elem = {
     val serviceProvider = apiManager.getServiceProvider(service)

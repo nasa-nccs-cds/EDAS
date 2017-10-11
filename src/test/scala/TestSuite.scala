@@ -716,10 +716,8 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     response
   }
 
-  def cleanup() = {
-    webProcessManager.shutdown( service )
-  }
-
+  def cleanup = webProcessManager.term
+  
   def getCapabilities( identifier: String="", runArgs: Map[String,String]=Map.empty[String,String] ): xml.Elem = {
     val t0 = System.nanoTime()
     val response: xml.Elem = webProcessManager.getCapabilities(service, identifier, runArgs )
