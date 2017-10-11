@@ -95,7 +95,6 @@ unmanagedJars in Compile ++= {
       pw.write( jars_list )
       customJars.classpath
     case None =>
-      println(" Custom jars: UNDEF " )
       PathFinder.empty.classpath
   }
 }

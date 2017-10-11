@@ -298,7 +298,8 @@ public abstract class EDASPortal {
                 sendResponseMessage(  execUtility( parts ) );
             } else if( parts[1].equals("quit") || parts[1].equals("shutdown") ) {
                 sendResponseMessage( new Message(parts[0],"quit", "Terminating") );
-                term("Received Shutdown Message");
+                logger.info("Received Shutdown Message");
+                System.exit(0);
             } else if( parts[1].toLowerCase().equals("getcapabilities") ) {
                 sendResponseMessage(  getCapabilities( parts ) );
             } else if( parts[1].toLowerCase().equals("describeprocess") ) {
@@ -308,7 +309,6 @@ public abstract class EDASPortal {
                 logger.info( msg );
                 sendResponseMessage( new Message( parts[0],"error",msg ) );
             }
-            System.exit(0);
         } catch ( java.nio.channels.ClosedSelectorException ex ) {
             logger.info( "Request Socket closed." );
             active = false;

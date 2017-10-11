@@ -93,7 +93,7 @@ class WPSExecuteStatusQueued( val serviceInstance: String,  val statusMessage: S
 }
 
 
-class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: String, val resId: String  ) extends WPSResponse {
+class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: String, val resId: String  ) extends WPSResponse with Loggable {
   def toXml( response_syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem =  getSyntax(response_syntax) match {
     case ResponseSyntax.WPS =>
       <wps:ExecuteResponse xmlns:wps="http://www.opengis.net/wps/1.0.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -106,6 +106,7 @@ class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: Str
 
   def getExceptionReport( errorMessage: String ): xml.Node = try {
     val reportNodes: xml.NodeSeq = scala.xml.XML.loadString(errorMessage) \\ "ExceptionReport"
+    logger.info( s"Cleaning ExceptionReport, ExceptionReport nodes found: ${reportNodes.length.toString}, text = ${errorMessage}" )
     reportNodes.headOption.getOrElse( throw new Exception( "No ExceptionReport") )
   } catch {
     case ex: Exception =>
