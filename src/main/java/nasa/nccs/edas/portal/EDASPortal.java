@@ -323,7 +323,7 @@ public abstract class EDASPortal {
 
 
     public void term(String msg) {
-        logger.info( "EDAS Shutdown: " + msg );
+        logger.info( "!!EDAS Shutdown: " + msg );
         active = false;
         PythonWorkerPortal.getInstance().quit();
         logger.info( "QUIT PythonWorkerPortal");
