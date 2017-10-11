@@ -7,10 +7,12 @@ import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.utilities.appParameters
+import nasa.nccs.esgf.process.UID.ndigits
 import nasa.nccs.esgf.process.{DataFragmentSpec, TargetGrid}
 import nasa.nccs.esgf.wps.CDSecurity
 import nasa.nccs.utilities.Loggable
 import nasa.nccs.wps.ResponseSyntax.Value
+import org.apache.commons.lang.RandomStringUtils
 
 import scala.collection.mutable.ListBuffer
 
@@ -151,7 +153,7 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
   }
 }
 
-abstract class WPSExecuteResponse( val serviceInstance: String ) extends WPSResponse {
+abstract class WPSExecuteResponse( val serviceInstance: String ) extends WPSResponse  with Loggable {
 
   def getData( response_syntax: ResponseSyntax.Value, id: String, array: CDFloatArray, units: String, maxSize: Int = Int.MaxValue ): xml.Elem =  getSyntax(response_syntax) match {
     case ResponseSyntax.WPS =>
@@ -270,36 +272,36 @@ class RefExecutionResult(serviceInstance: String, process: WPSProcess, id: Strin
 }
 
 
-class ExecutionErrorReport( serviceInstance: String, processes: List[WPSProcess], id: String, val err: Throwable ) extends WPSReferenceExecuteResponse( serviceInstance, processes, "" )  with Loggable {
-  print_error
-  override def toXml( response_syntax: ResponseSyntax.Value ): xml.Elem = {
-    val syntax = getSyntax(response_syntax)
-    syntax match {
-      case ResponseSyntax.WPS =>
-        <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                             xsi:schemaLocation="http://www.opengis.net/ows/1.1 ../../../ows/1.1.0/owsExceptionReport.xsd" version="1.0.0" xml:lang="en-CA">
-          {getReport(syntax)} </ows:ExceptionReport>
-      case ResponseSyntax.Generic => <response> <exceptions> {getReport(syntax)} </exceptions> </response>
-    }
-  }
-  def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] =  {
-    val syntax = getSyntax(response_syntax)
-    val error_mesage = CDSecurity.sanitize(err.getMessage + ":\n\t" + err.getStackTrace.map(_.toString).mkString("\n\t"))
-    syntax match {
-      case ResponseSyntax.WPS =>
-        List(<ows:Exception exceptionCode={err.getClass.getName}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
-      case ResponseSyntax.Generic =>
-        List(<exception name={err.getClass.getName}>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </exception>)
-    }
-  }
-  def print_error = {
-    val err1 = if (err.getCause == null) err else err.getCause
-    logger.error("\n\n-------------------------------------------\n" + err1.toString + "\n")
-    logger.error(  err1.getStackTrace.mkString("\n")  )
-    if (err.getCause != null) { logger.error( "\nTriggered at: \n" + err.getStackTrace.mkString("\n") ) }
-    logger.error( "\n-------------------------------------------\n\n")
-  }
-}
+//class ExecutionErrorReport( serviceInstance: String, processes: List[WPSProcess], id: String, val err: Throwable ) extends WPSReferenceExecuteResponse( serviceInstance, processes, "" )  with Loggable {
+//  print_error
+//  override def toXml( response_syntax: ResponseSyntax.Value ): xml.Elem = {
+//    val syntax = getSyntax(response_syntax)
+//    syntax match {
+//      case ResponseSyntax.WPS =>
+//        <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+//                             xsi:schemaLocation="http://www.opengis.net/ows/1.1 ../../../ows/1.1.0/owsExceptionReport.xsd" version="1.0.0" xml:lang="en-CA">
+//          {getReport(syntax)} </ows:ExceptionReport>
+//      case ResponseSyntax.Generic => <response> <exceptions> {getReport(syntax)} </exceptions> </response>
+//    }
+//  }
+//  def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] =  {
+//    val syntax = getSyntax(response_syntax)
+//    val error_mesage = CDSecurity.sanitize(err.getMessage + ":\n\t" + err.getStackTrace.map(_.toString).mkString("\n\t"))
+//    syntax match {
+//      case ResponseSyntax.WPS =>
+//        List(<ows:Exception exceptionCode={err.getClass.getName}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
+//      case ResponseSyntax.Generic =>
+//        List(<exception name={err.getClass.getName}>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </exception>)
+//    }
+//  }
+//  def print_error = {
+//    val err1 = if (err.getCause == null) err else err.getCause
+//    logger.error("\n\n-------------------------------------------\n" + err1.toString + "\n")
+//    logger.error(  err1.getStackTrace.mkString("\n")  )
+//    if (err.getCause != null) { logger.error( "\nTriggered at: \n" + err.getStackTrace.mkString("\n") ) }
+//    logger.error( "\n-------------------------------------------\n\n")
+//  }
+//}
 
 
 abstract class WPSEventReport extends WPSResponse {
@@ -311,34 +313,36 @@ class UtilityExecutionResult( id: String, val report: xml.Elem )  extends WPSEve
   def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] =  List( <UtilityReport utilityId={id}>  { report } </UtilityReport> )
 }
 
-class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) extends WPSExecuteResponse(serviceInstance) with Loggable {
-  print_error
+class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) extends WPSExecuteResponse(serviceInstance) {
+  val eId = print_error
   def toXml( response_syntax: ResponseSyntax.Value ): xml.Elem = {
     val syntax = getSyntax(response_syntax)
     syntax match {
       case ResponseSyntax.WPS =>
         <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                              xsi:schemaLocation="http://www.opengis.net/ows/1.1 ../../../ows/1.1.0/owsExceptionReport.xsd" version="1.0.0" xml:lang="en-CA">
-          {getReport(syntax)} </ows:ExceptionReport>
-      case ResponseSyntax.Generic => <response> <exceptions> {getReport(syntax)} </exceptions> </response>
+          {getReport(eId,syntax)} </ows:ExceptionReport>
+      case ResponseSyntax.Generic => <response> <exceptions> {getReport(eId,syntax)} </exceptions> </response>
     }
   }
-  def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] =  {
+  def getReport( eId: String, response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] =  {
     val syntax = getSyntax(response_syntax)
-    val error_mesage = CDSecurity.sanitize(err.getMessage + ":\n\t" + err.getStackTrace.map(_.toString).mkString("\n\t"))
+    val error_mesage = CDSecurity.sanitize( err.getClass.getName + ": " + err.getMessage )
     syntax match {
       case ResponseSyntax.WPS =>
-        List(<ows:Exception exceptionCode={err.getClass.getName}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
+        List(<ows:Exception exceptionCode={eId}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
       case ResponseSyntax.Generic =>
-        List(<exception name={err.getClass.getName}> {"<![CDATA[\n " + error_mesage + "\n]]>"} </exception>)
+        List(<exception name={eId}> {"<![CDATA[\n " + error_mesage + "\n]]>"} </exception>)
     }
   }
-  def print_error = {
+  def print_error: String = {
+    val eId = RandomStringUtils.random( 6, true, true )
     val err1 = if (err.getCause == null) err else err.getCause
-    logger.error("\n\n-------------------------------------------\n" + err1.toString + "\n")
+    logger.error("\n\n-------------------------------------------\nERROR " + eId + ": " + err1.toString + "\n")
     logger.error(  err1.getStackTrace.mkString("\n")  )
     if (err.getCause != null) { logger.error( "\nTriggered at: \n" + err.getStackTrace.mkString("\n") ) }
     logger.error( "\n-------------------------------------------\n\n")
+    eId
   }
 }
 
@@ -358,7 +362,7 @@ class WPSMergedEventReport( val reports: List[WPSEventReport] ) extends WPSEvent
 }
 
 class WPSMergedExceptionReport( val exceptions: List[WPSExceptionReport] ) extends WPSEventReport {
-  def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] = exceptions.flatMap( _.getReport(response_syntax) )
+  def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] = exceptions.flatMap( ex => { val eid = ex.print_error; ex.getReport(eid,response_syntax) } )
 }
 
 class BlockingExecutionResult( serviceInstance: String, processes: List[WPSProcess], id: String, val intputSpecs: List[DataFragmentSpec], val gridSpec: TargetGrid, val result_tensor: CDFloatArray,

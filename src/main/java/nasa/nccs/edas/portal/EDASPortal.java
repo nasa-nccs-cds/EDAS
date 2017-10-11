@@ -298,7 +298,7 @@ public abstract class EDASPortal {
                 sendResponseMessage(  execUtility( parts ) );
             } else if( parts[1].equals("quit") || parts[1].equals("shutdown") ) {
                 sendResponseMessage( new Message(parts[0],"quit", "Terminating") );
-                term();
+                term("Received Shutdown Message");
             } else if( parts[1].toLowerCase().equals("getcapabilities") ) {
                 sendResponseMessage(  getCapabilities( parts ) );
             } else if( parts[1].toLowerCase().equals("describeprocess") ) {
@@ -322,8 +322,8 @@ public abstract class EDASPortal {
     }
 
 
-    public void term() {
-        logger.info( "EDAS Shutdown");
+    public void term(String msg) {
+        logger.info( "EDAS Shutdown: " + msg );
         active = false;
         PythonWorkerPortal.getInstance().quit();
         logger.info( "QUIT PythonWorkerPortal");

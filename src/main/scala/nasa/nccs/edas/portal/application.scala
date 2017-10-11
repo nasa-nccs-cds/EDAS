@@ -45,7 +45,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   val process = "edas"
   val randomIds = new RandomString(8)
   val printer = new scala.xml.PrettyPrinter(200, 3)
-  Runtime.getRuntime().addShutdownHook( new Thread() { override def run() { term() } } )
+  Runtime.getRuntime().addShutdownHook( new Thread() { override def run() { term("ShutdownHook Called") } } )
 
   override def execUtility(utilSpec: Array[String]): Message = {
     new Message("","","")
