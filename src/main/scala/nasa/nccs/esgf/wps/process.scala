@@ -34,14 +34,17 @@ trait GenericProcessManager {
 }
 
 class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericProcessManager with Loggable {
-  def apiManager = new APIManager( serverConfiguration )
+  private var _apiManagerOpt: Option[APIManager] = None
+  def alloc = if( _apiManagerOpt.isEmpty ) { _apiManagerOpt = Some( new APIManager( serverConfiguration ) ) }
+
+  def apiManager: APIManager = { alloc; _apiManagerOpt.get }
 
   def unacceptable(msg: String): Unit = {
     logger.error(msg)
     throw new NotAcceptableException(msg)
   }
 
-  def term = apiManager.shutdown
+  def term = _apiManagerOpt.foreach( _.shutdown )
 
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Elem = {
     val serviceProvider = apiManager.getServiceProvider(service)
