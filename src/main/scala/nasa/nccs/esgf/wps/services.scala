@@ -3,7 +3,7 @@ package nasa.nccs.esgf.wps
 import java.io.{PrintWriter, StringWriter}
 import java.util.concurrent.ExecutionException
 
-import nasa.nccs.caching.RDDTransientVariable
+import nasa.nccs.caching.{JobRecord, RDDTransientVariable, collectionDataCache}
 import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.wps.{BlockingExecutionResult, ResponseSyntax, WPSExceptionReport, WPSResponse}
@@ -42,7 +42,7 @@ trait ServiceProvider extends Loggable {
 
 }
 
-object cds2ServiceProvider extends ServiceProvider {
+object edasServiceProvider extends ServiceProvider {
   import nasa.nccs.edas.engine.CDS2ExecutionManager
   import nasa.nccs.esgf.process.TaskRequest
 
@@ -65,22 +65,28 @@ object cds2ServiceProvider extends ServiceProvider {
     case z => ResponseSyntax.WPS
   }
 
-  override def executeProcess(request: TaskRequest, dataInputsSpec: String, runargs: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Elem = {
+  override def executeProcess(request: TaskRequest, dataInputsSpec: String, _run_args: Map[String, String], executionCallback: Option[ExecutionCallback] = None): xml.Elem = {
+    val jobRec = request.getJobRec(_run_args)
+    val jobId = collectionDataCache.addJob( jobRec )
+    val runargs = Map("jobId" ->  jobId ) ++ _run_args
     val syntax = getResponseSyntax(runargs)
     try {
-      logger.info( " @@cds2ServiceProvider: exec process: " + request.name + ", runArgs = " + runargs.mkString("; ") )
+      logger.info( " @@edasServiceProvider: exec process: " + request.name + ", runArgs = " + runargs.mkString("; ") )
 
       cdsutils.time(logger, "\n\n-->> Process %s, datainputs: %s \n\n".format(request.name, dataInputsSpec ) ) {
-        if (runargs.getOrElse("status", "false").toBoolean) {
-          val result = cds2ExecutionManager.asyncExecute( request, runargs, executionCallback )
+        if (runargs.getOrElse("status", "true").toBoolean) {
+          val result = cds2ExecutionManager.asyncExecute( jobId, request, runargs, executionCallback )
           result.toXml(syntax)
         } else {
-          val result = cds2ExecutionManager.blockingExecute( request, runargs, executionCallback )
+          val result = cds2ExecutionManager.blockingExecute( jobId, request, runargs, executionCallback )
           result.toXml(syntax)
         }
       }
     } catch {
-      case e: Exception => fatal(e).toXml(syntax)
+      case e: Exception =>
+        val result = fatal(e).toXml(syntax)
+        executionCallback.foreach( _.execute( result, false ) )
+        result
     }
   }
   def describeWPSProcess(process_name: String, runArgs: Map[String,String]): xml.Elem = {

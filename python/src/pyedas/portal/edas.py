@@ -33,12 +33,13 @@ class MessageState(Enum):
 
 class ResponseManager(Thread):
 
-    def __init__(self, context, host, port ):
+    def __init__(self, context, clientId, host, port ):
         Thread.__init__(self)
         self.context = context
         self.logger = logging.getLogger("portal")
         self.host = host
         self.port = port
+        self.clientId = clientId
         self.active = True
         self.mstate = MessageState.RESULT
         self.setName('EDAS Response Thread')
@@ -65,8 +66,9 @@ class ResponseManager(Thread):
 
     def run(self):
         self.log("Run RM thread")
-        response_socket = self.context.socket( zmq.PULL )
+        response_socket = self.context.socket( zmq.SUB )
         response_port = ConnectionMode.connectSocket( response_socket, self.host, self.port )
+        response_socket.subscribe(self.clientID);
         self.log("Connected response socket on port: {0}".format( response_port ) )
         while( self.active ):
             self.processNextResponse( response_socket )
@@ -110,7 +112,7 @@ class ResponseManager(Thread):
             rId = self.getItem( toks, 0 )
             type = self.getItem( toks, 1 )
             msg = self.getItem(toks, 2)
-            self.logger.info(" #### Received response, rid: " + rId + ", type: " + type )
+            self.log("Received response, rid: " + rId + ", type: " + type )
             if type == "array":
                 self.log( "\n\n #### Received array " + rId + ": " + msg )
                 data = socket.recv()
@@ -209,9 +211,10 @@ class EDASPortal:
             self.active = True
             self.app_host = host
             self.application_thread = None
+            self.clientID = self.randomId(6)
             self.logger =  logging.getLogger("portal")
-            self.context = zmq.Context(2)
-            self.request_socket = self.context.socket(zmq.PUSH)
+            self.context = zmq.Context()
+            self.request_socket = self.context.socket(zmq.REQ)
 
             # if( connectionMode == ConnectionMode.BIND ):
             #     self.request_port = ConnectionMode.bindSocket( self.request_socket, self.app_host, request_port )
@@ -221,9 +224,9 @@ class EDASPortal:
             # else:
 
             self.request_port = ConnectionMode.connectSocket(self.request_socket, self.app_host, request_port)
-            self.log("[3]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
+            self.log("[1]Connected request socket to server {0} on port: {1}".format( self.app_host, self.request_port ) )
 
-            self.response_manager = ResponseManager(self.context, host, response_port)
+            self.response_manager = ResponseManager(self.context, self.clientID, host, response_port)
             self.response_manager.start()
 
 
@@ -243,7 +246,7 @@ class EDASPortal:
         self.application_thread = AppThread( self.app_host, self.request_port, self.response_port )
         self.application_thread.start()
 
-    def getResponseManager(self):
+    def createResponseManager(self):
         return self.response_manager
 
     def shutdown(self):
@@ -253,7 +256,8 @@ class EDASPortal:
             try: self.request_socket.close()
             except Exception: pass
             if( self.application_thread ):
-                self.sendMessage("shutdown")
+                response = self.sendMessage("shutdown")
+                self.log( "Shutdown Response: " + response )
                 self.application_thread.term()
                 self.application_thread = None
             if self.response_manager != None:
@@ -267,15 +271,16 @@ class EDASPortal:
         return ''.join(random.choice(sample) for i in range(length))
 
     def sendMessage( self, type, mDataList = [""] ):
-        msgId = self.randomId(8)
         msgStrs = [ str(mData).replace("'",'"') for mData in mDataList ]
-        self.logger.info( "Sending {0} request {1} on port {2}.".format( type, msgStrs, self.request_port )  )
+        self.log( "Sending {0} request {1} on port {2}.".format( type, msgStrs, self.request_port )  )
         try:
-            message = "!".join( [msgId,type] + msgStrs )
+            message = "!".join( [self.clientID,type] + msgStrs )
             self.request_socket.send( message )
+            response = self.request_socket.recv()
         except zmq.error.ZMQError as err:
             self.logger.error( "Error sending message {0} on request socket: {1}".format( message, str(err) ) )
-        return msgId
+            response = str(err)
+        return response
 
 class AppThread(Thread):
     def __init__(self, host, request_port, response_port):

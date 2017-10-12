@@ -199,10 +199,10 @@ class CDSparkContext( @transient val sparkContext: SparkContext ) extends Loggab
     }
   }
 
-  def getRDD(uid: String, directInput: EDASDirectDataInput, requestCx: RequestContext, opSection: Option[ma2.Section], node: WorkflowNode, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+  def getRDD(uid: String, directInput: EDASDirectDataInput, requestCx: RequestContext, opSection: Option[ma2.Section], node: WorkflowNode, batchIndex: Int, kernelContext: KernelContext ): Option[RDD[(RecordKey,RDDRecord)]] = {
     directInput.getPartitioner(opSection) flatMap ( partMgr => {
       val partitions = partMgr.partitions
-      val tgrid: TargetGrid = requestCx.getTargetGrid(uid).getOrElse(throw new Exception("Missing target grid for uid " + uid))
+      val tgrid: TargetGrid = requestCx.getTargetGridOpt(uid).getOrElse(throw new Exception("Missing target grid for uid " + uid))
       val batch= partitions.getBatch(batchIndex)
       val rddPartSpecs: Array[DirectRDDPartSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, List(directInput.getRDDVariableSpec(uid, opSection)))) filterNot (_.empty(uid))
       if (rddPartSpecs.length == 0) { None }
@@ -211,14 +211,14 @@ class CDSparkContext( @transient val sparkContext: SparkContext ) extends Loggab
         val partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
 //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
         val parallelized_rddspecs = sparkContext parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy partitioner
-        Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex)) )
+        Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition(requestCx,batchIndex)) )
       }
     } )
   }
 
   def getUnifiedRDD( directInputs: Iterable[EDASDirectDataInput], requestCx: RequestContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
     val partitions = requestCx.partitioner.partitions
-    val tgrid: TargetGrid = requestCx.getTargetGrid( requestCx.partitioner.uid ).getOrElse(throw new Exception("Missing target grid for uid " + requestCx.partitioner.uid ) )
+    val tgrid: TargetGrid = requestCx.getTargetGrid( requestCx.partitioner.uid )
     val batch= partitions.getBatch(batchIndex)
     val rddPartSpecs: Array[DirectRDDPartSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, directInputs.map( _.getRDDVariableSpec ) ) )
     if (rddPartSpecs.length == 0) { None }

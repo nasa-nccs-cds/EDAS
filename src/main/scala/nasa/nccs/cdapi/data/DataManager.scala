@@ -955,10 +955,10 @@ class ExtRDDPartSpec(val timeRange: RecordKey, val varSpecs: List[ RDDVariableSp
 
 }
 
-class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, val varShortName: String, val dataPath: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
+class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, section: CDSection, val varShortName: String, val dataPath: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
   def toHeapArray(partition: Partition, iRecord: Int ) = {
     val timeAxis: CoordinateAxis1DTime = NetcdfDatasetMgr.getTimeAxis(dataPath)
-    val recordSection: ma2.Section = partition.recordSection( timeAxis, partition.start_date, partition.end_date )
+    val recordSection: ma2.Section = partition.recordSection( section.toSection, iRecord, timeAxis, partition.start_time, partition.end_time )
     val part_size = recordSection.getShape.product
     if( part_size > 0 ) {
       val fltData: CDFloatArray = CDFloatArray.factory(readVariableData(recordSection), missing)

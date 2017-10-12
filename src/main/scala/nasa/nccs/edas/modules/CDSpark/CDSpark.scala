@@ -27,6 +27,7 @@ import scala.reflect.runtime.{universe => u}
 //}
 
 class max extends SingularRDDKernel(Map("mapreduceOp" -> "max")) {
+  override val status = KernelStatus.public
 //  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Maximum"
@@ -116,6 +117,7 @@ class sum2 extends DualRDDKernel(Map("mapOp" -> "sum")) {
 }
 
 class diff2 extends DualRDDKernel(Map("mapOp" -> "subt")) {
+  override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Difference"
@@ -137,6 +139,7 @@ class div2 extends DualRDDKernel(Map("mapOp" -> "divide")) {
 }
 
 class min extends SingularRDDKernel(Map("mapreduceOp" -> "min")) {
+  override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Minimum"
@@ -146,6 +149,7 @@ class min extends SingularRDDKernel(Map("mapreduceOp" -> "min")) {
 }
 
 class sum extends SingularRDDKernel(Map("mapreduceOp" -> "sum")) {
+  override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Sum"
@@ -161,6 +165,7 @@ class rmSum extends SingularRDDKernel(Map("mapreduceOp" -> "sum","postOp"->"rms"
 }
 
 class rms extends SingularRDDKernel( Map("mapOp" -> "sqAdd", "reduceOp" -> "sum", "postOp"->"rms" ) ) {
+  override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variables", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Root Mean Square"
@@ -201,13 +206,12 @@ class multiAverage extends Kernel(Map.empty) {
   override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
 }
 
-object BinKeyUtils {
-  implicit object BinKeyOrdering extends Ordering[String] {
-    def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
-  }
-}
-
 class bin extends Kernel(Map.empty) {
+  object BinKeyUtils {
+    implicit object BinKeyOrdering extends Ordering[String] {
+      def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
+    }
+  }
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Binning"
@@ -267,9 +271,13 @@ class binAve extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Binning"
   override val description = "Aggregates data into bins using specified reduce function and binning specifications"
+  object BinKeyUtils {
+    implicit object BinKeyOrdering extends Ordering[String] {
+      def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
+    }
+  }
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
-    import BinKeyUtils.BinKeyOrdering
     val t0 = System.nanoTime
     val axes = context.config("axes","")
     val binParm = context.config( "bin", "month" )
@@ -349,6 +357,7 @@ class binAve extends Kernel(Map.empty) {
 //}
 
 class average extends SingularRDDKernel(Map.empty) {
+  override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Mean"

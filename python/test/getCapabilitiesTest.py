@@ -3,13 +3,13 @@ import time, numpy as np
 
 request_port = 5670
 response_port = 5671
-# edas_server = "10.71.9.11"
 edas_server = "localhost"
+# edas_server = "10.71.9.11"
 test_collection = "cip_cfsr_6hr_ta"
 
 try:
     portal = EDASPortal(  edas_server, request_port, response_port )
-    response_manager = portal.getResponseManager()
+    response_manager = portal.createResponseManager()
     rId = portal.sendMessage("getCapabilities", [""])
     responses = response_manager.getResponses(rId)
     print "Capabilities:\n" + "\n".join(responses)

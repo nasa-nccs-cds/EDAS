@@ -91,6 +91,7 @@ unmanagedJars in Compile ++= {
       val classpath_file = edas_cache_dir.value / "classpath.txt"
       val pw = new PrintWriter( classpath_file )
       val jars_list = customJars.getPaths.mkString("\n")
+      println("Custom jars: " + jars_list + ", dir: " + jars_dir )
       pw.write( jars_list )
       customJars.classpath
     case None =>
@@ -113,7 +114,7 @@ classpathTypes += "so"
 stage ~= { (file: File) => edasPatch( file / "bin" / "edas" ); file }
 // lazy val edasGlobalCollectionsFile = settingKey[File]("The edas global Collections file")
 
-edas_cache_dir := getCacheDir()
+edas_cache_dir := getCacheDir
 edasPropertiesFile := edas_cache_dir.value / "edas.properties"
 edasDefaultPropertiesFile := baseDirectory.value / "project" / "edas.properties"
 edasPythonRunScript := edas_sbin_dir.value / "startup_python_worker.sh"
@@ -155,12 +156,12 @@ upscr := {
 
 compile  <<= (compile in Compile).dependsOn(upscr)
 
-def getCondaLibDir(): Option[File] = sys.env.get("CONDA_PREFIX") match {
+def getCondaLibDir: Option[File] = sys.env.get("CONDA_PREFIX") match {
   case Some(ldir) => Some(file(ldir) / "lib")
   case None => println( " ******* Warning: Must activate the edas environment in Anaconda to run the EDAS server: '>> source activate edas'  ******* " ); None
 }
 
-def getCacheDir(): File = {
+def getCacheDir: File = {
   val cache_dir = sys.env.get("EDAS_CACHE_DIR") match {
     case Some(cache_dir) => file(cache_dir)
     case None => file(System.getProperty("user.home")) / ".edas" / "cache";
@@ -170,13 +171,13 @@ def getCacheDir(): File = {
   cache_dir
 }
 
-def getEDASbinDir(): File = {
+def getEDASbinDir: File = {
   val bin_dir =  file(System.getProperty("user.home")) / ".edas" / "sbin";
   bin_dir.mkdirs();
   bin_dir
 }
 
-def getEDASlogsDir(): File = {
+def getEDASlogsDir: File = {
   val log_dir =  file(System.getProperty("user.home")) / ".edas" / "logs";
   log_dir.mkdirs();
   log_dir
@@ -197,7 +198,7 @@ edasLocalCollectionsFile :=  {
 
 publishTo := Some(Resolver.file( "file",  sys.env.get("SBT_PUBLISH_DIR") match {
   case Some(pub_dir) => { val pdir = file(pub_dir); pdir.mkdirs(); pdir }
-  case None =>  { val pdir = getCacheDir() / "publish"; pdir.mkdirs(); pdir }
+  case None =>  { val pdir = getCacheDir / "publish"; pdir.mkdirs(); pdir }
 } ) )
 
 //

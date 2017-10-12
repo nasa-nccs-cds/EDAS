@@ -22,8 +22,9 @@ import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.wps._
+import nasa.nccs.wps.{WPSExecuteStatusStarted, _}
 import ucar.nc2.Attribute
+import ucar.nc2.dataset.CoordinateAxis
 import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingDefault, Nc4ChunkingStrategyNone}
 
 import scala.io.Source
@@ -38,7 +39,7 @@ class Counter(start: Int = 0) {
 }
 
 trait ExecutionCallback extends Loggable {
-  def execute( jobId: String, results: WPSResponse  ) // WPSMergedEventReport
+  def execute( results: xml.Node, success: Boolean  )
 }
 
 object CDS2ExecutionManager extends Loggable {
@@ -158,7 +159,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 //    }
 //  }
 
-  def createRequestContext(request: TaskRequest, run_args: Map[String,String] ): RequestContext = {
+  def createRequestContext( jobId: String, request: TaskRequest, run_args: Map[String,String] ): RequestContext = {
     val t0 = System.nanoTime
     val profiler = ProfilingTool( serverContext.spark.sparkContext )
     val sourceContainers = request.variableMap.values.filter(_.isSource)
@@ -167,7 +168,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       yield serverContext.createInputSpec( data_container, domainOpt, request )
     val t2 = System.nanoTime
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
-    val rv = new RequestContext ( sourceMap, request, profiler, run_args )
+    val rv = new RequestContext ( jobId, sourceMap, request, profiler, run_args )
     val t3 = System.nanoTime
     profiler.timestamp( " LoadInputDataT: %.4f %.4f %.4f, MAXINT: %.2f G".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, Int.MaxValue/1.0E9 ), true )
     rv
@@ -210,7 +211,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 
   def saveResultToFile( resultId: String, gridUid: String, maskedTensor: CDFloatArray, request: RequestContext, server: ServerContext, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute] ): Option[String] = {
     val optInputSpec: Option[DataFragmentSpec] = request.getInputSpec()
-    val targetGrid = request.getTargetGrid( gridUid ).getOrElse( throw new Exception( "Undefined Target Grid when saving result " + resultId ))
+    val targetGrid = request.getTargetGridOpt( gridUid ).getOrElse( throw new Exception( "Undefined Target Grid when saving result " + resultId ))
     request.getCollection(server) map { collection =>
       val varname = searchForValue(varMetadata, List("varname", "fullname", "standard_name", "original_name", "long_name"), "Nd4jMaskedTensor")
       val resultFile = Kernel.getResultFile( resultId, true )
@@ -218,7 +219,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker )
       writer.setLargeFile(true)
       assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
-      val coordAxes = collection.grid.getCoordinateAxes
+      val coordAxes: List[CoordinateAxis] = collection.grid.getCoordinateAxes
       val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, maskedTensor.getShape(idim)))
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
       val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec => inputSpec.getRange(coordAxis.getFullName) match {
@@ -229,7 +230,8 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
             case None => range;
             case Some(dim) => if (dim.getLength < range.length) new ma2.Range(dim.getLength) else range
           }
-          Some(coordVar, coordAxis.read(List(newRange)))
+          val data = coordAxis.read( List(newRange) )
+          Some( coordVar, data )
         case None => None
       } }).flatten
       logger.info("Writing result %s to file '%s', varname=%s, dims=(%s), shape=[%s], coords = [%s]".format(
@@ -244,7 +246,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         for (newCoordVar <- newCoordVars) {
           newCoordVar match {
             case (coordVar, coordData) =>
-              logger.info("Writing cvar %s: shape = [%s]".format(coordVar.getFullName, coordData.getShape.mkString(",")))
+              logger.info("Writing cvar %s: shape = [%s], dataType = %s".format(coordVar.getFullName, coordData.getShape.mkString(","), coordVar.getDataType.toString ))
               writer.write(coordVar, coordData)
           }
         }
@@ -269,55 +271,59 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 
   def isCollectionPath( path: File ): Boolean = { path.isDirectory || path.getName.endsWith(".csv") }
 
-  def executeUtilityRequest(util_id: String, request: TaskRequest, run_args: Map[String, String]): WPSMergedEventReport = util_id match {
-    case "magg" =>
-      val collectionNodes =  request.variableMap.values.flatMap( ds => {
-        val pcol = ds.getSource.collection
-        val base_dir = new File(pcol.dataPath)
-        val base_id = pcol.id
-        val col_dirs: Array[File] = base_dir.listFiles
-        for( col_path <- col_dirs; if isCollectionPath(col_path); col_id = base_id + "/" + col_path.getName ) yield {
-          Collection.aggregate( col_id, col_path )
-        }
-      })
-      new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
-    case "agg" =>
-      val collectionNodes =  request.variableMap.values.flatMap( ds => if(ds.isSource) { Some( Collection.aggregate( ds.getSource ) ) } else { None } )
-      new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
-    case "clearCache" =>
-      val fragIds = clearCache
-      new WPSMergedEventReport( List( new UtilityExecutionResult( "clearCache", <deleted fragments={fragIds.mkString(",")}/> ) ) )
-    case "cache" =>
-      val cached_data: Iterable[(DataFragmentKey,Future[PartitionedFragment])] = cacheInputData(request, run_args).flatten
-      FragmentPersistence.close()
-      new WPSMergedEventReport( cached_data.map( cache_result => new UtilityExecutionResult( cache_result._1.toStrRep, <cache/> ) ).toList )
-    case "dcol" =>
-      val colIds = request.variableMap.values.map( _.getSource.collection.id )
-      val deletedCollections = Collections.removeCollections( colIds.toArray )
-      new WPSMergedEventReport(List(new UtilityExecutionResult("dcol", <deleted collections={deletedCollections.mkString(",")}/> )))
-    case "dfrag" =>
-      val fragIds: Iterable[String] = request.variableMap.values.map( ds => Array( ds.getSource.name, ds.getSource.collection.id, ds.getSource.domain ).mkString("|") )
-      deleteFragments( fragIds )
-      new WPSMergedEventReport(List(new UtilityExecutionResult("dfrag", <deleted fragments={fragIds.mkString(",")}/> )))
-    case "dres" =>
-      val resIds: Iterable[String] = request.variableMap.values.map( ds => ds.uid )
-      logger.info( "Deleting results: " + resIds.mkString(", ") + "; Current Results = " + collectionDataCache.getResultIdList.mkString(", ") )
-      resIds.foreach( resId => collectionDataCache.deleteResult( resId ) )
-      new WPSMergedEventReport(List(new UtilityExecutionResult("dres", <deleted results={resIds.mkString(",")}/> )))
-    case x => throw new Exception( "Unrecognized Utility:" + x )
+  def executeUtilityRequest(jobId: String, util_id: String, request: TaskRequest, run_args: Map[String, String]): WPSMergedEventReport = {
+    val result = util_id match {
+      case "magg" =>
+        val collectionNodes =  request.variableMap.values.flatMap( ds => {
+          val pcol = ds.getSource.collection
+          val base_dir = new File(pcol.dataPath)
+          val base_id = pcol.id
+          val col_dirs: Array[File] = base_dir.listFiles
+          for( col_path <- col_dirs; if isCollectionPath(col_path); col_id = base_id + "/" + col_path.getName ) yield {
+            Collection.aggregate( col_id, col_path )
+          }
+        })
+        new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
+      case "agg" =>
+        val collectionNodes =  request.variableMap.values.flatMap( ds => if(ds.isSource) { Some( Collection.aggregate( ds.getSource ) ) } else { None } )
+        new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
+      case "clearCache" =>
+        val fragIds = clearCache
+        new WPSMergedEventReport( List( new UtilityExecutionResult( "clearCache", <deleted fragments={fragIds.mkString(",")}/> ) ) )
+      case "cache" =>
+        val cached_data: Iterable[(DataFragmentKey,Future[PartitionedFragment])] = cacheInputData(request, run_args).flatten
+        FragmentPersistence.close()
+        new WPSMergedEventReport( cached_data.map( cache_result => new UtilityExecutionResult( cache_result._1.toStrRep, <cache/> ) ).toList )
+      case "dcol" =>
+        val colIds = request.variableMap.values.map( _.getSource.collection.id )
+        val deletedCollections = Collections.removeCollections( colIds.toArray )
+        new WPSMergedEventReport(List(new UtilityExecutionResult("dcol", <deleted collections={deletedCollections.mkString(",")}/> )))
+      case "dfrag" =>
+        val fragIds: Iterable[String] = request.variableMap.values.map( ds => Array( ds.getSource.name, ds.getSource.collection.id, ds.getSource.domain ).mkString("|") )
+        deleteFragments( fragIds )
+        new WPSMergedEventReport(List(new UtilityExecutionResult("dfrag", <deleted fragments={fragIds.mkString(",")}/> )))
+      case "dres" =>
+        val resIds: Iterable[String] = request.variableMap.values.map( ds => ds.uid )
+        logger.info( "Deleting results: " + resIds.mkString(", ") + "; Current Results = " + collectionDataCache.getResultIdList.mkString(", ") )
+        resIds.foreach( resId => collectionDataCache.deleteResult( resId ) )
+        new WPSMergedEventReport(List(new UtilityExecutionResult("dres", <deleted results={resIds.mkString(",")}/> )))
+      case x => throw new Exception( "Unrecognized Utility:" + x )
+    }
+    collectionDataCache.removeJob( jobId )
+    result
   }
 
-  def futureExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): Future[WPSResponse] = Future {
-    logger.info("ASYNC Execute { runargs: " + run_args.toString + ",  request: " + request.toString + " }")
-    val jobId = run_args.getOrElse("jobId","")
-    val requestContext = createRequestContext(request, run_args)
+  def futureExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): Future[WPSResponse] = Future {
+    logger.info("ASYNC Execute { runargs: " + run_args.toString + ",  request: " + request.toString+ ",  jobId: " + jobId + " }")
+    val requestContext = createRequestContext( jobId, request, run_args )
     val results = executeWorkflows( requestContext )
-    executionCallback.foreach( _.execute( jobId, results ))
+    val response = results.toXml( ResponseSyntax.Generic )
+    executionCallback.foreach( _.execute( response, true ))
     collectionDataCache.removeJob( jobId )
     results
   }
 
-  def blockingExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSResponse =  {
+  def blockingExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSResponse =  {
     logger.info("Blocking Execute { runargs: " + run_args.toString + ", request: " + request.toString + " }")
     runtime.printMemoryUsage(logger)
     val t0 = System.nanoTime
@@ -326,17 +332,21 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       req_ids(0) match {
         case "util" =>
           logger.info("Executing utility request " + req_ids(1) )
-          executeUtilityRequest( req_ids(1), request, run_args )
+          executeUtilityRequest( jobId, req_ids(1), request, run_args )
         case _ =>
           logger.info("Executing task request " + request.name )
-          val requestContext = createRequestContext (request, run_args)
-          val response = executeWorkflows ( requestContext )
+          val requestContext = createRequestContext ( jobId, request, run_args )
+          val results = executeWorkflows ( requestContext )
+          val response = results.toXml( ResponseSyntax.Generic )
           requestContext.logTimingReport("Executed task request " + request.name)
-          executionCallback.foreach( _.execute( request.getJobRec(run_args).id, response ))
-          response
+          executionCallback.foreach( _.execute( response, true ) )
+          collectionDataCache.removeJob( jobId )
+          results
       }
     } catch {
-      case err: Exception => new WPSExceptionReport(err)
+      case err: Exception =>
+        collectionDataCache.removeJob( jobId )
+        new WPSExceptionReport(err)
     }
   }
 
@@ -377,26 +387,29 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
   def getResultStatus( resId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
     logger.info( "Locating result: " + resId )
     val message = collectionDataCache.getExistingResult( resId ) match {
-      case None => "EDAS Process has not yet completed"
-      case Some( tvar: RDDTransientVariable ) => "EDAS Process successfully completed"
+      case None => new WPSExecuteStatusStarted( "WPS", "", resId ).toXml( response_syntax )
+      case Some( tvar: RDDTransientVariable ) => new WPSExecuteStatusCompleted( "WPS", "", resId ).toXml( response_syntax )
     }
-    new WPSExecuteStatus( "WPS", message, resId ).toXml( response_syntax )
+    message
   }
 
-  def asyncExecute( request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSReferenceExecuteResponse = {
-    logger.info("Execute { runargs: " + run_args.toString + ",  request: " + request.toString + " }")
+  def asyncExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSReferenceExecuteResponse = {
+    logger.info("Execute { runargs: " + run_args.toString + ",  request: " + request.toString + ",  jobId: " + jobId + " }")
     runtime.printMemoryUsage(logger)
-    val jobId = collectionDataCache.addJob( request.getJobRec(run_args) )
     val req_ids = request.name.split('.')
     req_ids(0) match {
       case "util" =>
-        val util_result = executeUtilityRequest(req_ids(1), request, Map("jobId" -> jobId) ++ run_args )
+        val util_result = executeUtilityRequest( jobId, req_ids(1), request, run_args )
         Future(util_result)
       case _ =>
-        val futureResult = this.futureExecute( request, Map("jobId" -> jobId) ++ run_args, executionCallback )
-        futureResult onFailure { case e: Throwable => fatal(e); collectionDataCache.removeJob(jobId); throw e }
+        val futureResult = this.futureExecute( jobId, request, run_args, executionCallback )
+        futureResult onFailure { case e: Throwable =>
+          fatal(e);
+          collectionDataCache.removeJob(jobId);
+          throw e
+        }
     }
-    new AsyncExecutionResult( request.id.toString, request.getProcess, jobId )
+    new AsyncExecutionResult( request.id.toString, List(request.getProcess), jobId )
   }
 
 //  def execute( request: TaskRequest, runargs: Map[String,String] ): xml.Elem = {
@@ -410,7 +423,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
       case x if x.startsWith("frag") => FragmentPersistence.getFragmentListXml
       case x if x.startsWith("res") => collectionDataCache.getResultListXml // collectionDataCache
       case x if x.startsWith("job") => collectionDataCache.getJobListXml
-      case x if x.startsWith("coll") => {
+      case x if x.startsWith("col") => {
         val itToks = x.split(Array(':','|'))
         if( itToks.length < 2 ) Collections.toXml
         else <collection id={itToks(0)}> { Collections.getCollectionMetadata( itToks(1) ).map( attr => attrToXml( attr ) ) } </collection>
@@ -442,7 +455,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         case x =>
           logger.info( "---------->>> Execute Workflows: " + request.operations.mkString(",") )
           val responses = request.workflow.executeRequest( requestCx )
-          new MergedWPSExecuteResponse( request.id.toString, responses )
+          new MergedWPSExecuteResponse( requestCx.jobId, responses )
       }
       case None => throw new Exception( "Error, no operation specified, cannot define workflow")
     }

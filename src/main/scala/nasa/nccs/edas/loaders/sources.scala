@@ -111,15 +111,18 @@ object Collections extends XmlResource {
   refreshCollectionList
 
   def refreshCollectionList = {
-    val collPath: Path = Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
-    val ncmlExtensions = List( ".xml", ".ncml" )
-    val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists( file.getName.toLowerCase.endsWith(_) ) }
-    for (ncmlFile <- ncmlFiles; fileName = ncmlFile.getName; collId = fileName.substring( 0, fileName.lastIndexOf('.') ).toLowerCase; if (collId != "local_collections") && !datasets.containsKey(collId) ) {
-      Collections.addCollection( collId, ncmlFile.toString ) match {
-        case Some( collection ) => datasets.put( collId, collection )
-        case None => logger.warn( s"Skipping collection ${collId}" )
+    var collPath: Path = null
+    try {
+      collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
+      val ncmlExtensions = List(".xml", ".ncml")
+      val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
+      for (ncmlFile <- ncmlFiles; fileName = ncmlFile.getName; collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase; if (collId != "local_collections") && !datasets.containsKey(collId)) {
+        Collections.addCollection(collId, ncmlFile.toString) match {
+          case Some(collection) => datasets.put(collId, collection)
+          case None => logger.warn(s"Skipping collection ${collId}")
+        }
       }
-    }
+    } catch { case ex: Exception => logger.error( " Error refreshing Collection List from '%s': %s".format( collPath , ex.getMessage ) ) }
   }
 
   def toXml: xml.Elem = {
@@ -306,7 +309,8 @@ object Collections extends XmlResource {
     Collection( attr(n,"id"), attr(n,"path"), attr(n,"fileFilter"), scope, attr(n,"title"), n.text.split(";").toList )
   }
 
-  def findCollection( collectionId: String ): Option[Collection] = Option( datasets.get( collectionId.toLowerCase ) )
+  def findCollection( collectionId: String ): Option[Collection] =
+    Option( datasets.get( collectionId.toLowerCase ) )
 
   def getCollectionXml( collectionId: String ): xml.Elem = {
     Option( datasets.get( collectionId.toLowerCase ) ) match {
@@ -335,7 +339,7 @@ object Collections extends XmlResource {
 //    }
 //  }
 
-  def getCollectionKeys(): Array[String] = datasets.keys.toArray
+  def getCollectionKeys: Array[String] = datasets.keys.toArray
 }
 
 

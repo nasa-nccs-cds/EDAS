@@ -73,7 +73,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
 
   def timeConversion(input: RDD[(RecordKey,RDDRecord)], partitioner: RangePartitioner, context: KernelContext, requestCx: RequestContext ): RDD[(RecordKey,RDDRecord)] = {
     val trsOpt: Option[String] = context.trsOpt
-    val gridMap: Map[String,TargetGrid] = Map( (for( uid: String <- context.operation.inputs; targetGrid: TargetGrid = requestCx.getTargetGrid(uid).getOrElse( fatal("Missing target grid for kernel input " + uid) ) ) yield  uid -> targetGrid ) : _* )
+    val gridMap: Map[String,TargetGrid] = Map( (for( uid: String <- context.operation.inputs; targetGrid: TargetGrid = requestCx.getTargetGrid(uid) ) yield  uid -> targetGrid ) : _* )
     val targetTrsGrid: TargetGrid = trsOpt match {
       case Some( trs ) =>
         val trs_input = context.operation.inputs.find( _.split('-')(0).equals( trs.substring(1) ) ).getOrElse( fatal( "Invalid trs configuration: " + trs ) )
@@ -85,7 +85,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
     val new_partitioner: RangePartitioner = partitioner.colaesce
     val conversionGridMap: Map[String,TargetGrid] = gridMap.filter { case (uid, grid) => grid.shape(0) != toAxis.getSize }
     val fromAxisMap: Map[ Int, CoordinateAxis1DTime ] =  conversionGridMap map { case (uid, grid) => grid.shape(0) ->
-      requestCx.getTargetGrid(uid).getOrElse(throw new Exception("Missing Target Grid: " + uid))
+      requestCx.getTargetGridOpt(uid).getOrElse(throw new Exception("Missing Target Grid: " + uid))
         .getTimeCoordinateAxis.getOrElse(throw new Exception("Missing Time Axis: " + uid) )    }
     val conversionMap: Map[Int,TimeConversionSpec] = fromAxisMap mapValues ( fromAxis => { val converter = TimeAxisConverter( toAxis, fromAxis, toAxisRange ); converter.computeWeights(); } ) map (identity)
     CDSparkContext.coalesce( input, context ).map { case ( pkey, rdd_part ) => ( new_partitioner.range, rdd_part.reinterp( conversionMap ) ) } repartitionAndSortWithinPartitions new_partitioner
@@ -269,12 +269,13 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def createResponse(result: RDDRecord, context: RequestContext, node: WorkflowNode ): Option[WPSProcessExecuteResponse] = {
     val resultId = cacheResult( result, context, node )
+    logger.info( s"Create result ${resultId}: req-context metadata: ${context.request.metadata.mkString("; ")}" )
     if( node.isRoot ) {
       context.getConf("response", "xml") match {
         case "object" =>
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, None) )
         case "xml" =>
-          Some( new RDDExecutionResult("WPS", node.kernel, node.operation.identifier, result, resultId) )// TODO: serviceInstance
+          Some( new RDDExecutionResult("WPS", List(node.kernel), node.operation.identifier, result, resultId) )// TODO: serviceInstance
         case "file" =>
           val resultFileOpt: Option[String] = executionMgr.getResultFilePath(resultId)
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFileOpt) )
@@ -283,20 +284,20 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def cacheResult(result: RDDRecord, context: RequestContext, node: WorkflowNode ): String = {
-    collectionDataCache.putResult( node.operation.rid, new RDDTransientVariable( result, node.operation, context ) )
-    logger.info( " ^^^^## Cached result, rid = " + node.operation.rid + ", head elem metadata = " + result.elements.head._2.metadata )
-    node.operation.rid
+    collectionDataCache.putResult( context.jobId, new RDDTransientVariable( result, node.operation, context ) )
+    logger.info( " ^^^^## Cached result, rid = " + context.jobId + ", head elem metadata = " + result.elements.head._2.metadata )
+    context.jobId
   }
 
   def needsRegrid(rdd: RDD[(RecordKey,RDDRecord)], requestCx: RequestContext, kernelContext: KernelContext ): Boolean = {
     val sampleRDDPart: RDDRecord = rdd.first._2
-    val targetGrid = requestCx.getTargetGrid (kernelContext.grid.uid).getOrElse (throw new Exception ("Undefined Target Grid for kernel " + kernelContext.operation.identifier) )
+    val targetGrid = requestCx.getTargetGridOpt (kernelContext.grid.uid).getOrElse (throw new Exception ("Undefined Target Grid for kernel " + kernelContext.operation.identifier) )
     if( targetGrid.getGridSpec.startsWith("gspec") ) return true
     sampleRDDPart.elements.foreach { case(uid,data) => if( data.gridSpec != targetGrid.getGridSpec ) kernelContext.crsOpt match {
       case Some( crs ) =>
         return true
       case None =>
-        requestCx.getTargetGrid(uid) match {
+        requestCx.getTargetGridOpt(uid) match {
           case Some(tgrid) => if( !tgrid.shape.sameElements( targetGrid.shape ) ) return true
           case None => throw new Exception (s"Undefined Grid in input ${uid} for kernel " + kernelContext.operation.identifier)
         }

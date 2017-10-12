@@ -9,6 +9,8 @@ import java.nio.file.{Files, Path, Paths}
 import com.joestelmach.natty
 import ucar.nc2.time.CalendarDate
 import java.nio.file.{Files, Path}
+import java.text.SimpleDateFormat
+import java.util.Calendar
 
 import nasa.nccs.esgf.process.UID
 
@@ -38,27 +40,40 @@ import scala.collection.mutable
 class Logger( val name: String, val test: Boolean, val master: Boolean ) extends Serializable {
   val LNAME = if( test ) name + "-test" else name + "-"
   val LID = if( master ) "master" else UID().uid
+  var newline_state = true
   val logFilePath: Path = Paths.get( "/tmp" /* System.getProperty("user.home") */, "edas", "logs", LNAME + LID + ".log" )
+  val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
+  def timestamp = Calendar.getInstance().getTime
+  def timeStr = s"(${timeFormatter.format(timestamp)})"
+
   val writer = if(Files.exists(logFilePath)) {
     new PrintWriter(logFilePath.toString)
   } else {
-    val perms: java.util.Set[PosixFilePermission] = PosixFilePermissions.fromString("rwxrwxrwx")
-    val fileAttr = PosixFilePermissions.asFileAttribute(perms)
-    Files.createDirectories( logFilePath.getParent, fileAttr )
-    val logFile = new java.io.File(logFilePath.toString)
-    val existingLogFile: Path = Files.createFile( logFile.toPath, fileAttr )
-    new PrintWriter( existingLogFile.toFile )
+    if( !logFilePath.getParent().toFile.exists() ) {
+      val perms: java.util.Set[PosixFilePermission] = PosixFilePermissions.fromString("rwxrwxrwx")
+      val fileAttr = PosixFilePermissions.asFileAttribute(perms)
+      Files.createDirectories(logFilePath.getParent, fileAttr)
+    }
+    new PrintWriter( logFilePath.toFile )
   }
-  def log( level: String, msg: String  ) = {
-    val output = level + ": " + msg
-    writer.println( output )
+
+  def log( level: String, msg: String, newline: Boolean  ) = try {
+    var output = if(newline) { level + timeStr + ": " + msg } else { msg }
+    if( newline && !newline_state) { output = "\n" + output }
+    if(newline) { writer.println( output ) } else { writer.print( output ) }
     writer.flush()
     if(!test) { println( output ) }
-  }
-  def info( msg: String ) = { log( "info", msg ) }
-  def debug( msg: String ) = { log( "debug", msg ) }
-  def error( msg: String ) = { log( "error", msg ) }
-  def warn( msg: String ) = { log( "warn", msg ) }
+    newline_state = newline
+  } catch { case ex: Exception =>  println( "Logging exception: " + ex.toString ) }
+
+  def close() { writer.close(); }
+  def info( msg: String ) = { log( "info", msg, true ) }
+  def debug( msg: String ) = { log( "debug", msg, true ) }
+  def info( msg: String, newline: Boolean ) = { log( "info", msg, newline ) }
+  def debug( msg: String, newline: Boolean ) = { log( "debug", msg, newline ) }
+  def error( msg: String ) = { log( "error", msg, true ) }
+  def warn( msg: String ) = { log( "warn", msg, true ) }
+
 }
 
 

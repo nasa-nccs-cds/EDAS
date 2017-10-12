@@ -1,5 +1,7 @@
 package nasa.nccs.edas.kernels
+import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.edas.workers.python.PythonWorkerPortal
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.utilities.cdsutils
@@ -39,11 +41,12 @@ object KernelPackageTools {
   }
 
   def getKernelMap: Map[String,KernelModule] = {
-    val internal_kernels: Map[String,KernelModule] = getKernelClasses.map(ClassInfoRec( _ )).groupBy( _.module.toLowerCase ).mapValues( KernelModule(_) )
+    val visibility = KernelStatus.parse( appParameters("kernels.visibility","public") )
+    val internal_kernels: Map[String,KernelModule] = getKernelClasses.map(ClassInfoRec( _ )).groupBy( _.module.toLowerCase ).mapValues( KernelModule(_) filter visibility )
     val capabilities_data = PythonWorkerPortal.getInstance().getCapabilities()
-    val python_kernels: Array[KernelModule] = capabilities_data map ( KernelModule(_) )
+    val python_kernels: Array[KernelModule] = capabilities_data map ( KernelModule(_) filter visibility )
     val external_kernel_map: Map[String,KernelModule] = Map( python_kernels.map( km => km.getName -> km ): _* )
-    internal_kernels ++ external_kernel_map
+    ( internal_kernels ++ external_kernel_map ) filter { case (_,kmod) => kmod.nonEmpty }
   }
 }
 

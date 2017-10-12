@@ -14,6 +14,7 @@ import nasa.nccs.cdapi.data.RDDVariableSpec
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.engine.{CDS2ExecutionManager, Workflow}
 import nasa.nccs.edas.kernels.AxisIndices
+import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.OperationContext.OpResultType
 import nasa.nccs.esgf.process.UID.ndigits
 
@@ -25,7 +26,7 @@ import scala.collection.mutable.HashSet
 import mutable.ListBuffer
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.esgf.utilities.wpsNameMatchers
-import nasa.nccs.esgf.wps.cds2ServiceProvider
+import nasa.nccs.esgf.wps.edasServiceProvider
 import nasa.nccs.wps._
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2.dataset.CoordinateAxis1DTime
@@ -50,12 +51,10 @@ class TaskRequest(val id: UID,
                   val metadata: Map[String, String] = Map("id" -> "#META"))
     extends Loggable {
   val errorReports = new ListBuffer[ErrorReport]()
-  val targetGridMap =
-    scala.collection.mutable.HashMap.empty[String, TargetGrid]
+  val targetGridMap = scala.collection.mutable.HashMap.empty[String, TargetGrid]
   validate()
-  logger.info(s"TaskRequest: name= $name, workflows= " + operations.mkString(
-    ",") + ", variableMap= " + variableMap.toString + ", domainMap= " + domainMap.toString)
-  val workflow = Workflow(this, cds2ServiceProvider.cds2ExecutionManager);
+  logger.info(s"TaskRequest: name= $name, workflows= " + operations.mkString(",") + ", variableMap= " + variableMap.toString + ", domainMap= " + domainMap.toString)
+  val workflow = Workflow(this, edasServiceProvider.cds2ExecutionManager);
 
   def addErrorReport(severity: String, message: String) = {
     val error_rep = ErrorReport(severity, message)
@@ -97,9 +96,13 @@ class TaskRequest(val id: UID,
   def getOutputs: List[WPSProcessOutput] =
     List(WPSProcessOutput(id.toString, "text/xml", "Workflow Output"))
 
-  def getJobRec(run_args: Map[String, String]): JobRecord = {
+  def getJobRec1(run_args: Map[String, String]): JobRecord = {
     val jobIds = for (node <- workflow.roots) yield node.operation.rid
     new JobRecord(jobIds.mkString(";"))
+  }
+
+  def getJobRec(run_args: Map[String, String]): JobRecord = {
+    new JobRecord(name)
   }
 
   def isMetadataRequest: Boolean =
@@ -148,7 +151,7 @@ class TaskRequest(val id: UID,
 
   override def toString = {
     var taskStr =
-      s"TaskRequest { name='$name', variables = '$variableMap', domains='$domainMap', workflows='$operations' }"
+      s"TaskRequest { \n\tname='$name', \n\tvariables = ${variableMap.mkString("\n\t\t","\n\t\t","\n\t\t")}, \n\tdomains=${domainMap.mkString("\n\t\t","\n\t\t","\n\t\t")}, \n\tworkflows=${operations.mkString("\n\t\t","\n\t\t","\n\t\t")} }"
     if (errorReports.nonEmpty) {
       taskStr += errorReports.mkString("\nError Reports: {\n\t", "\n\t", "\n}")
     }
@@ -309,7 +312,7 @@ class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) 
 class DataSource(val name: String, val collection: Collection, val domain: String, val autoCache: Boolean, val fragIdOpt: Option[String] = None) {
   val debug = 1
   def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.domain, dsource.autoCache )
-  override def toString = s"DataSource { name = $name, collection = %s, domain = $domain, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
+  override def toString = s"DataSource { name = $name, \n\t\t\tcollection = %s, domain = $domain, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
   def toXml =  <dataset name={name} domain={domain}> {collection.toXml} </dataset>
   def isDefined = (!collection.isEmpty && !name.isEmpty)
   def isReadable = (!collection.isEmpty && !name.isEmpty && !domain.isEmpty)
@@ -819,7 +822,7 @@ class DataContainer(val uid: String, private val source: Option[DataSource] = No
   override def toString = {
     val embedded_val: String =
       if (source.isDefined) source.get.toString else operation.get.toString
-    s"DataContainer ( $uid ) { $embedded_val }"
+    s"DataContainer ( $uid ) { \n\t\t\t$embedded_val }"
   }
   override def toXml = {
     val embedded_xml =
@@ -867,24 +870,11 @@ object DataContainer extends ContainerBase {
       idItems.head
   }
 
-  def getCollection(
-      metadata: Map[String, Any]): (Option[Collection], Option[String]) = {
+  def getCollection( metadata: Map[String, Any]): (Option[Collection], Option[String] ) = {
     val uri = metadata.getOrElse("uri", "").toString
     val varsList: List[String] =
-      if (metadata.keySet.contains("id"))
-        metadata
-          .getOrElse("id", "")
-          .toString
-          .split(",")
-          .map(item => stripQuotes(vid(item, false)))
-          .toList
-      else
-        metadata
-          .getOrElse("name", "")
-          .toString
-          .split(",")
-          .map(item => stripQuotes(vid(item, false)))
-          .toList
+      if (metadata.keySet.contains("id")) metadata.getOrElse("id", "").toString.split(",").map(item => stripQuotes(vid(item, false))).toList
+      else metadata.getOrElse("name", "").toString.split(",").map(item => stripQuotes(vid(item, false))).toList
     val path = metadata.getOrElse("path", "").toString
     val collection = metadata.getOrElse("collection", "").toString
     val title = metadata.getOrElse("title", "").toString
@@ -906,23 +896,28 @@ object DataContainer extends ContainerBase {
         if (colId.equals("")) {
           (None, None)
         } else if (path.isEmpty && !collection.isEmpty) {
-          (Some(Collections.addCollection(colId, path, title, varsList)),
-           fragIdOpt)
+          (Some(Collections.addCollection(colId, path, title, varsList)), fragIdOpt)
         } else {
-          if (path.isEmpty)
-            throw new Exception(
-              s"Unrecognized collection: '$colId', current collections: " + Collections.idSet
-                .mkString(", "))
-          (Some(
-             Collections
-               .addCollection(colId, path, fileFilter, title, varsList)),
-           fragIdOpt)
+          if (path.isEmpty) {
+            logger.warn( s"Unrecognized collection: '$colId', current collections: " + Collections.idSet.mkString(", "))
+            ( None, fragIdOpt )
+          } else {
+            ( Some(Collections.addCollection(colId, path, fileFilter, title, varsList)), fragIdOpt )
+          }
         }
     }
   }
 
+  def validateInputMethods( metadata: Map[String, Any] ): Unit = {
+    val allowed_input_methods = appParameters("inputs.methods.allowed","collection").split(',').map( _.toLowerCase.trim )
+    val uri = metadata.getOrElse("uri", throw new Exception("Missing required parameter 'uri' in variable spec") ).toString
+    val input_method = uri.split(':').head.toLowerCase
+    if( !allowed_input_methods.contains( input_method ) ) { throw new Exception( s"Input method '$input_method' is not permitted, allowed methods = ${allowed_input_methods.mkString("[ ",", "," ]")} ")}
+  }
+
   def factory(uid: UID, metadata: Map[String, Any], noOp: Boolean ): Array[DataContainer] = {
     try {
+      validateInputMethods( metadata )
       val fullname =
         if (metadata.keySet.contains("id")) metadata.getOrElse("id", "").toString
         else metadata.getOrElse("name", "").toString
@@ -935,6 +930,9 @@ object DataContainer extends ContainerBase {
           val var_names: Array[String] = fullname.toString.split(',')
           val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
           val cid = dataPath.split('/').last
+          if( dataPath.toLowerCase.startsWith("collection") ) {
+            throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollectionKeys.mkString(", ")}")
+          }
           val collection = Collection( cid, dataPath )
           for ((name, index) <- var_names.zipWithIndex) yield {
             val name_items = name.split(Array(':', '|'))
@@ -1011,7 +1009,7 @@ class DomainContainer(val name: String,
     extends ContainerBase
     with Serializable {
   override def toString = {
-    s"DomainContainer { name = $name, axes = $axes }"
+    s"DomainContainer { name = $name, axes = ${axes.mkString("\n\t\t\t","\n\t\t\t","\n\t\t\t")} }"
   }
   def toDataInput: Map[String, Any] =
     Map(axes.map(_.toDataInput): _*) ++ Map(("name" -> name))

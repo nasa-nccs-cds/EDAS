@@ -17,7 +17,7 @@ public abstract class WorkerPortal extends Thread {
     protected Logger logger = EDASLogManager.getCurrentLogger();
 
     protected WorkerPortal(){
-        zmqContext = ZMQ.context(2);
+        zmqContext = ZMQ.context(1);
         availableWorkers = new ConcurrentLinkedQueue<Worker>();
         busyWorkers = new ConcurrentLinkedQueue<Worker>();
     }
@@ -44,13 +44,15 @@ public abstract class WorkerPortal extends Thread {
 
     int getNumWorkers() { return availableWorkers.size() + busyWorkers.size(); }
 
-    public void shutdown() { start(); }
+    public void shutdown() { try { start(); } catch ( Exception ex ) { run(); } }
 
     public void run() {
-        logger.info( "\t   ***!! WorkerPortal SHUTDOWN !!*** " );
-        while( !availableWorkers.isEmpty() ) try { availableWorkers.poll().quit(); } catch ( Exception ex ) {;}
-        while( !busyWorkers.isEmpty() ) try { busyWorkers.poll().quit(); } catch ( Exception ex ) {;}
-        logger.info( "\t   *** Worker shutdown complete *** " );
+        try {
+            logger.info( "\t   ***!! WorkerPortal SHUTDOWN !!*** " );
+            while( !availableWorkers.isEmpty() ) try { availableWorkers.poll().quit(); } catch ( Exception ex ) {;}
+            while( !busyWorkers.isEmpty() ) try { busyWorkers.poll().quit(); } catch ( Exception ex ) {;}
+            logger.info( "\t   *** Worker shutdown complete *** " );
+        } catch ( Exception ex ) { logger.info( "Error shutting down WorkerPortal: " + ex.toString() ); }
     }
 
     public void shutdown1() {

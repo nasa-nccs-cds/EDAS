@@ -8,6 +8,7 @@ public class WorkerManager {
 
     private WorkerManager() {
         responderThread = new ResponderThread(BASE_PORT);
+        responderThread.setDaemon(true);
         responderThread.start();
     }
 

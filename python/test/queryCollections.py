@@ -9,7 +9,7 @@ test_collection = "cip_cfsr_6hr_ta"
 
 try:
     portal = EDASPortal(  edas_server, request_port, response_port )
-    response_manager = portal.getResponseManager()
+    response_manager = portal.createResponseManager()
     rId = portal.sendMessage("getCapabilities", ["coll"])
     responses = response_manager.getResponses(rId)
     print "\n\nList Collections:\n" + "\n".join(responses)

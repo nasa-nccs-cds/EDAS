@@ -19,7 +19,7 @@ import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.TransientFragment
 import nasa.nccs.edas.loaders.Masks
 import nasa.nccs.esgf.process.{DataFragmentKey, _}
-import nasa.nccs.esgf.wps.cds2ServiceProvider
+import nasa.nccs.esgf.wps.edasServiceProvider
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import org.apache.commons.io.{FileUtils, IOUtils}
 import ucar.ma2.Range
@@ -58,7 +58,7 @@ class CacheChunk(val offset: Int,
 }
 
 object BatchSpec extends Loggable {
-  lazy val serverContext = cds2ServiceProvider.cds2ExecutionManager.serverContext
+  lazy val serverContext = edasServiceProvider.cds2ExecutionManager.serverContext
   lazy val nCores = appParameters( "parts.per.node", "1" ).toInt
   lazy val nNodes = appParameters( "num.cluster.nodes", "1" ).toInt
   lazy val nParts = nCores * nNodes
@@ -105,14 +105,14 @@ object CachePartition {
   }
   def apply(path: String, partition: RegularPartition ): CachePartition = {
     val partShape = getPartitionShape( partition.partSize, partition.shape )
-    new CachePartition( partition.index, path, partition.dimIndex, partition.startIndex, partition.partSize, partition.start_date, partition.end_date, partition.recordSize, partition.sliceMemorySize, partition.origin, partShape )
+    new CachePartition( partition.index, path, partition.dimIndex, partition.startIndex, partition.partSize, partition.start_time, partition.end_time, partition.recordSize, partition.sliceMemorySize, partition.origin, partShape )
   }
   def getPartitionShape(partSize: Int, fragShape: Array[Int]): Array[Int] = {
     var shape = fragShape.clone(); shape(0) = partSize; shape
   }
 }
 
-class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int]) extends RegularPartition(index, dimIndex, startIndex, partSize, start_date, end_date, recordSize, sliceMemorySize, origin, shape) {
+class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: Int, partSize: Int, start_time: Long, end_time: Long, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int]) extends RegularPartition(index, dimIndex, startIndex, partSize, start_time, end_time, recordSize, sliceMemorySize, origin, shape) {
 
   def data(missing_value: Float): CDFloatArray = {
     val file = new RandomAccessFile(path, "r")
@@ -139,7 +139,9 @@ class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: I
     }
 }
 
-abstract class Partition( val index: Int, val start_time: Long, val end_time: Long ) extends Loggable with Serializable {
+abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int, val partSize: Int, val start_time: Long, val end_time: Long, val sliceMemorySize: Long, val origin: Array[Int], val shape: Array[Int] ) extends Loggable with Serializable {
+  val partitionOrigin: Array[Int] = origin.zipWithIndex map { case (value, ival) => if( ival== 0 ) value + startIndex else value }
+  val endIndex: Int = startIndex + partSize - 1
   val start_date: CalendarDate = CalendarDate.of(start_time)
   val end_date: CalendarDate = CalendarDate.of(end_time)
 
@@ -150,7 +152,14 @@ abstract class Partition( val index: Int, val start_time: Long, val end_time: Lo
     logger.info( " *** RecordSection[%d]: dim=%d, range=[ %d, %d ]: %s -> %s ".format(iRecord,0,start_index,end_index, section.toString, rv.toString ) )
     rv
   }
-  override def toString() = s"Part[$index]{ start=${start_date.toString}, end=${end_date.toString} }"
+  def recordSection( section: ma2.Section, iRecord: Int ): ma2.Section = {
+    val rec_range = recordRange(iRecord)
+    val rv = new ma2.Section(section.getRanges).replaceRange(dimIndex, rec_range ).intersect(section)
+    logger.info( " *** RecordSection[%d]: dim=%d, range=[ %d, %d ]: %s -> %s ".format(iRecord,dimIndex,rec_range.first,rec_range.last, section.toString, rv.toString ) )
+    rv
+  }
+  override def toString() = s"Part[$index]{ start=${start_date.toString}, end=${end_date.toString} startIndex=$startIndex, size=$partSize, origin=(${origin.mkString(",")}), shape=(${shape.mkString(",")}) ]"
+
   def partSection(section: ma2.Section): ma2.Section = {
     new ma2.Section(section.getRanges).replaceRange(0, partRange)
   }
@@ -873,9 +882,8 @@ class JobRecord(val id: String) {
 class RDDTransientVariable(val result: RDDRecord,
                            val operation: OperationContext,
                            val request: RequestContext) {
-  val timeFormatter = new SimpleDateFormat("MM.dd-HH:mm:ss")
-  val timestamp = Calendar.getInstance().getTime
-
+  val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
+  def timestamp = Calendar.getInstance().getTime
   def getTimestamp = timeFormatter.format(timestamp)
 
   def getGridId = result.metadata.get("gid") match {

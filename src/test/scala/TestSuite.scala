@@ -7,6 +7,7 @@ import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.esgf.process.UID.ndigits
+import nasa.nccs.esgf.wps.Job
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import org.apache.commons.lang.RandomStringUtils
 
@@ -39,7 +40,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     case None => Paths.get("")
   }
   after {
-    if(shutdown_after) { cleanup() }
+    if(shutdown_after) { cleanup }
   }
 
   test("RemoveCollections") {
@@ -374,6 +375,20 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
   }
 
+  test("anomaly-collection") {
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":40,"end":50,"system":"values"},"lon":{"start":10,"end":50,"system":"values"},"lev":{"start":10,"end":10,"system":"indices"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection://cip_merra2_mon_ta","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"xt","id":"v1ave"},{"name":"CDSpark.diff2","input":"v1,v1ave","domain":"d0"}]]"""
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
+  }
+
+  test("anomaly-spatial") {
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":0,"end":60,"system":"values"},"lon":{"start":0,"end":60,"system":"values"},"time": {"start": 0, "end": 100, "crs": "indices"}},{"name":"d1","lat":{"start":30,"end":30,"system":"values"},"lon":{"start":30,"end":30,"system":"values"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"xy","id":"v1ave"},{"name":"CDSpark.diff2","input":"v1,v1ave","domain":"d1"}]]"""
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
+  }
+
   test("pyMaximum-cache") {
       val nco_verified_result = 309.7112
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"xy"}]]"""
@@ -694,21 +709,19 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     variables.toList
   }
 
-  def executeTest( datainputs: String, runArgs: Map[String,String]=Map.empty, identifier: String = "CDSpark.workflow"  ): xml.Elem = {
+  def executeTest( datainputs: String, runArgs: Map[String,String]=Map.empty, process_name: String = "CDSpark.workflow"  ): xml.Elem = {
     val t0 = System.nanoTime()
     val runargs = runArgs ++ Map( "responseform" -> "generic", "storeexecuteresponse" -> "true", "unitTest" -> "true", "status" -> "false" )
-    val parsed_data_inputs = wpsObjectParser.parseDataInputs(datainputs)
     val rId: String = RandomStringUtils.random( 6, true, true )
-    val request = TaskRequest( rId, service, parsed_data_inputs)
-    val response: xml.Elem = webProcessManager.executeProcess( request, identifier, datainputs, runargs)
-    for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) { throw new Exception( child_node.toString ) }
-    println("Completed test '%s' in %.4f sec".format(identifier, (System.nanoTime() - t0) / 1.0E9))
+    val response: xml.Elem = webProcessManager.executeProcess( Job( rId, process_name, datainputs, runargs ) )
+    for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) {
+      throw new Exception( child_node.toString )
+    }
+    println("Completed test '%s' in %.4f sec".format(process_name, (System.nanoTime() - t0) / 1.0E9))
     response
   }
 
-  def cleanup() = {
-    webProcessManager.shutdown( service )
-  }
+  def cleanup = webProcessManager.term
 
   def getCapabilities( identifier: String="", runArgs: Map[String,String]=Map.empty[String,String] ): xml.Elem = {
     val t0 = System.nanoTime()

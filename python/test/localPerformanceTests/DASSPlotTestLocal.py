@@ -12,7 +12,7 @@ edas_server = "localhost"
 
 try:
     portal = EDASPortal(  edas_server, request_port, response_port )
-    response_manager = portal.getResponseManager()
+    response_manager = portal.createResponseManager()
     datainputs = """[domain=[{"name":"d0","lat":{"start":70,"end":90,"system":"values"},"lon":{"start":5,"end":45,"system":"values"},"level":{"start":0,"end":0,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"xy"}]]"""
 
     rId1 = portal.sendMessage("execute", [ "WPS", datainputs, '{ "response":"file" }'] )

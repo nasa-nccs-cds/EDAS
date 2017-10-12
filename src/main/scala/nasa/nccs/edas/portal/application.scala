@@ -8,17 +8,23 @@ import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
 import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.EDASApplication.logger
-import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
+import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.TaskRequest
-import nasa.nccs.esgf.wps.cds2ServiceProvider.getResponseSyntax
+import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
-import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSMergedEventReport, WPSResponse}
+import nasa.nccs.wps._
 import org.apache.spark.SparkEnv
 import ucar.ma2.ArrayFloat
 import ucar.nc2.dataset.NetcdfDataset
 
 import scala.io.Source
+
+//import gov.nasa.gsfc.cisto.cds.sia.scala.climatespark.core.EDASDriver
+//
+//object TestImportApp extends EDASDriver {
+//
+//}
 
 object EDASapp {
   def elem( array: Array[String], index: Int, default: String = "" ): String = if( array.length > index ) array(index) else default
@@ -37,27 +43,23 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   import EDASapp._
   val processManager = new ProcessManager( appConfiguration )
   val process = "edas"
+  val randomIds = new RandomString(8)
   val printer = new scala.xml.PrettyPrinter(200, 3)
-  Runtime.getRuntime().addShutdownHook( new Thread() { override def run() { term() } } )
+  Runtime.getRuntime().addShutdownHook( new Thread() { override def run() { term("ShutdownHook Called") } } )
 
-
-  override def postArray(header: String, data: Array[Byte]) = {
-
+  override def execUtility(utilSpec: Array[String]): Message = {
+    new Message("","","")
   }
 
-  override def execUtility(utilSpec: Array[String]) = {
-
-  }
-
-  def getResult( resultSpec: Array[String], response_syntax: ResponseSyntax.Value ) = {
-    val result: xml.Node = processManager.getResult( process, resultSpec(0),response_syntax )
-    sendResponse( resultSpec(0), printer.format( result )  )
-  }
-
-  def getResultStatus( resultSpec: Array[String], response_syntax: ResponseSyntax.Value ) = {
-    val result: xml.Node = processManager.getResultStatus( process, resultSpec(0), response_syntax )
-    sendResponse( resultSpec(0), printer.format( result )  )
-  }
+//  def getResult( resultSpec: Array[String], response_syntax: ResponseSyntax.Value ) = {
+//    val result: xml.Node = processManager.getResult( process, resultSpec(0),response_syntax )
+//    sendResponse( resultSpec(0), printer.format( result )  )
+//  }
+//
+//  def getResultStatus( resultSpec: Array[String], response_syntax: ResponseSyntax.Value ) = {
+//    val result: xml.Node = processManager.getResultStatus( process, resultSpec(0), response_syntax )
+//    sendResponse( resultSpec(0), printer.format( result )  )
+//  }
 
   def getRunArgs( taskSpec: Array[String] ): Map[String,String] = {
     val runargs = if( taskSpec.length > 4 ) wpsObjectParser.parseMap( taskSpec(4) ) else Map.empty[String, Any]
@@ -68,47 +70,57 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     } else runargs.mapValues(_.toString)
   }
 
-  override def execute( taskSpec: Array[String] ) = {
-    val rId = elem(taskSpec,0)
-    val process_name = elem(taskSpec,2)
-    val dataInputsSpec = taskSpec(3)
-    val dataInputsObj = if( taskSpec.length > 3 ) wpsObjectParser.parseDataInputs( dataInputsSpec ) else Map.empty[String, Seq[Map[String, Any]]]
-    val request: TaskRequest = TaskRequest( rId, process_name, dataInputsObj )
-    setExeStatus( rId, "executing " + process_name + "-> " + dataInputsSpec )
-
+  override def execute( taskSpec: Array[String] ): Message = {
+    val clientId = elem(taskSpec,0)
     val runargs = getRunArgs( taskSpec )
+    val jobId = runargs.getOrElse("jobId",randomIds.nextString)
+    val process_name = elem(taskSpec,2)
+    val dataInputsSpec = elem(taskSpec,3)
+    setExeStatus( jobId, "executing " + process_name + "-> " + dataInputsSpec )
+    logger.info( "\n\nExecuting " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; ") + "\n\n")
+    responder.setClientId(clientId)
     val response_syntax = getResponseSyntax(runargs)
-    val responseType = runargs.getOrElse("response","xml")
+    val responseType = runargs.getOrElse("response","file")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
-      override def execute(jobId: String, results: WPSResponse): Unit = {
-        if( responseType == "object" ) { sendDirectResponse( response_syntax, taskSpec(0), results ) }
-        else if( responseType == "file" ) { sendFileResponse( response_syntax, taskSpec(0), results ) }
+      override def execute( results: xml.Node, success: Boolean ): Unit = {
+        logger.info( s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType}, success = ${success} *** \n\n")
+        if( success ) {
+          if (responseType == "object") { sendDirectResponse(response_syntax, clientId, jobId, results) }
+          else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
+          setExeStatus( jobId, "completed" )
+        } else {
+          setExeStatus( jobId, "error" )
+        }
+        responder.clearClientId()
       }
     }
-    val response = processManager.executeProcess( request, process_name, dataInputsSpec, runargs, Some(executionCallback) )
-    sendResponse( rId, printer.format( response ) )
-    setExeStatus( rId, "completed" )
+    try {
+      val responseElem = processManager.executeProcess(Job(jobId, process_name, dataInputsSpec, runargs), Some(executionCallback))
+      new Message(clientId, jobId, printer.format(responseElem))
+    } catch  {
+      case e: Throwable =>
+        e.printStackTrace()
+        val errorReport = new WPSExecuteStatusError( "cds2",  e.getClass.getSimpleName + ": " + e.getMessage, jobId  )
+        new Message(clientId, jobId, printer.format( errorReport.toXml(response_syntax) ) )
+    }
   }
 
-  def sendErrorReport( response_format: ResponseSyntax.Value, responseId: String, exc: Exception ): Unit = {
+  def sendErrorReport( response_format: ResponseSyntax.Value, clientId: String, responseId: String, exc: Exception ): Unit = {
     val err = new WPSExceptionReport(exc)
-    sendErrorReport( responseId, printer.format( err.toXml(response_format) ) )
+    sendErrorReport( clientId, responseId, printer.format( err.toXml(response_format) ) )
   }
 
   def sendErrorReport( taskSpec: Array[String], exc: Exception ): Unit = {
-    val id = taskSpec(0)
+    val clientId = taskSpec(0)
     val runargs = getRunArgs( taskSpec )
     val syntax = getResponseSyntax(runargs)
     val err = new WPSExceptionReport(exc)
-    sendErrorReport( id, printer.format( err.toXml(syntax) ) )
+    sendErrorReport( clientId, "requestError", printer.format( err.toXml(syntax) ) )
   }
 
-  override def shutdown() = {
-    processManager.shutdown( process )
-  }
+  override def shutdown = processManager.term
 
-  def sendDirectResponse( response_format: ResponseSyntax.Value, responseId: String, results: WPSResponse ): Unit =  {
-    val response = results.toXml(ResponseSyntax.Generic)
+  def sendDirectResponse( response_format: ResponseSyntax.Value, clientId: String, responseId: String, response: xml.Node ): Unit =  {
     val refs: xml.NodeSeq = response \\ "data"
     val resultHref = refs.flatMap( _.attribute("href") ).find( _.nonEmpty ).map( _.text ) match {
       case Some( href ) =>
@@ -120,17 +132,17 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
             resultVar.result.elements.foreach { case (key, data) =>
               if( gridfilename.isEmpty ) {
                 val gridfilepath = data.metadata("gridfile")
-                gridfilename = sendFile( rid, "gridfile", gridfilepath )
+                gridfilename = sendFile( clientId, rid, "gridfile", gridfilepath )
               }
-              sendArrayData(rid, data.origin, data.shape, data.toByteArray, data.metadata + ("gridfile" -> gridfilename) + ( "elem" -> key.split('.').last ) )
+              sendArrayData( clientId, rid, data.origin, data.shape, data.toByteArray, data.metadata + ("gridfile" -> gridfilename) + ( "elem" -> key.split('.').last ) )
             }
           case None =>
             logger.error( "Can't find result variable " + rid)
-            sendErrorReport( response_format, rid, new Exception( "Can't find result variable " + rid + " in [ " + processManager.getResultVariables("edas").mkString(", ") + " ]") )
+            sendErrorReport( response_format, clientId, rid, new Exception( "Can't find result variable " + rid + " in [ " + processManager.getResultVariables("edas").mkString(", ") + " ]") )
         }
       case None =>
         logger.error( "Can't find result Id in direct response: " + response.toString() )
-        sendErrorReport( response_format, responseId, new Exception( "Can't find result Id in direct response: " + response.toString()  ) )
+        sendErrorReport( response_format, clientId, responseId, new Exception( "Can't find result Id in direct response: " + response.toString()  ) )
     }
   }
 
@@ -140,32 +152,33 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   def getNodeAttributes( node: xml.Node ): String = node.attributes.toString()
 
-  def sendFileResponse( response_format: ResponseSyntax.Value, responseId: String, results: WPSResponse ): Unit =  {
-    val response = results.toXml( ResponseSyntax.Generic )
+  def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, jobId: String, response: xml.Node ): Unit =  {
     val refs: xml.NodeSeq = response \\ "data"
     for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file") ) {
       if (hrefOpt.isDefined && fileOpt.isDefined) {
-        val href = hrefOpt.get
+//        val href = hrefOpt.get
+//        val rid = href.split("[/]").last
         val filepath = fileOpt.get
-        val rid = href.split("[/]").last
-        logger.info("\n\n     **** Found result Id: " + rid + ": sending File: " + filepath + " ****** \n\n")
-        sendFile(rid, "variable", filepath)
+        logger.info("\n\n     ****>> Found file node for jobId: " + jobId + ", clientId: " + clientId + ", sending File: " + filepath + " ****** \n\n")
+        sendFile( clientId, jobId, "publish", filepath )
       } else {
-        sendErrorReport( response_format, responseId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )
+        sendErrorReport( response_format, clientId, jobId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )
       }
     }
   }
 
-  override def getCapabilities(utilSpec: Array[String]) = {
+  override def getCapabilities(utilSpec: Array[String]): Message = {
     val runargs: Map[String,String] = getRunArgs( utilSpec )
+    logger.info(s"Processing getCapabilities request with args ${runargs.toList.mkString(",")}" )
     val result: xml.Elem = processManager.getCapabilities( process, elem(utilSpec,2), runargs )
-    sendResponse( utilSpec(0), printer.format( result ) )
+    new Message( utilSpec(0), "capabilities", printer.format( result ) )
   }
 
-  override def describeProcess(procSpec: Array[String]) = {
+  override def describeProcess(procSpec: Array[String]): Message = {
     val runargs: Map[String,String] = getRunArgs( procSpec )
+    logger.info(s"Processing describeProcess request with args ${runargs.toList.mkString(",")}" )
     val result: xml.Elem = processManager.describeProcess( process, elem(procSpec,2), runargs )
-    sendResponse( procSpec(0), printer.format( result )  )
+    new Message( procSpec(0), "preocesses", printer.format( result ) )
   }
 }
 

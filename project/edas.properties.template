@@ -13,3 +13,4 @@ wps.response.syntax=generic
 partition.size=40m
 record.size=40m
 parts.per.node=6
+kernels.visibility=public

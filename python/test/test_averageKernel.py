@@ -6,7 +6,7 @@ edas_server = "10.71.9.11"
 # edas_server = "198.120.209.96"
 
 portal = EDASPortal(  edas_server, request_port, response_port )
-response_manager = portal.getResponseManager()
+response_manager = portal.createResponseManager()
 domain = {"name":"d0"}
 
 def testOnePointCDSparkAvg():

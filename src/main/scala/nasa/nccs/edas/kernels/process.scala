@@ -227,9 +227,24 @@ object PartSortUtils {
   }
 }
 
+object KernelStatus {
+  val public = 3;
+  val restricted = 2;
+  val developmental = 1;
+  val experimental = 0;
+  def parse( status: String ) = status.toLowerCase match {
+    case x if x.startsWith("pub") => public
+    case x if x.startsWith("res") => restricted
+    case x if x.startsWith("dev") => developmental
+    case x if x.startsWith("exp") => experimental
+    case x => throw new Exception( "Unknown Kernel Status: " + status )
+  }
+}
+
 abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Loggable with Serializable with WPSProcess {
   import Kernel._
   val identifiers = this.getClass.getName.split('$').flatMap(_.split('.'))
+  val status = KernelStatus.developmental
   def operation: String = identifiers.last.toLowerCase
   def module: String = identifiers.dropRight(1).mkString(".")
   def id = identifiers.mkString(".")
@@ -1166,7 +1181,7 @@ class SerializeTest {
   val ucar_array = CDFloatArray.toUcarArray( input_array )
   val byte_data = ucar_array.getDataAsByteBuffer().array()
   println( "Byte data: %x %x %x %x".format( byte_data(0),byte_data(1), byte_data(2), byte_data(3) ))
-  val tvar = new TransVar( " | |0|4| ", byte_data )
+  val tvar = new TransVar( " | |0|4| ", byte_data, 0 )
   val result = HeapFltArray( tvar, None )
   println( "Float data: %f %f %f %f".format( result.data(0), result.data(1), result.data(2), result.data(3) ))
 }

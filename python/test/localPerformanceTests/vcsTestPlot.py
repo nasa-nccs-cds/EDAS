@@ -8,11 +8,10 @@ def nbDisplay( x ):
     x.png(outFile)
     display( Image(outFile) )
 
-dataPath = "/home/tpmaxwel/.edas/cache/cdscan/merra2_mon_ua.xml"
-varName = "ua"
+dataPath = "https://dataserver.nccs.nasa.gov/thredds/fileServer/bypass/edas/publish/x589hnZJ.nc"
+varName = "tas"
 f = cdms2.openDataset(dataPath)
-var = f( varName, time=slice(0,1),level=slice(10,11) )
-s = var[0]
+var = f( varName ) # , time=slice(0,1),level=slice(10,11) )
 x = vcs.init()
 x.plot(s,variable = var,bg=True)
 

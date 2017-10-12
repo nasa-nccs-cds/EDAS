@@ -9,7 +9,7 @@ import java.util.Formatter
 import nasa.nccs.cdapi.data._
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.WorkflowNode
-import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey, RecordKey$}
+import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey }
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
@@ -49,7 +49,7 @@ trait ScopeContext {
   def config( key: String ): Option[String] = __configuration__.get(key)
 }
 
-class RequestContext( val inputs: Map[String, Option[DataFragmentSpec]], val request: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
+class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val request: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = request.domainMap
@@ -72,7 +72,7 @@ class RequestContext( val inputs: Map[String, Option[DataFragmentSpec]], val req
   def getTargetGridSpec( kernelContext: KernelContext ) : String = {
     if( kernelContext.crsOpt.getOrElse("").indexOf('~') > 0 ) { "gspec:" + kernelContext.crsOpt.get }
     else {
-        val targetGrid: TargetGrid = getTargetGrid (kernelContext.grid.uid).getOrElse (throw new Exception ("Undefined Grid in domain partition for kernel " + kernelContext.operation.identifier) )
+        val targetGrid: TargetGrid = getTargetGridOpt(kernelContext.grid.uid).getOrElse (throw new Exception ("Undefined Grid in domain partition for kernel " + kernelContext.operation.identifier) )
         targetGrid.getGridFile
     }
   }
@@ -84,6 +84,7 @@ class RequestContext( val inputs: Map[String, Option[DataFragmentSpec]], val req
     case Some(domain_container) => domain_container
     case None => throw new Exception("Undefined domain in ExecutionContext: " + domain_id)
   }
+
   def generatePartitioning: EDASPartitioner = {
     val fragments: Iterable[DataFragmentSpec] = inputs.values.flatten.flatMap( _.domainSection )
     if( fragments.isEmpty ) { throw new Exception( "No Inputs for request + " + request.name + " ( " + request.id + " )" )  }
@@ -92,8 +93,12 @@ class RequestContext( val inputs: Map[String, Option[DataFragmentSpec]], val req
       new EDASPartitioner( largestInput.uid, largestInput.roi, getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles )
     }
   }
-  def getTargetGrid( uid: String  ): Option[TargetGrid] = request.getTargetGrid( uid )
-//  def getAxisIndices( axisConf: String ): AxisIndices = targetGrid.getAxisIndices( axisConf  )
+
+  def getTargetGridOpt( uid: String  ): Option[TargetGrid] = request.getTargetGrid( uid )
+  def getTargetGridIds: Iterable[String] = getTargetGrids flatMap { case ( key, valOpt ) => valOpt map ( _ => key ) }
+  def getTargetGrid( uid: String  ) = getTargetGridOpt(uid).getOrElse( throw new Exception("Missing target grid for kernel input " + uid + ", grids: " + getTargetGridIds.mkString( ", " ) ) )
+
+  //  def getAxisIndices( axisConf: String ): AxisIndices = targetGrid.getAxisIndices( axisConf  )
 }
 
 class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: CoordinateAxis1D, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {

@@ -5,11 +5,13 @@ import nasa.nccs.utilities.Loggable
 
 class APIManager( serverConfiguration: Map[String,String] ) extends Loggable {
 
-  val providers = Map( ("edas", cds2ServiceProvider) )
-  val default_service = cds2ServiceProvider
+  val providers = Map( ("edas", edasServiceProvider) )
+  val default_service = edasServiceProvider
   appParameters.addConfigParams( serverConfiguration )
 
   def getServiceProvider(service: String = ""): ServiceProvider = {
     providers.getOrElse(service,default_service)
   }
+
+  def shutdown =  providers.values.map( _.shutdown() )
 }
