@@ -14,6 +14,7 @@ import nasa.nccs.cdapi.data.RDDVariableSpec
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.engine.{CDS2ExecutionManager, Workflow}
 import nasa.nccs.edas.kernels.AxisIndices
+import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.OperationContext.OpResultType
 import nasa.nccs.esgf.process.UID.ndigits
 
@@ -855,8 +856,7 @@ object DataContainer extends ContainerBase {
       idItems.head
   }
 
-  def getCollection(
-      metadata: Map[String, Any]): (Option[Collection], Option[String]) = {
+  def getCollection( metadata: Map[String, Any]): (Option[Collection], Option[String] ) = {
     val uri = metadata.getOrElse("uri", "").toString
     val varsList: List[String] =
       if (metadata.keySet.contains("id")) metadata.getOrElse("id", "").toString.split(",").map(item => stripQuotes(vid(item, false))).toList
@@ -894,8 +894,16 @@ object DataContainer extends ContainerBase {
     }
   }
 
+  def validateInputMethods( metadata: Map[String, Any] ): Unit = {
+    val allowed_input_methods = appParameters("inputs.methods.allowed","collection").split(',').map( _.toLowerCase.trim )
+    val uri = metadata.getOrElse("uri", throw new Exception("Missing required parameter 'uri' in variable spec") ).toString
+    val input_method = uri.split(':').head.toLowerCase
+    if( !allowed_input_methods.contains( input_method ) ) { throw new Exception( s"Input method '$input_method' is not permitted, allowed methods = ${allowed_input_methods.mkString("[ ",", "," ]")} ")}
+  }
+
   def factory(uid: UID, metadata: Map[String, Any], noOp: Boolean ): Array[DataContainer] = {
     try {
+      validateInputMethods( metadata )
       val fullname =
         if (metadata.keySet.contains("id")) metadata.getOrElse("id", "").toString
         else metadata.getOrElse("name", "").toString
