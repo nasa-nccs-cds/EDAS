@@ -29,7 +29,8 @@ _Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and 
         num.cluster.nodes:       Number of nodes in your cluster (defaults to 1)
         partition.size           Optimal spark partition size for your cluster, recommended value:  200m
         record.size              Optimal spark record size for your cluster, recommended value:  200m
-        parts.per.node           Number of cores to be utilized on each worker node of your cluster      
+        parts.per.node           Number of cores to be utilized on each worker node of your cluster   
+        wps.shared.data.dir      Denotes the path of a data directory that is shared between the EDAS server and client.  Should not be included if a shared directory does not exist.
         
     4. Optional EDAS environment variable:
         EDAS_CACHE_DIR:             EDAS Cacahe dir (defaults to ~/.edas/cache).
