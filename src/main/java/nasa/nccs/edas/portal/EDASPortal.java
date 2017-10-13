@@ -50,11 +50,16 @@ class ErrorReport extends Response {
 class DataPacket extends Response {
     private String _header = null;
     private byte[] _data = null;
-    public DataPacket( String client_id, String response_id, String header, byte[] data ) {
+    public DataPacket( String client_id, String response_id, String header, byte[] data  ) {
         super( "data",  client_id, response_id );
         _header =  header;
         _data = data;
     }
+    public DataPacket( String client_id, String response_id, String header  ) {
+        super( "data",  client_id, response_id );
+        _header =  header;
+    }
+    boolean hasData() { return (_data != null); }
     byte[] getTransferHeader() { return (clientId + ":" + _header).getBytes(); }
     String getHeaderString() { return _header; }
 
@@ -132,7 +137,7 @@ class Responder extends Thread {
 
     void doSendDataPacket( ZMQ.Socket socket, DataPacket dataPacket ) {
         socket.send( dataPacket.getTransferHeader() );
-        socket.send( dataPacket.getTransferData() );
+        if( dataPacket.hasData() ) { socket.send( dataPacket.getTransferData() ); }
         logger.info( " Sent data packet " + dataPacket.id() + ", header: " + dataPacket.getHeaderString() );
     }
 
@@ -254,7 +259,7 @@ public abstract class EDASPortal {
         List<String> header_fields = Arrays.asList( jobId,"file", file_header );
         String header = StringUtils.join(header_fields,"!");
         try {
-            byte[] data = sendData ? Files.toByteArray( file ) : new byte[0];
+            byte[] data = sendData ? Files.toByteArray( file ) : null;
             responder.sendDataPacket( new DataPacket( clientId, jobId, header, data ) );
             logger.debug("Done sending file data packet: " + header);
         } catch ( IOException ex ) {

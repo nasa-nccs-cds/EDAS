@@ -121,8 +121,7 @@ class ResponseManager(Thread):
                 self.cacheArray( rId, array )
             elif type == "file":
                 self.log("\n\n #### Received file " + rId + ": " + msg)
-                data = socket.recv()
-                filePath = self.saveFile( msg, data )
+                filePath = self.saveFile( msg, socket )
                 self.filePaths[rId] = filePath
                 self.log("Saved file '{0}' for rid {1}".format(filePath,rId))
             elif type == "error":
@@ -146,15 +145,19 @@ class ResponseManager(Thread):
         if not os.path.exists(filePath): os.makedirs(filePath)
         return filePath
 
-    def saveFile(self, header, data):
+    def saveFile(self, header, socket ):
         header_toks = header.split('|')
         id = header_toks[1]
         role = header_toks[2]
         fileName = header_toks[3]
-        filePath = os.path.join( self.getFileCacheDir(role), fileName )
-        with open( filePath, mode='wb') as file:
-            file.write( bytearray(data) )
-            self.log(" ***->> Saving File, path = {0}".format(filePath) )
+        if( len(header_toks) > 4 ):
+            filePath = header_toks[4]
+        else:
+            data = socket.recv()
+            filePath = os.path.join( self.getFileCacheDir(role), fileName )
+            with open( filePath, mode='wb') as file:
+                file.write( bytearray(data) )
+                self.log(" ***->> Saving File, path = {0}".format(filePath) )
         return filePath
 
 
