@@ -157,7 +157,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val refs: xml.NodeSeq = response \\ "data"
     for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file") ) {
       if (hrefOpt.isDefined && fileOpt.isDefined) {
-        val sharedDataDir = appParameters( "wps.shared.data.dir", "" )
+        val sharedDataDir = appParameters( "wps.shared.data.dir" )
 //        val href = hrefOpt.get
 //        val rid = href.split("[/]").last
         val filepath = fileOpt.get
