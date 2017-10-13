@@ -254,7 +254,7 @@ public abstract class EDASPortal {
         logger.debug( String.format("Portal: Sending file data to client for %s, filePath=%s", name, filePath ));
         File file = new File(filePath);
         ArrayList<String> file_header_fields = new ArrayList<>( Arrays.asList( "array", jobId, name, file.getName() ) );
-        if( sendData ) { file_header_fields.add(filePath); }
+        if( !sendData ) { file_header_fields.add(filePath); }
         String file_header = StringUtils.join( file_header_fields, "|" );
         List<String> header_fields = Arrays.asList( jobId,"file", file_header );
         String header = StringUtils.join(header_fields,"!");
