@@ -69,6 +69,21 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
     case None =>inputs.head._2 map { _.roi }
   }
 
+  def getUnifiedRDD( batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+    val partitions = partitioner.partitions
+    val tgrid: TargetGrid = getTargetGrid( partitioner.uid )
+    val batch= partitions.getBatch(batchIndex)
+    val rddPartSpecs: Array[DataFragmentSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, inputs.values.flatten  ) )
+    if (rddPartSpecs.length == 0) { None }
+    else {
+      logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex,rddPartSpecs.length))
+      val rdd_partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
+      //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
+      val parallelized_rddspecs = sparkContext parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy rdd_partitioner
+      Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition( requestCx, batchIndex )) )
+    }
+  }
+
   def getTargetGridSpec( kernelContext: KernelContext ) : String = {
     if( kernelContext.crsOpt.getOrElse("").indexOf('~') > 0 ) { "gspec:" + kernelContext.crsOpt.get }
     else {
