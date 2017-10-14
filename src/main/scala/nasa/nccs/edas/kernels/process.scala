@@ -129,7 +129,8 @@ object Kernel extends Loggable {
   }
 
   def getResultDir(): File = {
-    val resultsDirPath = appParameters("wps.results.dir", "~/.wps/results").replace( "~",  System.getProperty("user.home") ).replaceAll("[()]","-").replace("=","~")
+    val rawResultsDirPath = appParameters( "wps.shared.data.dir", appParameters("edas.results.dir", "~/.wps/results") )
+    val resultsDirPath = rawResultsDirPath.replace( "~",  System.getProperty("user.home") ).replaceAll("[()]","-").replace("=","~")
     val resultsDir = new File(resultsDirPath); resultsDir.mkdirs()
     resultsDir
   }

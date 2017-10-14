@@ -86,7 +86,8 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         logger.info( s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType}, success = ${success} *** \n\n")
         if( success ) {
           if (responseType == "object") { sendDirectResponse(response_syntax, clientId, jobId, results) }
-          else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
+          else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results ) }
+
           setExeStatus( jobId, "completed" )
         } else {
           setExeStatus( jobId, "error" )
@@ -132,7 +133,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
             resultVar.result.elements.foreach { case (key, data) =>
               if( gridfilename.isEmpty ) {
                 val gridfilepath = data.metadata("gridfile")
-                gridfilename = sendFile( clientId, rid, "gridfile", gridfilepath )
+                gridfilename = sendFile( clientId, rid, "gridfile", gridfilepath, true )
               }
               sendArrayData( clientId, rid, data.origin, data.shape, data.toByteArray, data.metadata + ("gridfile" -> gridfilename) + ( "elem" -> key.split('.').last ) )
             }
@@ -152,15 +153,16 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   def getNodeAttributes( node: xml.Node ): String = node.attributes.toString()
 
-  def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, jobId: String, response: xml.Node ): Unit =  {
+  def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, jobId: String, response: xml.Node  ): Unit =  {
     val refs: xml.NodeSeq = response \\ "data"
     for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file") ) {
       if (hrefOpt.isDefined && fileOpt.isDefined) {
+        val sharedDataDir = appParameters( "wps.shared.data.dir" )
 //        val href = hrefOpt.get
 //        val rid = href.split("[/]").last
         val filepath = fileOpt.get
         logger.info("\n\n     ****>> Found file node for jobId: " + jobId + ", clientId: " + clientId + ", sending File: " + filepath + " ****** \n\n")
-        sendFile( clientId, jobId, "publish", filepath )
+        sendFile( clientId, jobId, "publish", filepath, sharedDataDir.isEmpty )
       } else {
         sendErrorReport( response_format, clientId, jobId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )
       }

@@ -50,11 +50,16 @@ class ErrorReport extends Response {
 class DataPacket extends Response {
     private String _header = null;
     private byte[] _data = null;
-    public DataPacket( String client_id, String response_id, String header, byte[] data ) {
+    public DataPacket( String client_id, String response_id, String header, byte[] data  ) {
         super( "data",  client_id, response_id );
         _header =  header;
         _data = data;
     }
+    public DataPacket( String client_id, String response_id, String header  ) {
+        super( "data",  client_id, response_id );
+        _header =  header;
+    }
+    boolean hasData() { return (_data != null); }
     byte[] getTransferHeader() { return (clientId + ":" + _header).getBytes(); }
     String getHeaderString() { return _header; }
 
@@ -132,7 +137,7 @@ class Responder extends Thread {
 
     void doSendDataPacket( ZMQ.Socket socket, DataPacket dataPacket ) {
         socket.send( dataPacket.getTransferHeader() );
-        socket.send( dataPacket.getTransferData() );
+        if( dataPacket.hasData() ) { socket.send( dataPacket.getTransferData() ); }
         logger.info( " Sent data packet " + dataPacket.id() + ", header: " + dataPacket.getHeaderString() );
     }
 
@@ -245,21 +250,22 @@ public abstract class EDASPortal {
         responder.sendDataPacket( new DataPacket( clientId, rid, header, data ) );
     }
 
-    public String sendFile( String clientId, String jobId, String name, String filePath ) {
+    public String sendFile( String clientId, String jobId, String name, String filePath, Boolean sendData  ) {
         logger.debug( String.format("Portal: Sending file data to client for %s, filePath=%s", name, filePath ));
         File file = new File(filePath);
-        String[] file_header_fields = { "array", jobId, name, file.getName() };
+        ArrayList<String> file_header_fields = new ArrayList<>( Arrays.asList( "array", jobId, name, file.getName() ) );
+        if( !sendData ) { file_header_fields.add(filePath); }
         String file_header = StringUtils.join( file_header_fields, "|" );
         List<String> header_fields = Arrays.asList( jobId,"file", file_header );
         String header = StringUtils.join(header_fields,"!");
         try {
-            byte[] data = Files.toByteArray(file);
+            byte[] data = sendData ? Files.toByteArray( file ) : null;
             responder.sendDataPacket( new DataPacket( clientId, jobId, header, data ) );
             logger.debug("Done sending file data packet: " + header);
         } catch ( IOException ex ) {
             logger.info( "Error sending file : " + filePath + ": " + ex.toString() );
         }
-        return file_header_fields[3];
+        return file.getName();
     }
 
     public abstract Message execUtility( String[] utilSpec );
