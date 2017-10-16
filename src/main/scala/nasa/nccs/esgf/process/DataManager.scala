@@ -49,7 +49,7 @@ trait ScopeContext {
   def config( key: String ): Option[String] = __configuration__.get(key)
 }
 
-class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val request: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
+class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val request: TaskRequest, serverContext: ServerContext, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = request.domainMap
@@ -69,17 +69,19 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
     case None =>inputs.head._2 map { _.roi }
   }
 
-  def getUnifiedRDD( batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+  def getUnifiedRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
     val partitions = partitioner.partitions
     val tgrid: TargetGrid = getTargetGrid( partitioner.uid )
     val batch= partitions.getBatch(batchIndex)
-    val rddPartSpecs: Array[DataFragmentSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, inputs.values.flatten  ) )
+    val validInputs: Map[String, DataFragmentSpec] = inputs.flatMap { case (key, valueOpt ) => valueOpt.map ( fragSpec => key -> fragSpec ) }
+    val varSpecs = validInputs map { case (uid, fragSpec ) => new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath ) }
+    val rddPartSpecs: Array[DirectRDDPartSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, varSpecs  ) )
     if (rddPartSpecs.length == 0) { None }
     else {
       logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex,rddPartSpecs.length))
       val rdd_partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
       //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
-      val parallelized_rddspecs = sparkContext parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy rdd_partitioner
+      val parallelized_rddspecs = serverContext.spark parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy rdd_partitioner
       Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition( requestCx, batchIndex )) )
     }
   }

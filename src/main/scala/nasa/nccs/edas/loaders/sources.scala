@@ -146,12 +146,13 @@ object Collections extends XmlResource {
     refreshCollectionList
     for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase("local") ) {
       logger.info( "Opening NetCDF dataset(4) at: " + collection.dataPath )
-      val dataset: NetcdfDataset = NetcdfDatasetMgr.open( collection.dataPath )
+      val dataset: NetcdfDataset = NetcdfDatasetMgr.openFile( collection.dataPath )
       val vars = dataset.getVariables.filter(!_.isCoordinateVariable).map(v => getVariableString(v) ).toList
       val title = findAttribute( dataset, List( "Title", "LongName" ) )
       val newCollection = new Collection( collection.ctype, id, collection.dataPath, collection.fileFilter, "local", title, vars)
       println( "\nUpdating collection %s, vars = %s".format( id, vars.mkString(";") ))
       datasets.put( collection.id, newCollection  )
+      dataset.close()
     }
     persistLocalCollections()
   }

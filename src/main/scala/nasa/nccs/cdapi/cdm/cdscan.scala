@@ -372,7 +372,7 @@ object FileHeader extends Loggable {
   }
 
   def getTimeAxisRegularity(ncFile: URI): Boolean = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.open(ncFile.toString)
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncFile.toString)
     val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
       case Some(coordAxis) =>
         coordAxis match {
@@ -382,7 +382,7 @@ object FileHeader extends Loggable {
       case None =>
         throw new Exception("ncFile does not have a time axis: " + ncFile)
     }
-    NetcdfDatasetMgr.close( ncFile.toString )
+    ncDataset.close
     result
   }
 
@@ -395,12 +395,12 @@ object FileHeader extends Loggable {
 
 
   def getTimeCoordValues(ncFile: URI): (Array[Long], Array[Double]) = {
-    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.open(ncFile.toString)
+    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.openFile(ncFile.toString)
     val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
       case Some(timeAxis) => getTimeValues(ncDataset, timeAxis)
       case None => throw new Exception( "ncFile does not have a time axis: " + ncFile.getRawPath)
     }
-    NetcdfDatasetMgr.close( ncFile.toString )
+    ncDataset.close
     result
   }
 }
