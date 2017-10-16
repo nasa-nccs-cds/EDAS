@@ -90,7 +90,7 @@ object CDGrid extends Loggable {
     val dimensions = gridDS.getDimensions.toList
     val conv = gridDS.getConventionUsed
     val title = gridDS.getTitle
-    NetcdfDatasetMgr.close(gridFilePath)
+    NetcdfDatasetMgr.closeAll
     new CDGrid(name, gridFilePath, coordAxes, coordSystems, dimensions, dset_attributes)
   }
 
@@ -144,7 +144,7 @@ object CDGrid extends Loggable {
       val newGroup = getNewGroup( groupMap, oldGroup, gridWriter )
       val newVar: nc2.Variable = gridWriter.addVariable( newGroup, NCMLWriter.getName(cvar), dataType, getDimensionNames( cvar.getDimensionsString.split(' '), dimMap.keys ).mkString(" ")  )
 //      val newVar = gridWriter.addVariable( newGroup, NCMLWriter.getName(cvar), dataType, cvar.getDimensionsString  )
-      NetcdfDatasetMgr.close(datfilePath)
+      NetcdfDatasetMgr.closeAll
       NCMLWriter.getName(cvar) -> (cvar -> newVar)
     }
     val varMap = Map(varTups.toList: _*)
@@ -217,7 +217,7 @@ object CDGrid extends Loggable {
 //      case None => Unit
 //    }
     gridWriter.close()
-    NetcdfDatasetMgr.close(datfilePath)
+    NetcdfDatasetMgr.closeAll
   }
 }
 
@@ -252,7 +252,7 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
         logger.error(err.getStackTrace.mkString("\n"))
         None
     } finally {
-      NetcdfDatasetMgr.close(gridFilePath)
+      NetcdfDatasetMgr.closeAll
     }
   }
 
@@ -1199,7 +1199,7 @@ object writeTest extends App {
 //      val raw_data = axis.read()
 //      val dataArray = CDLongArray.factory(raw_data)
 //      print( dataArray.getArrayData().mkString(", ") )
-//      NetcdfDatasetMgr.close( gridFilePath )
+//      NetcdfDatasetMgr.closeAll
 //    } )
 //  } catch {
 //    case err: Exception =>
