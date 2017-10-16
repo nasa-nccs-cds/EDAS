@@ -185,7 +185,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   def getTimeAxis: CoordinateAxis1DTime = {
     val gridDS = NetcdfDatasetMgr.open(grid.gridFilePath )
     val timeAxis = CoordinateAxis1DTime.factory( gridDS, coordAxis, new Formatter() )
-    NetcdfDatasetMgr.closeAll
+    NetcdfDatasetMgr.closeAllInThread
     timeAxis
   }
 

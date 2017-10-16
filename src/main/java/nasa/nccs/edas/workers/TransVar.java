@@ -48,7 +48,7 @@ public class TransVar {
         NetcdfDataset ncd = NetcdfDatasetMgr.open(gridfile);
         Variable var = ncd.findVariable(null,name);
         Attribute missing = var.findAttribute("missing_value");
-        NetcdfDatasetMgr.closeAll();
+        NetcdfDatasetMgr.closeAllInThread();
         return missing.getNumericValue().floatValue();
     }
 
