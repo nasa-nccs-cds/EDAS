@@ -6,6 +6,7 @@ import java.nio._
 import java.nio.file.{FileSystems, Path, Paths}
 import java.util.Formatter
 
+import nasa.nccs.cdapi.cdm.CDScan.logger
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -32,6 +33,25 @@ object NCMLWriter extends Loggable {
     val fname = fName.toLowerCase;
     fname.endsWith(".nc4") || fname.endsWith(".nc") || fname.endsWith(".hdf") || fname
       .endsWith(".ncml")
+  }
+
+  def backup( dir: File, backupDir: File ): Unit = {
+    backupDir.mkdirs()
+    for( f <- backupDir.listFiles ) { f.delete() }
+    for( f <- dir.listFiles ) { f.renameTo( new File( backupDir, f.getName ) ) }
+  }
+
+  def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
+    backup( ncmlDir, new File("/tmp/backup/NCML") )
+    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines) {
+      val specs = line.split(",")
+      val collectionId = specs.head.trim
+      val paths = specs.tail.map( f => new File( f.trim ) )
+      val ncmlFile = getCachePath("NCML").resolve(collectionId + ".ncml").toFile
+      val writer = new NCMLWriter( paths.iterator )
+      logger.info(s"Creating NCML file for collection ${collectionId} from paths ${paths.map(_.getAbsolutePath).mkString(", ")}")
+      writer.writeNCML(ncmlFile)
+    }
   }
 
   def isNcFile(file: File): Boolean = {
@@ -433,15 +453,23 @@ class FileMetadata(ncDataset: NetcdfDataset) {
 
 object CDScan extends Loggable {
     def main(args: Array[String]) {
-      if( args.length < 2 ) { println( "Usage: dsagg <collectionID> <datPath>"); return }
+      if( args.length < 1 ) { println( "Usage: 'dsagg <collectionID> <datPath>' or 'dsagg <collectionsFile>'"); return }
       EDASLogManager.isMaster
-      val collectionId = args(0).toLowerCase
-      val pathFile = new File(args(1))
-      val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(collectionId + ".ncml" ).toFile
-      if( ncmlFile.exists ) { throw new Exception( "Collection already exists, defined by: " + ncmlFile.toString ) }
-      logger.info( s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
-      ncmlFile.getParentFile.mkdirs
-      val ncmlWriter = NCMLWriter(pathFile)
-      ncmlWriter.writeNCML( ncmlFile )
+      if( args.length == 1 ) {
+        val collectionsFile = new File(args(0))
+        if( !collectionsFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsFile.toString) }
+        val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
+        ncmlDir.mkdirs
+        NCMLWriter.updateNCMLFiles( collectionsFile, ncmlDir )
+      } else {
+        val collectionId = args(0).toLowerCase
+        val pathFile = new File(args(1))
+        val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(collectionId + ".ncml").toFile
+        if ( ncmlFile.exists ) { throw new Exception("Collection already exists, defined by: " + ncmlFile.toString) }
+        logger.info(s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
+        ncmlFile.getParentFile.mkdirs
+        val ncmlWriter = NCMLWriter(pathFile)
+        ncmlWriter.writeNCML(ncmlFile)
+      }
     }
 }
