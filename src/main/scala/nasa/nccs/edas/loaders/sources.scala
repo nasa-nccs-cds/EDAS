@@ -151,6 +151,7 @@ object Collections extends XmlResource {
       val newCollection = new Collection( collection.ctype, id, collection.dataPath, collection.fileFilter, "local", title, vars)
       println( "\nUpdating collection %s, vars = %s".format( id, vars.mkString(";") ))
       datasets.put( collection.id, newCollection  )
+      NetcdfDatasetMgr.close( collection.dataPath )
     }
     persistLocalCollections()
   }
@@ -216,6 +217,7 @@ object Collections extends XmlResource {
     val newCollection = new Collection( "file", id, ncmlFilePath, "", "", title, vars )
     datasets.put( id, newCollection  )
     persistLocalCollections()
+    NetcdfDatasetMgr.close( ncmlFilePath )
     Some(newCollection)
   } catch {
     case err: Exception =>
@@ -255,7 +257,9 @@ object Collections extends XmlResource {
       case Some(f) =>
         logger.info( "Opening NetCDF dataset(5) at: " + f.getAbsolutePath )
         val dset: NetcdfDataset = NetcdfDatasetMgr.open( f.getAbsolutePath )
-        dset.getVariables.toList.flatMap( v => if(v.isCoordinateVariable) None else Some(v.getFullName) )
+        val varlist = dset.getVariables.toList.flatMap( v => if(v.isCoordinateVariable) None else Some(v.getFullName) )
+        NetcdfDatasetMgr.close( f.getAbsolutePath )
+        varlist
       case None => throw new Exception( "Can't find any nc files in dataset path: " + path )
     }
   }

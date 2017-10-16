@@ -345,32 +345,18 @@ object FileHeader extends Loggable {
         val t0 = System.nanoTime()
         val fileHeader = FileHeader(file, timeRegular)
         val t1 = System.nanoTime()
-        println(
-          "Worker[%d]: Processing file[%d] '%s', start = %s, ncoords = %d, time = %.4f "
-            .format(workerIndex,
-              iFile,
-              file,
-              fileHeader.startDate,
-              fileHeader.nElem,
-              (t1 - t0) / 1.0E9))
+        println( "Worker[%d]: Processing file[%d] '%s', start = %s, ncoords = %d, time = %.4f ".format(workerIndex, iFile, file, fileHeader.startDate, fileHeader.nElem, (t1 - t0) / 1.0E9))
         if ((iFile % 5) == 0) runtime.printMemoryUsage(logger)
         Some(fileHeader)
       } catch {
-        case err: Exception =>
-          logger.error(
-            "Worker[%d]: Encountered error Processing file[%d] '%s': '%s'"
-              .format(workerIndex, iFile, file, err.toString))
-          if ((iFile % 10) == 0) {
-            logger.error(err.getStackTrace.mkString("\n"))
-          }
+        case err: Exception =>  logger.error(  "Worker[%d]: Encountered error Processing file[%d] '%s': '%s'".format(workerIndex, iFile, file, err.toString))
+          if ((iFile % 10) == 0) { logger.error(err.getStackTrace.mkString("\n")) }
           retryFiles += file; None
       }
     }
     val secondPass =
       for (iFile <- retryFiles.indices; file = retryFiles(iFile)) yield {
-        println(
-          "Worker[%d]: Reprocessing file[%d] '%s'"
-            .format(workerIndex, iFile, file))
+        println( "Worker[%d]: Reprocessing file[%d] '%s'".format(workerIndex, iFile, file))
         FileHeader(file, timeRegular)
       }
     firstPass.flatten ++ secondPass
@@ -419,16 +405,11 @@ class DatasetFileHeaders(val aggDim: String, val aggFileMap: Seq[FileHeader]) {
     aggFileMap.foldLeft(Array[Long]()) { _ ++ _.axisValues }
 }
 
-class FileHeader(val filePath: String,
-                 val axisValues: Array[Long],
-                 val boundsValues: Array[Double],
-                 val timeRegular: Boolean) {
+class FileHeader(val filePath: String, val axisValues: Array[Long], val boundsValues: Array[Double],  val timeRegular: Boolean) {
   def nElem = axisValues.length
   def startValue: Long = axisValues.headOption.getOrElse(Long.MinValue)
   def startDate: String = CalendarDate.of(startValue).toString
-  override def toString: String =
-    " *** FileHeader { path='%s', nElem=%d, startValue=%f startDate=%s} "
-      .format(filePath, nElem, startValue, startDate)
+  override def toString: String = " *** FileHeader { path='%s', nElem=%d, startValue=%f startDate=%s} ".format(filePath, nElem, startValue, startDate)
 }
 
 object FileMetadata {
