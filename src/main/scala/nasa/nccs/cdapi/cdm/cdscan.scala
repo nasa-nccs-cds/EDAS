@@ -43,13 +43,14 @@ object NCMLWriter extends Loggable {
 
   def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
     backup( ncmlDir, new File("/tmp/backup/NCML") )
+    logger.info(s"Update NCML file from specs in " + collectionsFile.getAbsolutePath )
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines) {
       val specs = line.split(",")
       val collectionId = specs.head.trim
-      val paths = specs.tail.map( f => new File( f.trim ) )
+      val paths = specs.tail.map( _.trim ).filter( !_.isEmpty ).map( f => new File( f ) )
       val ncmlFile = getCachePath("NCML").resolve(collectionId + ".ncml").toFile
-      val writer = new NCMLWriter( paths.iterator )
       logger.info(s"Creating NCML file for collection ${collectionId} from paths ${paths.map(_.getAbsolutePath).mkString(", ")}")
+      val writer = new NCMLWriter( paths.iterator )
       writer.writeNCML(ncmlFile)
     }
   }
