@@ -107,7 +107,7 @@ object Masks extends XmlResource {
 object Collections extends XmlResource {
   val maxCapacity: Int=500
   val initialCapacity: Int=10
-  val datasets: ConcurrentLinkedHashMap[String,Collection] =  loadCollectionXmlData( Map( "local" -> getCacheFilePath("local_collections.xml") ) )
+  val datasets: ConcurrentLinkedHashMap[String,Collection] =  loadCollectionXmlData( ) // Map( "local" -> getCacheFilePath("local_collections.xml") ) )
   refreshCollectionList
 
   def refreshCollectionList = {
@@ -271,7 +271,7 @@ object Collections extends XmlResource {
   def isChild( subDir: String,  parentDir: String ): Boolean = Paths.get( subDir ).toAbsolutePath.startsWith( Paths.get( parentDir ).toAbsolutePath )
   def findCollectionByPath( subDir: String ): Option[Collection] = datasets.values.toList.find { case collection => if( collection.dataPath.isEmpty) { false } else { isChild( subDir, collection.dataPath ) } }
 
-  def loadCollectionXmlData( filePaths: Map[String,String] ): ConcurrentLinkedHashMap[String,Collection] = {
+  def loadCollectionXmlData( filePaths: Map[String,String] = Map.empty[String,String] ): ConcurrentLinkedHashMap[String,Collection] = {
     val maxCapacity: Int=100000
     val initialCapacity: Int=250
     val datasets = new ConcurrentLinkedHashMap.Builder[String, Collection].initialCapacity(initialCapacity).maximumWeightedCapacity(maxCapacity).build()
