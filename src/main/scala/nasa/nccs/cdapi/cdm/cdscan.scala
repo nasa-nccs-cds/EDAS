@@ -24,6 +24,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.io.Source
+import java.nio.file.{Files, Path, StandardCopyOption}
 
 object NCMLWriter extends Loggable {
 
@@ -40,8 +41,13 @@ object NCMLWriter extends Loggable {
     for( f <- backupDir.listFiles ) { f.delete() }
     for( f <- dir.listFiles ) {
       val newFile = new File( backupDir, f.getName )
-      val success = f.renameTo( newFile )
-      logger.info( s"Moving file ${f.getAbsolutePath} -> ${newFile.getAbsolutePath}, success: ${success.toString}")
+      try {
+        val path = Files.move( f.toPath, newFile.toPath, StandardCopyOption.ATOMIC_MOVE )
+        logger.info(s"Moving file ${f.getAbsolutePath} -> ${path.toString}")
+      } catch {
+        case err: IOException =>
+          logger.info(s"Error Moving file ${f.getAbsolutePath} -> ${newFile.getAbsolutePath}: ${err.getMessage}")
+      }
     }
   }
 
