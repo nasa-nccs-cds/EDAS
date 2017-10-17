@@ -304,29 +304,36 @@ public abstract class EDASPortal {
             logger.info( String.format( "Listening for requests on port: %d, host: %s",  request_port, getHostInfo() ) );
             String request_header = new String(request_socket.recv(0)).trim();
             parts = request_header.split("[!]");
-            String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
-            logger.info( String.format( "  ###  Processing %s request: %s @(%s)",  parts[1], request_header, timeStamp ) );
-            if( parts[1].equals("execute") ) {
-                sendResponseMessage(  execute( parts ) );
-            } else if( parts[1].equals("util") ) {
-                sendResponseMessage(  execUtility( parts ) );
-            } else if( parts[1].equals("quit") || parts[1].equals("shutdown") ) {
-                sendResponseMessage( new Message(parts[0],"quit", "Terminating") );
-                logger.info("Received Shutdown Message");
-                System.exit(0);
-            } else if( parts[1].toLowerCase().equals("getcapabilities") ) {
-                sendResponseMessage(  getCapabilities( parts ) );
-            } else if( parts[1].toLowerCase().equals("describeprocess") ) {
-                sendResponseMessage(  describeProcess( parts ) );
-            } else {
-                String msg = "Unknown request header type: " + parts[1];
-                logger.info( msg );
-                sendResponseMessage( new Message( parts[0],"error",msg ) );
+            try {
+                String timeStamp = timeFormatter.format(Calendar.getInstance().getTime());
+                logger.info(String.format("  ###  Processing %s request: %s @(%s)", parts[1], request_header, timeStamp));
+                if (parts[1].equals("execute")) {
+                    sendResponseMessage(execute(parts));
+                } else if (parts[1].equals("util")) {
+                    sendResponseMessage(execUtility(parts));
+                } else if (parts[1].equals("quit") || parts[1].equals("shutdown")) {
+                    sendResponseMessage(new Message(parts[0], "quit", "Terminating"));
+                    logger.info("Received Shutdown Message");
+                    System.exit(0);
+                } else if (parts[1].toLowerCase().equals("getcapabilities")) {
+                    sendResponseMessage(getCapabilities(parts));
+                } else if (parts[1].toLowerCase().equals("describeprocess")) {
+                    sendResponseMessage(describeProcess(parts));
+                } else {
+                    String msg = "Unknown request header type: " + parts[1];
+                    logger.info(msg);
+                    sendResponseMessage(new Message(parts[0], "error", msg));
+                }
+            } catch ( Exception ex ) {   // TODO: COnvert to Java
+//                String clientId = elem(taskSpec,0)
+//                val runargs = getRunArgs( taskSpec )
+//                String jobId = runargs.getOrElse("jobId",randomIds.nextString)
+//                sendResponseMessage( error_response );
             }
-        } catch ( java.nio.channels.ClosedSelectorException ex ) {
-            logger.info( "Request Socket closed." );
+        } catch ( Exception ex ) {
+            logger.info( "Request Communication error: Shutting down." );
             active = false;
-        } 
+        }
         logger.info( "EXIT EDASPortal");
     }
 

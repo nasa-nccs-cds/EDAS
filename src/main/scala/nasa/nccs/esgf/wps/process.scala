@@ -9,7 +9,7 @@ import nasa.nccs.utilities.Loggable
 
 import scala.collection.JavaConversions._
 import nasa.nccs.wps
-import nasa.nccs.wps.WPSExceptionReport
+import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSExecuteStatusError}
 
 import scala.xml.XML
 
@@ -132,9 +132,20 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
     val message = response.substring( response.indexOf('!') + 1 )
     logger.info( "Received 'execute' response, Sample: " + response.substring(0,Math.min(250,message.length)) )
-    val xmlResults: xml.Node = EDAS_XML.loadString( message )
-    executionCallback.foreach( _.success( xmlResults ) )
-    xmlResults
+    getResults( message, job, executionCallback )
+  }
+
+  def getResults( message: String, job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Node = {
+    try {
+      val xmlResults = EDAS_XML.loadString(message)
+      executionCallback.foreach(_.success(xmlResults))
+      xmlResults
+    } catch {
+      case ex: Exception =>
+        executionCallback.foreach( _.failure(message) )
+        val response = new WPSExecuteStatusError( "EDAS", message, job.requestId )
+        response.toXml( ResponseSyntax.WPS )
+    }
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
