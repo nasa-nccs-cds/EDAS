@@ -189,7 +189,7 @@ object EDASApplication extends Loggable {
   def main(args: Array[String]) {
     import EDASapp._
     EDASLogManager.isMaster
-//    refreshCollectionList
+    refreshCollectionList
     logger.info(s"Executing EDAS with args: ${args.mkString(",")}, nprocs: ${Runtime.getRuntime.availableProcessors()}")
     val request_port = elem(args, 0, "0").toInt
     val response_port = elem(args, 1, "0").toInt
