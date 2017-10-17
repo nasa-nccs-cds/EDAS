@@ -147,7 +147,7 @@ class Responder extends Thread {
 
     void heartbeat(ZMQ.Socket socket) {
         if( clientId != null ) {
-            Message hb_msg = new Message(clientId, "status", status_reports.toString());
+            Message hb_msg = new Message( clientId, "status", status_reports.toString() );
             doSendMessage(socket, hb_msg);
         }
     }
@@ -278,7 +278,7 @@ public abstract class EDASPortal {
         List<String> request_args = Arrays.asList( msg.id(), msg.message );
         String packaged_msg = StringUtils.join( request_args,  "!" );
         String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
-        logger.info( String.format( "@@ Sending response %s on request_socket @(%s)", msg.id(), timeStamp ) );
+        logger.info( String.format( "@@ Sending %s response %s: %s on request_socket @(%s)", msg.rtype, msg.id(), msg.responseId, timeStamp ) );
         request_socket.send( packaged_msg.getBytes(),0 );
         return packaged_msg;
     }
