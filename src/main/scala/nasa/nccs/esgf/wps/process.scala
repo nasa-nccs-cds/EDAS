@@ -58,18 +58,11 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getWPSCapabilities( identifier, runArgs )
   }
 
-  def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Elem = try {
+  def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
     val dataInputsObj = if( !job.datainputs.isEmpty ) wpsObjectParser.parseDataInputs( job.datainputs ) else Map.empty[String, Seq[Map[String, Any]]]
     val request: TaskRequest = TaskRequest( job.requestId, job.identifier, dataInputsObj )
     val serviceProvider = apiManager.getServiceProvider("edas")
     serviceProvider.executeProcess( request, job.datainputs, job.runargs, executionCallback )
-  } catch {
-    case ex: Throwable =>
-      val response_syntax = getResponseSyntax( job.runargs )
-      val response_xml = new WPSExceptionReport( ex ).toXml( response_syntax )
-      logger.info (s"\nJob exited with error, jobId=${ job.requestId }, response=${response_xml.toString}\n")
-      executionCallback.foreach( _.execute( response_xml, false ) )
-      response_xml
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {

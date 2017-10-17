@@ -104,6 +104,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         e.printStackTrace()
         val errorReport = new WPSExecuteStatusError( "cds2",  e.getClass.getSimpleName + ": " + e.getMessage, jobId  )
         setExeStatus( jobId, "error" )
+        responder.clearClientId()
         new Message(clientId, jobId, printer.format( errorReport.toXml(response_syntax) ) )
     }
   }

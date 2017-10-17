@@ -327,26 +327,20 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     logger.info("Blocking Execute { runargs: " + run_args.toString + ", request: " + request.toString + " }")
     runtime.printMemoryUsage(logger)
     val t0 = System.nanoTime
-    try {
-      val req_ids = request.name.split('.')
-      req_ids(0) match {
-        case "util" =>
-          logger.info("Executing utility request " + req_ids(1) )
-          executeUtilityRequest( jobId, req_ids(1), request, run_args )
-        case _ =>
-          logger.info("Executing task request " + request.name )
-          val requestContext = createRequestContext ( jobId, request, run_args )
-          val results = executeWorkflows ( requestContext )
-          val response = results.toXml( ResponseSyntax.Generic )
-          requestContext.logTimingReport("Executed task request " + request.name)
-          executionCallback.foreach( _.execute( response, true ) )
-          collectionDataCache.removeJob( jobId )
-          results
-      }
-    } catch {
-      case err: Exception =>
+    val req_ids = request.name.split('.')
+    req_ids(0) match {
+      case "util" =>
+        logger.info("Executing utility request " + req_ids(1) )
+        executeUtilityRequest( jobId, req_ids(1), request, run_args )
+      case _ =>
+        logger.info("Executing task request " + request.name )
+        val requestContext = createRequestContext ( jobId, request, run_args )
+        val results = executeWorkflows ( requestContext )
+        val response = results.toXml( ResponseSyntax.Generic )
+        requestContext.logTimingReport("Executed task request " + request.name)
+        executionCallback.foreach( _.execute( response, true ) )
         collectionDataCache.removeJob( jobId )
-        new WPSExceptionReport(err)
+        results
     }
   }
 
