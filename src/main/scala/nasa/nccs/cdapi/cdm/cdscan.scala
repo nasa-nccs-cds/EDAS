@@ -34,6 +34,30 @@ object NCMLWriter extends Loggable {
       .endsWith(".ncml")
   }
 
+  def backup( dir: File, backupDir: File ): Unit = {
+    backupDir.mkdirs()
+    for( f <- backupDir.listFiles ) { f.delete() }
+    for( f <- dir.listFiles ) { f.renameTo( new File( backupDir, f.getName ) ) }
+  }
+
+  def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
+    backup( ncmlDir, new File( ncmlDir, "backup") )
+    logger.info(s"Update NCML file from specs in " + collectionsFile.getAbsolutePath )
+    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; if !line.trim.isEmpty ) {
+      val specs = line.split(",")
+      val collectionId = specs.head.trim
+      try {
+        val paths = specs.tail.map(_.trim).filter(!_.isEmpty).map(f => new File(f))
+        val ncmlFile = getCachePath("NCML").resolve(collectionId + ".ncml").toFile
+        logger.info(s"Creating NCML file for collection ${collectionId} from paths ${paths.map(_.getAbsolutePath).mkString(", ")}")
+        val writer = new NCMLWriter(paths.iterator)
+        writer.writeNCML(ncmlFile)
+      } catch {
+        case err: Exception => logger.error( s"Error writing NCML file for collection ${collectionId}: ${err.getMessage}")
+      }
+    }
+  }
+  
   def isNcFile(file: File): Boolean = {
     file.isFile && isNcFileName(file.getName.toLowerCase)
   }
@@ -195,25 +219,26 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
 
   def getVariable(variable: nc2.Variable,  timeRegularSpecs: Option[(Double, Double)]): xml.Node = {
     val axisType = fileMetadata.getAxisType(variable)
-    <variable name={getName(variable)} shape={getDims(variable)} type={variable.getDataType.toString}>
-      { if( axisType == AxisType.Time )  <attribute name="_CoordinateAxisType" value="Time"/>  <attribute name="units" value={if(overwriteTime) cdsutils.baseTimeUnits else variable.getUnitsString}/>
-      else for (attribute <- variable.getAttributes; if( !isIgnored( attribute ) ) ) yield getAttribute(attribute) }
-      { if( (axisType != AxisType.Time) && (axisType != AxisType.RunTime) ) variable match {
-        case coordVar: CoordinateAxis1D => getData(variable, coordVar.isRegular)
-        case _ => getData(variable, false)
-      }}
-    </variable>
+
+    <variable name={getName(variable)} shape={getDims(variable)} type={variable.getDataType.toString}> {
+        if( axisType == AxisType.Time )  <attribute name="_CoordinateAxisType" value="Time"/>  <attribute name="units" value={if(overwriteTime) cdsutils.baseTimeUnits else variable.getUnitsString}/>
+        else for (attribute <- variable.getAttributes; if( !isIgnored( attribute ) ) ) yield getAttribute(attribute)
+    } </variable>
   }
 
+  //      {
+  //        if( (axisType != AxisType.Time) && (axisType != AxisType.RunTime) ) variable match {
+  //          case coordVar: CoordinateAxis1D => getData(variable, coordVar.isRegular)
+  //          case _ => getData(variable, false)
+  //        }
+  //      }
+
   def getData(variable: nc2.Variable, isRegular: Boolean): xml.Node = {
-    val dataArray: Array[Double] =
-      CDDoubleArray.factory(variable.read).getArrayData()
+    val dataArray: Array[Double] = CDDoubleArray.factory(variable.read).getArrayData()
     if (isRegular) {
       <values start={"%.3f".format(dataArray(0))} increment={"%.6f".format(dataArray(1)-dataArray(0))}/>
     } else {
-      <values>
-        {dataArray.map(dv => "%.3f".format(dv)).mkString(" ")}
-      </values>
+      <values> { dataArray.map(dv => "%.3f".format(dv)).mkString(" ") } </values>
     }
   }
 
@@ -352,7 +377,7 @@ object FileHeader extends Loggable {
   }
 
   def getTimeAxisRegularity(ncFile: URI): Boolean = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.open(ncFile.toString)
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncFile.toString)
     val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
       case Some(coordAxis) =>
         coordAxis match {
@@ -362,7 +387,7 @@ object FileHeader extends Loggable {
       case None =>
         throw new Exception("ncFile does not have a time axis: " + ncFile)
     }
-    NetcdfDatasetMgr.close( ncFile.toString )
+    ncDataset.close()
     result
   }
 
@@ -375,12 +400,12 @@ object FileHeader extends Loggable {
 
 
   def getTimeCoordValues(ncFile: URI): (Array[Long], Array[Double]) = {
-    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.open(ncFile.toString)
+    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.openFile(ncFile.toString)
     val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
       case Some(timeAxis) => getTimeValues(ncDataset, timeAxis)
       case None => throw new Exception( "ncFile does not have a time axis: " + ncFile.getRawPath)
     }
-    NetcdfDatasetMgr.close( ncFile.toString )
+    ncDataset.close()
     result
   }
 }
@@ -408,9 +433,9 @@ class FileHeader(val filePath: String,
 
 object FileMetadata {
   def apply(file: URI): FileMetadata = {
-    val dataset  = NetcdfDatasetMgr.open(file.toString)
+    val dataset  = NetcdfDatasetMgr.openFile(file.toString)
     val result = new FileMetadata(dataset)
-    NetcdfDatasetMgr.close(file.toString)
+    dataset.close()
     result
   }
 }
