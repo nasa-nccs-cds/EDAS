@@ -84,7 +84,6 @@ object edasServiceProvider extends ServiceProvider {
       }
     } catch {
       case e: Exception =>
-        executionCallback.foreach( _.execute( <ows:ExceptionText> e.getMessage </ows:ExceptionText>, false ) )
         collectionDataCache.removeJob( jobId )
         throw e
     }

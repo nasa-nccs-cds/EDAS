@@ -83,16 +83,16 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val response_syntax = getResponseSyntax(runargs)
     val responseType = runargs.getOrElse("response","file")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
-      override def execute( results: xml.Node, success: Boolean ): Unit = {
-        logger.info( s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType}, success = ${success} *** \n\n")
-        if( success ) {
-          if (responseType == "object") { sendDirectResponse(response_syntax, clientId, jobId, results) }
-          else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results ) }
-
-          setExeStatus( jobId, "completed" )
-        } else {
-          setExeStatus( jobId, "error" )
-        }
+      override def success( results: xml.Node ): Unit = {
+        logger.info(s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType} *** \n\n")
+        if (responseType == "object") { sendDirectResponse(response_syntax, clientId, jobId, results) }
+        else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
+        setExeStatus(jobId, "completed")
+        responder.clearClientId()
+      }
+      override def failure( msg: String ): Unit = {
+        logger.error( s"ERROR CALLBACK ($jobId:$clientId): " + msg )
+        setExeStatus( jobId, "error" )
         responder.clearClientId()
       }
     }
@@ -101,10 +101,10 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
       new Message(clientId, jobId, printer.format(responseElem))
     } catch  {
       case e: Throwable =>
+        logger.error( "Caught execution error: " + e.getMessage )
         e.printStackTrace()
+        executionCallback.failure( e.getMessage )
         val errorReport = new WPSExecuteStatusError( "cds2",  e.getClass.getSimpleName + ": " + e.getMessage, jobId  )
-        setExeStatus( jobId, "error" )
-        responder.clearClientId()
         new Message(clientId, jobId, printer.format( errorReport.toXml(response_syntax) ) )
     }
   }
