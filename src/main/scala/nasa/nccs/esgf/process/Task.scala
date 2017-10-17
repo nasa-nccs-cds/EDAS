@@ -205,6 +205,7 @@ class UID( val uid: String  ) {
 object TaskRequest extends Loggable {
   def apply(rId: String, process_name: String, datainputs: Map[String, Seq[Map[String, Any]]]) = {
     logger.info( "TaskRequest--> process_name: %s, datainputs: %s".format(process_name, datainputs.toString))
+    Collections.initCollectionList
     val uid = UID(rId)
     val op_spec_list: Seq[Map[String, Any]] = datainputs .getOrElse("operation", List())
     val data_list: List[DataContainer] = datainputs.getOrElse("variable", List()).flatMap(DataContainer.factory(uid, _, op_spec_list.isEmpty )).toList

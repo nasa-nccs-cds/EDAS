@@ -1018,7 +1018,7 @@ object NetcdfDatasetMgr extends Loggable {
     result
   }
 
-  def openFile( path: String ): NetcdfDataset = NetcdfDataset.openDataset(cleanPath(path))
+  def openFile( path: String ): NetcdfDataset = NetcdfDataset.openDataset( cleanPath(path) )
 
 }
 
