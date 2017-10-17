@@ -326,12 +326,7 @@ public abstract class EDASPortal {
         } catch ( java.nio.channels.ClosedSelectorException ex ) {
             logger.info( "Request Socket closed." );
             active = false;
-        } catch ( Exception ex ) {
-            logger.error( "Error in Request: " + ex.toString() );
-            ex.printStackTrace();
-            sendErrorReport( parts[0], "error", ex.getClass().getName() + ": " + ex.getMessage() );
-            responder.clearClientId();
-        }
+        } 
         logger.info( "EXIT EDASPortal");
     }
 
