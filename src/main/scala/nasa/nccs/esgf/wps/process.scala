@@ -133,7 +133,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     val message = response.substring( response.indexOf('!') + 1 )
     logger.info( "Received 'execute' response, Sample: " + response.substring(0,Math.min(250,message.length)) )
     val xmlResults: xml.Node = EDAS_XML.loadString( message )
-    executionCallback.foreach( _.execute( xmlResults, true ) )
+    executionCallback.foreach( _.success( xmlResults ) )
     xmlResults
   }
 
