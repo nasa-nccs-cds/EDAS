@@ -6,7 +6,6 @@ import java.nio._
 import java.nio.file.{FileSystems, Path, Paths}
 import java.util.Formatter
 
-import nasa.nccs.cdapi.cdm.CDScan.logger
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -33,25 +32,6 @@ object NCMLWriter extends Loggable {
     val fname = fName.toLowerCase;
     fname.endsWith(".nc4") || fname.endsWith(".nc") || fname.endsWith(".hdf") || fname
       .endsWith(".ncml")
-  }
-
-  def backup( dir: File, backupDir: File ): Unit = {
-    backupDir.mkdirs()
-    for( f <- backupDir.listFiles ) { f.delete() }
-    for( f <- dir.listFiles ) { f.renameTo( new File( backupDir, f.getName ) ) }
-  }
-
-  def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
-    backup( ncmlDir, new File("/tmp/backup/NCML") )
-    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines) {
-      val specs = line.split(",")
-      val collectionId = specs.head.trim
-      val paths = specs.tail.map( f => new File( f.trim ) )
-      val ncmlFile = getCachePath("NCML").resolve(collectionId + ".ncml").toFile
-      val writer = new NCMLWriter( paths.iterator )
-      logger.info(s"Creating NCML file for collection ${collectionId} from paths ${paths.map(_.getAbsolutePath).mkString(", ")}")
-      writer.writeNCML(ncmlFile)
-    }
   }
 
   def isNcFile(file: File): Boolean = {
@@ -166,17 +146,17 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
             attribute
               .getStringValue(i)
               .filter(ch => org.jdom2.Verifier.isXMLCharacter(ch)))
-          <attribute name={getName(attribute) } value={sarray.mkString("|")} separator="|"/>
+        <attribute name={getName(attribute) } value={sarray.mkString("|")} separator="|"/>
       } else {
-          <attribute name={getName(attribute)} value={attribute.getStringValue(0)}/>
+        <attribute name={getName(attribute)} value={attribute.getStringValue(0)}/>
       }
     } else {
       if (attribute.getLength > 1) {
         val sarray: IndexedSeq[String] = (0 until attribute.getLength).map(i =>
           attribute.getNumericValue(i).toString)
-          <attribute name={getName(attribute)} type={attribute.getDataType.toString} value={sarray.mkString(" ")}/>
+        <attribute name={getName(attribute)} type={attribute.getDataType.toString} value={sarray.mkString(" ")}/>
       } else {
-          <attribute name={getName(attribute)} type={attribute.getDataType.toString} value={attribute.getNumericValue(0).toString}/>
+        <attribute name={getName(attribute)} type={attribute.getDataType.toString} value={attribute.getNumericValue(0).toString}/>
       }
     }
 
@@ -195,7 +175,7 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
           else coordAxis.getSize
         val dimension = coordAxis.getDimension(0)
         val node =
-            <dimension name={getName(dimension)} length={nElems.toString} isUnlimited={dimension.isUnlimited.toString} isVariableLength={dimension.isVariableLength.toString} isShared={dimension.isShared.toString}/>
+          <dimension name={getName(dimension)} length={nElems.toString} isUnlimited={dimension.isUnlimited.toString} isVariableLength={dimension.isVariableLength.toString} isShared={dimension.isShared.toString}/>
         Some(node)
       case x =>
         logger.warn( "This Coord axis type not currently supported: " + axis.getClass.getName + " for axis " + axis.getNameAndDimensions(true) )
@@ -205,23 +185,23 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
 
   def getAggDatasetTUC(fileHeader: FileHeader,
                        timeRegular: Boolean = false): xml.Node =
-      <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} timeUnitsChange="true"/>
+    <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} timeUnitsChange="true"/>
 
   def getAggDataset(fileHeader: FileHeader, timeRegular: Boolean = false): xml.Node =
     if (timeRegular || !overwriteTime)
-        <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString}/>
+      <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString}/>
     else
-        <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} coordValue={fileHeader.axisValues.map( x => "%d".format(x)).mkString(", ")}/>
+      <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} coordValue={fileHeader.axisValues.map( x => "%d".format(x)).mkString(", ")}/>
 
   def getVariable(variable: nc2.Variable,  timeRegularSpecs: Option[(Double, Double)]): xml.Node = {
     val axisType = fileMetadata.getAxisType(variable)
     <variable name={getName(variable)} shape={getDims(variable)} type={variable.getDataType.toString}>
       { if( axisType == AxisType.Time )  <attribute name="_CoordinateAxisType" value="Time"/>  <attribute name="units" value={if(overwriteTime) cdsutils.baseTimeUnits else variable.getUnitsString}/>
-    else for (attribute <- variable.getAttributes; if( !isIgnored( attribute ) ) ) yield getAttribute(attribute) }
+      else for (attribute <- variable.getAttributes; if( !isIgnored( attribute ) ) ) yield getAttribute(attribute) }
       { if( (axisType != AxisType.Time) && (axisType != AxisType.RunTime) ) variable match {
-      case coordVar: CoordinateAxis1D => getData(variable, coordVar.isRegular)
-      case _ => getData(variable, false)
-    }}
+        case coordVar: CoordinateAxis1D => getData(variable, coordVar.isRegular)
+        case _ => getData(variable, false)
+      }}
     </variable>
   }
 
@@ -229,7 +209,7 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
     val dataArray: Array[Double] =
       CDDoubleArray.factory(variable.read).getArrayData()
     if (isRegular) {
-        <values start={"%.3f".format(dataArray(0))} increment={"%.6f".format(dataArray(1)-dataArray(0))}/>
+      <values start={"%.3f".format(dataArray(0))} increment={"%.6f".format(dataArray(1)-dataArray(0))}/>
     } else {
       <values>
         {dataArray.map(dv => "%.3f".format(dv)).mkString(" ")}
@@ -343,11 +323,11 @@ object FileHeader extends Loggable {
         println(
           "Worker[%d]: Processing file[%d] '%s', start = %s, ncoords = %d, time = %.4f "
             .format(workerIndex,
-              iFile,
-              file,
-              fileHeader.startDate,
-              fileHeader.nElem,
-              (t1 - t0) / 1.0E9))
+                    iFile,
+                    file,
+                    fileHeader.startDate,
+                    fileHeader.nElem,
+                    (t1 - t0) / 1.0E9))
         if ((iFile % 5) == 0) runtime.printMemoryUsage(logger)
         Some(fileHeader)
       } catch {
@@ -452,24 +432,16 @@ class FileMetadata(ncDataset: NetcdfDataset) {
 }
 
 object CDScan extends Loggable {
-  def main(args: Array[String]) {
-    if( args.length < 1 ) { println( "Usage: 'dsagg <collectionID> <datPath>' or 'dsagg <collectionsFile>'"); return }
-    EDASLogManager.isMaster
-    if( args.length == 1 ) {
-      val collectionsFile = new File(args(0))
-      if( !collectionsFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsFile.toString) }
-      val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
-      ncmlDir.mkdirs
-      NCMLWriter.updateNCMLFiles( collectionsFile, ncmlDir )
-    } else {
+    def main(args: Array[String]) {
+      if( args.length < 2 ) { println( "Usage: dsagg <collectionID> <datPath>"); return }
+      EDASLogManager.isMaster
       val collectionId = args(0).toLowerCase
       val pathFile = new File(args(1))
-      val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(collectionId + ".ncml").toFile
-      if ( ncmlFile.exists ) { throw new Exception("Collection already exists, defined by: " + ncmlFile.toString) }
-      logger.info(s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
+      val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(collectionId + ".ncml" ).toFile
+      if( ncmlFile.exists ) { throw new Exception( "Collection already exists, defined by: " + ncmlFile.toString ) }
+      logger.info( s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
       ncmlFile.getParentFile.mkdirs
       val ncmlWriter = NCMLWriter(pathFile)
-      ncmlWriter.writeNCML(ncmlFile)
+      ncmlWriter.writeNCML( ncmlFile )
     }
-  }
 }
