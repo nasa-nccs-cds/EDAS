@@ -38,11 +38,7 @@ object NCMLWriter extends Loggable {
   def backup( dir: File, backupDir: File ): Unit = {
     backupDir.mkdirs()
     for( f <- backupDir.listFiles ) { f.delete() }
-    for( f <- dir.listFiles ) {
-      val newFile = new File( backupDir, f.getName )
-      val success = f.renameTo( newFile )
-      logger.info( s"Moving file ${f.getAbsolutePath} -> ${newFile.getAbsolutePath}, success: ${success.toString}")
-    }
+    for( f <- dir.listFiles ) { f.renameTo( new File( backupDir, f.getName ) ) }
   }
 
   def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
