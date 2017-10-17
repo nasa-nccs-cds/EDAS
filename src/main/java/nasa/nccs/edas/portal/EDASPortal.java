@@ -8,11 +8,10 @@ import org.zeromq.ZMQ;
 import nasa.nccs.utilities.EDASLogManager;
 import ucar.nc2.time.CalendarDate;
 
+import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.io.File;
-import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
@@ -278,8 +277,18 @@ public abstract class EDASPortal {
         String packaged_msg = StringUtils.join( request_args,  "!" );
         String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
         logger.info( String.format( "@@ Sending response %s on request_socket @(%s): %s", msg.responseId, timeStamp, msg.toString() ) );
+        logger.info( getCurrentStackTrace() );
         request_socket.send( packaged_msg.getBytes(),0 );
         return packaged_msg;
+    }
+
+    public static String getCurrentStackTrace() {
+        try{ throw new Exception("Current"); } catch(Exception ex)  {
+            Writer result = new StringWriter();
+            PrintWriter printWriter = new PrintWriter(result);
+            ex.printStackTrace(printWriter);
+            return result.toString();
+        }
     }
 
     public String getHostInfo() {
