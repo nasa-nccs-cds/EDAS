@@ -9,7 +9,7 @@ import java.util.Formatter
 import nasa.nccs.cdapi.data._
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.WorkflowNode
-import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey, RecordKey$}
+import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
