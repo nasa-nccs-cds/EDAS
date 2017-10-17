@@ -71,7 +71,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     } else runargs.mapValues(_.toString)
   }
 
-  override def execute( taskSpec: Array[String] ): Message = {
+  override def execute( taskSpec: Array[String] ): Response = {
     val clientId = elem(taskSpec,0)
     val runargs = getRunArgs( taskSpec )
     val jobId = runargs.getOrElse("jobId",randomIds.nextString)
@@ -104,8 +104,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         logger.error( "Caught execution error: " + e.getMessage )
         e.printStackTrace()
         executionCallback.failure( e.getMessage )
-        val errorReport = new WPSExecuteStatusError( "cds2",  e.getClass.getSimpleName + ": " + e.getMessage, jobId  )
-        new Message(clientId, jobId, printer.format( errorReport.toXml(response_syntax) ) )
+        new ErrorReport( clientId, jobId, e.getClass.getSimpleName + ": " + e.getMessage )
     }
   }
 

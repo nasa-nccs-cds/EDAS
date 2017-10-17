@@ -20,7 +20,9 @@ class Response {
     String clientId = null;
     String responseId = null;
     String rtype = null;
+    String _body = null;
     String id() { return clientId + ":" + responseId; }
+    String message() { return _body; }
 
     public Response( String _rtype, String _clientId, String _responseId )  {
         rtype = _rtype;
@@ -30,42 +32,39 @@ class Response {
 }
 
 class Message extends Response {
-    String message = null;
     public Message( String _clientId, String _responseId, String _message ) {
         super( "message", _clientId, _responseId );
-        message = _message;
+        _body = _message;
     }
-    public String toString() { return "Message[" + id() + "]: " + message; }
+    public String toString() { return "Message[" + id() + "]: " + _body; }
 }
 
 class ErrorReport extends Response {
-    String message = null;
     public ErrorReport( String _clientId, String _responseId, String _message ) {
         super( "error", _clientId, _responseId );
-        message = _message;
+        _body = _message;
     }
-    public String toString() { return "ErrorReport[" + id() + "]: " + message; }
+    public String toString() { return "ErrorReport[" + id() + "]: " + _body; }
 }
 
 class DataPacket extends Response {
-    private String _header = null;
     private byte[] _data = null;
     public DataPacket( String client_id, String response_id, String header, byte[] data  ) {
         super( "data",  client_id, response_id );
-        _header =  header;
+        _body =  header;
         _data = data;
     }
     public DataPacket( String client_id, String response_id, String header  ) {
         super( "data",  client_id, response_id );
-        _header =  header;
+        _body =  header;
     }
     boolean hasData() { return (_data != null); }
-    byte[] getTransferHeader() { return (clientId + ":" + _header).getBytes(); }
-    String getHeaderString() { return _header; }
+    byte[] getTransferHeader() { return (clientId + ":" + _body).getBytes(); }
+    String getHeaderString() { return _body; }
 
     byte[] getTransferData() { return concat(clientId.getBytes(), _data ); }
     byte[] getRawData() { return _data; }
-    public String toString() { return "DataPacket[" + _header + "]"; }
+    public String toString() { return "DataPacket[" + _body + "]"; }
 
     static byte[] concat( byte[] a, byte[] b ) {
         byte[] c = new byte[a.length + b.length];
@@ -122,7 +121,7 @@ class Responder extends Thread {
     }
 
     String doSendMessage( ZMQ.Socket socket, Message msg  ) {
-        List<String> request_args = Arrays.asList( msg.id(), "response", msg.message );
+        List<String> request_args = Arrays.asList( msg.id(), "response", msg.message() );
         String packaged_msg = StringUtils.join( request_args,  "!" );
         logger.info( " Sending message to client, msgId=" + msg.id() + ", content: " + packaged_msg );
         socket.send( packaged_msg.getBytes() );
@@ -130,9 +129,9 @@ class Responder extends Thread {
     }
 
     void doSendErrorReport( ZMQ.Socket socket, ErrorReport msg  ) {
-        List<String> request_args = Arrays.asList( msg.id(), "error", msg.message );
+        List<String> request_args = Arrays.asList( msg.id(), "error", msg.message() );
         socket.send( StringUtils.join( request_args,  "!" ).getBytes() );
-        logger.info( " Sent error report: " + msg.id() + ", content: " + msg.message );
+        logger.info( " Sent error report: " + msg.id() + ", content: " + msg.message() );
     }
 
     void doSendDataPacket( ZMQ.Socket socket, DataPacket dataPacket ) {
@@ -269,16 +268,16 @@ public abstract class EDASPortal {
     }
 
     public abstract Message execUtility( String[] utilSpec );
-    public abstract Message execute( String[] taskSpec );
+    public abstract Response execute( String[] taskSpec );
     public abstract void shutdown();
     public abstract Message getCapabilities( String[] utilSpec );
     public abstract Message describeProcess( String[] utilSpec );
 
-    public String sendResponseMessage( Message msg ) {
-        List<String> request_args = Arrays.asList( msg.id(), msg.message );
+    public String sendResponseMessage( Response msg ) {
+        List<String> request_args = Arrays.asList( msg.id(), msg.message() );
         String packaged_msg = StringUtils.join( request_args,  "!" );
         String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
-        logger.info( String.format( "@@ Sending %s response %s: %s on request_socket @(%s)", msg.rtype, msg.id(), msg.responseId, timeStamp ) );
+        logger.info( String.format( "@@ Sending response %s on request_socket @(%s): %s", msg.responseId, timeStamp, msg.toString() ) );
         request_socket.send( packaged_msg.getBytes(),0 );
         return packaged_msg;
     }
@@ -321,7 +320,7 @@ public abstract class EDASPortal {
         } catch ( Exception ex ) {
             logger.error( "Error in Request: " + ex.toString() );
             ex.printStackTrace();
-            sendResponseMessage( new Message( parts[0], "error", ex.getClass().getName() + ": " + ex.getMessage() ) );
+            sendErrorReport( parts[0], "error", ex.getClass().getName() + ": " + ex.getMessage() );
             responder.clearClientId();
         }
         logger.info( "EXIT EDASPortal");
