@@ -377,7 +377,7 @@ object FileHeader extends Loggable {
       case None =>
         throw new Exception("ncFile does not have a time axis: " + ncFile)
     }
-    NetcdfDatasetMgr.closeAll
+    NetcdfDatasetMgr.close( ncFile.toString )
     result
   }
 
@@ -395,7 +395,7 @@ object FileHeader extends Loggable {
       case Some(timeAxis) => getTimeValues(ncDataset, timeAxis)
       case None => throw new Exception( "ncFile does not have a time axis: " + ncFile.getRawPath)
     }
-    NetcdfDatasetMgr.closeAll
+    NetcdfDatasetMgr.close( ncFile.toString )
     result
   }
 }
@@ -420,7 +420,7 @@ object FileMetadata {
   def apply(file: URI): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.open(file.toString)
     val result = new FileMetadata(dataset)
-    NetcdfDatasetMgr.closeAll
+    NetcdfDatasetMgr.close(file.toString)
     result
   }
 }
