@@ -220,25 +220,25 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
 
   def getVariable(variable: nc2.Variable,  timeRegularSpecs: Option[(Double, Double)]): xml.Node = {
     val axisType = fileMetadata.getAxisType(variable)
-    <variable name={getName(variable)} shape={getDims(variable)} type={variable.getDataType.toString}>
-      { if( axisType == AxisType.Time )  <attribute name="_CoordinateAxisType" value="Time"/>  <attribute name="units" value={if(overwriteTime) cdsutils.baseTimeUnits else variable.getUnitsString}/>
-    else for (attribute <- variable.getAttributes; if( !isIgnored( attribute ) ) ) yield getAttribute(attribute) }
-      { if( (axisType != AxisType.Time) && (axisType != AxisType.RunTime) ) variable match {
-      case coordVar: CoordinateAxis1D => getData(variable, coordVar.isRegular)
-      case _ => getData(variable, false)
-    }}
-    </variable>
+    <variable name={getName(variable)} shape={getDims(variable)} type={variable.getDataType.toString}> {
+        if( axisType == AxisType.Time )  <attribute name="_CoordinateAxisType" value="Time"/>  <attribute name="units" value={if(overwriteTime) cdsutils.baseTimeUnits else variable.getUnitsString}/>
+        else for (attribute <- variable.getAttributes; if( !isIgnored( attribute ) ) ) yield getAttribute(attribute)
+    } </variable>
   }
 
+  //      {
+  //        if( (axisType != AxisType.Time) && (axisType != AxisType.RunTime) ) variable match {
+  //          case coordVar: CoordinateAxis1D => getData(variable, coordVar.isRegular)
+  //          case _ => getData(variable, false)
+  //        }
+  //      }
+
   def getData(variable: nc2.Variable, isRegular: Boolean): xml.Node = {
-    val dataArray: Array[Double] =
-      CDDoubleArray.factory(variable.read).getArrayData()
+    val dataArray: Array[Double] = CDDoubleArray.factory(variable.read).getArrayData()
     if (isRegular) {
         <values start={"%.3f".format(dataArray(0))} increment={"%.6f".format(dataArray(1)-dataArray(0))}/>
     } else {
-      <values>
-        {dataArray.map(dv => "%.3f".format(dv)).mkString(" ")}
-      </values>
+      <values> { dataArray.map(dv => "%.3f".format(dv)).mkString(" ") } </values>
     }
   }
 
