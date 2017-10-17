@@ -104,7 +104,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         logger.error( "Caught execution error: " + e.getMessage )
         e.printStackTrace()
         executionCallback.failure( e.getMessage )
-        new ErrorReport( clientId, jobId, e.getClass.getSimpleName + ": " + e.getMessage )
+        throw e
     }
   }
 

@@ -96,7 +96,7 @@ class Responder extends Thread {
     public void clearClientId() { clientId = null; }
 
     public void sendResponse( Response msg ) {
-        logger.info( "Post Message to response queue: " + msg.id() );
+        logger.info( "Post Message to response queue: " + msg.toString() );
         response_queue.add( msg );
     }
 
