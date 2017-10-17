@@ -108,6 +108,7 @@ object Collections extends XmlResource {
   val maxCapacity: Int=500
   val initialCapacity: Int=10
   val datasets: ConcurrentLinkedHashMap[String,Collection] =  loadCollectionXmlData( ) // Map( "local" -> getCacheFilePath("local_collections.xml") ) )
+  refreshCollectionList
 
   def refreshCollectionList = {
     var collPath: Path = null

@@ -7,7 +7,6 @@ import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
 import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.edas.loaders.Collections.refreshCollectionList
 import nasa.nccs.edas.portal.EDASApplication.logger
 import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
@@ -189,7 +188,6 @@ object EDASApplication extends Loggable {
   def main(args: Array[String]) {
     import EDASapp._
     EDASLogManager.isMaster
-    refreshCollectionList
     logger.info(s"Executing EDAS with args: ${args.mkString(",")}, nprocs: ${Runtime.getRuntime.availableProcessors()}")
     val request_port = elem(args, 0, "0").toInt
     val response_port = elem(args, 1, "0").toInt
