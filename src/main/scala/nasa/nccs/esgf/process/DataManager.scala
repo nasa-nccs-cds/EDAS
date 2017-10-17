@@ -81,8 +81,8 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
       logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex,rddPartSpecs.length))
       val rdd_partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
       //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
-      val parallelized_rddspecs = serverContext.spark parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy rdd_partitioner
-      Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition( requestCx, batchIndex )) )
+      val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy rdd_partitioner
+      Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition( this, batchIndex )) )
     }
   }
 
