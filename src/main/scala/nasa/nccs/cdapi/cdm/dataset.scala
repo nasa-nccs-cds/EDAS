@@ -90,7 +90,7 @@ object CDGrid extends Loggable {
     val dimensions = gridDS.getDimensions.toList
     val conv = gridDS.getConventionUsed
     val title = gridDS.getTitle
-    NetcdfDatasetMgr.closeAllInThread
+    NetcdfDatasetMgr.closeAll
     new CDGrid(name, gridFilePath, coordAxes, coordSystems, dimensions, dset_attributes)
   }
 
@@ -144,7 +144,7 @@ object CDGrid extends Loggable {
       val newGroup = getNewGroup( groupMap, oldGroup, gridWriter )
       val newVar: nc2.Variable = gridWriter.addVariable( newGroup, NCMLWriter.getName(cvar), dataType, getDimensionNames( cvar.getDimensionsString.split(' '), dimMap.keys ).mkString(" ")  )
 //      val newVar = gridWriter.addVariable( newGroup, NCMLWriter.getName(cvar), dataType, cvar.getDimensionsString  )
-      NetcdfDatasetMgr.closeAllInThread
+      NetcdfDatasetMgr.closeAll
       NCMLWriter.getName(cvar) -> (cvar -> newVar)
     }
     val varMap = Map(varTups.toList: _*)
@@ -217,7 +217,7 @@ object CDGrid extends Loggable {
 //      case None => Unit
 //    }
     gridWriter.close()
-    NetcdfDatasetMgr.closeAllInThread
+    NetcdfDatasetMgr.closeAll
   }
 }
 
@@ -252,7 +252,7 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
         logger.error(err.getStackTrace.mkString("\n"))
         None
     } finally {
-      NetcdfDatasetMgr.closeAllInThread
+      NetcdfDatasetMgr.closeAll
     }
   }
 
@@ -999,8 +999,6 @@ object NetcdfDatasetMgr extends Loggable {
     else path
 
   def closeAll: Iterable[NetcdfDataset]  = keys flatMap _close
-  def keysInThread = keys.filter( _.split(':').last == Thread.currentThread().getId() )
-  def closeAllInThread: Iterable[NetcdfDataset]  = keysInThread flatMap _close
   private def _close( key: String ): Option[NetcdfDataset] = Option( datasetCache.remove( key ) ).map ( dataset => { dataset.close(); dataset } )
   def close( path: String ): Option[NetcdfDataset] = _close( getKey(cleanPath(path)) )
 
@@ -1201,7 +1199,7 @@ object writeTest extends App {
 //      val raw_data = axis.read()
 //      val dataArray = CDLongArray.factory(raw_data)
 //      print( dataArray.getArrayData().mkString(", ") )
-//      NetcdfDatasetMgr.closeAllInThread
+//      NetcdfDatasetMgr.closeAll
 //    } )
 //  } catch {
 //    case err: Exception =>

@@ -52,7 +52,7 @@ object NCMLWriter extends Loggable {
   }
 
   def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
-    backup( ncmlDir, new File( ncmlDir, "backup" ) )
+    backup( ncmlDir, new File("/tmp/backup/NCML") )
     logger.info(s"Update NCML file from specs in " + collectionsFile.getAbsolutePath )
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; if !line.trim.isEmpty ) {
       val specs = line.split(",")
@@ -383,7 +383,7 @@ object FileHeader extends Loggable {
       case None =>
         throw new Exception("ncFile does not have a time axis: " + ncFile)
     }
-    NetcdfDatasetMgr.closeAllInThread
+    NetcdfDatasetMgr.closeAll
     result
   }
 
@@ -401,7 +401,7 @@ object FileHeader extends Loggable {
       case Some(timeAxis) => getTimeValues(ncDataset, timeAxis)
       case None => throw new Exception( "ncFile does not have a time axis: " + ncFile.getRawPath)
     }
-    NetcdfDatasetMgr.closeAllInThread
+    NetcdfDatasetMgr.closeAll
     result
   }
 }
@@ -426,7 +426,7 @@ object FileMetadata {
   def apply(file: URI): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.open(file.toString)
     val result = new FileMetadata(dataset)
-    NetcdfDatasetMgr.closeAllInThread
+    NetcdfDatasetMgr.closeAll
     result
   }
 }
