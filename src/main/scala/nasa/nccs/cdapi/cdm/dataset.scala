@@ -90,7 +90,6 @@ object CDGrid extends Loggable {
     val dimensions = gridDS.getDimensions.toList
     val conv = gridDS.getConventionUsed
     val title = gridDS.getTitle
-    NetcdfDatasetMgr.close(gridFilePath)
     new CDGrid(name, gridFilePath, coordAxes, coordSystems, dimensions, dset_attributes)
   }
 
@@ -144,7 +143,6 @@ object CDGrid extends Loggable {
       val newGroup = getNewGroup( groupMap, oldGroup, gridWriter )
       val newVar: nc2.Variable = gridWriter.addVariable( newGroup, NCMLWriter.getName(cvar), dataType, getDimensionNames( cvar.getDimensionsString.split(' '), dimMap.keys ).mkString(" ")  )
 //      val newVar = gridWriter.addVariable( newGroup, NCMLWriter.getName(cvar), dataType, cvar.getDimensionsString  )
-      NetcdfDatasetMgr.close(datfilePath)
       NCMLWriter.getName(cvar) -> (cvar -> newVar)
     }
     val varMap = Map(varTups.toList: _*)
@@ -251,8 +249,6 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
         logger.error("Can't find Coordinate Axis " + name + " in gridFile " + gridFilePath + " , error = " + err.toString );
         logger.error(err.getStackTrace.mkString("\n"))
         None
-    } finally {
-      NetcdfDatasetMgr.close(gridFilePath)
     }
   }
 
