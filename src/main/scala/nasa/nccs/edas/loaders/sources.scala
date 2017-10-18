@@ -120,9 +120,13 @@ object Collections extends XmlResource {
       collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
       val ncmlExtensions = List(".xml", ".ncml", ".csv" )
       val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
-      val collFuts = Future.sequence( for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
-                            if (collId != "local_collections") && !datasets.containsKey(collId) ) yield Future { Collections.addCollection(collId, ncmlFile.toString) } )
-      Await.result( collFuts, Duration.Inf )
+//      val collFuts = Future.sequence( for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
+//                            if (collId != "local_collections") && !datasets.containsKey(collId) ) yield Future { Collections.addCollection(collId, ncmlFile.toString) } )
+//      Await.result( collFuts, Duration.Inf )
+
+      for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
+             if (collId != "local_collections") && !datasets.containsKey(collId) ) { Collections.addCollection(collId, ncmlFile.toString) }
+      
     } catch { case ex: Exception => logger.error( " Error refreshing Collection List from '%s': %s".format( collPath , ex.getMessage ) ) }
   }
 
