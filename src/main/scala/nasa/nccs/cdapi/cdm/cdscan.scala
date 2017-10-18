@@ -46,13 +46,13 @@ object NCMLWriter extends Loggable {
   def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
     backup( ncmlDir, new File( ncmlDir, "backup") )
     logger.info(s"Update NCML file from specs in " + collectionsFile.getAbsolutePath )
-    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; if !line.trim.isEmpty ) {
-      val mdata = line.split(",")
-      val agg_type: String = mdata.head.trim
+    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
+      val mdata = tline.split(",").map(_.trim)
+      val agg_type: String = mdata.head
       val cspecs = mdata.tail
-      val collectionId = cspecs.head.trim
+      val collectionId = cspecs.head
       val variableMap = new collection.mutable.HashMap[String,String]()
-      val paths: Array[File] = cspecs.tail.map(_.trim).filter(!_.isEmpty).map(f => new File(f))
+      val paths: Array[File] = cspecs.tail.filter(!_.isEmpty).map(fpath => new File(fpath))
       agg_type match {
         case multi if multi.startsWith("m") =>
           for( path <- paths; if path.isDirectory; subdir <- path.listFiles; if subdir.isDirectory ) {
