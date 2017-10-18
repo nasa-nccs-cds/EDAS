@@ -9,14 +9,17 @@ import collection.JavaConverters._
 import scala.collection.JavaConversions._
 import collection.mutable
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
-import nasa.nccs.caching.{FragmentPersistence, collectionDataCache}
+import nasa.nccs.caching.{CachePartition, FragmentPersistence, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{Collection, DiskCacheFileMgr, NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.utilities.Loggable
 import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
 import ucar.{ma2, nc2}
+
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.Duration
 import scala.xml.factory.XMLLoader
-import scala.xml.{ Node, SAXParser, XML }
+import scala.xml.{Node, SAXParser, XML}
 
 object AxisNames {
   def apply( x: String = "", y: String = "", z: String = "", t: String = "" ): Option[AxisNames] = {
@@ -115,14 +118,11 @@ object Collections extends XmlResource {
     var collPath: Path = null
     try {
       collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
-      val ncmlExtensions = List(".xml", ".ncml")
+      val ncmlExtensions = List(".xml", ".ncml", ".csv" )
       val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
-      for (ncmlFile <- ncmlFiles; fileName = ncmlFile.getName; collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase; if (collId != "local_collections") && !datasets.containsKey(collId)) {
-        Collections.addCollection(collId, ncmlFile.toString) match {
-          case Some(collection) => datasets.put(collId, collection)
-          case None => logger.warn(s"Skipping collection ${collId}")
-        }
-      }
+      val collFuts = for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
+                            if (collId != "local_collections") && !datasets.containsKey(collId) ) yield Future { Collections.addCollection(collId, ncmlFile.toString) }
+      Await.result( Future.sequence(collFuts), Duration.Inf )
     } catch { case ex: Exception => logger.error( " Error refreshing Collection List from '%s': %s".format( collPath , ex.getMessage ) ) }
   }
 
@@ -154,7 +154,7 @@ object Collections extends XmlResource {
       println( "\nUpdating collection %s, vars = %s".format( id, vars.mkString(";") ))
       datasets.put( collection.id, newCollection  )
     }
-    persistLocalCollections()
+//    persistLocalCollections()
   }
 
   def getVariableString( variable: nc2.Variable ): String = variable.getShortName + ":" + variable.getDimensionsString.replace(" ",",") + ":" + variable.getDescription+ ":" + variable.getUnitsString
@@ -198,7 +198,7 @@ object Collections extends XmlResource {
         case None => logger.error("Attempt to delete collection that does not exist: " + collectionId ); None
       }
     } )
-    persistLocalCollections()
+//    persistLocalCollections()
     removedCids
   }
 
@@ -207,7 +207,7 @@ object Collections extends XmlResource {
     val collection = Collection( id, dataPath, fileFilter, "local", title, cvars )
     collection.generateAggregation
     datasets.put( id, collection  )
-    persistLocalCollections()
+//    persistLocalCollections()
     collection
   }
 
@@ -217,7 +217,7 @@ object Collections extends XmlResource {
     val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
     val newCollection = new Collection( "file", id, ncmlFilePath, "", "", title, vars )
     datasets.put( id, newCollection  )
-    persistLocalCollections()
+//    persistLocalCollections()
     Some(newCollection)
   } catch {
     case err: Exception =>
@@ -228,16 +228,16 @@ object Collections extends XmlResource {
 
   def addCollection(  id: String, dataPath: String, title: String, vars: List[String] ): Collection = {
     val collection = Collection( id, dataPath, "", "local", title, vars )
-    collection.generateAggregation
+//    collection.generateAggregation
     datasets.put( id, collection  )
-    persistLocalCollections()
+//    persistLocalCollections()
     collection
   }
 
   def updateCollection( collection: Collection ): Collection = {
     datasets.put( collection.id, collection  )
     logger.info( " *----> Persist New Collection: " + collection.id )
-    persistLocalCollections()
+//    persistLocalCollections()
     collection
   }
 

@@ -33,6 +33,8 @@ import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
 import ucar.nc2._
 import ucar.nc2.write.Nc4Chunking
 
+import scala.io.Source
+
 object Collection extends Loggable {
   def apply( id: String, ncmlFile: File ) = {
     new Collection( "file", id, ncmlFile.toString )
@@ -1024,7 +1026,11 @@ object NetcdfDatasetMgr extends Loggable {
 
   def getCollectionPath( path: String, varName: String ): String = {
     if( path.endsWith("csv") ) {
-      path
+      for (line <- Source.fromFile(path).getLines) {
+        val items = line.split(",").map(_.trim)
+        if( items.head.toLowerCase == varName.toLowerCase ) { return items.last }
+      }
+      throw new Exception( s"Can't locate variable ${varName} in Collection Directory ${path}")
     } else { path }
   }
 
