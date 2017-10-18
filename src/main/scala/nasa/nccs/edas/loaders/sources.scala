@@ -147,7 +147,7 @@ object Collections extends XmlResource {
     refreshCollectionList
     for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase("local") ) {
       logger.info( "Opening NetCDF dataset(4) at: " + collection.dataPath )
-      val dataset: NetcdfDataset = NetcdfDatasetMgr.open( collection.dataPath )
+      val dataset: NetcdfDataset = NetcdfDatasetMgr.openFile( collection.dataPath )
       val vars = dataset.getVariables.filter(!_.isCoordinateVariable).map(v => getVariableString(v) ).toList
       val title = findAttribute( dataset, List( "Title", "LongName" ) )
       val newCollection = new Collection( collection.ctype, id, collection.dataPath, collection.fileFilter, "local", title, vars)
@@ -212,7 +212,7 @@ object Collections extends XmlResource {
   }
 
   def addCollection(  id: String, ncmlFilePath: String ): Option[Collection] = try {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.open(ncmlFilePath)
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncmlFilePath)
     val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
     val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
     val newCollection = new Collection( "file", id, ncmlFilePath, "", "", title, vars )
@@ -256,7 +256,7 @@ object Collections extends XmlResource {
     findNcFile( new File(path) ) match {
       case Some(f) =>
         logger.info( "Opening NetCDF dataset(5) at: " + f.getAbsolutePath )
-        val dset: NetcdfDataset = NetcdfDatasetMgr.open( f.getAbsolutePath )
+        val dset: NetcdfDataset = NetcdfDatasetMgr.openFile( f.getAbsolutePath )
         dset.getVariables.toList.flatMap( v => if(v.isCoordinateVariable) None else Some(v.getFullName) )
       case None => throw new Exception( "Can't find any nc files in dataset path: " + path )
     }
