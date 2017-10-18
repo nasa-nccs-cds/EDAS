@@ -7,6 +7,7 @@ import java.nio.file.{FileSystems, Path, Paths}
 import java.util.Formatter
 
 import nasa.nccs.cdapi.cdm.CDScan.logger
+import nasa.nccs.cdapi.cdm.FileMetadata.logger
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -17,9 +18,9 @@ import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{NetcdfDataset, _}
 import ucar.nc2.time.CalendarDate
 
-import collection.mutable.ListBuffer
-import scala.collection.JavaConversions._
-import scala.collection.JavaConversions._
+import collection.mutable.{ ListBuffer, HashMap }
+import collection.JavaConversions._
+import collection.JavaConversions._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -45,17 +46,48 @@ object NCMLWriter extends Loggable {
     backup( ncmlDir, new File( ncmlDir, "backup") )
     logger.info(s"Update NCML file from specs in " + collectionsFile.getAbsolutePath )
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; if !line.trim.isEmpty ) {
-      val specs = line.split(",")
-      val collectionId = specs.head.trim
-      try {
-        val paths = specs.tail.map(_.trim).filter(!_.isEmpty).map(f => new File(f))
-        val ncmlFile = getCachePath("NCML").resolve(collectionId + ".ncml").toFile
-        logger.info(s"Creating NCML file for collection ${collectionId} from paths ${paths.map(_.getAbsolutePath).mkString(", ")}")
-        val writer = new NCMLWriter(paths.iterator)
-        writer.writeNCML(ncmlFile)
-      } catch {
-        case err: Exception => logger.error( s"Error writing NCML file for collection ${collectionId}: ${err.getMessage}")
+      val mdata = line.split(",")
+      val agg_type: String = mdata.head.trim
+      val cspecs = mdata.tail
+      val collectionId = cspecs.head.trim
+      val variableMap = new collection.mutable.HashMap[String,String]()
+      val paths: Array[File] = cspecs.tail.map(_.trim).filter(!_.isEmpty).map(f => new File(f))
+      agg_type match {
+        case multi if multi.startsWith("m") =>
+          for( path <- paths; if path.isDirectory; subdir <- path.listFiles; if subdir.isDirectory ) {
+            val subCollectionId = collectionId + subdir.getName
+            val varNames = generateNCML( subCollectionId, Array(subdir) )
+            varNames.foreach( vname => variableMap += ( vname -> subCollectionId ) )
+          }
+        case singl if singl.startsWith("s") =>
+          val varNames = generateNCML( collectionId, paths )
+          varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
+        case _ => throw new Exception( "Unrecognized aggregation type: " + agg_type )
       }
+      writeCollectionDirectory( collectionId, variableMap.toMap )
+    }
+  }
+
+  def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
+    val dirFile = getCachePath("NCML").resolve(collectionId + ".csv").toFile
+    val pw = new PrintWriter( dirFile )
+    variableMap foreach { case ( varName, subCollectionId ) =>
+      val collectionFile = getCachePath("NCML").resolve(subCollectionId + ".ncml").toString
+      pw.write(s"$varName, ${collectionFile}/n")
+    }
+    pw.close
+  }
+
+  def generateNCML( collectionId: String, paths: Array[File] ): List[String] = {
+    try {
+      val ncmlFile = getCachePath("NCML").resolve(collectionId + ".ncml").toFile
+      logger.info(s"Creating NCML file for collection ${collectionId} from paths ${paths.map(_.getAbsolutePath).mkString(", ")}")
+      val writer = new NCMLWriter(paths.iterator)
+      writer.writeNCML(ncmlFile)
+    } catch {
+      case err: Exception =>
+        logger.error( s"Error writing NCML file for collection ${collectionId}: ${err.getMessage}")
+        List.empty[String]
     }
   }
 
@@ -277,8 +309,9 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
   def findTimeVariable(fileMetadata: FileMetadata): Option[nc2.Variable] =
     fileMetadata.coordVars find (fileMetadata.getAxisType(_) == AxisType.Time)
 
-  def getNCMLVerbose: xml.Node = {
+  def getNCMLVerbose: ( List[String], xml.Node ) = {
     val fileMetadata = FileMetadata(files.head)
+    logger.info( s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n" )
     val timeRegularSpecs = None //  getTimeSpecs( fileMetadata )
     println( "Processing %d files with %d workers".format(nFiles, nReadProcessors))
     val result = <netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
@@ -292,8 +325,9 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
       { getAggregation( fileMetadata, timeRegularSpecs.isDefined ) }
 
     </netcdf>
+    val varNames: List[String] = fileMetadata.coordVars.map( _.getShortName )
     fileMetadata.close
-    result
+    ( varNames, result )
   }
 
 //  def defineNewTimeVariable: xml.Node =
@@ -323,11 +357,13 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
 //    </netcdf>
 //  }
 
-  def writeNCML(ncmlFile: File): Unit = {
+  def writeNCML(ncmlFile: File): List[String] = {
     logger.info("Writing *NCML* File: " + ncmlFile.toString)
     val bw = new BufferedWriter(new FileWriter(ncmlFile))
-    bw.write(getNCMLVerbose.toString)
+    val ( varNames, result ) = getNCMLVerbose
+    bw.write(result.toString)
     bw.close()
+    varNames
   }
 
 }
@@ -336,7 +372,9 @@ object FileHeader extends Loggable {
   val maxOpenAttempts = 1
   val retryIntervalSecs = 10
   def apply(file: URI, timeRegular: Boolean): FileHeader = {
-    val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(file)
+    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.openFile(file.toString)
+    val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
+    ncDataset.close()
     new FileHeader(file.toString, axisValues, boundsValues, timeRegular)
   }
 
@@ -402,13 +440,11 @@ object FileHeader extends Loggable {
   }
 
 
-  def getTimeCoordValues(ncFile: URI): (Array[Long], Array[Double]) = {
-    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.openFile(ncFile.toString)
+  def getTimeCoordValues(ncDataset: NetcdfDataset): (Array[Long], Array[Double]) = {
     val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
       case Some(timeAxis) => getTimeValues(ncDataset, timeAxis)
-      case None => throw new Exception( "ncFile does not have a time axis: " + ncFile.getRawPath)
+      case None => throw new Exception( "ncDataset does not have a time axis: " + ncDataset.getReferencedFile.getLocation )
     }
-    ncDataset.close()
     result
   }
 }
@@ -435,9 +471,7 @@ class FileHeader(val filePath: String,
 object FileMetadata extends Loggable {
   def apply(file: URI): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.openFile(file.toString)
-    val result = new FileMetadata(dataset)
-    logger.info( s"\n\n -----> FileMetadata: variables = ${result.variables.map(_.getName).mkString(", ")}\n\n" )
-    result
+    new FileMetadata(dataset)
   }
 }
 
