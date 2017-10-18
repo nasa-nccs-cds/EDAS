@@ -1,7 +1,7 @@
 package nasa.nccs.cdapi.cdm
 
 import java.io._
-import java.net.{URI, URL}
+import java.net.URI
 import java.nio._
 import java.nio.file.{FileSystems, Path, Paths}
 import java.util.Formatter
@@ -432,20 +432,22 @@ class FileHeader(val filePath: String,
   override def toString: String = " *** FileHeader { path='%s', nElem=%d, startValue=%d startDate=%s} ".format(filePath, nElem, startValue, startDate)
 }
 
-object FileMetadata {
+object FileMetadata extends Loggable {
   def apply(file: URI): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.openFile(file.toString)
-    new FileMetadata(dataset)
+    val result = new FileMetadata(dataset)
+    logger.info( s"\n\n -----> FileMetadata: variables = ${result.variables.map(_.getName).mkString(", ")}\n\n" )
+    result
   }
 }
 
 class FileMetadata(val ncDataset: NetcdfDataset) {
-  val coordinateAxes = ncDataset.getCoordinateAxes.toList
+  val coordinateAxes: List[CoordinateAxis] = ncDataset.getCoordinateAxes.toList
   val dimensions: List[nc2.Dimension] = ncDataset.getDimensions.toList
-  val variables = ncDataset.getVariables.filterNot(_.isCoordinateVariable).toList
-  val coordVars = ncDataset.getVariables.filter(_.isCoordinateVariable).toList
-  val attributes = ncDataset.getGlobalAttributes
-  val dimNames = dimensions.map(NCMLWriter.getName(_))
+  val variables: List[nc2.Variable] = ncDataset.getVariables.filterNot(_.isCoordinateVariable).toList
+  val coordVars: List[nc2.Variable] = ncDataset.getVariables.filter(_.isCoordinateVariable).toList
+  val attributes: List[nc2.Attribute] = ncDataset.getGlobalAttributes.toList
+  val dimNames: List[String] = dimensions.map(NCMLWriter.getName(_))
 
   def close = ncDataset.close()
 

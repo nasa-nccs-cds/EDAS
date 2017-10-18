@@ -1,4 +1,6 @@
 package nasa.nccs.esgf.wps
+import java.io.{PrintWriter, StringWriter}
+
 import nasa.nccs.utilities.Loggable
 
 import scala.util.parsing.combinator._
@@ -27,10 +29,16 @@ class ObjectNotationParser extends JavaTokenParsers {
   def objlist: Parser[Seq[Map[String, Any]]] = "[" ~> repsep(omap,sep) <~ "]" | omap ^^ (List(_))
 }
 
-object CDSecurity {
+object CDSecurity extends Loggable {
   def sanitize( str_data: String ): String = {
+    logger.info( s"\n\n -----> Sanitize: ${str_data}\n ${getStack}")
     if (str_data contains "]]>") throw new SecurityException(" Request contains illegal CDATA breakout string")
     str_data
+  }
+  def getStack: String = {
+    val sw = new StringWriter
+    new Throwable().printStackTrace(new PrintWriter(sw))
+    sw.toString
   }
 }
 
