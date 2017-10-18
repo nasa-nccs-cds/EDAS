@@ -124,9 +124,10 @@ object Collections extends XmlResource {
 //                            if (collId != "local_collections") && !datasets.containsKey(collId) ) yield Future { Collections.addCollection(collId, ncmlFile.toString) } )
 //      Await.result( collFuts, Duration.Inf )
 
-      logger.info( " ---> Updating Collections from files: \n\t" + ncmlFiles.map(_.toString).mkString("\n\t") )
       for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
              if (collId != "local_collections") && !datasets.containsKey(collId) ) { Collections.addCollection(collId, ncmlFile.toString) }
+
+      logger.info( " ---> Updating Collections from files: \n\t" + ncmlFiles.map(_.toString).sorted.mkString("\n\t") + " ----> Collections = \n\t" + Collections.getCollectionKeys.sorted.mkString("\n\t"))
 
     } catch { case ex: Exception => logger.error( " Error refreshing Collection List from '%s': %s".format( collPath , ex.getMessage ) ) }
   }
