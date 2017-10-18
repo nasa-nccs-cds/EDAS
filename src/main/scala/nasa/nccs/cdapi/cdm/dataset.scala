@@ -997,7 +997,7 @@ object NetcdfDatasetMgr extends Loggable {
   def openCollection(varName: String, path: String ): NetcdfDataset = {
     val cpath = cleanPath(path)
     val key = getKey(path)
-    val result = datasetCache.getOrElseUpdate( key, acquireCollection(varName,cpath) )
+    val result = datasetCache.getOrElseUpdate( key, acquireCollection(cpath,varName) )
     //    logger.info(s"   Accessed Dataset using key: $key, path: $cpath")
     result
   }
@@ -1013,9 +1013,8 @@ object NetcdfDatasetMgr extends Loggable {
 
   private def acquireCollection( dpath: String, varName: String ): NetcdfDataset = {
     val collectionPath: String = getCollectionPath( dpath, varName )
-    val result = NetcdfDataset.openDataset(collectionPath)
-    logger.info(s"   Opened Dataset from path: $collectionPath   ")
-    result
+    logger.info(s" Opening Dataset from path: $collectionPath   ")
+    NetcdfDataset.openDataset(collectionPath)
   }
 
   private def acquireDataset( dpath: String ): NetcdfDataset = {
