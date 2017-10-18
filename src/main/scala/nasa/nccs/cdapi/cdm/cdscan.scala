@@ -8,6 +8,7 @@ import java.util.Formatter
 
 import nasa.nccs.cdapi.cdm.CDScan.logger
 import nasa.nccs.cdapi.cdm.FileMetadata.logger
+import nasa.nccs.cdapi.cdm.NCMLWriter.{generateNCML, writeCollectionDirectory}
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -18,7 +19,7 @@ import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{NetcdfDataset, _}
 import ucar.nc2.time.CalendarDate
 
-import collection.mutable.{ ListBuffer, HashMap }
+import collection.mutable.{HashMap, ListBuffer}
 import collection.JavaConversions._
 import collection.JavaConversions._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -55,7 +56,7 @@ object NCMLWriter extends Loggable {
       agg_type match {
         case multi if multi.startsWith("m") =>
           for( path <- paths; if path.isDirectory; subdir <- path.listFiles; if subdir.isDirectory ) {
-            val subCollectionId = collectionId + subdir.getName
+            val subCollectionId = collectionId + "_" + subdir.getName
             val varNames = generateNCML( subCollectionId, Array(subdir) )
             varNames.foreach( vname => variableMap += ( vname -> subCollectionId ) )
           }
@@ -70,10 +71,11 @@ object NCMLWriter extends Loggable {
 
   def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
     val dirFile = getCachePath("NCML").resolve(collectionId + ".csv").toFile
+    logger.info( s"Generating CollectionDirectory ${dirFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
     val pw = new PrintWriter( dirFile )
     variableMap foreach { case ( varName, subCollectionId ) =>
       val collectionFile = getCachePath("NCML").resolve(subCollectionId + ".ncml").toString
-      pw.write(s"$varName, ${collectionFile}/n")
+      pw.write(s"$varName, ${collectionFile}\n")
     }
     pw.close
   }
@@ -511,7 +513,10 @@ object CDScan extends Loggable {
       logger.info(s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
       ncmlFile.getParentFile.mkdirs
       val ncmlWriter = NCMLWriter(pathFile)
-      ncmlWriter.writeNCML(ncmlFile)
+      val variableMap = new collection.mutable.HashMap[String,String]()
+      val varNames: List[String] = ncmlWriter.writeNCML(ncmlFile)
+      varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
+      writeCollectionDirectory( collectionId, variableMap.toMap )
     }
   }
 }

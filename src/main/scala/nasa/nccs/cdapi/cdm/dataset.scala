@@ -379,7 +379,10 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
       logger.info( s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
       _ncmlFile.getParentFile.mkdirs
       val ncmlWriter = NCMLWriter(pathFile)
-      ncmlWriter.writeNCML(_ncmlFile)
+      val variableMap = new collection.mutable.HashMap[String,String]()
+      val varNames: List[String] = ncmlWriter.writeNCML(_ncmlFile)
+      varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
+      NCMLWriter.writeCollectionDirectory( collectionId, variableMap.toMap )
     }
     _ncmlFile.toURI.toString
   }
@@ -998,11 +1001,17 @@ object NetcdfDatasetMgr extends Loggable {
   private def _close( key: String ): Option[NetcdfDataset] = Option( datasetCache.remove( key ) ).map ( dataset => { dataset.close(); dataset } )
   def close( path: String ): Option[NetcdfDataset] = _close( getKey(cleanPath(path)) )
 
-  private def acquireDataset( path: String ): NetcdfDataset = {
-//    val result = NetcdfDataset.acquireDataset(path, null)
-    val result = NetcdfDataset.openDataset(path)
-    logger.info(s"   Opened Dataset from path: $path   ")
+  private def acquireDataset( dpath: String, varName: String ): NetcdfDataset = {
+    val collectionPath: String = getCollectionPath( dpath, varName )
+    val result = NetcdfDataset.openDataset(collectionPath)
+    logger.info(s"   Opened Dataset from path: $collectionPath   ")
     result
+  }
+
+  def getCollectionPath( path: String, varName: String ): String = {
+    if( path.endsWith("csv") ) {
+
+    } else { path }
   }
 
   def openFile( path: String ): NetcdfDataset = NetcdfDataset.openDataset( cleanPath(path) )
