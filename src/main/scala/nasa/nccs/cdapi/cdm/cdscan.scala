@@ -327,7 +327,7 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
       { getAggregation( fileMetadata, timeRegularSpecs.isDefined ) }
 
     </netcdf>
-    val varNames: List[String] = fileMetadata.coordVars.map( _.getShortName )
+    val varNames: List[String] = fileMetadata.variables.map( _.getShortName )
     fileMetadata.close
     ( varNames, result )
   }
