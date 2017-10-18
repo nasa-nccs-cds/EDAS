@@ -4,6 +4,7 @@ import java.net.URL
 import java.nio.channels.Channels
 import java.nio.file.{Files, Path, Paths}
 import javax.xml.parsers.{ParserConfigurationException, SAXParserFactory}
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import collection.JavaConverters._
 import scala.collection.JavaConversions._
@@ -18,6 +19,7 @@ import ucar.{ma2, nc2}
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
+import scala.io.Source
 import scala.xml.factory.XMLLoader
 import scala.xml.{Node, SAXParser, XML}
 
@@ -118,7 +120,7 @@ object Collections extends XmlResource {
     var collPath: Path = null
     try {
       collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
-      val ncmlExtensions = List(".xml", ".ncml", ".csv" )
+      val ncmlExtensions = List( ".ncml", ".csv" )
       val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
 //      val collFuts = Future.sequence( for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
 //                            if (collId != "local_collections") && !datasets.containsKey(collId) ) yield Future { Collections.addCollection(collId, ncmlFile.toString) } )
@@ -127,7 +129,7 @@ object Collections extends XmlResource {
       for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
              if (collId != "local_collections") && !datasets.containsKey(collId) ) { Collections.addCollection(collId, ncmlFile.toString) }
 
-      logger.info( " ---> Updating Collections from files: \n\t" + ncmlFiles.map(_.toString).sorted.mkString("\n\t") + " ----> Collections = \n\t" + Collections.getCollectionKeys.sorted.mkString("\n\t"))
+      logger.info( " ---> Updating Collections from files: \n\t" + ncmlFiles.map(_.toString).sorted.mkString("\n\t") + "\n----> Collections = \n\t" + Collections.getCollectionKeys.sorted.mkString("\n\t"))
 
     } catch { case ex: Exception => logger.error( " Error refreshing Collection List from '%s': %s".format( collPath , ex.getMessage ) ) }
   }
@@ -217,17 +219,22 @@ object Collections extends XmlResource {
     collection
   }
 
-  def addCollection(  id: String, ncmlFilePath: String ): Option[Collection] = try {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncmlFilePath)
-    val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
-    val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
-    val newCollection = new Collection( "file", id, ncmlFilePath, "", "", title, vars )
+  def addCollection(  id: String, collectionFilePath: String ): Option[Collection] = try {
+    val newCollection = if( collectionFilePath.endsWith(".csv") ) {
+      val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
+      new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )
+    } else {
+      val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(collectionFilePath)
+      val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
+      val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
+      new Collection("file", id, collectionFilePath, "", "", title, vars)
+    }
     datasets.put( id, newCollection  )
 //    persistLocalCollections()
     Some(newCollection)
   } catch {
     case err: Exception =>
-      logger.error( s"Error reading collection ${id} from ncml ${ncmlFilePath}: ${err.toString}" )
+      logger.error( s"Error reading collection ${id} from ncml ${collectionFilePath}: ${err.toString}" )
       None
   }
 
