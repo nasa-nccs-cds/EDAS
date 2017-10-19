@@ -31,7 +31,6 @@ class ObjectNotationParser extends JavaTokenParsers {
 
 object CDSecurity extends Loggable {
   def sanitize( str_data: String ): String = {
-    logger.info( s"\n\n -----> Sanitize: ${str_data}\n ${getStack}")
     if (str_data contains "]]>") throw new SecurityException(" Request contains illegal CDATA breakout string")
     str_data
   }

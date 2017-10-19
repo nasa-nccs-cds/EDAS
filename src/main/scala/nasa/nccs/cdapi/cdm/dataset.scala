@@ -364,9 +364,11 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
 
   def toXml: xml.Elem = {
     <collection id={id} title={title}>
-      { vars.map ( v => { val elems = v.split(":"); <variable name={elems.head} axes={elems.last}> {v} </variable> } ) }
+      { vars.map ( vname => getVariable(vname).toXml ) }
     </collection>
   }
+
+  // <variable name={elems.head} axes={elems.last}> {v} </variable> } ) }
 
   def createNCML( pathFile: File, collectionId: String  ): String = {
     val _ncmlFile = NCMLWriter.getCachePath("NCML").resolve(collectionId).toFile
