@@ -367,8 +367,8 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     val subCollections = new MetaCollectionFile(dataPath).subCollections
     subCollections flatMap ( _.getCollectionsXml )
   } else {
-    val vnames: Seq[String] = for( vspec<-vars; vname=vspec.split(':').head; if !vname.endsWith("_bnds") ) yield vname
-    vnames.toSet.map( vname => getVariable( vname ).toXmlHeader ).toSeq
+    val vnames: Set[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") ).toSet
+    vnames.map( getVariable( _ ).toXmlHeader ).toSeq
   }
 
 
