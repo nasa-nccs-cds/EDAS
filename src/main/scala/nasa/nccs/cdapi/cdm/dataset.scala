@@ -34,6 +34,7 @@ import ucar.nc2._
 import ucar.nc2.write.Nc4Chunking
 
 import scala.io.Source
+import scala.xml.Node
 
 object Collection extends Loggable {
   def apply( id: String, ncmlFile: File ) = {
@@ -326,7 +327,7 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
   lazy val varNames = vars.map(varStr => varStr.split(Array(':', '|')).head)
   lazy val grid = CDGrid(id, dataPath)
 
-  def isMeta = dataPath.endsWith(".csv")
+  def isMeta: Boolean = dataPath.endsWith(".csv")
   def deleteAggregation() = grid.deleteAggregation
   def getVariableMetadata(varName: String): List[nc2.Attribute] = grid.getVariableMetadata(varName)
   def getGridFilePath = grid.gridFilePath
@@ -362,9 +363,16 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     case _ => "file:/" + dataPath
   }
 
-  def toXml: xml.Elem = {
+  def getCollectionsXml: Seq[Node] = if(isMeta) {
+    val subCollections = new MetaCollectionFile(dataPath).subCollections
+    subCollections flatMap ( _.getCollectionsXml )
+  } else {
+    { vars.map ( vname => getVariable(vname).toXml ) }
+  }
+
+  def toXml: xml.Elem =  {
     <collection id={id} title={title}>
-      { vars.map ( vname => getVariable(vname).toXml ) }
+      { getCollectionsXml }
     </collection>
   }
 
@@ -1032,7 +1040,7 @@ object NetcdfDatasetMgr extends Loggable {
 }
 
 class MetaCollectionFile( val path: String ) {
-  val subCollections: Map[String,String]  = parse
+  private val _subCollections: Map[String,String]  = parse
 
   private def parse: Map[String,String] = {
     val items: Iterator[(String,String)] = for( line <- Source.fromFile(path).getLines; tline = line.trim; if !tline.startsWith("#") ) yield {
@@ -1042,7 +1050,9 @@ class MetaCollectionFile( val path: String ) {
     Map( items.toSeq: _* )
   }
 
-  def getPath( varName: String ): Option[String] = subCollections.get( varName.toLowerCase )
+  def getPath( varName: String ): Option[String] = _subCollections.get( varName.toLowerCase )
+  def paths: Seq[String] = _subCollections.values.toSeq
+  def subCollections: Seq[Collection] = paths flatMap Collections.getCollectionFromPath
 }
 
 //class ncWriteTest extends Loggable {
