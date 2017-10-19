@@ -367,7 +367,7 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     val subCollections = new MetaCollectionFile(dataPath).subCollections
     subCollections flatMap ( _.getCollectionsXml )
   } else {
-    { vars.map ( vname => getVariable(vname.split(':').head).toXmlHeader ) }
+    { vars.map ( vname => getVariable(vname.split(':').head).toXml ) }
   }
 
   def toXml: xml.Elem =  {
