@@ -366,9 +366,8 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
   def getCollectionsXml: Seq[Node] = if(isMeta) {
     val subCollections = new MetaCollectionFile(dataPath).subCollections
     subCollections flatMap ( _.getCollectionsXml )
-  } else {
-    { vars.map ( vname => getVariable(vname.split(':').head).toXml ) }
-  }
+  } else { for( vspec<-vars; vname=vspec.split(':').head; if !vname.endsWith("_bnds"); v=getVariable(vname) ) yield v.toXml }
+
 
   def toXml: xml.Elem =  {
     <collection id={id} title={title}>
