@@ -311,7 +311,7 @@ class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) 
     s"PartitionSpec { axis = $axisIndex, nPart = $nPart, partIndex = $partIndex }"
 }
 
-class DataSource(val name: String, metaCollection: Collection, val domain: String, val autoCache: Boolean, val fragIdOpt: Option[String] = None) {
+class DataSource(val name: String, metaCollection: Collection, val domain: String, val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
   val debug = 1
   val collection: Collection = getSubCollection( metaCollection, name )
   def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.domain, dsource.autoCache )
@@ -322,7 +322,7 @@ class DataSource(val name: String, metaCollection: Collection, val domain: Strin
   def getKey: Option[DataFragmentKey] = fragIdOpt.map(DataFragmentKey.apply(_))
 
   def getSubCollection( metaCollection: Collection, varName: String  ): Collection = {
-    if( metaCollection.dataPath.endsWith(".csv") ) {
+    val result = if( metaCollection.dataPath.endsWith(".csv") ) {
       val metaFile = new MetaCollectionFile( metaCollection.dataPath )
       metaFile.getPath( varName ) match {
         case Some(path) => Collections.getCollectionFromPath( path ) match {
@@ -332,6 +332,8 @@ class DataSource(val name: String, metaCollection: Collection, val domain: Strin
         case None => throw new Exception( s"Can't locate variable ${varName} in metaCollection ${metaCollection.dataPath}")
       }
     } else { metaCollection }
+    logger.info( s"DataSource::GetSubCollection: metaCollection= ${metaCollection.dataPath}, subCollection= ${result.dataPath}" )
+    result
   }
 }
 
