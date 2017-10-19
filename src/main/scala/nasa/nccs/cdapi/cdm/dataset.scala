@@ -324,7 +324,7 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
   override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
   def isEmpty = dataPath.isEmpty
   lazy val varNames = vars.map(varStr => varStr.split(Array(':', '|')).head)
-  val grid = CDGrid(id, dataPath)
+  lazy val grid = CDGrid(id, dataPath)
 
   def deleteAggregation() = grid.deleteAggregation
   def getVariableMetadata(varName: String): List[nc2.Attribute] = grid.getVariableMetadata(varName)
