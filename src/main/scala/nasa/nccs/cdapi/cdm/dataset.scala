@@ -326,6 +326,7 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
   lazy val varNames = vars.map(varStr => varStr.split(Array(':', '|')).head)
   lazy val grid = CDGrid(id, dataPath)
 
+  def isMeta = dataPath.endsWith(".csv")
   def deleteAggregation() = grid.deleteAggregation
   def getVariableMetadata(varName: String): List[nc2.Attribute] = grid.getVariableMetadata(varName)
   def getGridFilePath = grid.gridFilePath
@@ -362,8 +363,9 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
   }
 
   def toXml: xml.Elem = {
-    val varData = vars.mkString(",")
-    <collection id={id} ctype={ctype} title={title} vars={varData}></collection>
+    <collection id={id} ctype={ctype} title={title}>
+      { vars.map ( v => { val elems = v.split(":"); <variable name={elems.head} axes={elems.last}></variable> } ) }
+    </collection>
   }
 
   def createNCML( pathFile: File, collectionId: String  ): String = {

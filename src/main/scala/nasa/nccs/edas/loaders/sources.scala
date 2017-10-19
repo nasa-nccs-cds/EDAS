@@ -140,7 +140,14 @@ object Collections extends XmlResource {
   def toXml: xml.Elem = {
     refreshCollectionList
     <collections>
-      {for ((id: String, collection: Collection) <- datasets) yield collection.toXml}
+      {for ( (id: String, collection: Collection) <- datasets; if collection.isMeta ) yield collection.toXml}
+    </collections>
+  }
+
+  def toXml( scope: String ): xml.Elem = {
+    refreshCollectionList
+    <collections>
+      { for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase(scope) ) yield collection.toXml }
     </collections>
   }
 
@@ -185,13 +192,6 @@ object Collections extends XmlResource {
 
   def idSet: Set[String] = datasets.keySet.toSet
   def values: Iterator[Collection] = datasets.valuesIterator
-
-  def toXml( scope: String ): xml.Elem = {
-    refreshCollectionList
-    <collections>
-      { for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase(scope) ) yield collection.toXml }
-    </collections>
-  }
 
   def uriToFile( uri: String ): String = {
     uri.toLowerCase.split(":").last.stripPrefix("/").stripPrefix("/").replaceAll("[-/]","_").replaceAll("[^a-zA-Z0-9_.]", "X") + ".ncml"
