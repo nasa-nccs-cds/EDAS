@@ -220,6 +220,7 @@ object Collections extends XmlResource {
   }
 
   def addCollection(  id: String, collectionFilePath: String ): Option[Collection] = try {
+    logger.info( s"AddCollection $id: file: $collectionFilePath" )
     val newCollection = if( collectionFilePath.endsWith(".csv") ) {
       val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
       new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )

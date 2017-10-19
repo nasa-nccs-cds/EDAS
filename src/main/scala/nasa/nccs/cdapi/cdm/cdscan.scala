@@ -33,8 +33,7 @@ object NCMLWriter extends Loggable {
   def getName(node: nc2.CDMNode): String = node.getFullName
   def isNcFileName(fName: String): Boolean = {
     val fname = fName.toLowerCase;
-    fname.endsWith(".nc4") || fname.endsWith(".nc") || fname.endsWith(".hdf") || fname
-      .endsWith(".ncml")
+    fname.endsWith(".nc4") || fname.endsWith(".nc") || fname.endsWith(".hdf") || fname.endsWith(".ncml")
   }
 
   def backup( dir: File, backupDir: File ): Unit = {

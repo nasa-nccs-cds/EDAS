@@ -362,16 +362,8 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
   }
 
   def toXml: xml.Elem = {
-    val varData = vars.mkString(";")
-    if (fileFilter.isEmpty) {
-      <collection id={id} ctype={ctype} grid={grid.toString} path={dataPath} title={title}>
-        {varData}
-      </collection>
-    } else {
-      <collection id={id} ctype={ctype} grid={grid.toString} path={dataPath} fileFilter={fileFilter} title={title}>
-        {varData}
-      </collection>
-    }
+    val varData = vars.mkString(",")
+    <collection id={id} ctype={ctype} title={title} vars={varData}></collection>
   }
 
   def createNCML( pathFile: File, collectionId: String  ): String = {
