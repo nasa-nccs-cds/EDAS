@@ -1,7 +1,7 @@
 package nasa.nccs.esgf.process
 
 import nasa.nccs.caching.{EDASPartitioner, JobRecord}
-import nasa.nccs.cdapi.cdm.{CDSVariable, Collection, PartitionedFragment}
+import nasa.nccs.cdapi.cdm.{CDSVariable, Collection, MetaCollectionFile, PartitionedFragment}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import nasa.nccs.cdapi.tensors.{CDCoordMap, CDFloatArray}
 import nasa.nccs.edas.loaders.Collections
@@ -31,6 +31,7 @@ import nasa.nccs.wps._
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2.dataset.CoordinateAxis1DTime
 
+import scala.io.Source
 import scala.util.Random
 
 case class ErrorReport(severity: String, message: String) {
@@ -310,14 +311,28 @@ class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) 
     s"PartitionSpec { axis = $axisIndex, nPart = $nPart, partIndex = $partIndex }"
 }
 
-class DataSource(val name: String, val collection: Collection, val domain: String, val autoCache: Boolean, val fragIdOpt: Option[String] = None) {
+class DataSource(val name: String, metaCollection: Collection, val domain: String, val autoCache: Boolean, val fragIdOpt: Option[String] = None) {
   val debug = 1
+  val collection: Collection = getSubCollection( metaCollection, name )
   def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.domain, dsource.autoCache )
   override def toString = s"DataSource { name = $name, \n\t\t\tcollection = %s, domain = $domain, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
   def toXml =  <dataset name={name} domain={domain}> {collection.toXml} </dataset>
   def isDefined = (!collection.isEmpty && !name.isEmpty)
   def isReadable = (!collection.isEmpty && !name.isEmpty && !domain.isEmpty)
   def getKey: Option[DataFragmentKey] = fragIdOpt.map(DataFragmentKey.apply(_))
+
+  def getSubCollection( metaCollection: Collection, varName: String  ): Collection = {
+    if( metaCollection.dataPath.endsWith(".csv") ) {
+      val metaFile = new MetaCollectionFile( metaCollection.dataPath )
+      metaFile.getPath( varName ) match {
+        case Some(path) => Collections.getCollectionFromPath( path ) match {
+          case Some( collection ) => collection
+          case None =>  throw new Exception( s"Can't locate collection with path ${path}: paths = ${Collections.getCollectionPaths.mkString(", ")}" )
+        }
+        case None => throw new Exception( s"Can't locate variable ${varName} in metaCollection ${metaCollection.dataPath}")
+      }
+    } else { metaCollection }
+  }
 }
 
 class DataFragmentKey(val varname: String, val collId: String, val origin: Array[Int], val shape: Array[Int] ) extends Serializable {

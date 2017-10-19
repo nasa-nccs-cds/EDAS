@@ -116,6 +116,9 @@ object Collections extends XmlResource {
 
   def initCollectionList = if( datasets.isEmpty ) { refreshCollectionList }
 
+  def getCollectionFromPath( path: String ): Option[Collection] = datasets.values.find( _.dataPath == path )
+  def getCollectionPaths: Iterable[String] = datasets.values.map( _.dataPath )
+
   def refreshCollectionList = {
     var collPath: Path = null
     try {
@@ -220,7 +223,6 @@ object Collections extends XmlResource {
   }
 
   def addCollection(  id: String, collectionFilePath: String ): Option[Collection] = try {
-    logger.info( s"AddCollection $id: file: $collectionFilePath" )
     val newCollection = if( collectionFilePath.endsWith(".csv") ) {
       val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
       new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )

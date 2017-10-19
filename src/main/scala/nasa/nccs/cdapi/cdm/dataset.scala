@@ -1017,14 +1017,28 @@ object NetcdfDatasetMgr extends Loggable {
 
   def getCollectionPath( path: String, varName: String ): String = {
     if( path.endsWith("csv") ) {
-      for (line <- Source.fromFile(path).getLines) {
-        val items = line.split(",").map(_.trim)
-        if( items.head.toLowerCase == varName.toLowerCase ) { return items.last }
+      val metaFile = new MetaCollectionFile(path)
+      metaFile.getPath( varName ) match {
+        case Some(path) => path
+        case None => throw new Exception( s"Can't locate variable ${varName} in Collection Directory ${path}")
       }
-      throw new Exception( s"Can't locate variable ${varName} in Collection Directory ${path}")
     } else { path }
   }
 
+}
+
+class MetaCollectionFile( val path: String ) {
+  val subCollections: Map[String,String]  = parse
+
+  private def parse: Map[String,String] = {
+    val items: Iterator[(String,String)] = for( line <- Source.fromFile(path).getLines; tline = line.trim; if !tline.startsWith("#") ) yield {
+      val items = tline.split(",").map(_.trim)
+      ( items.head.toLowerCase, items.tail.mkString(";") )
+    }
+    Map( items.toSeq: _* )
+  }
+
+  def getPath( varName: String ): Option[String] = subCollections.get( varName.toLowerCase )
 }
 
 //class ncWriteTest extends Loggable {
