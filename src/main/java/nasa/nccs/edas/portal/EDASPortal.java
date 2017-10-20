@@ -8,11 +8,10 @@ import org.zeromq.ZMQ;
 import nasa.nccs.utilities.EDASLogManager;
 import ucar.nc2.time.CalendarDate;
 
+import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.io.File;
-import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
@@ -20,7 +19,9 @@ class Response {
     String clientId = null;
     String responseId = null;
     String rtype = null;
+    String _body = null;
     String id() { return clientId + ":" + responseId; }
+    String message() { return _body; }
 
     public Response( String _rtype, String _clientId, String _responseId )  {
         rtype = _rtype;
@@ -30,42 +31,39 @@ class Response {
 }
 
 class Message extends Response {
-    String message = null;
     public Message( String _clientId, String _responseId, String _message ) {
         super( "message", _clientId, _responseId );
-        message = _message;
+        _body = _message;
     }
-    public String toString() { return "Message[" + id() + "]: " + message; }
+    public String toString() { return "Message[" + id() + "]: " + _body; }
 }
 
 class ErrorReport extends Response {
-    String message = null;
     public ErrorReport( String _clientId, String _responseId, String _message ) {
         super( "error", _clientId, _responseId );
-        message = _message;
+        _body = _message;
     }
-    public String toString() { return "ErrorReport[" + id() + "]: " + message; }
+    public String toString() { return "ErrorReport[" + id() + "]: " + _body; }
 }
 
 class DataPacket extends Response {
-    private String _header = null;
     private byte[] _data = null;
     public DataPacket( String client_id, String response_id, String header, byte[] data  ) {
         super( "data",  client_id, response_id );
-        _header =  header;
+        _body =  header;
         _data = data;
     }
     public DataPacket( String client_id, String response_id, String header  ) {
         super( "data",  client_id, response_id );
-        _header =  header;
+        _body =  header;
     }
     boolean hasData() { return (_data != null); }
-    byte[] getTransferHeader() { return (clientId + ":" + _header).getBytes(); }
-    String getHeaderString() { return _header; }
+    byte[] getTransferHeader() { return (clientId + ":" + _body).getBytes(); }
+    String getHeaderString() { return _body; }
 
     byte[] getTransferData() { return concat(clientId.getBytes(), _data ); }
     byte[] getRawData() { return _data; }
-    public String toString() { return "DataPacket[" + _header + "]"; }
+    public String toString() { return "DataPacket[" + _body + "]"; }
 
     static byte[] concat( byte[] a, byte[] b ) {
         byte[] c = new byte[a.length + b.length];
@@ -98,7 +96,7 @@ class Responder extends Thread {
     public void clearClientId() { clientId = null; }
 
     public void sendResponse( Response msg ) {
-        logger.info( "Post Message to response queue: " + msg.id() );
+        logger.info( "Post Message to response queue: " + msg.toString() );
         response_queue.add( msg );
     }
 
@@ -122,7 +120,7 @@ class Responder extends Thread {
     }
 
     String doSendMessage( ZMQ.Socket socket, Message msg  ) {
-        List<String> request_args = Arrays.asList( msg.id(), "response", msg.message );
+        List<String> request_args = Arrays.asList( msg.id(), "response", msg.message() );
         String packaged_msg = StringUtils.join( request_args,  "!" );
         logger.info( " Sending message to client, msgId=" + msg.id() + ", content: " + packaged_msg );
         socket.send( packaged_msg.getBytes() );
@@ -130,9 +128,9 @@ class Responder extends Thread {
     }
 
     void doSendErrorReport( ZMQ.Socket socket, ErrorReport msg  ) {
-        List<String> request_args = Arrays.asList( msg.id(), "error", msg.message );
+        List<String> request_args = Arrays.asList( msg.id(), "error", msg.message() );
         socket.send( StringUtils.join( request_args,  "!" ).getBytes() );
-        logger.info( " Sent error report: " + msg.id() + ", content: " + msg.message );
+        logger.info( " Sent error report: " + msg.id() + ", content: " + msg.message() );
     }
 
     void doSendDataPacket( ZMQ.Socket socket, DataPacket dataPacket ) {
@@ -147,7 +145,7 @@ class Responder extends Thread {
 
     void heartbeat(ZMQ.Socket socket) {
         if( clientId != null ) {
-            Message hb_msg = new Message(clientId, "status", status_reports.toString());
+            Message hb_msg = new Message( clientId, "status", status_reports.toString() );
             doSendMessage(socket, hb_msg);
         }
     }
@@ -269,18 +267,28 @@ public abstract class EDASPortal {
     }
 
     public abstract Message execUtility( String[] utilSpec );
-    public abstract Message execute( String[] taskSpec );
+    public abstract Response execute( String[] taskSpec );
     public abstract void shutdown();
     public abstract Message getCapabilities( String[] utilSpec );
     public abstract Message describeProcess( String[] utilSpec );
 
-    public String sendResponseMessage( Message msg ) {
-        List<String> request_args = Arrays.asList( msg.id(), msg.message );
+    public String sendResponseMessage( Response msg ) {
+        List<String> request_args = Arrays.asList( msg.id(), msg.message() );
         String packaged_msg = StringUtils.join( request_args,  "!" );
         String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
-        logger.info( String.format( "@@ Sending response %s on request_socket @(%s)", msg.id(), timeStamp ) );
+        logger.info( String.format( "@@ Sending response %s on request_socket @(%s): %s", msg.responseId, timeStamp, msg.toString() ) );
+        logger.info( getCurrentStackTrace() );
         request_socket.send( packaged_msg.getBytes(),0 );
         return packaged_msg;
+    }
+
+    public static String getCurrentStackTrace() {
+        try{ throw new Exception("Current"); } catch(Exception ex)  {
+            Writer result = new StringWriter();
+            PrintWriter printWriter = new PrintWriter(result);
+            ex.printStackTrace(printWriter);
+            return result.toString();
+        }
     }
 
     public String getHostInfo() {
@@ -296,33 +304,35 @@ public abstract class EDASPortal {
             logger.info( String.format( "Listening for requests on port: %d, host: %s",  request_port, getHostInfo() ) );
             String request_header = new String(request_socket.recv(0)).trim();
             parts = request_header.split("[!]");
-            String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
-            logger.info( String.format( "  ###  Processing %s request: %s @(%s)",  parts[1], request_header, timeStamp ) );
-            if( parts[1].equals("execute") ) {
-                sendResponseMessage(  execute( parts ) );
-            } else if( parts[1].equals("util") ) {
-                sendResponseMessage(  execUtility( parts ) );
-            } else if( parts[1].equals("quit") || parts[1].equals("shutdown") ) {
-                sendResponseMessage( new Message(parts[0],"quit", "Terminating") );
-                logger.info("Received Shutdown Message");
-                System.exit(0);
-            } else if( parts[1].toLowerCase().equals("getcapabilities") ) {
-                sendResponseMessage(  getCapabilities( parts ) );
-            } else if( parts[1].toLowerCase().equals("describeprocess") ) {
-                sendResponseMessage(  describeProcess( parts ) );
-            } else {
-                String msg = "Unknown request header type: " + parts[1];
-                logger.info( msg );
-                sendResponseMessage( new Message( parts[0],"error",msg ) );
+            try {
+                String timeStamp = timeFormatter.format(Calendar.getInstance().getTime());
+                logger.info(String.format("  ###  Processing %s request: %s @(%s)", parts[1], request_header, timeStamp));
+                if (parts[1].equals("execute")) {
+                    sendResponseMessage(execute(parts));
+                } else if (parts[1].equals("util")) {
+                    sendResponseMessage(execUtility(parts));
+                } else if (parts[1].equals("quit") || parts[1].equals("shutdown")) {
+                    sendResponseMessage(new Message(parts[0], "quit", "Terminating"));
+                    logger.info("Received Shutdown Message");
+                    System.exit(0);
+                } else if (parts[1].toLowerCase().equals("getcapabilities")) {
+                    sendResponseMessage(getCapabilities(parts));
+                } else if (parts[1].toLowerCase().equals("describeprocess")) {
+                    sendResponseMessage(describeProcess(parts));
+                } else {
+                    String msg = "Unknown request header type: " + parts[1];
+                    logger.info(msg);
+                    sendResponseMessage(new Message(parts[0], "error", msg));
+                }
+            } catch ( Exception ex ) {   // TODO: COnvert to Java
+//                String clientId = elem(taskSpec,0)
+//                val runargs = getRunArgs( taskSpec )
+//                String jobId = runargs.getOrElse("jobId",randomIds.nextString)
+//                sendResponseMessage( error_response );
             }
-        } catch ( java.nio.channels.ClosedSelectorException ex ) {
-            logger.info( "Request Socket closed." );
-            active = false;
         } catch ( Exception ex ) {
-            logger.error( "Error in Request: " + ex.toString() );
-            ex.printStackTrace();
-            sendResponseMessage( new Message( parts[0], "error", ex.getClass().getName() + ": " + ex.getMessage() ) );
-            responder.clearClientId();
+            logger.info( "Request Communication error: Shutting down." );
+            active = false;
         }
         logger.info( "EXIT EDASPortal");
     }

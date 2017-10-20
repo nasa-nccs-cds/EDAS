@@ -22,7 +22,7 @@ import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.wps.{WPSExecuteStatusStarted, _}
+import nasa.nccs.wps.{WPSExecuteStatusStarted, WPSResponse, _}
 import ucar.nc2.Attribute
 import ucar.nc2.dataset.CoordinateAxis
 import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingDefault, Nc4ChunkingStrategyNone}
@@ -39,7 +39,8 @@ class Counter(start: Int = 0) {
 }
 
 trait ExecutionCallback extends Loggable {
-  def execute( results: xml.Node, success: Boolean  )
+  def success( results: xml.Node  )
+  def failure( msg: String )
 }
 
 object CDS2ExecutionManager extends Loggable {
@@ -315,38 +316,39 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 
   def futureExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): Future[WPSResponse] = Future {
     logger.info("ASYNC Execute { runargs: " + run_args.toString + ",  request: " + request.toString+ ",  jobId: " + jobId + " }")
-    val requestContext = createRequestContext( jobId, request, run_args )
-    val results = executeWorkflows( requestContext )
-    val response = results.toXml( ResponseSyntax.Generic )
-    executionCallback.foreach( _.execute( response, true ))
-    collectionDataCache.removeJob( jobId )
-    results
+    try {
+      val requestContext = createRequestContext(jobId, request, run_args)
+      val results = executeWorkflows(requestContext)
+      val response = results.toXml(ResponseSyntax.Generic)
+      executionCallback.foreach(_.success(response))
+      results
+    } catch {
+      case err: Exception =>
+        executionCallback.foreach( _.failure(err.getMessage) )
+        new WPSExceptionReport(err)
+    } finally {
+      collectionDataCache.removeJob(jobId)
+    }
   }
 
   def blockingExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSResponse =  {
     logger.info("Blocking Execute { runargs: " + run_args.toString + ", request: " + request.toString + " }")
     runtime.printMemoryUsage(logger)
     val t0 = System.nanoTime
-    try {
-      val req_ids = request.name.split('.')
-      req_ids(0) match {
-        case "util" =>
-          logger.info("Executing utility request " + req_ids(1) )
-          executeUtilityRequest( jobId, req_ids(1), request, run_args )
-        case _ =>
-          logger.info("Executing task request " + request.name )
-          val requestContext = createRequestContext ( jobId, request, run_args )
-          val results = executeWorkflows ( requestContext )
-          val response = results.toXml( ResponseSyntax.Generic )
-          requestContext.logTimingReport("Executed task request " + request.name)
-          executionCallback.foreach( _.execute( response, true ) )
-          collectionDataCache.removeJob( jobId )
-          results
-      }
-    } catch {
-      case err: Exception =>
+    val req_ids = request.name.split('.')
+    req_ids(0) match {
+      case "util" =>
+        logger.info("Executing utility request " + req_ids(1) )
+        executeUtilityRequest( jobId, req_ids(1), request, run_args )
+      case _ =>
+        logger.info("Executing task request " + request.name )
+        val requestContext = createRequestContext ( jobId, request, run_args )
+        val results = executeWorkflows ( requestContext )
+        val response = results.toXml( ResponseSyntax.Generic )
+        requestContext.logTimingReport("Executed task request " + request.name)
+        executionCallback.foreach( _.success( response ) )
         collectionDataCache.removeJob( jobId )
-        new WPSExceptionReport(err)
+        results
     }
   }
 

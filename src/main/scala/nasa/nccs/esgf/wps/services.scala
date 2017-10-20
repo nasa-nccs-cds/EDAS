@@ -84,9 +84,8 @@ object edasServiceProvider extends ServiceProvider {
       }
     } catch {
       case e: Exception =>
-        val result = fatal(e).toXml(syntax)
-        executionCallback.foreach( _.execute( result, false ) )
-        result
+        collectionDataCache.removeJob( jobId )
+        throw e
     }
   }
   def describeWPSProcess(process_name: String, runArgs: Map[String,String]): xml.Elem = {

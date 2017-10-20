@@ -104,12 +104,7 @@ class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: Str
         <response serviceInstance={serviceInstance} status="ERROR" creation_time={currentTime}> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </response>
   }
 
-  def getExceptionReport( errorMessage: String ): xml.Node = try {
-    val reportNodes: xml.NodeSeq = scala.xml.XML.loadString(errorMessage) \\ "ExceptionReport"
-    logger.info( s"Cleaning ExceptionReport, ExceptionReport nodes found: ${reportNodes.length.toString}, text = ${errorMessage}" )
-    reportNodes.headOption.getOrElse( throw new Exception( "No ExceptionReport") )
-  } catch {
-    case ex: Exception =>
+  def getExceptionReport( errorMessage: String ): xml.Node = {
       <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">
         <ows:Exception>
           <ows:ExceptionText> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </ows:ExceptionText>

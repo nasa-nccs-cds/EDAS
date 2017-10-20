@@ -9,7 +9,7 @@ import java.util.Formatter
 import nasa.nccs.cdapi.data._
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.WorkflowNode
-import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey }
+import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
@@ -212,7 +212,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   def getUnits: String =  coordAxis.getUnitsString // coordAxis.getAxisType match { case AxisType.Time => cdsutils.baseTimeUnits case x => coordAxis.getUnitsString }
 
   def getTimeAxis: CoordinateAxis1DTime = {
-    val gridDS = NetcdfDatasetMgr.open(grid.gridFilePath )
+    val gridDS = NetcdfDatasetMgr.openFile(grid.gridFilePath )
     CoordinateAxis1DTime.factory( gridDS, coordAxis, new Formatter() )
   }
 

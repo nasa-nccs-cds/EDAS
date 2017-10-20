@@ -9,7 +9,7 @@ import nasa.nccs.utilities.Loggable
 
 import scala.collection.JavaConversions._
 import nasa.nccs.wps
-import nasa.nccs.wps.WPSExceptionReport
+import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSExecuteStatusError}
 
 import scala.xml.XML
 
@@ -58,18 +58,11 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getWPSCapabilities( identifier, runArgs )
   }
 
-  def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Elem = try {
+  def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
     val dataInputsObj = if( !job.datainputs.isEmpty ) wpsObjectParser.parseDataInputs( job.datainputs ) else Map.empty[String, Seq[Map[String, Any]]]
     val request: TaskRequest = TaskRequest( job.requestId, job.identifier, dataInputsObj )
     val serviceProvider = apiManager.getServiceProvider("edas")
     serviceProvider.executeProcess( request, job.datainputs, job.runargs, executionCallback )
-  } catch {
-    case ex: Throwable =>
-      val response_syntax = getResponseSyntax( job.runargs )
-      val response_xml = new WPSExceptionReport( ex ).toXml( response_syntax )
-      logger.info (s"\nJob exited with error, jobId=${ job.requestId }, response=${response_xml.toString}\n")
-      executionCallback.foreach( _.execute( response_xml, false ) )
-      response_xml
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {
@@ -147,9 +140,20 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
     val message = response.substring( response.indexOf('!') + 1 )
     logger.info( "Received 'execute' response, Sample: " + response.substring(0,Math.min(250,message.length)) )
-    val xmlResults: xml.Node = EDAS_XML.loadString( message )
-    executionCallback.foreach( _.execute( xmlResults, true ) )
-    xmlResults
+    getResults( message, job, executionCallback )
+  }
+
+  def getResults( message: String, job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Node = {
+    try {
+      val xmlResults = EDAS_XML.loadString(message)
+      executionCallback.foreach(_.success(xmlResults))
+      xmlResults
+    } catch {
+      case ex: Exception =>
+        executionCallback.foreach( _.failure(message) )
+        val response = new WPSExecuteStatusError( "EDAS", message, job.requestId )
+        response.toXml( ResponseSyntax.WPS )
+    }
   }
 
   def getResultFilePath( service: String, resultId: String ): Option[String] = {

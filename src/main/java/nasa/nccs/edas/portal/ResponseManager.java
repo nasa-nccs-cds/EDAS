@@ -114,19 +114,17 @@ public class ResponseManager extends Thread {
                     Path outFilePath = saveFile( header, rId, data, 8 );
                     file_paths.put( rId, outFilePath.toString() );
                     logger.info( String.format("Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
-//                    ExecutionCallback callback = callbacks.get( jobId );
-//                    callback.execute( );
                 } catch( Exception err ) {
                     logger.error(String.format("Unable to write to output file: %s", err.getMessage() ) );
                 }
             } else if ( type.equals("response") ) {
                 cacheResult(rId, toks[2]);
+                String currentTime = timeFormat.format(Calendar.getInstance().getTime());
+                logger.info(String.format("Received result[%s] (%s): %s", rId, currentTime, response));
+            } else if ( type.equals("error") ) {
+                cacheResult(rId, toks[2]);
                 String currentTime = timeFormat.format( Calendar.getInstance().getTime() );
-                logger.info(String.format("Received result[%s] (%s): %s", rId, currentTime, response ) );
-//                if( !latest_result.equals(toks[2]) ) {
-//                    logger.info(String.format("Received result: %s", response ) );
-//                    latest_result = toks[2];
-//                }
+                logger.info(String.format("Received error[%s] (%s): %s", rId, currentTime, response ) );
             } else {
                 logger.error(String.format("EDASPortal.ResponseThread-> Received unrecognized message type: %s",type));
             }

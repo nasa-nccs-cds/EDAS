@@ -69,8 +69,12 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
       { for( name <- attributes.keys ) yield <attribute name={name}> { getAttributeValue(name) } </attribute> }
     </variable>
 
+  def toXmlHeader: xml.Node = {
+      val ( index: Int, variable: nc2.Variable ) = collection.grid.getVariable(name)
+      <variable name={name} fullname={fullname} description={description} units={units} shape={shape.mkString("[", " ", "]")} dims={variable.getDimensionsString}/>
+  }
 
-//  def read( section: ma2.Section ) = ncVariable.read(section)
+  //  def read( section: ma2.Section ) = ncVariable.read(section)
   def getTargetGrid( fragSpec: DataFragmentSpec ): TargetGrid = fragSpec.targetGridOpt match { case Some(targetGrid) => targetGrid;  case None => new TargetGrid( this, Some(fragSpec.getAxes) ) }
   def getCoordinateAxes: List[ CoordinateAxis1D ] = {
     dims.flatMap( dim => collection.grid.findCoordinateAxis( dim ).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) ) ).toList
