@@ -61,6 +61,7 @@ class partition extends Kernel() {
   val inputs = List( WPSDataInput("input variables", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Partitioner"
+  override val doesAxisElimination: Boolean = false
   val description = "Configures various data partitioning and filtering operations"
 }
 
@@ -68,6 +69,7 @@ class compress extends Kernel() {
   val inputs = List(WPSDataInput("input variable", 1, 1))
   val outputs = List(WPSProcessOutput("operation result"))
   val title = "Compress"
+  override val doesAxisElimination: Boolean = false
   val description = "Compress data by cherry-picking slices, etc."
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
@@ -215,6 +217,7 @@ class bin extends Kernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Binning"
+  override val doesAxisElimination: Boolean = false
   override val description = "Aggregates data into bins using specified reduce function and binning specifications"
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
@@ -257,6 +260,7 @@ class noOp extends Kernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "NoOperation"
+  override val doesAxisElimination: Boolean = false
   override val description = "Returns the input data subset to the specified domain as the result"
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
@@ -271,6 +275,7 @@ class binAve extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Binning"
   override val description = "Aggregates data into bins using specified reduce function and binning specifications"
+  override val doesAxisElimination: Boolean = false
   object BinKeyUtils {
     implicit object BinKeyOrdering extends Ordering[String] {
       def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
@@ -395,6 +400,7 @@ class subset extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Subset"
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
+  override val doesAxisElimination: Boolean = false
 }
 
 class anomaly extends SingularRDDKernel(Map.empty) {
@@ -487,6 +493,7 @@ class timeBin extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Time Binning"
   override val description = "Aggregates data into bins over time using specified reduce function and binning specifications"
+  override val doesAxisElimination: Boolean = false
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
     val t0 = System.nanoTime

@@ -966,7 +966,7 @@ object NetcdfDatasetMgr extends Loggable {
   val formatter = new Formatter(Locale.US)
 
   def getTimeAxis( dataPath: String ): CoordinateAxis1DTime = {
-    val ncDataset: NetcdfDataset = open( dataPath )
+    val ncDataset: NetcdfDataset = openFile( dataPath )
     val axes = ncDataset.getCoordinateAxes.toList
     val result = axes.find( _.getAxisType == AxisType.Time ) match {
       case Some( time_axis ) => CoordinateAxis1DTime.factory(ncDataset, time_axis, formatter )
