@@ -33,6 +33,7 @@ import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
 import ucar.nc2._
 import ucar.nc2.write.Nc4Chunking
 
+import scala.collection.immutable.SortedMap
 import scala.io.Source
 import scala.xml.Node
 
@@ -192,7 +193,7 @@ object CDGrid extends Loggable {
                     val bounds: Array[Double] = ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
                     gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, bounds))
                   } catch {
-                    case err: Exception => logger.error( s"Error creating bounds in grid file for coordinate var ${coordAxis1D.getShortName}")
+                    case err: Exception => logger.error( s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}")
                   }
                 case None => Unit
               }
@@ -371,14 +372,14 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     val subCollections = new MetaCollectionFile(dataPath).subCollections
     subCollections flatMap ( _.getVarNodeMap )
   } else {
-    val vnames: Set[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") ).toSet
+    val vnames: List[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") )
     vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) ).toSeq
   }
 
 
   def toXml: xml.Elem =  {
     <collection id={id} title={title}>
-      { Map( getVarNodeMap: _* ).values }
+      { SortedMap( getVarNodeMap: _* ).values }
     </collection>
   }
 
