@@ -2,39 +2,39 @@ package nasa.nccs.utilities
 import scala.collection.GenTraversableOnce
 import scala.collection.mutable.ListBuffer
 
-object DNodeRelation extends Enumeration { val Child, Parent, Ancestor, Descendent = Value }
-object DNodeDirection extends Enumeration { val Up, Down = Value }
+object DNodeRelation extends Enumeration { val Input, Product, Antecedent, Predecesor = Value }
+object DNodeDirection extends Enumeration { val Post, Pre = Value }
 
 object DAGNode {
-  def sort[T <: DAGNode]( nodes: List[T] ): List[T] = nodes.sortWith( (n0,n1) => n1.hasDescendent(n0) )
+  def sort[T <: DAGNode]( nodes: List[T] ): List[T] = nodes.sortWith( (n0,n1) => n1.hasPredecesor(n0) )
 }
 
 class DAGNode extends Loggable {
   type DNRelation = DNodeRelation.Value
   type DNDirection = DNodeDirection.Value
 
-  private val _children = ListBuffer [DAGNode]()
-  private val _parents = ListBuffer [DAGNode]()
+  private val _inputs = ListBuffer [DAGNode]()
+  private val _products = ListBuffer [DAGNode]()
 
-  def addChild( node: DAGNode ) = {
+  def addInput(node: DAGNode ) = {
     assert( !(node eq this), " Error, Attempt to add DAG node to itself as child.")
-    if( !hasChild(node) ) {
-      assert(!(node.hasDescendent(this)), " Error, Attempt to create a circular DAG graph.")
-      _children += node;
-      node._parents += this;
+    if( !hasInput(node) ) {
+      assert(!(node.hasPredecesor(this)), " Error, Attempt to create a circular DAG graph.")
+      _inputs += node;
+      node._products += this;
     }
   }
 
   private def getRelatives( direction: DNDirection ): ListBuffer[DAGNode] = direction match {
-    case DNodeDirection.Down => _children
-    case DNodeDirection.Up => _parents
+    case DNodeDirection.Pre => _inputs
+    case DNodeDirection.Post => _products
   }
 
   private def collectRelatives( relation: DNRelation ): ListBuffer[DAGNode] = relation match {
-    case DNodeRelation.Child => _children
-    case DNodeRelation.Parent => _parents
-    case DNodeRelation.Ancestor => accumulate( DNodeDirection.Up )
-    case DNodeRelation.Descendent => accumulate( DNodeDirection.Down )
+    case DNodeRelation.Input => _inputs
+    case DNodeRelation.Product => _products
+    case DNodeRelation.Antecedent => accumulate( DNodeDirection.Post )
+    case DNodeRelation.Predecesor => accumulate( DNodeDirection.Pre )
   }
 
   private def accumulate( direction: DNDirection ): ListBuffer[DAGNode] =
@@ -54,13 +54,13 @@ class DAGNode extends Loggable {
   def flatten( relation: DNRelation ): List[DAGNode] = collectRelatives(relation).toList
   def flatMap[B]( relation: DNRelation, f: (DAGNode) ⇒ GenTraversableOnce[B] ): List[B] = collectRelatives(relation).flatMap( f ).toList
 
-  def hasDescendent( dnode: DAGNode ): Boolean = exists( DNodeRelation.Descendent, _ eq dnode )
-  def hasAncestor( dnode: DAGNode ): Boolean = exists( DNodeRelation.Ancestor, _ eq dnode )
-  def hasChild( dnode: DAGNode ): Boolean = exists( DNodeRelation.Child, _ eq dnode )
-  def hasParent( dnode: DAGNode ): Boolean = exists( DNodeRelation.Parent, _ eq dnode )
+  def hasPredecesor(dnode: DAGNode ): Boolean = exists( DNodeRelation.Predecesor, _ eq dnode )
+  def hasAntecedent(dnode: DAGNode ): Boolean = exists( DNodeRelation.Antecedent, _ eq dnode )
+  def hasInput(dnode: DAGNode ): Boolean = exists( DNodeRelation.Input, _ eq dnode )
+  def hasProduct(dnode: DAGNode ): Boolean = exists( DNodeRelation.Product, _ eq dnode )
   def size( relation: DNRelation ) = collectRelatives(relation).size
-  def isRoot = ( size( DNodeRelation.Parent ) == 0 )
-  def ancestors = accumulate( DNodeDirection.Down )
+  def isRoot = ( size( DNodeRelation.Product ) == 0 )
+  def predecesors = accumulate( DNodeDirection.Pre )
 }
 
 class LabeledDAGNode(id: String) extends DAGNode with Loggable {
@@ -73,18 +73,18 @@ class DAGNodeTest {
   val dn3 = new LabeledDAGNode("N3")
   val dn4 = new LabeledDAGNode("N4")
 
-  dn1.addChild(dn2)
-  dn2.addChild(dn3)
-  dn2.addChild(dn4)
+  dn1.addInput(dn2)
+  dn2.addInput(dn3)
+  dn2.addInput(dn4)
 
-  println( dn1.size( DNodeRelation.Descendent ) )
-  println( dn2.size( DNodeRelation.Descendent ) )
-  println( dn4.size( DNodeRelation.Descendent ) )
-  println( dn4.size( DNodeRelation.Ancestor ) )
-  println( dn4.hasAncestor( dn1 ) )
-  println( dn4.hasDescendent( dn1 ) )
-  println( dn1.hasAncestor( dn4 ) )
-  println( dn1.hasDescendent( dn4 ) )
+  println( dn1.size( DNodeRelation.Predecesor ) )
+  println( dn2.size( DNodeRelation.Predecesor ) )
+  println( dn4.size( DNodeRelation.Predecesor ) )
+  println( dn4.size( DNodeRelation.Antecedent ) )
+  println( dn4.hasAntecedent( dn1 ) )
+  println( dn4.hasPredecesor( dn1 ) )
+  println( dn1.hasAntecedent( dn4 ) )
+  println( dn1.hasPredecesor( dn4 ) )
 
   println(  DAGNode.sort( List( dn4, dn2, dn3, dn1 ) ).mkString( ", ") )
 }
