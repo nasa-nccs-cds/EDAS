@@ -61,6 +61,7 @@ class partition extends Kernel() {
   val inputs = List( WPSDataInput("input variables", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Partitioner"
+  val doesAxisElimination: Boolean = false
   val description = "Configures various data partitioning and filtering operations"
 }
 
@@ -68,6 +69,7 @@ class compress extends Kernel() {
   val inputs = List(WPSDataInput("input variable", 1, 1))
   val outputs = List(WPSProcessOutput("operation result"))
   val title = "Compress"
+  val doesAxisElimination: Boolean = false
   val description = "Compress data by cherry-picking slices, etc."
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
@@ -99,6 +101,7 @@ class min2 extends DualRDDKernel(Map("mapOp" -> "min")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Minimum"
+  val doesAxisElimination: Boolean = false
   val description = "Computes element-wise minimum values for a pair of input variables data over specified roi"
 }
 
@@ -106,6 +109,7 @@ class max2 extends DualRDDKernel(Map("mapOp" -> "max")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Maximum"
+  val doesAxisElimination: Boolean = false
   val description = "Computes element-wise maximum values for a pair of input variables data over specified roi"
 }
 
@@ -121,6 +125,7 @@ class diff2 extends DualRDDKernel(Map("mapOp" -> "subt")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Difference"
+  val doesAxisElimination: Boolean = false
   val description = "Computes element-wise diffs for a pair of input variables over specified roi"
 }
 
@@ -128,6 +133,7 @@ class mult2 extends DualRDDKernel(Map("mapOp" -> "mult")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Product"
+  val doesAxisElimination: Boolean = false
   val description = "Computes element-wise products for a pair of input variables data over specified roi"
 }
 
@@ -135,6 +141,7 @@ class div2 extends DualRDDKernel(Map("mapOp" -> "divide")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Division"
+  val doesAxisElimination: Boolean = false
   val description = "Computes element-wise divisions for a pair of input variables data over specified roi"
 }
 
@@ -143,6 +150,7 @@ class min extends SingularRDDKernel(Map("mapreduceOp" -> "min")) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Minimum"
+  val doesAxisElimination: Boolean = true
   val description = "Computes minimum element value from input variable data over specified axes and roi"
   override val initValue: Float = Float.MaxValue
 
@@ -153,6 +161,7 @@ class sum extends SingularRDDKernel(Map("mapreduceOp" -> "sum")) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Sum"
+  val doesAxisElimination: Boolean = true
   val description = "Computes sums of element values from input variable data over specified axes and roi"
   override val initValue: Float = 0f
 }
@@ -161,6 +170,7 @@ class rmSum extends SingularRDDKernel(Map("mapreduceOp" -> "sum","postOp"->"rms"
   val inputs = List( WPSDataInput("input variables", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Root Mean Sum"
+  val doesAxisElimination: Boolean = true
   val description = "Computes root mean sum of input variable over specified axes and roi"
 }
 
@@ -169,6 +179,7 @@ class rms extends SingularRDDKernel( Map("mapOp" -> "sqAdd", "reduceOp" -> "sum"
   val inputs = List( WPSDataInput("input variables", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Root Mean Square"
+  val doesAxisElimination: Boolean = true
   val description = "Computes root mean square of input variable over specified axes and roi"
 }
 
@@ -176,6 +187,7 @@ class multiAverage extends Kernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Ensemble Mean"
+  val doesAxisElimination: Boolean = false
   val description = "Computes ensemble averages over inputs withing specified ROI"
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
@@ -215,6 +227,7 @@ class bin extends Kernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Binning"
+  val doesAxisElimination: Boolean = false
   override val description = "Aggregates data into bins using specified reduce function and binning specifications"
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
@@ -257,6 +270,7 @@ class noOp extends Kernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "NoOperation"
+  val doesAxisElimination: Boolean = false
   override val description = "Returns the input data subset to the specified domain as the result"
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
@@ -271,6 +285,7 @@ class binAve extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Binning"
   override val description = "Aggregates data into bins using specified reduce function and binning specifications"
+  val doesAxisElimination: Boolean = false
   object BinKeyUtils {
     implicit object BinKeyOrdering extends Ordering[String] {
       def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
@@ -395,6 +410,7 @@ class subset extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Subset"
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
+  val doesAxisElimination: Boolean = false
 }
 
 class anomaly extends SingularRDDKernel(Map.empty) {
@@ -487,6 +503,7 @@ class timeBin extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Time Binning"
   override val description = "Aggregates data into bins over time using specified reduce function and binning specifications"
+  val doesAxisElimination: Boolean = false
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
     val t0 = System.nanoTime

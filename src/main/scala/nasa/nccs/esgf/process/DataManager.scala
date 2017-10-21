@@ -49,11 +49,41 @@ trait ScopeContext {
   def config( key: String ): Option[String] = __configuration__.get(key)
 }
 
-class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val request: TaskRequest, serverContext: ServerContext, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
+class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[String, Option[DataFragmentSpec]], val batchIndex: Int ) extends Loggable  {
+  val partitioner: EDASPartitioner = generatePartitioning
+
+  def getUnifiedRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+    val partitions = partitioner.partitions
+    val tgrid: TargetGrid = request.getTargetGrid( partitioner.uid )
+    val batch= partitions.getBatch(batchIndex)
+    val validInputs: Map[String, DataFragmentSpec] = subworkflowInputs.flatMap { case (key, valueOpt ) => valueOpt.map ( fragSpec => key -> fragSpec ) }
+    val varSpecs = validInputs map { case (uid, fragSpec ) => new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath ) }
+    val rddPartSpecs: Array[DirectRDDPartSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, varSpecs  ) )
+    if (rddPartSpecs.length == 0) { None }
+    else {
+      logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex,rddPartSpecs.length))
+      val rdd_partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
+      //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
+      val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy rdd_partitioner
+      Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition( request, batchIndex )) )
+    }
+  }
+
+  def generatePartitioning: EDASPartitioner = {
+    val fragments: Iterable[DataFragmentSpec] = subworkflowInputs.values.flatten.flatMap( _.domainSection )
+    if( fragments.isEmpty ) { throw new Exception( "No Inputs for request + " + request.task.name + " ( " + request.task.id + " )" )  }
+    else {
+      val largestInput: DataFragmentSpec = fragments.foldLeft(fragments.head)((x, y) => if(x.getSize > y.getSize) x else y )
+      new EDASPartitioner( largestInput.uid, largestInput.roi, request.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles )
+    }
+  }
+}
+
+class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, serverContext: ServerContext, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
-  val domains: Map[String,DomainContainer] = request.domainMap
-  val partitioner: EDASPartitioner = generatePartitioning
+  val domains: Map[String,DomainContainer] = task.domainMap
+
   def getConf( key: String, default: String ) = configuration.getOrElse(key,default)
   def missing_variable(uid: String) = throw new Exception("Can't find Variable '%s' in uids: [ %s ]".format(uid, inputs.keySet.mkString(", ")))
   def getDataSources: Map[String, Option[DataFragmentSpec]] = inputs
@@ -69,22 +99,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
     case None =>inputs.head._2 map { _.roi }
   }
 
-  def getUnifiedRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
-    val partitions = partitioner.partitions
-    val tgrid: TargetGrid = getTargetGrid( partitioner.uid )
-    val batch= partitions.getBatch(batchIndex)
-    val validInputs: Map[String, DataFragmentSpec] = inputs.flatMap { case (key, valueOpt ) => valueOpt.map ( fragSpec => key -> fragSpec ) }
-    val varSpecs = validInputs map { case (uid, fragSpec ) => new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath ) }
-    val rddPartSpecs: Array[DirectRDDPartSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, varSpecs  ) )
-    if (rddPartSpecs.length == 0) { None }
-    else {
-      logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex,rddPartSpecs.length))
-      val rdd_partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
-      //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
-      val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy rdd_partitioner
-      Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition( this, batchIndex )) )
-    }
-  }
+
 
   def getTargetGridSpec( kernelContext: KernelContext ) : String = {
     if( kernelContext.crsOpt.getOrElse("").indexOf('~') > 0 ) { "gspec:" + kernelContext.crsOpt.get }
@@ -102,16 +117,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
     case None => throw new Exception("Undefined domain in ExecutionContext: " + domain_id)
   }
 
-  def generatePartitioning: EDASPartitioner = {
-    val fragments: Iterable[DataFragmentSpec] = inputs.values.flatten.flatMap( _.domainSection )
-    if( fragments.isEmpty ) { throw new Exception( "No Inputs for request + " + request.name + " ( " + request.id + " )" )  }
-    else {
-      val largestInput: DataFragmentSpec = fragments.foldLeft(fragments.head)((x, y) => if(x.getSize > y.getSize) x else y )
-      new EDASPartitioner( largestInput.uid, largestInput.roi, getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles )
-    }
-  }
-
-  def getTargetGridOpt( uid: String  ): Option[TargetGrid] = request.getTargetGrid( uid )
+  def getTargetGridOpt( uid: String  ): Option[TargetGrid] = task.getTargetGrid( uid )
   def getTargetGridIds: Iterable[String] = getTargetGrids flatMap { case ( key, valOpt ) => valOpt map ( _ => key ) }
   def getTargetGrid( uid: String  ) = getTargetGridOpt(uid).getOrElse( throw new Exception("Missing target grid for kernel input " + uid + ", grids: " + getTargetGridIds.mkString( ", " ) ) )
 

@@ -246,6 +246,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   import Kernel._
   val identifiers = this.getClass.getName.split('$').flatMap(_.split('.'))
   val status = KernelStatus.developmental
+  val doesAxisElimination: Boolean
   def operation: String = identifiers.last.toLowerCase
   def module: String = identifiers.dropRight(1).mkString(".")
   def id = identifiers.mkString(".")

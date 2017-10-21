@@ -60,6 +60,7 @@ class DAGNode extends Loggable {
   def hasParent( dnode: DAGNode ): Boolean = exists( DNodeRelation.Parent, _ eq dnode )
   def size( relation: DNRelation ) = collectRelatives(relation).size
   def isRoot = ( size( DNodeRelation.Parent ) == 0 )
+  def ancestors = accumulate( DNodeDirection.Down )
 }
 
 class LabeledDAGNode(id: String) extends DAGNode with Loggable {

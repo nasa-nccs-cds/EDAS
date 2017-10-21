@@ -105,7 +105,7 @@ class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: Str
   }
 
   def getExceptionReport( errorMessage: String ): xml.Node = {
-      <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">
+      <ows:ExceptionReport dbgId="1" xmlns:ows="http://www.opengis.net/ows/1.1" >
         <ows:Exception>
           <ows:ExceptionText> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </ows:ExceptionText>
         </ows:Exception>
@@ -315,7 +315,7 @@ class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) 
     val syntax = getSyntax(response_syntax)
     syntax match {
       case ResponseSyntax.WPS =>
-        <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        <ows:ExceptionReport  dbgId="2" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                              xsi:schemaLocation="http://www.opengis.net/ows/1.1 ../../../ows/1.1.0/owsExceptionReport.xsd" version="1.0.0" xml:lang="en-CA">
           {getReport(eId,syntax)} </ows:ExceptionReport>
       case ResponseSyntax.Generic => <response> <exceptions> {getReport(eId,syntax)} </exceptions> </response>
