@@ -363,18 +363,18 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     case _ => "file:/" + dataPath
   }
 
-  def getCollectionsXml: Seq[Node] = if(isMeta) {
+  def getVarNodeMap: Seq[(String,Node)] = if(isMeta) {
     val subCollections = new MetaCollectionFile(dataPath).subCollections
-    subCollections flatMap ( _.getCollectionsXml )
+    subCollections flatMap ( _.getVarNodeMap )
   } else {
     val vnames: Set[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") ).toSet
-    vnames.map( getVariable( _ ).toXmlHeader ).toSeq
+    vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) ).toSeq
   }
 
 
   def toXml: xml.Elem =  {
     <collection id={id} title={title}>
-      { getCollectionsXml }
+      { Map( getVarNodeMap: _* ).values }
     </collection>
   }
 
