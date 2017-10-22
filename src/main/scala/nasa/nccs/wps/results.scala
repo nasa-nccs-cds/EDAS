@@ -327,7 +327,7 @@ class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) 
     val error_mesage = CDSecurity.sanitize( err.getClass.getName + ": " + err.getMessage )
     syntax match {
       case ResponseSyntax.WPS =>
-        List(<ows:Exception exceptionCode={eId}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
+        List(<ows:Exception exceptionCode={eId}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + ", Stack:\n\t" + stack.mkString("\n\t") + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
       case ResponseSyntax.Generic =>
         List(<exception name={eId}> {"<![CDATA[\n " + error_mesage + ", Stack:\n\t" + stack.mkString("\n\t") + "\n]]>"} </exception>)
     }
