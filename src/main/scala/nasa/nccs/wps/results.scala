@@ -311,6 +311,7 @@ class UtilityExecutionResult( id: String, val report: xml.Elem )  extends WPSEve
 
 class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) extends WPSExecuteResponse(serviceInstance) {
   val eId = print_error
+  val stack = Thread.currentThread().getStackTrace()
   def toXml( response_syntax: ResponseSyntax.Value ): xml.Elem = {
     val syntax = getSyntax(response_syntax)
     syntax match {
@@ -328,7 +329,7 @@ class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) 
       case ResponseSyntax.WPS =>
         List(<ows:Exception exceptionCode={eId}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
       case ResponseSyntax.Generic =>
-        List(<exception name={eId}> {"<![CDATA[\n " + error_mesage + "\n]]>"} </exception>)
+        List(<exception name={eId}> {"<![CDATA[\n " + error_mesage + ", Stack:\n\t" + stack.mkString("\n\t") + "\n]]>"} </exception>)
     }
   }
   def print_error: String = {
