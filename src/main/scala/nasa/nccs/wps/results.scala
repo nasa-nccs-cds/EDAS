@@ -2,7 +2,6 @@ package nasa.nccs.wps
 
 import java.text.SimpleDateFormat
 import java.util.Calendar
-
 import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.cdapi.tensors.CDFloatArray
@@ -15,6 +14,7 @@ import nasa.nccs.wps.ResponseSyntax.Value
 import org.apache.commons.lang.RandomStringUtils
 
 import scala.collection.mutable.ListBuffer
+import scala.xml.Node
 
 object WPSProcessExecuteResponse {
   def merge(  serviceInstance: String, responses: List[WPSProcessExecuteResponse] ): WPSProcessExecuteResponse = new MergedWPSExecuteResponse( serviceInstance, responses )
@@ -45,9 +45,24 @@ trait WPSResponseElement {
 }
 
 trait WPSResponse extends WPSResponseElement {
-  val wpsProxyAddress =  appParameters("wps.server.proxy.href","${wps.server.proxy.href}")
-  val dapProxyAddress =  appParameters("wps.dap.proxy.href","${wps.dap.proxy.href}")
-  val fileProxyAddress =  appParameters("wps.file.proxy.href","${wps.file.proxy.href}")
+  val wpsProxyAddress = appParameters("wps.server.proxy.href", "${wps.server.proxy.href}")
+  val dapProxyAddress = appParameters("wps.dap.proxy.href", "${wps.dap.proxy.href}")
+  val fileProxyAddress = appParameters("wps.file.proxy.href", "${wps.file.proxy.href}")
+}
+
+object WPS_XML {
+  def extractErrorMessage(ex: Exception): Exception = try {
+    val error_node = scala.xml.XML.loadString(ex.getMessage)
+    val exception_text_nodes: Seq[Node] = (error_node \\ "ExceptionText").theSeq
+    val error_text = if (exception_text_nodes.isEmpty) { error_node.toString } else { exception_text_nodes.head.text }
+    new Exception(error_text, ex)
+  } catch { case ex1: Exception => ex }
+
+  def extractErrorMessage(msg: String): String = try {
+    val error_node = scala.xml.XML.loadString(msg)
+    val exception_text_nodes: Seq[Node] = (error_node \\ "ExceptionText").theSeq
+    if (exception_text_nodes.isEmpty) { error_node.toString } else { exception_text_nodes.head.text }
+  } catch { case ex1: Exception => msg }
 }
 
 class WPSExecuteStatusStarted( val serviceInstance: String,  val statusMessage: String, val resId: String  ) extends WPSResponse {
@@ -93,6 +108,8 @@ class WPSExecuteStatusQueued( val serviceInstance: String,  val statusMessage: S
 }
 
 
+
+
 class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: String, val resId: String  ) extends WPSResponse with Loggable {
   def toXml( response_syntax: ResponseSyntax.Value = ResponseSyntax.Default ): xml.Elem =  getSyntax(response_syntax) match {
     case ResponseSyntax.WPS =>
@@ -107,7 +124,7 @@ class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: Str
   def getExceptionReport( errorMessage: String ): xml.Node = {
       <ows:ExceptionReport dbgId="1" xmlns:ows="http://www.opengis.net/ows/1.1">
         <ows:Exception>
-          <ows:ExceptionText> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </ows:ExceptionText>
+          <ows:ExceptionText> { "<![CDATA[\n " + CDSecurity.sanitize( WPS_XML.extractErrorMessage(errorMessage) ) + "\n]]>" } </ows:ExceptionText>
         </ows:Exception>
       </ows:ExceptionReport>
   }
