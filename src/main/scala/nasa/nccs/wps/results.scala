@@ -56,7 +56,7 @@ object WPS_XML {
     val error_node = scala.xml.XML.loadString(ex.getMessage)
     val exception_text_nodes: Seq[Node] = (error_node \\ "ExceptionText").theSeq
     val error_text = if (exception_text_nodes.isEmpty) { error_node.toString } else { clean(exception_text_nodes.head.text.trim) }
-    new Exception( error_text.stripPrefix("<![CDATA[").stripSuffix("]]>").trim, ex)
+    new Exception( error_text.trim.stripPrefix("<![CDATA[").stripSuffix("]]>").trim, ex)
   } catch { case ex1: Exception => ex }
 
   def extractErrorMessage(msg: String): String = try {
@@ -119,19 +119,19 @@ class WPSExecuteStatusError( val serviceInstance: String,  val errorMessage: Str
         <wps:Status> <wps:ProcessFailed> { getExceptionReport(errorMessage) } </wps:ProcessFailed> </wps:Status>
       </wps:ExecuteResponse>
     case ResponseSyntax.Generic =>
-        <response serviceInstance={serviceInstance} status="ERROR" creation_time={currentTime}> { "<![CDATA[\n " + CDSecurity.sanitize( errorMessage ) + "\n]]>" } </response>
+        <response serviceInstance={serviceInstance} status="ERROR" creation_time={currentTime}> { CDSecurity.sanitize( errorMessage ) } </response>
   }
 
   def getExceptionReport( errorMessage: String ): xml.Node = {
       <ows:ExceptionReport dbgId="1" xmlns:ows="http://www.opengis.net/ows/1.1">
         <ows:Exception>
-          <ows:ExceptionText> { "<![CDATA[\n " + CDSecurity.sanitize( WPS_XML.extractErrorMessage(errorMessage) ) + "\n]]>" } </ows:ExceptionText>
+          <ows:ExceptionText> { CDSecurity.sanitize( WPS_XML.extractErrorMessage(errorMessage) ) } </ows:ExceptionText>
         </ows:Exception>
       </ows:ExceptionReport>
   }
 }
 
-
+//  <ows:ExceptionText> { "<![CDATA[\n " + CDSecurity.sanitize( WPS_XML.extractErrorMessage(errorMessage) ) + "\n]]>" } </ows:ExceptionText> }
 
 class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVariable ) extends WPSResponse {
 
@@ -345,11 +345,14 @@ class WPSExceptionReport( val err: Throwable, serviceInstance: String = "WPS" ) 
     val error_mesage = CDSecurity.sanitize( err.getClass.getName + ": " + err.getMessage )
     syntax match {
       case ResponseSyntax.WPS =>
-        List(<ows:Exception exceptionCode={eId}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + ", Stack:\n\t" + stack.mkString("\n\t") + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
+        List(<ows:Exception exceptionCode={eId}> <ows:ExceptionText>  { error_mesage } </ows:ExceptionText> </ows:Exception>)
       case ResponseSyntax.Generic =>
-        List(<exception name={eId}> {"<![CDATA[\n " + error_mesage + ", Stack:\n\t" + stack.mkString("\n\t") + "\n]]>"} </exception>)
+//        List(<exception name={eId}> {"<![CDATA[\n " + error_mesage + "\n]]>"} </exception>)
+        List(<exception name={eId}> { error_mesage } </exception>)
     }
   }
+  //  List(<ows:Exception exceptionCode={eId}> <ows:ExceptionText>  {"<![CDATA[\n " + error_mesage + ", Stack:\n\t" + stack.mkString("\n\t") + "\n]]>"} </ows:ExceptionText> </ows:Exception>)
+
   def print_error: String = {
     val eId = RandomStringUtils.random( 6, true, true )
     val err1 = if (err.getCause == null) err else err.getCause

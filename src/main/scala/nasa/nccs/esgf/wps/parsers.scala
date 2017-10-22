@@ -43,8 +43,6 @@ object CDSecurity extends Loggable {
 
 object wpsObjectParser extends ObjectNotationParser with Loggable {
 
-  def cdata(obj: Any): String = "<![CDATA[\n " + obj.toString + "\n]]>"
-
   def parseMap(args_input: String): Map[String, Any] = {
     try {
       CDSecurity.sanitize( args_input )
