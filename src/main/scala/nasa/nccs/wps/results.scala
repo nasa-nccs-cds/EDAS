@@ -51,18 +51,19 @@ trait WPSResponse extends WPSResponseElement {
 }
 
 object WPS_XML {
+  def clean( msg: String ): String = msg.trim.stripPrefix("<![CDATA[").stripSuffix("]]>").trim
   def extractErrorMessage(ex: Exception): Exception = try {
     val error_node = scala.xml.XML.loadString(ex.getMessage)
     val exception_text_nodes: Seq[Node] = (error_node \\ "ExceptionText").theSeq
-    val error_text = if (exception_text_nodes.isEmpty) { error_node.toString } else { exception_text_nodes.head.text.trim }
+    val error_text = if (exception_text_nodes.isEmpty) { error_node.toString } else { clean(exception_text_nodes.head.text.trim) }
     new Exception( error_text.stripPrefix("<![CDATA[").stripSuffix("]]>").trim, ex)
   } catch { case ex1: Exception => ex }
 
   def extractErrorMessage(msg: String): String = try {
     val error_node = scala.xml.XML.loadString(msg)
     val exception_text_nodes: Seq[Node] = (error_node \\ "ExceptionText").theSeq
-    if (exception_text_nodes.isEmpty) { error_node.toString } else { exception_text_nodes.head.text }
-  } catch { case ex1: Exception => msg.stripPrefix("<![CDATA[").stripSuffix("]]>").trim }
+    if (exception_text_nodes.isEmpty) { error_node.toString } else { clean(exception_text_nodes.head.text) }
+  } catch { case ex1: Exception => clean(msg) }
 }
 
 class WPSExecuteStatusStarted( val serviceInstance: String,  val statusMessage: String, val resId: String  ) extends WPSResponse {
