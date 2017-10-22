@@ -31,7 +31,7 @@ class ObjectNotationParser extends JavaTokenParsers {
 
 object CDSecurity extends Loggable {
   def sanitize( str_data: String ): String = {
-    if (str_data contains "]]>") throw new SecurityException(" Request contains illegal CDATA breakout string")
+    if (str_data contains "]]>") throw new SecurityException(" Request contains illegal CDATA breakout string: " + str_data )
     str_data
   }
   def getStack: String = {
