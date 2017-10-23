@@ -130,8 +130,6 @@ object cdsutils {
 
   def findNonNull[T]( values: T* ): Option[T] = values.toList.find( _ != null )
 
-  def cdata(obj: Any): String = "<![CDATA[\n " + obj.toString + "\n]]>"
-
   def isValid(obj: Any): Boolean = Option(obj) match { case Some(x) => true; case None => false }
 
   def toString( value: Any, max_len: Int = 250 ): String = { val vstr = value.toString; if( vstr.length > max_len ) vstr.substring(0,max_len) else vstr }

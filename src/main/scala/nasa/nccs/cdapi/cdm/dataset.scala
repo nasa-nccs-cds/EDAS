@@ -33,6 +33,7 @@ import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
 import ucar.nc2._
 import ucar.nc2.write.Nc4Chunking
 
+import scala.collection.immutable.SortedMap
 import scala.io.Source
 import scala.xml.Node
 
@@ -192,7 +193,7 @@ object CDGrid extends Loggable {
                     val bounds: Array[Double] = ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
                     gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, bounds))
                   } catch {
-                    case err: Exception => logger.error( s"Error creating bounds in grid file for coordinate var ${coordAxis1D.getShortName}")
+                    case err: Exception => logger.error( s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}")
                   }
                 case None => Unit
               }
@@ -367,18 +368,19 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     case _ => "file:/" + dataPath
   }
 
-  def getVarNodeMap: Seq[(String,Node)] = if(isMeta) {
+
+  def getVarNodes: Seq[(String,Node)] = if(isMeta) {
     val subCollections = new MetaCollectionFile(dataPath).subCollections
-    subCollections flatMap ( _.getVarNodeMap )
+    subCollections flatMap ( _.getVarNodes )
   } else {
-    val vnames: Set[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") ).toSet
-    vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) ).toSeq
+    val vnames: List[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") )
+    vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) )
   }
 
 
   def toXml: xml.Elem =  {
     <collection id={id} title={title}>
-      { Map( getVarNodeMap: _* ).values }
+      { SortedMap( getVarNodes: _* ).values }
     </collection>
   }
 
@@ -970,7 +972,7 @@ object NetcdfDatasetMgr extends Loggable {
   val formatter = new Formatter(Locale.US)
 
   def getTimeAxis( dataPath: String ): CoordinateAxis1DTime = {
-    val ncDataset: NetcdfDataset = open( dataPath )
+    val ncDataset: NetcdfDataset = openFile( dataPath )
     val axes = ncDataset.getCoordinateAxes.toList
     val result = axes.find( _.getAxisType == AxisType.Time ) match {
       case Some( time_axis ) => CoordinateAxis1DTime.factory(ncDataset, time_axis, formatter )

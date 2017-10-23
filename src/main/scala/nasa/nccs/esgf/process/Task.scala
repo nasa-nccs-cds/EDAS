@@ -286,11 +286,9 @@ class ContainerBase extends Loggable {
     }
   }
 
-  def toXml = {
-    <container>
-      {"<![CDATA[ " + toString + " ]]>"}
-    </container>
-  }
+  def toXml = <container>  { toString } </container>
+
+//  {"<![CDATA[ " + toString + " ]]>"}
 
   def getGenericNumber(opt_val: Option[Any]): GenericNumber = {
     opt_val match {

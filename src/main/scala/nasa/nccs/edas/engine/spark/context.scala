@@ -34,27 +34,26 @@ object CDSparkContext extends Loggable {
   val default_num_executors = "1"
 
   def apply( appName: String="EDAS", logConf: Boolean = true, enableMetrics: Boolean = false ) : CDSparkContext = {
-    logger.info( "--------------------------------------------------------")
-    logger.info( "   ****  NEW CDSparkContext Created  **** ")
-    logger.info( "--------------------------------------------------------\n\n")
-
-    val cl = ClassLoader.getSystemClassLoader
+//    val cl = ClassLoader.getSystemClassLoader
 //    logger.info( "Loaded jars: \n\t" + cl.asInstanceOf[java.net.URLClassLoader].getURLs.mkString("\n\t") )
 //    logger.info( "EDAS env: \n\t" +  ( System.getenv.map { case (k,v) => k + ": " + v } ).mkString("\n\t") )
-
     val sparkContext = new SparkContext( getSparkConf( appName, logConf, enableMetrics) )
     val rv = new CDSparkContext( sparkContext )
+    val spark_log_level = Level.toLevel( "WARN" )
+    val rootLogger = Logger.getRootLogger()
+    rootLogger.setLevel(spark_log_level)
+    sparkContext.setLogLevel( "WARN" )
+    Logger.getLogger("org").setLevel(spark_log_level)
+    Logger.getLogger("akka").setLevel(spark_log_level)
+    Logger.getLogger("dag-scheduler-event-loop").setLevel(spark_log_level)
+    Logger.getLogger("DAGScheduler").setLevel(spark_log_level)
+    Logger.getLogger("BlockManager").setLevel(spark_log_level)
+    Logger.getLogger("TaskSetManager").setLevel(spark_log_level)
+    Logger.getLogger("main").setLevel(spark_log_level)
 
-    val log_level: Level = Level.toLevel( appParameters("spark.log.level", "WARN" ) )
-    sparkContext.setLogLevel( log_level.toString )
-    Logger.getLogger("org").setLevel(log_level)
-    Logger.getLogger("akka").setLevel(log_level)
-    Logger.getLogger("main").setLevel(log_level)
-    Logger.getRootLogger.setLevel(log_level)
-    Logger.getLogger("dag-scheduler-event-loop").setLevel(log_level)
-    Logger.getLogger("DAGScheduler").setLevel(log_level)
-    Logger.getLogger("BlockManager").setLevel(log_level)
-    Logger.getLogger("TaskSetManager").setLevel(log_level)
+    val log_level: Level = Level.toLevel( appParameters("edas.log.level", "INFO" ) )
+    Logger.getLogger("edas").setLevel(log_level)
+
     logger.info( "Setting SparkContext Log level to " + log_level.toString )
     logger.info( "--------------------------------------------------------")
     logger.info( "   ****  CDSparkContext Creation FINISHED  **** ")
