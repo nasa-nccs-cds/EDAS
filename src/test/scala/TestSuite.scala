@@ -363,8 +363,8 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/CMIP5/ESGF/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0","cache":"false"}],operation=[{"name":"CDSpark.sum","input":"v1","domain":"d0","axes":"t"}]]"""
       val result_node = executeTest(datainputs)
       val result_data = getResultData( result_node )
-      println( "Op Result:       " + result_data )
-      println( "Verified Result: " + nco_verified_result )
+      println( "Op Result:       " + result_data.mkDataString(", ") )
+      println( "Verified Result: " + nco_verified_result.mkDataString(", ") )
       assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for Max")
     }
 
@@ -393,53 +393,37 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       val nco_verified_result = 309.7112
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"xy"}]]"""
       val result_node = executeTest(datainputs)
-      val result_value = getResultValue(result_node)
-      println( "Op Result:       " + result_value )
+      val results = getResults(result_node)
+      println( "Op Result:       " + results.mkString(",") )
       println( "Verified Result: " + nco_verified_result )
-      assert(Math.abs( result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
+      assert(Math.abs( results(0) - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
     }
 
     test("Maximum-cache") {
       val nco_verified_result = 309.7112
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
       val result_node = executeTest(datainputs)
-      val result_value = getResultValue(result_node)
-      println("Op Result:       " + result_value)
+      val results = getResults(result_node)
+      println( "Op Result:       " + results.mkString(",") )
       println("Verified Result: " + nco_verified_result)
-      assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
+      assert(Math.abs(results(0) - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
     }
 
     test("Maximum-local") {
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
-      val result_node = executeTest(datainputs, Map("response"->"file"))
-      println("Op Result:       " + printer.format( result_node ) )// result_data.mkBoundedDataString("[ ",", "," ]",100))
-    }
-
-    test("Maximum-cache-twice") {
-      val nco_verified_result = 309.7112
-      val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
-      val result_node = executeTest(datainputs)
-      val result_value = getResultValue(result_node)
-      println("Op Result:       " + result_value)
-      println("Verified Result: " + nco_verified_result)
-      assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
-
-      val datainputs1 = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"xy"}]]"""
-      val result_node1 = executeTest(datainputs1)
-      val result_value1 = getResultValue(result_node1)
-      println( "Op Result:       " + result_value1 )
-      println( "Verified Result: " + nco_verified_result )
-      assert(Math.abs( result_value1 - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
+      val result_node = executeTest(datainputs, Map("response"->"xml"))
+      val results = getResults(result_node)
+      println( "Op Result:       " + results.mkString(",") )
     }
 
     test("Maximum-dap") {
       val nco_verified_result = 309.7112
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/CMIP5/ESGF/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
       val result_node = executeTest(datainputs)
-      val result_value = getResultValue(result_node)
-      println( "Op Result:       " + result_value )
+      val results = getResults(result_node)
+      println( "Op Result:       " + results.mkString(",") )
       println( "Verified Result: " + nco_verified_result )
-      assert(Math.abs( result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
+      assert(Math.abs( results(0) - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
     }
 
   test("Seasons-filter") {
@@ -519,10 +503,10 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       else {
         val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"$uri","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
         val result_node = executeTest(datainputs)
-        val result_value = getResultValue(result_node)
-        println("Op Result:       " + result_value)
+        val results = getResults(result_node)
+        println( "Op Result:       " + results.mkString(",") )
         println("Verified Result: " + nco_verified_result)
-        assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
+        assert(Math.abs(results(0) - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
       }
     }
 
@@ -530,10 +514,10 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       val nco_verified_result = 309.7112
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/CMIP5/ESGF/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"xy"}]]"""
       val result_node = executeTest(datainputs)
-      val result_value = getResultValue(result_node)
-      println( "Op Result:       " + result_value )
+      val results = getResults(result_node)
+      println( "Op Result:       " + results.mkString(",") )
       println( "Verified Result: " + nco_verified_result )
-      assert(Math.abs( result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
+      assert(Math.abs( results(0) - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
     }
 
     test("Maximum1") {
@@ -615,10 +599,11 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       val nco_verified_result = 284.8936
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
       val result_node = executeTest(datainputs)
-      val result_value = getResultValue(result_node)
-      println( "Op Result:       " + result_value )
+      val node_str = result_node.toString
+      val results = getResults(result_node)
+      println( "Op Result:       " + results.mkString(",") )
       println( "Verified Result: " + nco_verified_result )
-      assert(Math.abs( result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
+      assert(Math.abs( results(0) - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
     }
 
     test("Max3") {
@@ -671,8 +656,10 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   def getDataNodes( result_node: xml.Elem, print_result: Boolean = false  ): xml.NodeSeq = {
     if(print_result) { println( s"Result Node:\n${result_node.toString}\n" ) }
     result_node.label match {
-      case "response" => result_node \\ "outputs" \\ "data"
-      case _ => result_node \\ "Output" \\ "LiteralData"
+      case "response" =>
+        result_node \\ "outputs" \\ "data"
+      case _ =>
+        result_node \\ "Output" \\ "LiteralData"
     }
   }
 
@@ -691,9 +678,10 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     case None => -1
   }
 
-  def getResultValue( result_node: xml.Elem ): Float = {
+  def getResults( result_node: xml.Elem ): Array[Float] = {
     val data_nodes: xml.NodeSeq = getDataNodes( result_node )
-    try{ data_nodes.head.text.toFloat } catch { case err: Exception => Float.NaN }
+    val nnodes = data_nodes.length
+    data_nodes.head.text.split(",").map(_.toFloat)
   }
 
   def getResultVariables( result_node: xml.Elem ): List[Variable] = {

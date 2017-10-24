@@ -148,7 +148,7 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
     }
   }
 
-  def getRDDVariableSpec( uid: String, optSection: Option[ma2.Section] ): DirectRDDVariableSpec  =
+  def getRDDVariableSpec( uid: String, optSection: Option[ma2.Section] = None ): DirectRDDVariableSpec  =
     domainSection(optSection) match {
       case Some( ( domFragSpec, section ) ) => new DirectRDDVariableSpec( uid, domFragSpec.getMetadata( Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.dataPath )
       case _ => new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath )
@@ -181,6 +181,8 @@ class ExternalDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode )
 }
 
 class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[CDByteArray], fragSpec: DataFragmentSpec, mdata: Map[String,nc2.Attribute] = Map.empty ) extends OperationDataInput(fragSpec,mdata) with Loggable {
+  val dbgId = 0
+
   def delete = partitions.delete
 
   def data(partIndex: Int ): CDFloatArray = partitions.getPartData(partIndex, fragmentSpec.missing_value )
@@ -208,7 +210,7 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
     val partition = partitions.getPart(partIndex)
     val data: CDFloatArray = partition.data( fragmentSpec.missing_value )
     val spec: DataFragmentSpec = partFragSpec(partIndex)
-    RDDRecord( TreeMap( spec.uid -> HeapFltArray(data, fragSpec.getOrigin, spec.getMetadata(), None) ), Map.empty )
+    RDDRecord( TreeMap( spec.uid -> HeapFltArray(data, fragSpec.getOrigin, spec.getMetadata(), None) ), Map.empty, partition )
   }
 
 //  def domainRDDPartition(partIndex: Int, optSection: Option[ma2.Section] ): Option[RDDPartition] = domainCDDataSection( partIndex, optSection ) match {

@@ -49,37 +49,117 @@ trait ScopeContext {
   def config( key: String ): Option[String] = __configuration__.get(key)
 }
 
-class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[String, Option[DataFragmentSpec]], val batchIndex: Int ) extends Loggable  {
-  val partitioner: EDASPartitioner = generatePartitioning
+class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[String,OperationInput] ) extends Loggable  {
+  val optPartitioner: Option[EDASPartitioner] = generatePartitioning
+  private var _optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = None
 
-  def getUnifiedRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
-    val partitions = partitioner.partitions
-    val tgrid: TargetGrid = request.getTargetGrid( partitioner.uid )
-    val batch= partitions.getBatch(batchIndex)
-    val validInputs: Map[String, DataFragmentSpec] = subworkflowInputs.flatMap { case (key, valueOpt ) => valueOpt.map ( fragSpec => key -> fragSpec ) }
-    val varSpecs = validInputs map { case (uid, fragSpec ) => new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath ) }
-    val rddPartSpecs: Array[DirectRDDPartSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, varSpecs  ) )
-    if (rddPartSpecs.length == 0) { None }
-    else {
-      logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex,rddPartSpecs.length))
-      val rdd_partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
-      //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
-      val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap( _.getRDDRecordSpecs() ) keyBy (_.timeRange) partitionBy rdd_partitioner
-      Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition( request, batchIndex )) )
+  private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
+    case None => Unit
+    case Some(partitioner) =>
+      val partitions = partitioner.partitions
+      val tgrid: TargetGrid = request.getTargetGrid(partitioner.uid)
+      val batch = partitions.getBatch(batchIndex)
+      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec(partition, tgrid))
+      if (rddPartSpecs.length > 0) {
+        logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
+        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
+        val parallelized_rddspecs: RDD[(RecordKey,DirectRDDRecordSpec)] = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getRDDRecordSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
+        _optInputsRDD = Some(parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex)))
+      }
+  }
+
+  def hasBatch ( batchIndex: Int ): Boolean = optPartitioner match {
+    case None => false
+    case Some( partitioner ) => partitioner.partitions.hasBatch( batchIndex )
+  }
+
+//  def getVarSpecs( directInput: EDASDirectDataInput, batchIndex: Int ): Array[DirectRDDPartSpec] = optPartitioner match {
+//    case None => Array.empty
+//    case Some(partitioner) =>
+//      val partitions = partitioner.partitions
+//      val tgrid: TargetGrid = request.getTargetGrid(partitioner.uid)
+//      val batch = partitions.getBatch(batchIndex)
+//      directInput.getRDDVariableSpec(uid, opSection)
+//    }
+
+
+  def addFileInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
+    initializeInputsRDD( serverContext, batchIndex )
+    _optInputsRDD match {
+      case None => Unit
+      case Some(inputsRDD) => _optInputsRDD = Some( inputsRDD.mapValues( rddRec => vSpecs.foldLeft(rddRec)( (rddRec,vSpec) => rddRec.extend(vSpec) ) ) )
     }
   }
 
-  def generatePartitioning: EDASPartitioner = {
-    val fragments: Iterable[DataFragmentSpec] = subworkflowInputs.values.flatten.flatMap( _.domainSection )
-    if( fragments.isEmpty ) { throw new Exception( "No Inputs for request + " + request.task.name + " ( " + request.task.id + " )" )  }
+  def optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = _optInputsRDD
+
+//  partition.getPartitionRecordKey(tgrid)
+//
+//  def subworkflowInputsRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = optPartitioner match {
+//    case None => None
+//    case Some( partitioner ) =>
+//      val partitions = partitioner.partitions
+//      val tgrid: TargetGrid = request.getTargetGrid(partitioner.uid)
+//      val batch = partitions.getBatch (batchIndex)
+//      val varSpecs: Iterable[DirectRDDVariableSpec] = subworkflowInputs flatMap {
+//        case (uid: String, dataInput: EDASDirectDataInput) =>
+//          val fragSpec = dataInput.fragmentSpec
+//          Some( new DirectRDDVariableSpec (uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty (fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath) )
+//        case _ => None
+//      }
+//      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec (partition, tgrid, varSpecs) )
+//      if (rddPartSpecs.length == 0) { None }
+//      else {
+//        logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
+//        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
+//        //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
+//        val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getRDDRecordSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
+//        Some(parallelized_rddspecs mapValues (spec => spec.getRDDPartition(request, batchIndex)))
+//      }
+//  }
+//
+//  def
+//
+//  RDDRecord.extend( vSpec: DirectRDDVariableSpec )
+
+//  def inputsRDD( serverContext: ServerContext, uid: String, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = optPartitioner match {
+//    case None => None
+//    case Some( partitioner ) =>
+//      val partitions = partitioner.partitions
+//      val tgrid: TargetGrid = request.getTargetGrid(partitioner.uid)
+//      val batch = partitions.getBatch (batchIndex)
+//      val input: Option[DirectRDDVariableSpec] = subworkflowInputs.get(uid) match {
+//        case None => None
+//        case Some( dataInput: EDASDirectDataInput )=>
+//          val fragSpec = dataInput.fragmentSpec
+//          Some( new DirectRDDVariableSpec (uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty (fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath) )
+//        case _ => None
+//      }
+//      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec (partition, tgrid, varSpecs) )
+//      if (rddPartSpecs.length == 0) { None }
+//      else {
+//        logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
+//        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
+//        //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
+//        val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getRDDRecordSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
+//        Some(parallelized_rddspecs mapValues (spec => spec.getRDDPartition(request, batchIndex)))
+//      }
+//  }
+
+  def generatePartitioning: Option[EDASPartitioner] = {
+    val fragments: Iterable[DataFragmentSpec] = subworkflowInputs.values.flatMap ( _ match {
+      case directInput: EDASDirectDataInput => Some(directInput.fragmentSpec)
+      case x => None
+    })
+    if( fragments.isEmpty ) { None  }
     else {
       val largestInput: DataFragmentSpec = fragments.foldLeft(fragments.head)((x, y) => if(x.getSize > y.getSize) x else y )
-      new EDASPartitioner( largestInput.uid, largestInput.roi, request.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles )
+      Some( new EDASPartitioner( largestInput.uid, largestInput.roi, request.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles ) )
     }
   }
 }
 
-class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, serverContext: ServerContext, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
+class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = task.domainMap

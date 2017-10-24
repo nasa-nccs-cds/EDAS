@@ -940,7 +940,7 @@ object DataContainer extends ContainerBase {
       val domain = metadata.getOrElse("domain", "").toString
       val (collectionOpt, fragIdOpt) = getCollection(metadata)
       val base_index = random.nextInt(Integer.MAX_VALUE)
-      val autocache = metadata.getOrElse( "cache", noOp ).toString.toBoolean
+      val autocache = metadata.getOrElse( "cache", false ).toString.toBoolean
       collectionOpt match {
         case None =>
           val var_names: Array[String] = fullname.toString.split(',')

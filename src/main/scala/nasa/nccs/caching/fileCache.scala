@@ -26,6 +26,7 @@ import ucar.ma2.Range
 import ucar.nc2.dataset.CoordinateAxis1DTime
 import ucar.nc2.time.CalendarDate
 import ucar.nc2.time.CalendarPeriod.Field.{Month, Year}
+import ucar.nc2.units.TimeUnit
 import ucar.{ma2, nc2}
 
 import scala.collection.JavaConversions._
@@ -86,6 +87,10 @@ class CachePartitions( val id: String, private val _section: ma2.Section, val pa
   }
 }
 
+object Partitions {
+
+}
+
 class Partitions( private val _section: ma2.Section, val parts: Array[Partition]) {
   private val baseShape = _section.getShape
   def getShape = baseShape
@@ -95,6 +100,11 @@ class Partitions( private val _section: ma2.Section, val parts: Array[Partition]
   def getBatch( batchIndex: Int ): Array[Partition] = {
     val batch = BatchSpec(batchIndex)
     parts.filter( p => batch.included(p.index) )
+  }
+
+  def hasBatch( batchIndex: Int ): Boolean = {
+    val batch = BatchSpec(batchIndex)
+    parts.exists( p => batch.included(p.index) )
   }
 }
 
@@ -147,7 +157,10 @@ abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int,
 
   def recordSection( section: ma2.Section, iRecord: Int, timeAxis: CoordinateAxis1DTime, start_time: Long, end_time: Long ): ma2.Section = {
     val start_index = timeAxis.findTimeIndexFromCalendarDate(start_date)
-    val end_index = timeAxis.findTimeIndexFromCalendarDate(end_date)
+    val time_resolution: Double = timeAxis.getTimeResolution.getValueInSeconds
+    val time_range = end_date.getDifferenceInMsecs(start_date)/1000.0
+    val section_size = Math.round(time_range/time_resolution).toInt
+    val end_index = start_index + section_size - 1
     val rv = new ma2.Section(section.getRanges).replaceRange(0, new Range(start_index,end_index) )
     logger.info( " *** RecordSection[%d]: dim=%d, range=[ %d, %d ]: %s -> %s ".format(iRecord,0,start_index,end_index, section.toString, rv.toString ) )
     rv
@@ -191,7 +204,6 @@ abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int,
   }
 }
 
-
 object RegularPartition {
   def apply(index: Int, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], fragShape: Array[Int]): RegularPartition = {
     val partShape = getPartitionShape(partSize, fragShape)
@@ -200,12 +212,14 @@ object RegularPartition {
   def getPartitionShape(partSize: Int, fragShape: Array[Int]): Array[Int] = {
     var shape = fragShape.clone(); shape(0) = partSize; shape
   }
-
+  val empty = new RegularPartition( -1, -1, -1, -1, -1, -1, -1, -1, Array.empty[Int], Array.empty[Int] )
 }
+
 class RegularPartition( index: Int,  dimIndex: Int,  startIndex: Int,  partSize: Int, start_date: Long, end_date: Long,  val recordSize: Int,  sliceMemorySize: Long,  origin: Array[Int],  shape: Array[Int]) extends Partition(index, dimIndex, startIndex, partSize, start_date, end_date, sliceMemorySize, origin, shape) {
 
   override val toString: String = s"Part[$index]{dim:$dimIndex start:$startIndex partSize:$partSize recordSize:$recordSize sliceMemorySize:$sliceMemorySize origin:${origin.mkString(",")} shape:${shape.mkString(",")})"
   override def nRecords: Int = math.ceil(partSize / recordSize.toDouble).toInt
+
 
   override def recordRange(iRecord: Int): ma2.Range = {
     val start = recordStartIndex(iRecord);
@@ -465,7 +479,8 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
             val startIndex = partIndex * pSpecs.nSlicesPerPart
             val partSize = Math.min(pSpecs.nSlicesPerPart, baseShape(0) - startIndex)
             val start_date: Long = timeAxis.getCalendarDate(startIndex).getMillis
-            val end_date: Long = timeAxis.getCalendarDate(startIndex+partSize).getMillis
+            val ts_ms = timeAxis.getTimeResolution.getValueInSeconds * 1000.0
+            val end_date: Long = ( start_date + partSize * ts_ms ).toLong
             RegularPartition(partIndex, 0, startIndex, partSize, start_date, end_date, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
           })
           logger.info(  s"\n---------------------------------------------\n ~~~~ Generating regular batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
