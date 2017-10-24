@@ -63,7 +63,8 @@ class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[Stri
       if (rddPartSpecs.length > 0) {
         logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
         val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
-        val parallelized_rddspecs: RDD[(RecordKey,DirectRDDRecordSpec)] = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getRDDRecordSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
+        val recordSpecs = rddPartSpecs.flatMap(_.getRDDRecordSpecs())
+        val parallelized_rddspecs: RDD[(RecordKey,DirectRDDRecordSpec)] = serverContext.spark.sparkContext parallelize recordSpecs keyBy (_.timeRange) partitionBy rdd_partitioner
         _optInputsRDD = Some(parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex)))
       }
   }
@@ -86,8 +87,10 @@ class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[Stri
   def addFileInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
     _optInputsRDD match {
-      case None => Unit
-      case Some(inputsRDD) => _optInputsRDD = Some( inputsRDD.mapValues( rddRec => vSpecs.foldLeft(rddRec)( (rddRec,vSpec) => rddRec.extend(vSpec) ) ) )
+      case None =>
+        Unit
+      case Some(inputsRDD) =>
+        _optInputsRDD = Some( inputsRDD.mapValues( rddRec => vSpecs.foldLeft(rddRec)( (rddRec,vSpec) => rddRec.extend(vSpec) ) ) )
     }
   }
 

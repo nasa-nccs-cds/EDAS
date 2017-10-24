@@ -909,7 +909,8 @@ object DirectRDDPartSpec {
 
 class DirectRDDPartSpec(val partition: Partition, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
 
-  def getRDDRecordSpecs(): IndexedSeq[DirectRDDRecordSpec] = ( 0 until partition.nRecords ) map ( DirectRDDRecordSpec( this, _ ) )
+  def getRDDRecordSpecs(): IndexedSeq[DirectRDDRecordSpec] =
+    ( 0 until partition.nRecords ) map ( DirectRDDRecordSpec( this, _ ) )
 
   def index = partition.index
 

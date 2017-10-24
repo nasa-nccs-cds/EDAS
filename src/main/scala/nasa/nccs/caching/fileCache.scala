@@ -473,15 +473,17 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
     val sparkConfig = BatchSpec.serverContext.spark.sparkContext.getConf.getAll map { case (key, value ) =>  key + " -> " + value } mkString( "\n\t")
     if( filters.isEmpty ) {
       val constraints = PartitionConstraints( partsConfig ++ Map( "numDataFiles" -> numDataFiles.toString ) )
+      val time_section_start_index = _section.getOrigin(0)
       val partitions: IndexedSeq[Partition] = getPartitionSpecs( constraints ) match {
         case pSpecs: RegularPartitionSpecs => {
           val parts = (0 until pSpecs.nPartitions) map (partIndex => {
-            val startIndex = partIndex * pSpecs.nSlicesPerPart
-            val partSize = Math.min(pSpecs.nSlicesPerPart, baseShape(0) - startIndex)
-            val start_date: Long = timeAxis.getCalendarDate(startIndex).getMillis
+            val relStartIndex = partIndex * pSpecs.nSlicesPerPart
+            val absStartIndex = relStartIndex + time_section_start_index
+            val partSize = Math.min (pSpecs.nSlicesPerPart, baseShape(0) - relStartIndex )
+            val start_date: Long = timeAxis.getCalendarDate( absStartIndex ).getMillis
             val ts_ms = timeAxis.getTimeResolution.getValueInSeconds * 1000.0
             val end_date: Long = ( start_date + partSize * ts_ms ).toLong
-            RegularPartition(partIndex, 0, startIndex, partSize, start_date, end_date, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
+            RegularPartition(partIndex, 0, absStartIndex, partSize, start_date, end_date, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
           })
           logger.info(  s"\n---------------------------------------------\n ~~~~ Generating regular batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
