@@ -98,7 +98,7 @@ object NCMLWriter extends Loggable {
 
   def isCollectionFile(file: File): Boolean = {
     val fname = file.getName.toLowerCase
-    file.isFile && fname.endsWith(".csv")
+    file.isFile && fname.endsWith(".txt")
   }
   def getCacheDir: String = {
     val collection_file_path =

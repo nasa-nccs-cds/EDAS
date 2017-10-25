@@ -47,6 +47,7 @@ object Collection extends Loggable {
       case url if(url.startsWith("file:")) => "file"
       case col if(col.startsWith("collection:")) => "collection"
       case dpath if(dpath.toLowerCase.endsWith(".csv")) => "csv"
+      case dpath if(dpath.toLowerCase.endsWith(".txt")) => "txt"
       case fpath if(new File(fpath).isFile) => "file"
       case dir if(new File(dir).isDirectory) => "file"
       case _ => throw new Exception( "Unrecognized Collection type, dataPath = " + dataPath )
@@ -403,6 +404,9 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
 
   def getDataFilePath( uri: String, collectionId: String ) : String = ctype match {
     case "csv" =>
+      val pathFile: File = new File(toFilePath(uri))
+      createNCML( pathFile, collectionId )
+    case "txt" =>
       val pathFile: File = new File(toFilePath(uri))
       createNCML( pathFile, collectionId )
     case "file" =>

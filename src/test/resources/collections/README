@@ -1,0 +1,4 @@
+Change file extensionts:
+
+find . -type f -name "*.csv" -exec sh -c 'mv -f $0 ${0%.csv}.txt' {} \;
+

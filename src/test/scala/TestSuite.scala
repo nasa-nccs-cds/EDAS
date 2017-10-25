@@ -54,7 +54,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
   test("Aggregate") {
     for( (model, collection) <- mod_collections ) {
-      val location = s"/collections/${model}/$collection.csv"
+      val location = s"/collections/${model}/$collection.txt"
       Option(getClass.getResource(location)) match {
         case Some( url ) =>
           val collection_path = url.getFile
@@ -68,7 +68,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
   test("Aggregate1") {
     for( (model, collection) <- cip_collections ) {
-      val location = s"/collections/${model}/$collection.csv"
+      val location = s"/collections/${model}/$collection.txt"
       Option(getClass.getResource(location)) match {
         case Some( url ) =>
           val collection_path = url.getFile
@@ -79,6 +79,20 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       }
     }
 
+  }
+
+  test("Aggregate2") {
+    val model = "GEOS5"
+    val collection = "GEOS5_r1i1p1"
+    val location = s"/collections/${model}/$collection.txt"
+    Option(getClass.getResource(location)) match {
+      case Some( url ) =>
+        val collection_path = url.getFile
+        val datainputs = s"""[variable=[{"uri":"collection:/$collection","path":"$collection_path"}]]"""
+        val agg_result_node = executeTest (datainputs, Map.empty, "util.agg")
+        logger.info (s"Agg collection $collection Result: " + printer.format (agg_result_node) )
+      case None => throw new Exception( s"Can't find collection $collection for model  $model ")
+    }
   }
 
 //  test("MultiAggregate") {
@@ -285,7 +299,33 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for Subset")
   }
 
-  test("ensemble_time_ave") {
+  test("ensemble_time_ave0") {
+    val GISS_H_vids = ( 1 to nExp ) map { index => s"vH$index" }
+    val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
+    val datainputs = s"""[
+             variable=[$GISS_H_variables],
+             domain=[       {"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"}}],
+             operation=[    {"name":"CDSpark.multiAverage","input":"${GISS_H_vids.mkString(",")}","domain":"d0","axes":"t"} ]
+            ]""".replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = CDFloatArray( getResultData( result_node, false ) )
+    println( " ** Op Result:         " + result_data.mkDataString(", ") )
+  }
+
+  test("ensemble_time_ave1") {
+    val GISS_H_vids = ( 1 to nExp ) map { index => s"vH$index" }
+    val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
+    val datainputs = s"""[
+             variable=[$GISS_H_variables],
+             domain=[       {"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"},"time":{"start":"1985-01-01T00:00:00Z","end":"1990-04-04T00:00:00Z"}}],
+             operation=[    {"name":"CDSpark.multiAverage","input":"${GISS_H_vids.mkString(",")}","domain":"d0","axes":"t"} ]
+            ]""".replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = CDFloatArray( getResultData( result_node, false ) )
+    println( " ** Op Result:         " + result_data.mkDataString(", ") )
+  }
+
+  test("ensemble_time_ave2") {
     val unverified_result: CDFloatArray = CDFloatArray(  Array( 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167 ).map(_.toFloat), Float.MaxValue )
     val GISS_H_vids = ( 1 to nExp ) map { index => s"vH$index" }
     val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
@@ -495,7 +535,14 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       println( "Op Result Data:       " + result_data.mkBoundedDataString(", ", 64) )
     }}
 
-    test("Maximum-file") {
+  test("TimeAve-GISS") {
+    val datainputs = """[domain=[{"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"}}],variable=[{"uri":"collection:/GISS_r3i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.average","input":"v1","domain":"d0","axes":"t"}]]"""
+    val result_node = executeTest(datainputs)
+    val result_data = getResultData( result_node )
+    println( "Op Result Data:       " + result_data.mkBoundedDataString(", ", 64) )
+  }
+
+  test("Maximum-file") {
       val nco_verified_result = 309.7112
       val data_file = "/data/GISS-r1i1p1-sample.nc"
       val uri=getClass.getResource(data_file)
@@ -522,7 +569,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
     test("Maximum1") {
       val nco_verified_result: CDFloatArray = CDFloatArray( Array( 277.8863, 279.0432, 280.0728, 280.9739, 282.2123, 283.7078, 284.6707, 285.4793, 286.259, 286.9836, 287.6983 ).map(_.toFloat), Float.MaxValue )
-      val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":150,"system":"indices"},"lon":{"start":100,"end":100,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"q"}]]"""
+      val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":150,"system":"indices"},"lon":{"start":100,"end":100,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"t"}]]"""
       val result_node = executeTest(datainputs)
       val result_data = getResultData( result_node )
       println( "Op Result:       " + result_data.mkDataString(", ") )
