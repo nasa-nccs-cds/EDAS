@@ -157,7 +157,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
       if( batchRequest.hasBatch (batchIndex + 1) ) {
         mapReduceBatch (node, batchRequest, kernelContext, batchIndex + 1) match {
           case Some (next_result) =>
-            val reduceOp = node.kernel.getReduceOp (kernelContext)
+            val reduceOp = node.kernel.getReduceOp(kernelContext)
             reduceOp (result, next_result)
           case None =>result
         }
@@ -341,10 +341,11 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
       case ( directInput: EDASDirectDataInput ) =>
         //          val opSection: Option[ma2.Section] = getOpSectionIntersection( directInput.getGrid, node )
         //          executionMgr.serverContext.spark.getRDD( uid, directInput, batchRequest.request, opSection, node, batchIndex, kernelContext ) map ( result => uid -> result )
-        val fragSpec = directInput.fragmentSpec
+
         val varSpec = directInput.getRDDVariableSpec(uid )
-        batchRequest.addFileInputs( executionMgr.serverContext, List(varSpec), batchIndex )
-        batchRequest.optInputsRDD.map( uid -> _ )
+        val opSection: Option[CDSection] = getOpSectionIntersection( directInput.getGrid, node ).map( CDSection(_) )
+        batchRequest.getKernelInputs( executionMgr.serverContext, List(varSpec), opSection, batchIndex ).map( uid -> _ )
+
       case ( kernelInput: DependencyOperationInput  ) =>
         val keyValOpt: Option[ RDD[ (RecordKey,RDDRecord) ] ] = stream( kernelInput.inputNode, batchRequest, batchIndex )
         logger.info( "\n\n ----------------------- NODE %s => Stream DEPENDENCY Node: %s, batch = %d, rID = %s, nParts = %d -------\n".format(

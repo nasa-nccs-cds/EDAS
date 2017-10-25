@@ -39,11 +39,11 @@ object MetadataOps {
   def mergeMetadata(opName: String)( metadata0: Map[String, String], metadata1: Map[String, String]): Map[String, String] = {
     metadata0.map { case (key, value) =>
       metadata1.get(key) match {
-        case None => (key, value)
         case Some(value1) =>
           if (value == value1) (key, value)
           else if( key == "roi")  ( key, CDSection.merge(value,value1) )
           else (key, opName + "(" + value + "," + value1 + ")")
+        case None => (key, value)
       }
     }
   }
@@ -661,6 +661,12 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def hasData = (data.length > 0)
   def toVector: DenseVector = new DenseVector( data.map(_.toDouble ) )
 
+  def section( new_section: ma2.Section ): HeapFltArray = {
+    if( new_section.getOrigin.sameElements(origin) && new_section.getShape.sameElements(shape) ) { this } else {
+      val ucarArray: ucar.ma2.Array = toUcarFloatArray.sectionNoReduce(new_section.getRanges)
+      HeapFltArray(CDArray(ucarArray, getMissing()), new_section.getOrigin, gridSpec, metadata, None)
+    }
+  }
   def reinterp( weights: Map[Int,RemapElem], origin_mapper: Array[Int] => Array[Int] ): HeapFltArray = {
     val reinterpArray = toCDFloatArray.reinterp(weights)
     new HeapFltArray( reinterpArray.getShape, origin_mapper(origin), reinterpArray.getArrayData(), Some(reinterpArray.getInvalid), gridSpec, metadata )
@@ -715,6 +721,7 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def findValue( value: Float, eps: Float = 0.0001f ): Option[Int] = { val seps = eps*value; data.indexWhere( x => Math.abs(x-value) < seps ) } match { case -1 => None;  case x => Some(x) }
   def toXml: xml.Elem = <array shape={shape.mkString(",")} missing={getMissing().toString}> { data.mkString(",")} </array> % metadata
 }
+
 object HeapFltArray extends Loggable {
   def apply( cdarray: CDFloatArray, origin: Array[Int], metadata: Map[String,String], optWeights: Option[Array[Float]] ): HeapFltArray = {
     val gridSpec = metadata.get( "gridfile" ).map( "file:/" + _ ).getOrElse("")
@@ -827,6 +834,13 @@ class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[Stri
     val new_elems = elements.mapValues( _.slice(startIndex,size) )
     new RDDRecord( new_elems, metadata, partition )
   }
+  def section( optSection: Option[CDSection] ): RDDRecord = optSection match {
+    case Some( section ) =>
+      val new_elements = elements.mapValues( _.section( section.toSection ) )
+      RDDRecord( new_elements, metadata, partition )
+    case None =>
+      this
+  }
 
   def hasMultiTimeScales( trsOpt: Option[String]=None ): Boolean = {
     if( elements.size == 0 ) return false
@@ -908,6 +922,7 @@ object DirectRDDPartSpec {
 }
 
 class DirectRDDPartSpec(val partition: Partition, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
+  val dbgIndex = 0
 
   def getRDDRecordSpecs(): IndexedSeq[DirectRDDRecordSpec] =
     ( 0 until partition.nRecords ) map ( DirectRDDRecordSpec( this, _ ) )

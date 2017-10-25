@@ -84,14 +84,14 @@ class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[Stri
 //    }
 
 
-  def addFileInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
+  private def addFileInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
-    _optInputsRDD match {
-      case None =>
-        Unit
-      case Some(inputsRDD) =>
-        _optInputsRDD = Some( inputsRDD.mapValues( rddRec => vSpecs.foldLeft(rddRec)( (rddRec,vSpec) => rddRec.extend(vSpec) ) ) )
-    }
+    _optInputsRDD = _optInputsRDD map ( _.mapValues( rddRec => vSpecs.foldLeft(rddRec)( (rddRec,vSpec) => rddRec.extend(vSpec) ) ) )
+  }
+
+  def getKernelInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+    addFileInputs( serverContext, vSpecs, batchIndex )
+    _optInputsRDD.map( rdd => rdd.mapValues( rddRec => rddRec.section( section ) ) )
   }
 
   def optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = _optInputsRDD

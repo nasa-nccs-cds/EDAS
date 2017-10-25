@@ -54,9 +54,14 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   def getContextStr: String = getConfiguration map { case ( key, value ) => key + ":" + value } mkString ";"
   def getDomainMetadata(domId: String): Map[String,String] = domains.get(domId) match { case Some(dc) => dc.metadata; case None => Map.empty }
   def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
-  private def getCRS: Option[String] =
-    operation.getDomain flatMap ( domId => domains.get( domId ).flatMap ( dc => dc.metadata.get("crs") ) )
-  private def getTRS: Option[String] = operation.getDomain flatMap ( domId => domains.get( domId ).flatMap ( dc => dc.metadata.get("trs") ) )
+
+  def getDomain: Option[DomainContainer] = operation.getDomain map ( domId => domains.getOrElse( domId, throw new Exception("Missing domain in KernelContext: " + domId ) ) )
+  def getDomainSection: Option[CDSection] = operation.getDomain flatMap (
+    domId => sectionMap.getOrElse( domId, throw new Exception("Missing domain in KernelContext: " + domId ) )
+    )
+  private def getCRS: Option[String] = getDomain.flatMap ( dc => dc.metadata.get("crs") )
+  private def getTRS: Option[String] = getDomain.flatMap ( dc => dc.metadata.get("trs") )
+
   def conf( params: Map[String,String] ): KernelContext = new KernelContext( operation, grids, sectionMap, domains, configuration ++ params, profiler )
   def commutativeReduction: Boolean = if( getAxes.includes(0) ) { true } else { false }
   def doesTimeReduction: Boolean = getAxes.includes(0)
@@ -696,8 +701,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     args.get(argname) match {
       case Some(sval) => sval
       case None => defaultVal match {
+        case Some(sval) => sval;
         case None => throw new Exception(s"Parameter $argname (int) is reqired for operation " + this.id);
-        case Some(sval) => sval
       }
     }
   }
@@ -710,8 +715,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         case err: NumberFormatException => throw new Exception(s"Parameter $argname must ba an integer: $sval")
       }
       case None => defaultVal match {
-        case None => throw new Exception(s"Parameter $argname (int) is reqired for operation " + this.id);
         case Some(ival) => ival
+        case None => throw new Exception(s"Parameter $argname (int) is reqired for operation " + this.id);
       }
     }
   }
@@ -724,8 +729,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         case err: NumberFormatException => throw new Exception(s"Parameter $argname must ba a float: $sval")
       }
       case None => defaultVal match {
-        case None => throw new Exception(s"Parameter $argname (float) is reqired for operation " + this.id);
         case Some(fval) => fval
+        case None => throw new Exception(s"Parameter $argname (float) is reqired for operation " + this.id);
       }
     }
   }
@@ -977,7 +982,7 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
   }
 }
 
-abstract class DualRDDKernel( options: Map[String,String] ) extends Kernel(options)  {
+abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(options)  {
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
     if( mapCombineOp.isDefined ) {
       val t0 = System.nanoTime
@@ -991,7 +996,7 @@ abstract class DualRDDKernel( options: Map[String,String] ) extends Kernel(optio
       if( input_array_maps.forall( _.size == 1 ) ) {
         val input_arrays = input_array_maps.map( _.head._2 )
         val ma2_input_arrays = input_arrays.map( _.toFastMaskedArray )
-        val result_array: CDFloatArray = ma2_input_arrays(0).merge(ma2_input_arrays(1), mapCombineOp.get).toCDFloatArray
+        val result_array: CDFloatArray = ma2_input_arrays.tail.fold(ma2_input_arrays.head)(_.merge(_, mapCombineOp.get)).toCDFloatArray
         val result_metadata = input_arrays.head.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
         logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
         context.addTimestamp("Map Op complete")
@@ -1157,10 +1162,10 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
   def indexAxisConf( metadata: Map[String,String], axisIndexMap: Map[String,Int] ): Map[String,String] = {
     try {
       metadata.get("axes") match {
-        case None => metadata
         case Some(axis_spec) =>
           val axisIndices = axis_spec.map( _.toString).map( axis => axisIndexMap(axis) )
           metadata + ( "axes" -> axisIndices.mkString(""))
+        case None => metadata
       }
     } catch { case e: Exception => throw new Exception( "Error converting axis spec %s to indices using axisIndexMap {%s}: %s".format( metadata.get("axes"), axisIndexMap.mkString(","), e.toString ) )  }
   }

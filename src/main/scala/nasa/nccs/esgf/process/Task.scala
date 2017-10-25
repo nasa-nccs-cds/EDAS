@@ -1021,9 +1021,7 @@ object DataContainer extends ContainerBase {
 class DomainContainer(val name: String,
                       val axes: List[DomainAxis] = List.empty[DomainAxis],
                       val metadata: Map[String, String] = Map.empty,
-                      val mask: Option[String] = None)
-    extends ContainerBase
-    with Serializable {
+                      val mask: Option[String] = None) extends ContainerBase with Serializable {
   override def toString = {
     s"DomainContainer { name = $name, axes = ${axes.mkString("\n\t\t\t","\n\t\t\t","\n\t\t\t")} }"
   }
@@ -1089,17 +1087,14 @@ class DomainAxis(val axistype: DomainAxis.Type.Value,
                  val start: GenericNumber,
                  val end: GenericNumber,
                  val system: String,
-                 val bounds: String = "")
-    extends ContainerBase
-    with Serializable {
+                 val bounds: String = "") extends ContainerBase  with Serializable {
   import DomainAxis.Type._
   val name = axistype.toString
   def getCFAxisName: String = axistype match {
     case X => "X"; case Y => "Y"; case Z => "Z"; case T => "T"
   }
   def getCoordAxisName: String = DomainAxis.coordAxisName(axistype)
-  override def toString =
-    s"DomainAxis { name = $name, start = $start, end = $end, system = $system, bounds = $bounds }"
+  override def toString = s"DomainAxis { name = $name, start = $start, end = $end, system = $system, bounds = $bounds }"
   def toBoundsString = s"$name:[$start,$end,$system]"
   def toDataInput: (String, Map[String, String]) =
     (getCoordAxisName -> Map("start" -> start.toString,
