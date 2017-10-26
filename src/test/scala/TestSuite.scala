@@ -2,6 +2,7 @@ import java.net.URI
 import java.nio.file.{Path, Paths}
 
 import nasa.nccs.cdapi.tensors.CDFloatArray
+import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.runtime
@@ -32,6 +33,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   val test_cache = false
   val test_python = false
   val test_binning = false
+  val test_regrid = true
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
   val eps = 0.00001
@@ -254,7 +256,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 //    }
 
 
-    test("pyRegridTest")  { if(test_python) {
+    test("pyRegridTest")  { if(test_regrid) {
       val unverified_result: CDFloatArray = CDFloatArray( Array( 238.94734, 238.95024, 238.95496, 238.95744, 238.95612, 238.95665, 238.95854, 238.95789, 238.95601, 238.95627, 238.95576, 238.95413, 238.95435, 238.95703, 238.95584, 238.95236, 238.94908, 238.94554, 238.94348, 238.94159, 238.94058, 238.93684, 238.93082, 238.92488, 238.91869, 238.9234, 238.92516, 238.91739, 238.91312, 238.91335, 238.91077, 238.90666, 238.902, 238.89793, 238.90051 ).map(_.toFloat), Float.MaxValue )
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/CMIP5/ESGF/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.cdmsModule.regrid","input":"v1","domain":"d0","grid":"gaussian","shape":"128"}]]"""
       val result_node = executeTest(datainputs)
@@ -264,7 +266,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       assert( result_data.maxScaledDiff( unverified_result )  < eps, s" Regrid result does not match previously computed  value")
     }}
 
-  test("pyRegridTest1") { if(test_python)  {
+  test("pyRegridTest1") { if(test_regrid)  {
     val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"},"level":{"start":0,"end":0,"system":"indices"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/CFSR/6hr/atmos/ta_2000s.ncml","name":"ta:v1","domain":"d0"}],operation=[{"name":"python.cdmsModule.regrid","input":"v1","domain":"d0","grid":"uniform","res":"4.0,4.0"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ) ).sample( 35 )
@@ -402,7 +404,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   }
 
   test("anomaly-spatial") {
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":0,"end":60,"system":"values"},"lon":{"start":0,"end":60,"system":"values"},"time": {"start": 0, "end": 100, "crs": "indices"}},{"name":"d1","lat":{"start":30,"end":30,"system":"values"},"lon":{"start":30,"end":30,"system":"values"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d1"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":0,"end":60,"system":"values"},"lon":{"start":0,"end":60,"system":"values"},"time": {"start": 0, "end": 100, "crs": "indices"}},{"name":"d1","lat":{"start":30,"end":30,"system":"values"},"lon":{"start":30,"end":30,"system":"values"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"},{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d1"}],operation=[{"name":"CDSpark.ave","input":"v0","axes":"xy","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
@@ -546,7 +548,15 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       assert(Math.abs( results(0) - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
     }}
 
-    test("Maximum1") {
+
+  test("CherryPick") {
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":1,"end":1,"system":"indices"},"lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.compress","input":"v1","plev":"975,875,775,650,550"}]]"""
+    val result_node = executeTest(datainputs)
+    val results = getResults(result_node)
+    println( "Op Result:       " + results.mkString(",") )
+  }
+
+  test("Maximum1") {
       val nco_verified_result: CDFloatArray = CDFloatArray( Array( 277.8863, 279.0432, 280.0728, 280.9739, 282.2123, 283.7078, 284.6707, 285.4793, 286.259, 286.9836, 287.6983 ).map(_.toFloat), Float.MaxValue )
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":150,"system":"indices"},"lon":{"start":100,"end":100,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"t"}]]"""
       val result_node = executeTest(datainputs)
@@ -571,7 +581,13 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
     }
 
-    test("pyMaxT") { if( test_python) {
+  test("Maximum-values") {
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":50,"system":"indices"},"lon":{"start":180,"end":360,"system":"values"},"lat":{"start":0,"end":90,"system":"values"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","axes":"t"}]]"""
+    val result_node = executeTest(datainputs, Map( "response"->"file" ) )
+    println( "Result: " + result_node.toString )
+  }
+
+  test("pyMaxT") { if( test_python) {
       val nco_verified_result: CDFloatArray = CDFloatArray( Array( 277.8863, 279.0432, 280.0728, 280.9739, 282.2123, 283.7078, 284.6707, 285.4793, 286.259, 286.9836, 287.6983 ).map(_.toFloat), Float.MaxValue )
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":150,"system":"indices"},"lon":{"start":100,"end":100,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"t"}]]"""
       val result_node = executeTest(datainputs)
@@ -723,10 +739,19 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     variables.toList
   }
 
-  def executeTest( datainputs: String, runArgs: Map[String,String]=Map.empty, process_name: String = "CDSpark.workflow"  ): xml.Elem = {
+  def executeTest( datainputs: String, runArgs: Map[String,String]=Map.empty, _processName: String = "" ): xml.Elem = {
     val t0 = System.nanoTime()
     val runargs = runArgs ++ Map( "responseform" -> "generic", "storeexecuteresponse" -> "true", "unitTest" -> "true", "status" -> "false" )
     val rId: String = RandomStringUtils.random( 6, true, true )
+    val process_name = if( _processName.isEmpty ) { "Workflow-" + rId } else _processName
+    val executionCallback: ExecutionCallback = new ExecutionCallback {
+      override def success( results: xml.Node ): Unit = {
+        val responseType = runArgs.getOrElse("response","xml")
+        logger.info(s"\n\n *** ExecutionCallback: rId = ${rId}, responseType = ${responseType} *** \n\n")
+        if (responseType == "file") { ; }
+      }
+      override def failure( msg: String ): Unit = { logger.error( s"ERROR CALLBACK ($rId): " + msg ) }
+    }
     val response: xml.Elem = webProcessManager.executeProcess( Job( rId, process_name, datainputs, runargs ) )
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) {
       throw new Exception( child_node.toString )

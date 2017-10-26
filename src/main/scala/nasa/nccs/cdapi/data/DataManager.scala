@@ -338,7 +338,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
   }
 
   def compress( indices: Array[Int], axis: Int ): FastMaskedArray = {
-    val slices = indices.map( index => new FastMaskedArray( array.slice(axis,index), missing ) )
+    val slices = indices.map( index => new FastMaskedArray( array.slice(axis,index).copy, missing ) )
     FastMaskedArray.join( slices, axis )
   }
 
@@ -662,8 +662,10 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def toVector: DenseVector = new DenseVector( data.map(_.toDouble ) )
 
   def section( new_section: ma2.Section ): HeapFltArray = {
-    if( new_section.getOrigin.sameElements(origin) && new_section.getShape.sameElements(shape) ) { this } else {
-      val ucarArray: ucar.ma2.Array = toUcarFloatArray.sectionNoReduce(new_section.getRanges)
+    val current_section = new ma2.Section(origin,shape)
+    if( new_section.contains( current_section ) ) { this } else {
+      val sub_section = new_section.intersect(current_section)
+      val ucarArray: ucar.ma2.Array = toUcarFloatArray.sectionNoReduce(sub_section.getRanges)
       HeapFltArray(CDArray(ucarArray, getMissing()), new_section.getOrigin, gridSpec, metadata, None)
     }
   }

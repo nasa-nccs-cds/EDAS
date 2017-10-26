@@ -117,14 +117,8 @@ class TaskRequest(val id: UID,
     }
 
   def getDomain(data_source: DataSource): Option[DomainContainer] = {
-    data_source.domain match {
-      case "" => None
-      case domain =>
-        assert(
-          domainMap.contains(domain),
-          "Undefined domain for dataset " + data_source.name + ", domain = " + data_source.domain)
-        domainMap.get(domain)
-    }
+    assert( domainMap.contains(data_source.domain), "Undefined domain for dataset " + data_source.name + ", domain = " + data_source.domain)
+    domainMap.get(data_source.domain)
   }
 
   def getDomain(domId: String): Option[DomainContainer] = domainMap.get(domId)
@@ -500,6 +494,7 @@ class DataFragmentSpec(val uid: String = "",
                        val autoCache: Boolean = false
                       ) extends Loggable with Serializable {
 
+  val dbgInt = 0
 //  logger.debug("DATA FRAGMENT SPEC: section: %s, _domSectOpt: %s".format(_section, _domSectOpt.getOrElse("null").toString))
   override def toString = "DataFragmentSpec { varname = %s, collection = %s, dimensions = %s, units = %s, longname = %s, roi = %s }".format(varname, collection, dimensions, units, longname, CDSection.serialize(roi))
   def sameVariable(otherCollection: String, otherVarName: String): Boolean = {

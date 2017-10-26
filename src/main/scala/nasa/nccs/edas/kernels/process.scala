@@ -172,7 +172,7 @@ object Kernel extends Loggable {
     customKernels.find(_.matchesSpecs(specToks)) match {
       case Some(kernel) => kernel
       case None => api match {
-        case "python" => new zmqPythonKernel(module, specToks(0), specToks(1), specToks(2), str2Map(specToks(3)), false )
+        case "python" => new zmqPythonKernel(module, specToks(0), specToks(1), specToks(2), str2Map(specToks(3)), false, "developmental" )
       }
       case wtf => throw new Exception("Unrecognized kernel api: " + api)
     }
@@ -1034,7 +1034,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
 //  }
 //}
 
-class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True" ), false ) {
+class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True" ), false, "public" ) {
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
     logger.info("&&MAP&&")
@@ -1077,13 +1077,14 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
   }
 }
 
-class zmqPythonKernel( _module: String, _operation: String, _title: String, _description: String, options: Map[String,String], axisElimination: Boolean  ) extends Kernel(options) {
+class zmqPythonKernel( _module: String, _operation: String, _title: String, _description: String, options: Map[String,String], axisElimination: Boolean, visibility_status: String  ) extends Kernel(options) {
   override def operation: String = _operation
   override def module = _module
   override def name = _module.split('.').last + "." + _operation
   override def id = _module + "." + _operation
   override val identifier = name
-  override val doesAxisElimination = axisElimination;
+  override val doesAxisElimination: Boolean = axisElimination;
+  override val status = KernelStatus.parse( visibility_status )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = _title
   val description = _description

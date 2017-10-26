@@ -428,7 +428,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   def getOpSections( targetGrid: TargetGrid, node: WorkflowNode ): Option[ IndexedSeq[ma2.Section] ] = {
     val optargs: Map[String, String] = node.operation.getConfiguration
     val domains: IndexedSeq[DomainContainer] = optargs.get("domain") match {
-      case Some(domainIds) => domainIds.split(",").flatMap(request.getDomain(_)).toIndexedSeq
+      case Some(domainIds) => domainIds.split(",").flatMap( request.getDomain(_) ).toIndexedSeq
       case None => return Some( IndexedSeq.empty[ma2.Section] )
     }
     //    logger.info( "OPT DOMAIN Arg: " + optargs.getOrElse( "domain", "None" ) )
