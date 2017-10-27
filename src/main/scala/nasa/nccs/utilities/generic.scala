@@ -41,7 +41,7 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   val LNAME = if( test ) name + "-test" else name + "-"
   val LID = if( master ) "master" else UID().uid
   var newline_state = true
-  val logFilePath: Path = Paths.get( "/tmp" /* System.getProperty("user.home") */, "edas", "logs", LNAME + LID + ".log" )
+  val logFilePath: Path = Paths.get( "/tmp", System.getProperty("user.name"), "logs", LNAME + LID + ".log" )
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
   def timestamp = Calendar.getInstance().getTime
   def timeStr = s"(${timeFormatter.format(timestamp)})"
