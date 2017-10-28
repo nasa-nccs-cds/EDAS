@@ -396,8 +396,8 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
   }}
 
-  test("anomaly-collection") {
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":40,"end":50,"system":"values"},"lon":{"start":10,"end":50,"system":"values"},"lev":{"start":10,"end":10,"system":"indices"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection://cip_merra2_mon_ta","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xt","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]"""
+  test("anomaly-time") {
+    val datainputs = s"""[domain=[{"name":"d0", "time": {"start": 10, "end": 10, "crs": "indices"}},{"name":"d1","lat":{"start":40,"end":40,"system":"values"},"lon":{"start":10,"end":10,"system":"values"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xt","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )

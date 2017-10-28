@@ -256,7 +256,10 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     return results.toList
   }
 
-  def getSubWorkflow(rootNode: WorkflowNode): List[WorkflowNode] = ( rootNode.predecesors.map( WorkflowNode.promote ) += rootNode ).toList
+  def getSubWorkflow(rootNode: WorkflowNode): List[WorkflowNode] = {
+    val filter = (node: DAGNode) => !WorkflowNode.promote(node).doesTimeElimination
+    ( rootNode.predecesors(filter).map( WorkflowNode.promote ) += rootNode ).toList
+  }
 
   def getSubworkflowInputs(requestCx: RequestContext, rootNode: WorkflowNode): Map[String, OperationInput] = {
     val inputMaps = getSubWorkflow(rootNode).map( getNodeInputs( requestCx, _ ) )

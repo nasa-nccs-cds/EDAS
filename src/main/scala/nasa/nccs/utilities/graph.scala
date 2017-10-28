@@ -45,6 +45,14 @@ class DAGNode extends Loggable {
       }
     }
 
+  private def accumulate( direction: DNDirection, filter: DAGNode => Boolean ): ListBuffer[DAGNode] =
+    getRelatives(direction).foldLeft( ListBuffer[DAGNode]() ) {
+      (results,node) => if( filter(node) ) {
+        results += node;
+        results ++= node.accumulate( direction )
+      } else { results }
+    }
+
   def find( relation: DNRelation, p: (DAGNode) ⇒ Boolean ): Option[DAGNode] = collectRelatives(relation).find( p )
   def filter( relation: DNRelation, p: (DAGNode) ⇒ Boolean ): List[DAGNode] = collectRelatives(relation).filter( p ).toList
   def filterNot( relation: DNRelation, p: (DAGNode) ⇒ Boolean ): List[DAGNode] = collectRelatives(relation).filterNot( p ).toList
@@ -58,9 +66,10 @@ class DAGNode extends Loggable {
   def hasAntecedent(dnode: DAGNode ): Boolean = exists( DNodeRelation.Antecedent, _ eq dnode )
   def hasInput(dnode: DAGNode ): Boolean = exists( DNodeRelation.Input, _ eq dnode )
   def hasProduct(dnode: DAGNode ): Boolean = exists( DNodeRelation.Product, _ eq dnode )
-  def size( relation: DNRelation ) = collectRelatives(relation).size
-  def isRoot = ( size( DNodeRelation.Product ) == 0 )
-  def predecesors = accumulate( DNodeDirection.Pre )
+  def size( relation: DNRelation ): Int = collectRelatives(relation).size
+  def isRoot: Boolean =  size( DNodeRelation.Product ) == 0
+  def predecesors: ListBuffer[DAGNode] = accumulate( DNodeDirection.Pre )
+  def predecesors(filter: DAGNode => Boolean): ListBuffer[DAGNode] = accumulate( DNodeDirection.Pre, filter )
 }
 
 class LabeledDAGNode(id: String) extends DAGNode with Loggable {
