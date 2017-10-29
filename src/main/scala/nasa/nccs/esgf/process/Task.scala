@@ -307,16 +307,16 @@ class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) 
     s"PartitionSpec { axis = $axisIndex, nPart = $nPart, partIndex = $partIndex }"
 }
 
-class DataSource(val name: String, metaCollection: Collection, domains: Seq[String], val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
+class DataSource(val name: String, metaCollection: Collection, val declared_domains: Seq[String], val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
   val debug = 1
   val collection: Collection = getSubCollection( metaCollection, name )
   private val _inferredDomains = new scala.collection.mutable.HashSet[String]()
-  domains.foreach( _addDomain )
+  declared_domains.foreach( _addDomain )
   def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.getDomains, dsource.autoCache )
-  override def toString: String = s"DataSource { name = $name, \n\t\t\tcollection = %s, domains = ${domains.mkString(",")}, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
-  def toXml: xml.Node =  <dataset name={name} domains={domains.mkString(",")}> {collection.toXml} </dataset>
+  override def toString: String = s"DataSource { name = $name, \n\t\t\tcollection = %s, domains = ${declared_domains.mkString(",")}, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
+  def toXml: xml.Node =  <dataset name={name} domains={declared_domains.mkString(",")}> {collection.toXml} </dataset>
   def isDefined: Boolean = !collection.isEmpty && !name.isEmpty
-  def isReadable: Boolean = !collection.isEmpty && !name.isEmpty && !domains.isEmpty
+  def isReadable: Boolean = !collection.isEmpty && !name.isEmpty && !declared_domains.isEmpty
   def getKey: Option[DataFragmentKey] = fragIdOpt map DataFragmentKey.apply
 
   def getDomains: List[String] = _inferredDomains.toList
@@ -336,7 +336,7 @@ class DataSource(val name: String, metaCollection: Collection, domains: Seq[Stri
     logger.info( s"DataSource::GetSubCollection: metaCollection= ${metaCollection.dataPath}, subCollection= ${result.dataPath}" )
     result
   }
-  def updateDomainsFromOperation( operation: OperationContext ): Boolean = operation.getDomains.exists( _addDomain )
+  def updateDomainsFromOperation( operation: OperationContext ): Boolean = if( declared_domains.isEmpty ) { operation.getDomains.exists( _addDomain ) } else { false }
 }
 
 class DataFragmentKey(val varname: String, val collId: String, val origin: Array[Int], val shape: Array[Int] ) extends Serializable {
