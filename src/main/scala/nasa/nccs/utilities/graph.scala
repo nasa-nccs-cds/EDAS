@@ -6,7 +6,7 @@ object DNodeRelation extends Enumeration { val Input, Product, Antecedent, Prede
 object DNodeDirection extends Enumeration { val Post, Pre = Value }
 
 object DAGNode {
-  def sort[T <: DAGNode]( nodes: List[T] ): List[T] = nodes.sortWith( (n0,n1) => n1.hasPredecesor(n0) )
+  def sort[T <: DAGNode]( nodes: Seq[T] ): Seq[T] = nodes.sortWith( (n0,n1) => n1.hasPredecesor(n0) )
 }
 
 class DAGNode extends Loggable {

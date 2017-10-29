@@ -190,7 +190,7 @@ abstract class WPSExecuteResponse( val serviceInstance: String ) extends WPSResp
   }
 }
 
-abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes: List[WPSProcess] ) extends WPSExecuteResponse(serviceInstance) {
+abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes: Seq[WPSProcess] ) extends WPSExecuteResponse(serviceInstance) {
   def this( serviceInstance: String, process: WPSProcess ) = this( serviceInstance, List(process) )
   def getReference: Option[WPSReference]
   def getFileReference: Option[WPSReference]
@@ -215,11 +215,11 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
     }
   }
 
-  def getOutputs( response_syntax: ResponseSyntax.Value ): List[xml.Elem] = {
+  def getOutputs( response_syntax: ResponseSyntax.Value ): Seq[xml.Elem] = {
     val syntax = getSyntax(response_syntax)
     syntax match {
       case ResponseSyntax.Generic =>
-        val outlist: List[xml.Elem]  = processes.flatMap(p => p.outputs.map(output => <outputs> {getProcessOutputs(syntax, p.identifier, output.identifier)} </outputs>))
+        val outlist: Seq[xml.Elem]  = processes.flatMap(p => p.outputs.map(output => <outputs> {getProcessOutputs(syntax, p.identifier, output.identifier)} </outputs>))
         outlist  ++ getReferenceOutputs(syntax)
       case ResponseSyntax.WPS =>
         val outlist = processes.flatMap(p => p.outputs.map(output => <wps:Output> {output.getHeader(syntax)}{getProcessOutputs(syntax,p.identifier, output.identifier)} </wps:Output>))
@@ -255,8 +255,8 @@ abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: 
   def getResultId: String = resultId
 }
 
-class MergedWPSExecuteResponse( serviceInstance: String, responses: List[WPSProcessExecuteResponse] ) extends WPSProcessExecuteResponse( serviceInstance, responses.flatMap(_.processes) ) with Loggable {
-  val process_ids: List[String] = responses.flatMap( response => response.processes.map( process => process.identifier ) )
+class MergedWPSExecuteResponse( serviceInstance: String, responses: Seq[WPSProcessExecuteResponse] ) extends WPSProcessExecuteResponse( serviceInstance, responses.flatMap(_.processes) ) with Loggable {
+  val process_ids: Seq[String] = responses.flatMap( response => response.processes.map( process => process.identifier ) )
   def getReference: Option[WPSReference] = responses.head.getReference
   def getFileReference: Option[WPSReference] = responses.head.getFileReference
   def getResultReference: Option[WPSReference] = responses.head.getResultReference
@@ -375,7 +375,7 @@ class AsyncExecutionResult( serviceInstance: String, processes: List[WPSProcess]
   }
 }
 
-class WPSMergedEventReport( val reports: List[WPSEventReport] ) extends WPSEventReport {
+class WPSMergedEventReport( val reports: Seq[WPSEventReport] ) extends WPSEventReport {
   def getReport( response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] = reports.flatMap( _.getReport(response_syntax) )
 }
 

@@ -570,16 +570,16 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
 
 //  def getAxisIndices( axisCFNames: String ): Array[Int] = for(cfName <- axisCFNames.toArray) yield grid.getAxisSpec(cfName.toString).map( _.index ).getOrElse(-1)
 
-  def getPotentialAxisIndices( axisConf: List[OperationSpecs], flatten: Boolean = false ): AxisIndices = {
-      val axis_ids = mutable.HashSet[Int]()
-      for( opSpec <- axisConf ) {
-        val axes = opSpec.getSpec("axes")
-        val axis_chars: List[Char] = if( axes.contains(',') ) axes.split(",").map(_.head).toList else axes.toList
-        axis_ids ++= axis_chars.map( cval => getAxisIndex( cval.toString ) )
-      }
-      val axisIdSet = if(flatten) axis_ids.toSet else  axis_ids.toSet
-      new AxisIndices( axisIds=axisIdSet )
-    }
+//  def getPotentialAxisIndices( axisConf: List[OperationSpecs], flatten: Boolean = false ): AxisIndices = {
+//      val axis_ids = mutable.HashSet[Int]()
+//      for( opSpec <- axisConf ) {
+//        val axes = opSpec.getSpec("axes")
+//        val axis_chars: List[Char] = if( axes.contains(',') ) axes.split(",").map(_.head).toList else axes.toList
+//        axis_ids ++= axis_chars.map( cval => getAxisIndex( cval.toString ) )
+//      }
+//      val axisIdSet = if(flatten) axis_ids.toSet else  axis_ids.toSet
+//      new AxisIndices( axisIds=axisIdSet )
+//    }
 
   def getAxisIndices( axisConf: String ): AxisIndices = new AxisIndices( axisIds=axisConf.map( ch => getAxisIndex(ch.toString ) ).toSet )
   def getAxisIndex( cfAxisName: String ): Int = grid.getAxisSpec( cfAxisName.toLowerCase ).map( gcs => gcs.index ).getOrElse( throw new Exception( "Unrecognized axis name ( should be 'x', 'y', 'z', or 't' ): " + cfAxisName ) )

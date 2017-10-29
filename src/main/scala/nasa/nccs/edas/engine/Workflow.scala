@@ -22,9 +22,8 @@ import scala.util.Try
 
 object WorkflowNode {
   val regridKernel = new CDMSRegridKernel()
-  def apply( operation: OperationContext, kernel: Kernel  ): WorkflowNode = {
-    new WorkflowNode( operation, kernel )
-  }
+  def apply( operation: OperationContext, kernel: Kernel  ): WorkflowNode = { new WorkflowNode( operation, kernel ) }
+  def apply( node: DAGNode ) : WorkflowNode = promote( node )
   def promote( node: DAGNode ) : WorkflowNode = node match {
     case workflowNode: WorkflowNode => workflowNode
     case _ => throw new Exception( "Unknown element in workflow: " + node.getClass.getName )
@@ -115,7 +114,7 @@ object Workflow {
 }
 
 class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager ) extends Loggable {
-  val nodes: List[WorkflowNode] = request.operations.map(opCx => WorkflowNode( opCx, createKernel( opCx.name.toLowerCase ) ) )
+  val nodes: Seq[WorkflowNode] = request.operations.map(opCx => WorkflowNode( opCx, createKernel( opCx.name.toLowerCase ) ) )
   val roots = findRootNodes()
 
   def createKernel(id: String): Kernel = executionMgr.getKernel(id)
@@ -139,7 +138,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     result
   }
 
-  def executeRequest(requestCx: RequestContext): List[ WPSProcessExecuteResponse ] = {
+  def executeRequest(requestCx: RequestContext): Seq[ WPSProcessExecuteResponse ] = {
     linkNodes( requestCx )
     val product_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) )
     val productNodeOpts = for (product_node <- product_nodes) yield {
@@ -257,7 +256,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def getSubWorkflow(rootNode: WorkflowNode): List[WorkflowNode] = {
-    val filter = (node: DAGNode) => !WorkflowNode.promote(node).doesTimeElimination
+    val filter = (node: DAGNode) => !WorkflowNode(node).doesTimeElimination
     ( rootNode.predecesors(filter).map( WorkflowNode.promote ) += rootNode ).toList
   }
 

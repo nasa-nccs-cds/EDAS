@@ -48,7 +48,7 @@ class TaskRequest(val id: UID,
                   val name: String,
                   val variableMap: Map[String, DataContainer],
                   val domainMap: Map[String, DomainContainer],
-                  val operations: List[OperationContext] = List(),
+                  val operations: Seq[OperationContext] = List(),
                   val metadata: Map[String, String] = Map("id" -> "#META"))
     extends Loggable {
   val errorReports = new ListBuffer[ErrorReport]()
@@ -69,10 +69,8 @@ class TaskRequest(val id: UID,
   def getTargetGrid(uid: String): Option[TargetGrid] = targetGridMap.get(uid)
 
   private def createTargetGrid(dataContainer: DataContainer): TargetGrid = {
-    val domainContainerOpt: Option[DomainContainer] = getDomain(
-      dataContainer.getSource)
-    val roiOpt: Option[List[DomainAxis]] =
-      domainContainerOpt.map(domainContainer => domainContainer.axes)
+    val domainContainers: List[DomainContainer] = dataContainer.getSource.getDomains flatMap ( getDomain )
+    val roiOpt: List[DomainAxis] = domainContainers.flatMap(domainContainer => domainContainer.axes)
     val t0 = System.nanoTime
     lazy val variable: CDSVariable = dataContainer.getVariable
     val t1 = System.nanoTime
@@ -116,17 +114,11 @@ class TaskRequest(val id: UID,
       case _ => DataAccessMode.Read
     }
 
-  def getDomain(data_source: DataSource): Option[DomainContainer] = {
-    assert( domainMap.contains(data_source.domain), "Undefined domain for dataset " + data_source.name + ", domain = " + data_source.domain)
-    domainMap.get(data_source.domain)
-  }
-
+  def getDomains(data_source: DataSource): List[DomainContainer] = data_source.getDomains.map( domId => domainMap.getOrElse(domId, throw new Exception("Undefined domain for dataset " + data_source.name + ", domain = " + domId) ) )
   def getDomain(domId: String): Option[DomainContainer] = domainMap.get(domId)
 
   def validate() = {
-    for (variable <- inputVariables; if variable.isSource;
-         domid = variable.getSource.domain; vid = variable.getSource.name;
-         if !domid.isEmpty) {
+    for (variable <- inputVariables; if variable.isSource; domid <- variable.getSource.getDomains; vid = variable.getSource.name;  if !domid.isEmpty) {
       if (!domainMap.contains(domid) && !domid.contains("|")) {
         var keylist = domainMap.keys.mkString("[", ",", "]")
         logger.error(s"Error, No $domid in $keylist in variable $vid")
@@ -206,9 +198,11 @@ object TaskRequest extends Loggable {
     val data_list: List[DataContainer] = datainputs.getOrElse("variable", List()).flatMap(DataContainer.factory(uid, _, op_spec_list.isEmpty )).toList
     val domain_list: List[DomainContainer] = datainputs.getOrElse("domain", List()).map(DomainContainer(_)).toList
     val opSpecs: Seq[Map[String, Any]] = if(op_spec_list.isEmpty) { getEmptyOpSpecs(data_list) } else { op_spec_list }
-    val operation_list: List[OperationContext] = opSpecs.zipWithIndex.map {  case (op, index) => OperationContext(index, uid, process_name, data_list.map(_.uid), op) } .toList
-    val variableMap = buildVarMap(data_list, operation_list)
-    val domainMap = buildDomainMap(domain_list)
+    val operation_map: Map[String,OperationContext] = Map( opSpecs.zipWithIndex.map {  case (op, index) => OperationContext(index, uid, process_name, data_list.map(_.uid), op) } map ( op => op.identifier -> op ) :_* )
+    val operation_list: Seq[OperationContext] = operation_map.values.toSeq
+    val variableMap: Map[String, DataContainer] = buildVarMap(data_list, operation_list)
+    val domainMap: Map[String, DomainContainer] = buildDomainMap(domain_list)
+    inferDomains(operation_list, variableMap )
     val gridId = datainputs.getOrElse("grid", data_list.headOption.map(dc => dc.uid).getOrElse("#META")).toString
     val gridSpec = Map("id" -> gridId.toString)
     val rv = new TaskRequest( uid, process_name, variableMap, domainMap, operation_list, gridSpec )
@@ -216,12 +210,29 @@ object TaskRequest extends Loggable {
     rv
   }
 
+  def inferDomains(operation_list: Seq[OperationContext], variableMap: Map[String, DataContainer] ) = {
+    var updated_op = false;  var updated_var = false
+    do {
+      updated_op = operation_list.exists(_.addInputDomains(variableMap))
+      updated_var = addVarDomainsFromOp(operation_list, variableMap)
+    } while( updated_op || updated_var )
+  }
+
+  def addVarDomainsFromOp( operation_list: Seq[OperationContext], variableMap: Map[String, DataContainer] ): Boolean = {
+    var change_occurred = false
+    for (operation <- operation_list; vid <- operation.inputs; if !vid.isEmpty ) variableMap.get(vid) match {
+        case Some(data_container) => if( data_container.updateDomainsFromOperation( operation ) ) { change_occurred = true; }
+        case None => throw new Exception( "Unrecognized variable %s in varlist [%s] for operation %s with inputs [ %s ]".format(vid, variableMap.keys.mkString(","),operation.name,operation.inputs.mkString(", ")))
+      }
+    change_occurred
+  }
+
   def getEmptyOpSpecs( data_list: List[DataContainer] ): Seq[Map[String, Any]] = {
     val inputs: List[String] = data_list.flatMap( dc => if( dc.isSource ) { Some(dc.uid) } else { None } )
     IndexedSeq( Map( "name"->"CDSpark.noOp", "input"->inputs ) )
   }
 
-  def buildVarMap( data: List[DataContainer], workflow: List[OperationContext]): Map[String, DataContainer] = {
+  def buildVarMap( data: Seq[DataContainer], workflow: Seq[OperationContext]): Map[String, DataContainer] = {
     var data_var_items = for (data_container <- data)
       yield data_container.uid -> data_container
     var op_var_items = for (operation <- workflow; if !operation.rid.isEmpty)
@@ -229,13 +240,6 @@ object TaskRequest extends Loggable {
     val var_map = Map(op_var_items ++ data_var_items: _*)
 //    logger.info( "Created Variable Map: op_var_items = (%s), data_var_items = (%s)".format( op_var_items.map(_._1).mkString(","), data_var_items.map(_._1).mkString(",") ) )
     logger.info( "Created Variable Map: " + var_map.toString + " from data containers: " + data.map(data_container => ("id:" + data_container.uid)).mkString("[ ", ", ", " ]"))
-    for (operation <- workflow; vid <- operation.inputs; if !vid.isEmpty)
-      var_map.get(vid) match {
-        case Some(data_container) =>
-          data_container.addOpSpec(operation)
-        case None =>
-          throw new Exception( "Unrecognized variable %s in varlist [%s] for operation %s with inputs [ %s ] with data containers: %s, and with op_var_items: [ %s ]".format(vid, var_map.keys.mkString(","),operation.name,operation.inputs.mkString(", "),data.map(data_container => ("id:" + data_container.uid)).mkString("[ ", ", ", " ]"), op_var_items.map(_._1).mkString(", ")))
-      }
     var_map
   }
 
@@ -303,15 +307,20 @@ class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) 
     s"PartitionSpec { axis = $axisIndex, nPart = $nPart, partIndex = $partIndex }"
 }
 
-class DataSource(val name: String, metaCollection: Collection, val domain: String, val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
+class DataSource(val name: String, metaCollection: Collection, domains: Seq[String], val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
   val debug = 1
   val collection: Collection = getSubCollection( metaCollection, name )
-  def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.domain, dsource.autoCache )
-  override def toString = s"DataSource { name = $name, \n\t\t\tcollection = %s, domain = $domain, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
-  def toXml =  <dataset name={name} domain={domain}> {collection.toXml} </dataset>
-  def isDefined = (!collection.isEmpty && !name.isEmpty)
-  def isReadable = (!collection.isEmpty && !name.isEmpty && !domain.isEmpty)
-  def getKey: Option[DataFragmentKey] = fragIdOpt.map(DataFragmentKey.apply(_))
+  private val _inferredDomains = new scala.collection.mutable.HashSet[String]()
+  domains.foreach( _addDomain )
+  def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.getDomains, dsource.autoCache )
+  override def toString: String = s"DataSource { name = $name, \n\t\t\tcollection = %s, domains = ${domains.mkString(",")}, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
+  def toXml: xml.Node =  <dataset name={name} domains={domains.mkString(",")}> {collection.toXml} </dataset>
+  def isDefined: Boolean = !collection.isEmpty && !name.isEmpty
+  def isReadable: Boolean = !collection.isEmpty && !name.isEmpty && !domains.isEmpty
+  def getKey: Option[DataFragmentKey] = fragIdOpt map DataFragmentKey.apply
+
+  def getDomains: List[String] = _inferredDomains.toList
+  private def _addDomain( domain_id: String ): Boolean = if( _inferredDomains.contains(domain_id) ) { false; } else { _inferredDomains += domain_id; true }
 
   def getSubCollection( metaCollection: Collection, varName: String  ): Collection = {
     val result = if( metaCollection.dataPath.endsWith(".csv") ) {
@@ -327,6 +336,7 @@ class DataSource(val name: String, metaCollection: Collection, val domain: Strin
     logger.info( s"DataSource::GetSubCollection: metaCollection= ${metaCollection.dataPath}, subCollection= ${result.dataPath}" )
     result
   }
+  def updateDomainsFromOperation( operation: OperationContext ): Boolean = operation.getDomains.exists( _addDomain )
 }
 
 class DataFragmentKey(val varname: String, val collId: String, val origin: Array[Int], val shape: Array[Int] ) extends Serializable {
@@ -807,28 +817,38 @@ class DataFragmentSpec(val uid: String = "",
   //  def getData: Option[PartitionedFragment] = dataFrag
 }
 
-object OperationSpecs {
-  def apply(op: OperationContext) =
-    new OperationSpecs(op.name, op.getConfiguration)
-}
-class OperationSpecs(id: String, val optargs: Map[String, String]) {
-  val ids = mutable.HashSet(id)
-  def ==(oSpec: OperationSpecs) = (optargs == oSpec.optargs)
-  def merge(oSpec: OperationSpecs) = { ids ++= oSpec.ids }
-  def getSpec(id: String, default: String = ""): String =
-    optargs.getOrElse(id, default)
-}
+//object OperationSpecs {
+//  def apply(op: OperationContext) =
+//    new OperationSpecs( op.identifier, op.name, op.getConfiguration )
+//}
+//class OperationSpecs( val id: String, name: String, val optargs: Map[String, String]) {
+//  val ids = mutable.HashSet(name)
+//  def ==(oSpec: OperationSpecs) = (optargs == oSpec.optargs)
+//  def merge(oSpec: OperationSpecs) = { ids ++= oSpec.ids }
+//  def getSpec(id: String, default: String = ""): String =
+//    optargs.getOrElse(id, default)
+// }
 
 class DataContainer(val uid: String, private val source: Option[DataSource] = None, private val operation: Option[OperationContext] = None)  extends ContainerBase {
   assert(source.isDefined || operation.isDefined, s"Empty DataContainer: variable uid = $uid")
   assert(source.isEmpty || operation.isEmpty, s"Conflicted DataContainer: variable uid = $uid")
-  private val optSpecs = mutable.ListBuffer[OperationSpecs]()
+//  private val optSpecs = mutable.ListBuffer[OperationSpecs]()
   private lazy val variable = {
     val source = getSource; source.collection.getVariable(source.name)
   }
 
+/*  def getDomains: List[String] = _domains.toList
+  private val _domains = new scala.collection.mutable.HashSet[String]()
+  private def _addDomain( domain_id: String ): Boolean = if( _domains.contains(domain_id) ) { false; } else { _domains += domain_id; true }
+  def addOperationDomains(operation_map: Map[String,OperationContext]): Boolean = {
+    var rv = false
+    val operations = optSpecs.flatMap( op => operation_map.get(op.ide ) )
+    rv
+  }*/
+
   def toWPSDataInput: WPSDataInput = WPSDataInput(uid.toString, 1, 1)
   def getVariable: CDSVariable = variable
+  def updateDomainsFromOperation( operation: OperationContext ): Boolean = source.forall( _.updateDomainsFromOperation(operation) )
 
   override def toString = {
     val embedded_val: String =
@@ -841,6 +861,7 @@ class DataContainer(val uid: String, private val source: Option[DataSource] = No
     <dataset uid={uid}> embedded_xml </dataset>
   }
   def isSource = source.isDefined
+  def domains: List[String] = source.map( _.getDomains ).getOrElse( List.empty )
 
   def isOperation = operation.isDefined
 
@@ -854,16 +875,16 @@ class DataContainer(val uid: String, private val source: Option[DataSource] = No
   }
   def getSourceOpt = { source }
 
-  def addOpSpec(operation: OperationContext): Unit = { // used to inform data container what types of ops will be performed on it.
-    def mergeOpSpec(oSpecList: mutable.ListBuffer[OperationSpecs], oSpec: OperationSpecs): Unit = oSpecList.headOption match {
-      case None => oSpecList += oSpec
-      case Some(head) =>
-        if (head == oSpec) head merge oSpec
-        else mergeOpSpec(oSpecList.tail, oSpec)
-    }
-    mergeOpSpec(optSpecs, OperationSpecs(operation))
-  }
-  def getOpSpecs: List[OperationSpecs] = optSpecs.toList
+//  def addOpSpec(operation: OperationContext): Unit = { // used to inform data container what types of ops will be performed on it.
+//    def mergeOpSpec(oSpecList: mutable.ListBuffer[OperationSpecs], oSpec: OperationSpecs): Unit = oSpecList.headOption match {
+//      case None => oSpecList += oSpec
+//      case Some(head) =>
+//        if (head == oSpec) head merge oSpec
+//        else mergeOpSpec(oSpecList.tail, oSpec)
+//    }
+//    mergeOpSpec(optSpecs, OperationSpecs(operation))
+//  }
+//  def getOpSpecs: List[OperationSpecs] = optSpecs.toList
 }
 
 object DataContainer extends ContainerBase {
@@ -947,7 +968,7 @@ object DataContainer extends ContainerBase {
           val collection = Collection( cid, dataPath )
           for ((name, index) <- var_names.zipWithIndex) yield {
             val name_items = name.split(Array(':', '|'))
-            val dsource = new DataSource( stripQuotes(name_items.head), collection, normalize(domain), autocache )
+            val dsource = new DataSource( stripQuotes(name_items.head), collection, Seq(normalize(domain)), autocache )
             val vid = stripQuotes(name_items.last)
             val vname = normalize(name_items.head)
             val dcid =
@@ -963,7 +984,7 @@ object DataContainer extends ContainerBase {
           fragIdOpt match {
             case Some(fragId) =>
               val name_items = var_names.head.split(Array(':', '|'))
-              val dsource = new DataSource(stripQuotes(name_items.head), collection, normalize(domain), autocache, fragIdOpt)
+              val dsource = new DataSource(stripQuotes(name_items.head), collection, Seq(normalize(domain)), autocache, fragIdOpt)
               val vid = normalize(name_items.last)
               Array(
                 new DataContainer(if (vid.isEmpty) uid + s"c-$base_index"
@@ -972,7 +993,7 @@ object DataContainer extends ContainerBase {
             case None =>
               for ((name, index) <- var_names.zipWithIndex) yield {
                 val name_items = name.split(Array(':', '|'))
-                val dsource = new DataSource(stripQuotes(name_items.head), collection, normalize(domain), autocache )
+                val dsource = new DataSource(stripQuotes(name_items.head), collection, Seq(normalize(domain)), autocache )
                 val vid = stripQuotes(name_items.last)
                 val vname = normalize(name_items.head)
                 val dcid =
@@ -1170,12 +1191,25 @@ class OperationContext(val index: Int,
                        val inputs: List[String],
                        val resultType: OpResultType,
                        private val configuration: Map[String, String]) extends ContainerBase with ScopeContext with Serializable {
+
   def getConfiguration = configuration
   def getDomain: Option[String] = configuration.get("domain")
   val moduleName: String = name.toLowerCase.split('.').head
   override def toString =  s"OperationContext { id = $identifier,  name = $name, rid = $rid, inputs = $inputs, configurations = $configuration }"
   override def toXml = <proc id={identifier} name={name} rid={rid} inputs={inputs.toString} configurations={configuration.toString}/>
   def operatesOnAxis( axis: Char ): Boolean = configuration.getOrElse("axes","").contains(axis)
+
+  def getDomains: List[String] = _domains.toList
+  private val _domains = new scala.collection.mutable.HashSet[String]()
+  private def _addDomain( var_id: String, domain_id: String ): Boolean = if( _domains.contains(domain_id) ) { false; } else { _domains += domain_id; true }
+  def addInputDomains( variableMap: Map[String, DataContainer] ): Boolean = {
+    var change_occurred = false
+    for( vid <- inputs; optVar = variableMap.get(vid) ) optVar match {
+      case Some( variable: DataContainer ) => variable.domains.foreach( domainId => { if( _addDomain(vid,domainId) ) { change_occurred = true } } )
+      case None => throw new Exception( s"Unrecognized variable ${vid} in workflow, variables = ${variableMap.keys.mkString(", ")}")
+    }
+    change_occurred
+  }
 }
 
 object OperationContext extends ContainerBase {
@@ -1185,34 +1219,18 @@ object OperationContext extends ContainerBase {
   }
   private var resultIndex = 0;
 
-  def apply(index: Int,
-            uid: UID,
-            process_name: String,
-            uid_list: List[String],
-            metadata: Map[String, Any]): OperationContext = {
+  def apply(index: Int, uid: UID, process_name: String, uid_list: List[String], metadata: Map[String, Any]): OperationContext = {
     val op_inputs: Iterable[String] = metadata.get("input") match {
-      case Some(input_values: List[_]) =>
-        input_values.map( input_value => {
-          val sval = input_value.asInstanceOf[String]
-          if( sval.endsWith( uid.toString ) ) { sval } else { uid + sval.trim } } )
-      case Some(input_value: String) =>
-        if( input_value.isEmpty ) { uid_list } else { input_value.split(',').map(uid + _.trim) }
-      case None => uid_list.map(uid + _.trim)
-      case x =>
-        throw new Exception(
-          "Unrecognized input in operation spec: " + x.toString)
+      case Some(input_values: List[_]) =>   input_values.map( input_value => { val sval = input_value.asInstanceOf[String]; if( sval.endsWith( uid.toString ) ) { sval } else { uid + sval.trim } } )
+      case Some(input_value: String) =>     if( input_value.isEmpty ) { uid_list } else { input_value.split(',').map(uid + _.trim) }
+      case None =>                          uid_list.map(uid + _.trim)
+      case x => throw new Exception("Unrecognized input in operation spec: " + x.toString)
     }
     var productType = ResultType.UNDEF;
     val op_name = metadata.getOrElse("name", process_name).toString.trim
-    val optargs: Map[String, String] = metadata
-      .filterNot((item) => List("input", "name").contains(item._1))
-      .mapValues(_.toString.trim)
-      .map(identity) // map(identity) to work around scala serialization bug
+    val optargs: Map[String, String] = metadata.filterNot((item) => List("input", "name").contains(item._1)).mapValues(_.toString.trim).map(identity) // map(identity) to work around scala serialization bug
     val input = metadata.getOrElse("input", "").toString
-    val opLongName = op_name + "-" + (List(input) ++ optargs.toList.map(item =>
-        item._1 + "=" + item._2))
-        .filterNot((item) => item.isEmpty)
-        .mkString("(", "_", ")")
+    val opLongName = op_name + "-" + (List(input) ++ optargs.toList.map(item => item._1 + "=" + item._2)).filterNot((item) => item.isEmpty).mkString("(", "_", ")")
     val dt: DateTime = new DateTime(DateTimeZone.getDefault())
     val rid = metadata.get("id") match {
       case Some(result_id) =>
@@ -1225,13 +1243,7 @@ object OperationContext extends ContainerBase {
           case None => uid + op_name + "-" + index.toString
         }
     }
-    new OperationContext(index,
-                         identifier = UID() + op_name,
-                         name = op_name,
-                         rid = rid,
-                         inputs = op_inputs.toList,
-                         productType,
-                         optargs)
+    new OperationContext(index, identifier = UID() + op_name, name = op_name, rid = rid, inputs = op_inputs.toList, productType, optargs)
   }
 
   def generateResultId: String = {
