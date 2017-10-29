@@ -1193,7 +1193,7 @@ class OperationContext(val index: Int,
                        private val configuration: Map[String, String]) extends ContainerBase with ScopeContext with Serializable {
 
   def getConfiguration = configuration
-  def getDomain: Option[String] = configuration.get("domain")
+  def getDeclaredDomain: Option[String] = configuration.get("domain")
   val moduleName: String = name.toLowerCase.split('.').head
   override def toString =  s"OperationContext { id = $identifier,  name = $name, rid = $rid, inputs = $inputs, configurations = $configuration }"
   override def toXml = <proc id={identifier} name={name} rid={rid} inputs={inputs.toString} configurations={configuration.toString}/>
@@ -1201,14 +1201,16 @@ class OperationContext(val index: Int,
 
   def getDomains: List[String] = _domains.toList
   private val _domains = new scala.collection.mutable.HashSet[String]()
-  private def _addDomain( var_id: String, domain_id: String ): Boolean = if( _domains.contains(domain_id) ) { false; } else { _domains += domain_id; true }
-  def addInputDomains( variableMap: Map[String, DataContainer] ): Boolean = {
-    var change_occurred = false
-    for( vid <- inputs; optVar = variableMap.get(vid) ) optVar match {
-      case Some( variable: DataContainer ) => variable.domains.foreach( domainId => { if( _addDomain(vid,domainId) ) { change_occurred = true } } )
-      case None => throw new Exception( s"Unrecognized variable ${vid} in workflow, variables = ${variableMap.keys.mkString(", ")}")
-    }
-    change_occurred
+  private def _addDomain( domain_id: String ): Boolean = if( _domains.contains(domain_id) ) { false; } else { _domains += domain_id; true }
+  def addInputDomains( variableMap: Map[String, DataContainer] ): Boolean = getDeclaredDomain match {
+    case None =>
+      var change_occurred = false
+      for( vid <- inputs; optVar = variableMap.get(vid) ) optVar match {
+        case Some( variable: DataContainer ) => variable.domains.foreach( domainId => { if( _addDomain(domainId) ) { change_occurred = true } } )
+        case None => throw new Exception( s"Unrecognized variable ${vid} in workflow, variables = ${variableMap.keys.mkString(", ")}")
+      }
+      change_occurred
+    case Some( domId ) => _addDomain(domId); false
   }
 }
 
