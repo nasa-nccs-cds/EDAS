@@ -210,13 +210,8 @@ object TaskRequest extends Loggable {
     rv
   }
 
-  def inferDomains(operation_list: Seq[OperationContext], variableMap: Map[String, DataContainer] ) = {
-    var updated_op = false;  var updated_var = false
-    do {
-      updated_op = operation_list.exists(_.addInputDomains(variableMap))
-      updated_var = addVarDomainsFromOp(operation_list, variableMap)
-    } while( updated_op || updated_var )
-  }
+  def inferDomains(operation_list: Seq[OperationContext], variableMap: Map[String, DataContainer] ): Unit =
+    do operation_list.foreach( _.addInputDomains(variableMap) ) while( addVarDomainsFromOp(operation_list, variableMap) )
 
   def addVarDomainsFromOp( operation_list: Seq[OperationContext], variableMap: Map[String, DataContainer] ): Boolean = {
     var change_occurred = false
@@ -836,6 +831,7 @@ class DataContainer(val uid: String, private val source: Option[DataSource] = No
   private lazy val variable = {
     val source = getSource; source.collection.getVariable(source.name)
   }
+  def getInputDomains: List[String] = source.flatMap( _.getDomains ).toList
 
 /*  def getDomains: List[String] = _domains.toList
   private val _domains = new scala.collection.mutable.HashSet[String]()
@@ -861,7 +857,6 @@ class DataContainer(val uid: String, private val source: Option[DataSource] = No
     <dataset uid={uid}> embedded_xml </dataset>
   }
   def isSource = source.isDefined
-  def domains: List[String] = source.map( _.getDomains ).getOrElse( List.empty )
 
   def isOperation = operation.isDefined
 
@@ -1193,25 +1188,22 @@ class OperationContext(val index: Int,
                        private val configuration: Map[String, String]) extends ContainerBase with ScopeContext with Serializable {
 
   def getConfiguration = configuration
-  def getDeclaredDomain: Option[String] = configuration.get("domain")
+  private val _domains = new scala.collection.mutable.HashSet[String]()
+  configuration.get("domain").foreach( _addDomain )
   val moduleName: String = name.toLowerCase.split('.').head
   override def toString =  s"OperationContext { id = $identifier,  name = $name, rid = $rid, inputs = $inputs, configurations = $configuration }"
   override def toXml = <proc id={identifier} name={name} rid={rid} inputs={inputs.toString} configurations={configuration.toString}/>
   def operatesOnAxis( axis: Char ): Boolean = configuration.getOrElse("axes","").contains(axis)
 
   def getDomains: List[String] = _domains.toList
-  private val _domains = new scala.collection.mutable.HashSet[String]()
+
   private def _addDomain( domain_id: String ): Boolean = if( _domains.contains(domain_id) ) { false; } else { _domains += domain_id; true }
-  def addInputDomains( variableMap: Map[String, DataContainer] ): Boolean = getDeclaredDomain match {
-    case None =>
-      var change_occurred = false
-      for( vid <- inputs; optVar = variableMap.get(vid) ) optVar match {
-        case Some( variable: DataContainer ) => variable.domains.foreach( domainId => { if( _addDomain(domainId) ) { change_occurred = true } } )
-        case None => throw new Exception( s"Unrecognized variable ${vid} in workflow, variables = ${variableMap.keys.mkString(", ")}")
-      }
-      change_occurred
-    case Some( domId ) => _addDomain(domId); false
+
+  def addInputDomains( variableMap: Map[String, DataContainer] ): Boolean = if( _domains.size > 0 ) { false } else {
+    inputs.exists( variableMap.get(_).exists( addDomainsForInput ) )
   }
+
+  def addDomainsForInput( dc: DataContainer): Boolean = dc.getInputDomains.exists( _addDomain )
 }
 
 object OperationContext extends ContainerBase {
