@@ -165,7 +165,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     val profiler = ProfilingTool( serverContext.spark.sparkContext )
     val sourceContainers = request.variableMap.values.filter(_.isSource)
     val t1 = System.nanoTime
-    val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource; domain <- data_container.getSource.getDomains.map(request.getDomain) )
+    val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource; domain <- data_container.getSource.getDomain.map(request.getDomain) )
       yield serverContext.createInputSpec( data_container, domain, request )
     val t2 = System.nanoTime
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
@@ -177,7 +177,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 
   def cacheInputData(request: TaskRequest, run_args: Map[String, String] ): Iterable[Option[(DataFragmentKey, Future[PartitionedFragment])]] = {
     val sourceContainers = request.variableMap.values.filter(_.isSource)
-    for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource; domain <- data_container.getSource.getDomains.map(request.getDomain) )
+    for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource; domain <- data_container.getSource.getDomain.map(request.getDomain) )
       yield serverContext.cacheInputData( data_container, run_args, domain, request.getTargetGrid(data_container), None )
   }
 
@@ -298,7 +298,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         val deletedCollections = Collections.removeCollections( colIds.toArray )
         new WPSMergedEventReport(List(new UtilityExecutionResult("dcol", <deleted collections={deletedCollections.mkString(",")}/> )))
       case "dfrag" =>
-        val fragIds: Iterable[String] = request.variableMap.values.flatMap( ds => ds.getSource.getDomains.map( domId => Array( ds.getSource.name, ds.getSource.collection.id, domId ).mkString("|") ) )
+        val fragIds: Iterable[String] = request.variableMap.values.flatMap( ds => ds.getSource.getDomain.map( domId => Array( ds.getSource.name, ds.getSource.collection.id, domId ).mkString("|") ) )
         deleteFragments( fragIds )
         new WPSMergedEventReport(List(new UtilityExecutionResult("dfrag", <deleted fragments={fragIds.mkString(",")}/> )))
       case "dres" =>

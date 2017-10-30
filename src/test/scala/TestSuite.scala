@@ -397,7 +397,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   }}
 
   test("anomaly-time") {
-    val datainputs = s"""[domain=[{"name":"d0", "time": {"start": 10, "end": 10, "crs": "indices"}},{"name":"d1","lat":{"start":40,"end":40,"system":"values"},"lon":{"start":10,"end":10,"system":"values"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xt","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0", "lat":{"start":30,"end":50,"system":"values"}, "lon":{"start":0,"end":20,"system":"values"}},{"name":"d1","lat":{"start":40,"end":40,"system":"values"},"lon":{"start":10,"end":10,"system":"values"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d1"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
@@ -558,7 +558,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
   test("Maximum1") {
       val nco_verified_result: CDFloatArray = CDFloatArray( Array( 277.8863, 279.0432, 280.0728, 280.9739, 282.2123, 283.7078, 284.6707, 285.4793, 286.259, 286.9836, 287.6983 ).map(_.toFloat), Float.MaxValue )
-      val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":150,"system":"indices"},"lon":{"start":100,"end":100,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"t"}]]"""
+      val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":150,"system":"indices"},"lon":{"start":100,"end":100,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"t"}]]"""
       val result_node = executeTest(datainputs)
       val result_data = getResultData( result_node )
       println( "Op Result:       " + result_data.mkDataString(", ") )
@@ -568,7 +568,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
     test("Maximum2") {
       val nco_verified_result: CDFloatArray = CDFloatArray( Array( 277.8863, 279.0432, 280.0728, 280.9739, 282.2123, 283.7078, 284.6707, 285.4793, 286.259, 286.9836, 287.6983 ).map(_.toFloat), Float.MaxValue )
-      val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":150,"system":"indices"},"lon":{"start":100,"end":100,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"t"}]]"""
+      val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":150,"system":"indices"},"lon":{"start":100,"end":100,"system":"indices"},"lat":{"start":10,"end":20,"system":"indices"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","axes":"t"}]]"""
       val result_node = executeTest(datainputs)
       val result_data = getResultData( result_node )
       println( "Completed first execution, Result:       " + result_data.mkDataString(", ") )
@@ -1112,7 +1112,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 //  }
 //
 //  test("Anomaly") {
-//    readVerificationData( "/data/ta_anomaly_0_0.nc", "ta" ) match {
+//    readVerificationData( "/data/ta__0_0.nc", "ta" ) match {
 //      case Some( nco_verified_result ) =>
 //        val dataInputs = getTemporalDataInputs(merra_data, 0, ( "axes"->"t") )
 //        val result_values = computeArray("CDSpark.anomaly", dataInputs)

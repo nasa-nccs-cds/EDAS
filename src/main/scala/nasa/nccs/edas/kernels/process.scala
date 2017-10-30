@@ -55,12 +55,12 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   def getDomainMetadata(domId: String): Map[String,String] = domains.get(domId) match { case Some(dc) => dc.metadata; case None => Map.empty }
   def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
 
-  def getDomain: Option[DomainContainer] = operation.getDomains map ( domId => domains.getOrElse( domId, throw new Exception("Missing domain in KernelContext: " + domId ) ) )
-  def getDomainSection: Option[CDSection] = operation.getDomains flatMap (
+  def getDomains: List[DomainContainer] = operation.getDomains map ( domId => domains.getOrElse( domId, throw new Exception("Missing domain in KernelContext: " + domId ) ) )
+  def getDomainSections: List[CDSection] = operation.getDomains flatMap (
     domId => sectionMap.getOrElse( domId, throw new Exception("Missing domain in KernelContext: " + domId ) )
     )
-  private def getCRS: Option[String] = getDomain.flatMap ( dc => dc.metadata.get("crs") )
-  private def getTRS: Option[String] = getDomain.flatMap ( dc => dc.metadata.get("trs") )
+  private def getCRS: Option[String] = getDomains.headOption.flatMap ( dc => dc.metadata.get("crs") )
+  private def getTRS: Option[String] = getDomains.headOption.flatMap ( dc => dc.metadata.get("trs") )
 
   def conf( params: Map[String,String] ): KernelContext = new KernelContext( operation, grids, sectionMap, domains, configuration ++ params, profiler )
   def commutativeReduction: Boolean = if( getAxes.includes(0) ) { true } else { false }
