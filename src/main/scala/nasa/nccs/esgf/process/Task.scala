@@ -213,14 +213,10 @@ object TaskRequest extends Loggable {
   def inferDomains(operation_list: Seq[OperationContext], variableMap: Map[String, DataContainer] ): Unit =
     do operation_list.foreach( _.addInputDomains(variableMap) ) while( addVarDomainsFromOp(operation_list, variableMap) )
 
-  def addVarDomainsFromOp( operation_list: Seq[OperationContext], variableMap: Map[String, DataContainer] ): Boolean = {
-    var change_occurred = false
-    for (operation <- operation_list; vid <- operation.inputs; if !vid.isEmpty ) variableMap.get(vid) match {
-        case Some(data_container) => if( data_container.updateDomainsFromOperation( operation ) ) { change_occurred = true; }
-        case None => throw new Exception( "Unrecognized variable %s in varlist [%s] for operation %s with inputs [ %s ]".format(vid, variableMap.keys.mkString(","),operation.name,operation.inputs.mkString(", ")))
-      }
-    change_occurred
-  }
+  def addVarDomainsFromOp( operation_list: Seq[OperationContext], variableMap: Map[String, DataContainer] ): Boolean =
+    operation_list.exists( operation => operation.inputs.exists( vid => if( vid.isEmpty ) { false } else {
+      variableMap.get(vid).exists( _.updateDomainsFromOperation( operation ) )
+    } ) )
 
   def getEmptyOpSpecs( data_list: List[DataContainer] ): Seq[Map[String, Any]] = {
     val inputs: List[String] = data_list.flatMap( dc => if( dc.isSource ) { Some(dc.uid) } else { None } )
