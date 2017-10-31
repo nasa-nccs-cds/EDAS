@@ -856,8 +856,9 @@ class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[Stri
     new RDDRecord( TreeMap(appendedElems.toSeq:_*), metadata ++ other.metadata, partition )
   }
   def extend( vSpec: DirectRDDVariableSpec ): RDDRecord = {
-    if( elements.contains(vSpec.uid) ) { this }
-    else {
+    if (elements.contains(vSpec.uid)) {
+      this
+    } else {
       val new_element = vSpec.toHeapArray(partition)
       new RDDRecord(elements + (vSpec.uid -> new_element), metadata ++ vSpec.metadata, partition)
     }

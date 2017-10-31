@@ -9,7 +9,6 @@ import nasa.nccs.edas.engine.spark._
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
 import nasa.nccs.edas.kernels._
 import nasa.nccs.edas.utilities.runtime
-
 import scala.collection.mutable.HashMap
 import nasa.nccs.esgf.process.{BatchRequest, _}
 import nasa.nccs.utilities.{DAGNode, Loggable, ProfilingTool}
@@ -32,6 +31,7 @@ object WorkflowNode {
 
 class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) extends DAGNode with Loggable {
   import WorkflowNode._
+  private val contexts = HashMap.empty[String,KernelContext]
   def getResultId: String = operation.rid
   def getNodeId(): String = operation.identifier
 
@@ -40,7 +40,10 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
   def getKernelOption( key: String , default: String = ""): String = kernel.options.getOrElse(key,default)
   def doesTimeElimination: Boolean = operation.operatesOnAxis('t' ) && kernel.doesAxisElimination
 
-  def generateKernelContext( requestCx: RequestContext, profiler: ProfilingTool ): KernelContext = {
+  def getKernelContext( requestCx: RequestContext, profiler: ProfilingTool ): KernelContext =
+    contexts.getOrElseUpdate(requestCx.jobId, generateKernelContext( requestCx, profiler) )
+
+  private def generateKernelContext( requestCx: RequestContext, profiler: ProfilingTool ): KernelContext = {
     val sectionMap: Map[String, Option[CDSection]] = requestCx.inputs.mapValues(_.map(_.cdsection)).map(identity)
     val gridMap: Map[String,Option[GridContext]] = requestCx.getTargetGrids.map { case (uid,tgridOpt) => uid -> tgridOpt.map( tg => GridContext(uid,tg)) }
     new KernelContext( operation, gridMap, sectionMap, requestCx.domains, requestCx.getConfiguration, profiler )
@@ -127,7 +130,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   def executeKernel( requestCx: RequestContext, root_node: WorkflowNode  ): RDDRecord = {
     val t0 = System.nanoTime()
     val subworkflowInputs = getSubworkflowInputs( requestCx, root_node )
-    val kernelContext = root_node.generateKernelContext( requestCx, requestCx.profiler )
+    val kernelContext = root_node.getKernelContext( requestCx, requestCx.profiler )
     kernelContext.addTimestamp( s"Executing Kernel for node ${root_node.getNodeId}" )
     var pre_result: RDDRecord = mapReduce( root_node, subworkflowInputs, kernelContext, requestCx )
     val t1 = System.nanoTime()
@@ -210,7 +213,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def stream(node: WorkflowNode, batchRequest: BatchRequest, batchIndex: Int ): Option[ RDD[ (RecordKey,RDDRecord) ] ] = {
-    val kernelContext = node.generateKernelContext( batchRequest.request, batchRequest.request.profiler )
+    val kernelContext = node.getKernelContext( batchRequest.request, batchRequest.request.profiler )
     streamMapReduceBatch( node, batchRequest, kernelContext, batchIndex )
   }
 

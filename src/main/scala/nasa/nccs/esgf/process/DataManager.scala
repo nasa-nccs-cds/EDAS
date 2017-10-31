@@ -236,7 +236,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
           if( dom_start < axis_len ) {
             Some( new ma2.Range(getCFAxisName, dom_start, math.min( domainAxis.end.toInt, axis_len-1 ), 1) )
           } else None
-        case asys if asys.startsWith("val") => getIndexBounds( domainAxis.start, domainAxis.end )
+        case asys if asys.startsWith("val") || asys.startsWith("time") => getIndexBounds( domainAxis.start, domainAxis.end )
         case _ => throw new IllegalStateException("CDSVariable: Illegal system value in axis bounds: " + domainAxis.system)
       }
       case None => Some( new ma2.Range( getCFAxisName, 0, axis_len-1, 1 ) )
@@ -244,7 +244,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   }
   private def getAxisBounds( coordAxis: CoordinateAxis, domainAxisOpt: Option[DomainAxis]): Array[Double] = domainAxisOpt match {
     case Some( domainAxis ) =>  domainAxis.system match {
-      case asys if asys.startsWith("val") => Array( _data(0), _data(_data.length-1) )
+      case asys if asys.startsWith("val")|| asys.startsWith("time") => Array( _data(0), _data(_data.length-1) )
       case asys if asys.startsWith("ind") => Array( domainAxis.start.toDouble, domainAxis.end.toDouble, 1 )
       case _ => throw new IllegalStateException("CDSVariable: Illegal system value in axis bounds: " + domainAxis.system)
     }
@@ -471,8 +471,8 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
       roi.find( _.matches( gridCoordSpec.getAxisType ) ) match {
         case Some( domainAxis ) => {
           val range = domainAxis.system match {
-            case asys if asys.startsWith( "ind" ) => new ma2.Range(domainAxis.start.toInt, domainAxis.end.toInt)
-            case asys if asys.startsWith( "val" ) =>
+            case asys if asys.startsWith( "ind" )=> new ma2.Range(domainAxis.start.toInt, domainAxis.end.toInt)
+            case asys if asys.startsWith( "val" ) || asys.startsWith("time") =>
  //             logger.info( "  %s getIndexBounds from %s".format( gridCoordSpec.toString, domainAxis.toString ) )
               gridCoordSpec.getIndexBounds( domainAxis.start, domainAxis.end ) match {
                 case Some(ibnds) => new ma2.Range (ibnds.first, ibnds.last)
