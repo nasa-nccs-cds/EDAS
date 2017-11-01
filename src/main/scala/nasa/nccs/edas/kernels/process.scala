@@ -55,10 +55,8 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   def getDomainMetadata(domId: String): Map[String,String] = domains.get(domId) match { case Some(dc) => dc.metadata; case None => Map.empty }
   def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
 
-  def getDomains: List[DomainContainer] = operation.getDomains map ( domId => domains.getOrElse( domId, throw new Exception("Missing domain in KernelContext: " + domId ) ) )
-  def getDomainSections: List[CDSection] = operation.getDomains flatMap (
-    domId => sectionMap.getOrElse( domId, throw new Exception("Missing domain in KernelContext: " + domId ) )
-    )
+  def getDomains: List[DomainContainer] = operation.getDomains flatMap domains.get
+  def getDomainSections: List[CDSection] = operation.getDomains.flatMap( sectionMap.get ).flatten
   private def getCRS: Option[String] = getDomains.headOption.flatMap ( dc => dc.metadata.get("crs") )
   private def getTRS: Option[String] = getDomains.headOption.flatMap ( dc => dc.metadata.get("trs") )
 
@@ -276,7 +274,6 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
-    logger.info( "Executing map OP for Kernel " + id + ", OP = " + context.operation.identifier )
     val mapresult = mapRDD( input, context )
     logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
     runtime.printMemoryUsage

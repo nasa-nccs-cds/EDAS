@@ -152,8 +152,8 @@ class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: I
 abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int, val partSize: Int, val start_time: Long, val end_time: Long, val sliceMemorySize: Long, val origin: Array[Int], val shape: Array[Int] ) extends Loggable with Serializable {
   val partitionOrigin: Array[Int] = origin.zipWithIndex map { case (value, ival) => if( ival== 0 ) value + startIndex else value }
   val endIndex: Int = startIndex + partSize - 1
-  val start_date: CalendarDate = CalendarDate.of(start_time)
-  val end_date: CalendarDate = CalendarDate.of(end_time)
+  def start_date: CalendarDate = CalendarDate.of(start_time)
+  def end_date: CalendarDate = CalendarDate.of(end_time)
 
   def recordSection( section: ma2.Section, iRecord: Int, timeAxis: CoordinateAxis1DTime, start_time: Long, end_time: Long ): ma2.Section = {
     val start_index = timeAxis.findTimeIndexFromCalendarDate(start_date)

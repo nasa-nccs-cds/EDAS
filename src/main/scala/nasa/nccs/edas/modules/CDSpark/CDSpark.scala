@@ -280,7 +280,6 @@ class anomaly extends SingularRDDKernel(Map.empty) {
   val description = "Computes an anomaly of the input variable data"
 
   override def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
-    logger.info( "Executing map OP for Kernel " + id + ", OP = " + context.operation.identifier )
     val binAveKernel = new binAve( )
     val mapReduceResult = binAveKernel.mapReduce(input,context,0)
     binAveKernel.finalize( mapReduceResult, context )

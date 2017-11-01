@@ -1,9 +1,7 @@
 package nasa.nccs.utilities
 
 import java.lang.management.ManagementFactory
-
 import org.apache.spark._
-import org.apache.spark.broadcast.Broadcast
 
 import scala.collection.mutable
 

@@ -86,11 +86,23 @@ class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[Stri
 
   private def addFileInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
-    _optInputsRDD = _optInputsRDD map ( _.mapValues( rddRec => vSpecs.foldLeft(rddRec)( (rddRec,vSpec) => rddRec.extend(vSpec) ) ) )
+    print(s"----> addFileInputs, vspecs = [ ${vSpecs.map(_.uid).mkString(", ")} ]\n")
+    _optInputsRDD = _optInputsRDD map ( _.mapValues( rddRec => vSpecs.foldLeft(rddRec)( _.extend(_) ) ) )
+  }
+
+  private def addOperationInput( serverContext: ServerContext, record: RDDRecord, batchIndex: Int ): Unit = {
+    initializeInputsRDD( serverContext, batchIndex )
+    print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
+    _optInputsRDD = _optInputsRDD map ( _.mapValues( rddRec => rddRec ++ record ) )
   }
 
   def getKernelInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
     addFileInputs( serverContext, vSpecs, batchIndex )
+    _optInputsRDD.map( rdd => rdd.mapValues( rddRec => rddRec.section( section ) ) )
+  }
+
+  def getOperationInput( serverContext: ServerContext, record: RDDRecord, section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+    addOperationInput( serverContext, record, batchIndex )
     _optInputsRDD.map( rdd => rdd.mapValues( rddRec => rddRec.section( section ) ) )
   }
 

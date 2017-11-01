@@ -646,13 +646,12 @@ abstract class ArrayBase[T <: AnyVal]( val shape: Array[Int]=Array.emptyIntArray
   def getSampleData( size: Int, start: Int): Array[Float] = toCDFloatArray.getSampleData( size, start )
   def getSampleDataStr( size: Int, start: Int): String = toCDFloatArray.getSampleData( size, start ).mkString( "[ ",", "," ]")
   def uid: String = metadata.getOrElse("uid", metadata.getOrElse("collection","") + ":" + metadata.getOrElse("name",""))
-  override def toString = "<array shape=(%s), %s> %s </array>".format( shape.mkString(","), metadata.mkString(",") )
+  override def toString = "<array shape=(%s)> %s </array>".format( shape.mkString(","), metadata.mkString(",") )
 
 }
 
 class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Array.emptyIntArray, val data:  Array[Float]=Array.emptyFloatArray, _missing: Option[Float]=None,
                     val gridSpec: String = "", metadata: Map[String,String]=Map.empty, private val _optWeights: Option[Array[Float]]=None, indexMaps: List[CDCoordMap] = List.empty ) extends ArrayBase[Float](shape,origin,_missing,metadata,indexMaps) with Loggable {
-  val bb = java.nio.ByteBuffer.allocate(4)
   def weights: Option[Array[Float]] = _optWeights
   override def toCDWeightsArray: Option[CDFloatArray] = _optWeights.map( CDFloatArray( shape, _, getMissing() ) )
   override def toMa2WeightsArray: Option[FastMaskedArray] = _optWeights.map( FastMaskedArray( shape, _, getMissing() ) )
@@ -712,8 +711,8 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
 
   def toByteArray() = {
     val mval = missing.getOrElse(Float.MaxValue)
-    bb.putFloat( 0, mval )
-    toUcarFloatArray.getDataAsByteBuffer().array() ++ bb.array()
+    HeapFltArray.bb.putFloat( 0, mval )
+    toUcarFloatArray.getDataAsByteBuffer().array() ++ HeapFltArray.bb.array()
   }
   def combine( combineOp: CDArray.ReduceOp[Float], other: HeapFltArray ): HeapFltArray = {
     verifyGrids( other )
@@ -725,6 +724,8 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
 }
 
 object HeapFltArray extends Loggable {
+  val bb = java.nio.ByteBuffer.allocate(4)
+
   def apply( cdarray: CDFloatArray, origin: Array[Int], metadata: Map[String,String], optWeights: Option[Array[Float]] ): HeapFltArray = {
     val gridSpec = metadata.get( "gridfile" ).map( "file:/" + _ ).getOrElse("")
     new HeapFltArray(cdarray.getShape, origin, cdarray.getArrayData(), Some(cdarray.getInvalid), gridSpec, metadata, optWeights, cdarray.getCoordMaps)
@@ -860,7 +861,9 @@ class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[Stri
       this
     } else {
       val new_element = vSpec.toHeapArray(partition)
-      new RDDRecord(elements + (vSpec.uid -> new_element), metadata ++ vSpec.metadata, partition)
+      val newRec = new RDDRecord(elements + (vSpec.uid -> new_element), metadata ++ vSpec.metadata, partition)
+      print( s"\n ********* Extend with vSpec ${vSpec.uid}, elements = [ ${elements.keys.mkString(", ")} ], part=${partition.index}, result nelems = ${newRec.elements.size}\n\n" )
+      newRec
     }
   }
 
@@ -950,7 +953,7 @@ class DirectRDDRecordSpec(val partition: Partition, iRecord: Int, val timeRange:
     val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition)) ).toSeq: _* )
     val rv = RDDRecord( elements, Map( "partIndex" -> partition.index.toString, "startIndex" -> timeRange.elemStart.toString, "recIndex" -> iRecord.toString, "batchIndex" -> batchIndex.toString ), partition )
     val dt = (System.nanoTime() - t0) / 1.0E9
-    logger.debug( "DirectRDDRecordSpec{ partition = %s, record = %d }: completed data input in %.4f sec".format( partition.toString, iRecord, dt) )
+    logger.debug( "DirectRDDRecordSpec{ partition = %s, record = %d, nelems=%d }: completed data input in %.4f sec".format( partition.toString, iRecord, elements.size, dt) )
     rv
   }
 
