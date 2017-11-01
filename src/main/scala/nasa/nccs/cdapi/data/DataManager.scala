@@ -862,7 +862,7 @@ class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[Stri
     } else {
       val new_element = vSpec.toHeapArray(partition)
       val newRec = new RDDRecord(elements + (vSpec.uid -> new_element), metadata ++ vSpec.metadata, partition)
-      print( s"\n ********* Extend with vSpec ${vSpec.uid}, elements = [ ${elements.keys.mkString(", ")} ], part=${partition.index}, result nelems = ${newRec.elements.size}\n\n" )
+//      print( s"\n ********* Extend with vSpec ${vSpec.uid}, elements = [ ${elements.keys.mkString(", ")} ], part=${partition.index}, result nelems = ${newRec.elements.size}\n\n" )
       newRec
     }
   }

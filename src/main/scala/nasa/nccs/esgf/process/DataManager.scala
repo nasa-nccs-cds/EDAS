@@ -86,13 +86,13 @@ class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[Stri
 
   private def addFileInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
-    print(s"----> addFileInputs, vspecs = [ ${vSpecs.map(_.uid).mkString(", ")} ]\n")
+ //   print(s"----> addFileInputs, vspecs = [ ${vSpecs.map(_.uid).mkString(", ")} ]\n")
     _optInputsRDD = _optInputsRDD map ( _.mapValues( rddRec => vSpecs.foldLeft(rddRec)( _.extend(_) ) ) )
   }
 
   private def addOperationInput( serverContext: ServerContext, record: RDDRecord, batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
-    print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
+//    print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
     _optInputsRDD = _optInputsRDD map ( _.mapValues( rddRec => rddRec ++ record ) )
   }
 

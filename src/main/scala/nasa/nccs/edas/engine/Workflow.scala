@@ -15,6 +15,7 @@ import nasa.nccs.wps._
 import org.apache.spark.rdd.RDD
 import ucar.ma2
 import ucar.nc2.dataset.CoordinateAxis1DTime
+
 import scala.collection.mutable
 import scala.util.Try
 
@@ -36,7 +37,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
   private val contexts = mutable.HashMap.empty[String,KernelContext]
 
   def getResultId: String = operation.rid
-  def getNodeId(): String = operation.identifier
+  def getNodeId: String = operation.identifier
 
   def cacheProduct( key: RecordKey, result: RDDRecord  ): Unit = {
     logger.info( s"WorkflowNode CACHE PRODUCT: ${operation.rid}" )
@@ -153,12 +154,29 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     ( key, result )
   }
 
+  private def common_inputs( node0: WorkflowNode, node_input_map: Map[ String, Set[String] ] )( node1: WorkflowNode ): Boolean = {
+    val node0_inputs: Set[String] = node_input_map.getOrElse( node0.getNodeId, Set.empty )
+    val node1_inputs: Set[String] = node_input_map.getOrElse( node1.getNodeId, Set.empty )
+    node0_inputs.intersect(node1_inputs).nonEmpty
+  }
+
+  def pruneProductNodeList( product_nodes: Seq[WorkflowNode], requestCx: RequestContext ): Seq[WorkflowNode] = {
+    val pruned_node_list = mutable.ListBuffer.empty[WorkflowNode]
+    val node_input_map: Map[ String, Set[String] ] = Map( product_nodes.map( node => node.getNodeId -> getSubworkflowInputs(requestCx, node).keys.toSet ): _* )
+    val node_stack = mutable.Queue[WorkflowNode]() ++= product_nodes
+    while( node_stack.nonEmpty ) {
+      val test_node = node_stack.dequeue()
+      if( ! node_stack.exists( common_inputs( test_node, node_input_map ) ) ) { pruned_node_list += test_node }
+    }
+    pruned_node_list
+  }
+
   def executeRequest(requestCx: RequestContext): Seq[ WPSProcessExecuteResponse ] = {
     linkNodes( requestCx )
-    val subworkflow_root_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ).toList
+    val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ), requestCx )
     val productNodeOpts = for( subworkflow_root_node <- subworkflow_root_nodes ) yield {
       val subworkflowInputs: Map[String, OperationInput] = getSubworkflowInputs( requestCx, subworkflow_root_node )
-      logger.info( "\n\n ----------------------- Execute PRODUCT Node: %s -------\n".format( subworkflow_root_node.getNodeId() ))
+      logger.info( "\n\n ----------------------- Execute PRODUCT Node: %s -------\n".format( subworkflow_root_node.getNodeId ))
       generateProduct( requestCx, subworkflowInputs, subworkflow_root_node )
     }
     productNodeOpts.flatten
@@ -233,9 +251,9 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 //  def prepareInputs( node: WorkflowNode, subworkflowInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
 //    domainRDDPartition( subworkflowInputs, kernelContext, requestCx, node, batchIndex ) match {
 //      case Some(rdd) =>
-//        logger.info( s"Prepared inputs with ${rdd.partitions.length} parts for node ${node.getNodeId()}"); Some(rdd)
+//        logger.info( s"Prepared inputs with ${rdd.partitions.length} parts for node ${node.getNodeId}"); Some(rdd)
 //      case None =>
-//        logger.info( s"No inputs for node ${node.getNodeId()}"); None
+//        logger.info( s"No inputs for node ${node.getNodeId}"); None
 //    }
 //  }
 
@@ -250,7 +268,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
             case None =>
               val errorMsg = " * Unidentified input in workflow node %s: '%s': This is typically due to an empty domain intersection with the dataset! \n ----> inputs ids = %s, input source keys = %s, input source values = %s, result ids = %s".format(
                 workflowNode.getNodeId, uid, requestCx.inputs.keySet.map(k=>s"'$k'").mkString(", "), requestCx.inputs.keys.mkString(", "), requestCx.inputs.values.mkString(", "),
-                nodes.map(_.getNodeId()).map(k=>s"'$k'").mkString(", "))
+                nodes.map(_.getNodeId).map(k=>s"'$k'").mkString(", "))
               logger.error(errorMsg)
               throw new Exception(errorMsg)
           }
@@ -293,7 +311,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
             case Some(inode) =>
               uid -> new DependencyOperationInput( inode, workflowNode )
             case None =>
-              val errorMsg = " ** Unidentified input in workflow node %s: %s, input ids = %s".format(workflowNode.getNodeId(), uid, requestCx.inputs.keySet.mkString(", "))
+              val errorMsg = " ** Unidentified input in workflow node %s: %s, input ids = %s".format(workflowNode.getNodeId, uid, requestCx.inputs.keySet.mkString(", "))
               logger.error(errorMsg)
               throw new Exception(errorMsg)
           }
@@ -368,11 +386,11 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
         case ( kernelInput: DependencyOperationInput  ) => kernelInput.inputNode.getProduct match {
             case None =>
               val keyValOpt: Option[RDD[(RecordKey, RDDRecord)]] = stream(kernelInput.inputNode, batchRequest, batchIndex)
-              logger.info("\n\n ----------------------- NODE %s => Stream DEPENDENCY Node: %s, batch = %d, rID = %s, nParts = %d -------\n".format( node.getNodeId(), kernelInput.inputNode.getNodeId(), batchIndex, kernelInput.inputNode.getResultId, keyValOpt.map(_.partitions.length).getOrElse(-1)))
+              logger.info("\n\n ----------------------- NODE %s => Stream DEPENDENCY Node: %s, batch = %d, rID = %s, nParts = %d -------\n".format( node.getNodeId, kernelInput.inputNode.getNodeId, batchIndex, kernelInput.inputNode.getResultId, keyValOpt.map(_.partitions.length).getOrElse(-1)))
               keyValOpt.map( uid -> _ )
             case Some((key: RecordKey, result: RDDRecord)) =>
               val opSection: Option[CDSection] = kernelContext.getDomainSections.headOption
-              logger.info("\n\n ----------------------- NODE %s => Get Cached Result: %s, batch = %d, rID = %s, opSection= %s -------\n".format( node.getNodeId(), kernelInput.inputNode.getNodeId(), batchIndex, kernelInput.inputNode.getResultId, opSection.map(_.toString()).getOrElse("(EMPTY)") ) )
+              logger.info("\n\n ----------------------- NODE %s => Get Cached Result: %s, batch = %d, rID = %s, opSection= %s -------\n".format( node.getNodeId, kernelInput.inputNode.getNodeId, batchIndex, kernelInput.inputNode.getResultId, opSection.map(_.toString()).getOrElse("(EMPTY)") ) )
               batchRequest.getOperationInput(executionMgr.serverContext, result, opSection, batchIndex).map(uid -> _)
           }
         case ( extInput: ExternalDataInput ) =>
@@ -438,7 +456,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   //      case ( dataInput: PartitionedFragment) =>
   //        new RDDRegen( executionMgr.serverContext.spark.getRDD( uid, dataInput, requestCx, opSection, node ), dataInput.getGrid, targetGrid, node, kernelContext )
   //      case ( kernelInput: DependencyOperationInput  ) =>
-  //        logger.info( "\n\n ----------------------- Stream DEPENDENCY Node: %s -------\n".format( kernelInput.workflowNode.getNodeId() ))
+  //        logger.info( "\n\n ----------------------- Stream DEPENDENCY Node: %s -------\n".format( kernelInput.workflowNode.getNodeId ))
   //        val ( result, context ) = kernelInput.workflowNode.stream( requestCx )
   //        new RDDRegen( result, getKernelGrid(context,requestCx), targetGrid, node, kernelContext )
   //      case (  x ) =>

@@ -93,7 +93,7 @@ trait OperationInput {
 class EmptyOperationInput() extends OperationInput { def getKeyString: String = ""; }
 
 class DependencyOperationInput( val inputNode: WorkflowNode, val opNode: WorkflowNode ) extends OperationInput with Loggable {
-  def getKeyString: String =  inputNode.getNodeId() + "->" + opNode.getNodeId()
+  def getKeyString: String =  inputNode.getNodeId + "->" + opNode.getNodeId
 }
 
 class OperationTransientInput( val variable: RDDTransientVariable ) extends OperationInput with Loggable {
