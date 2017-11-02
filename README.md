@@ -84,4 +84,4 @@ _Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and 
     2) Start IDEA and import the EDAS Project from Version Control (github) using the address https://github.com/nasa-nccs-cds/EDAS.git.
         
     
-
+#### Workflow 

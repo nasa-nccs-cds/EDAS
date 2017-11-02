@@ -35,6 +35,10 @@ object WorkflowNode {
 class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) extends DAGNode with Loggable {
   import WorkflowNode._
   private val contexts = mutable.HashMap.empty[String,KernelContext]
+  private var _isSubworkflowRoot: Boolean = false;
+
+  def markAsSubworkflowRoot: WorkflowNode = { _isSubworkflowRoot = true; this }
+  def isSubworkflowRoot: Boolean = _isSubworkflowRoot
 
   def getResultId: String = operation.rid
   def getNodeId: String = operation.identifier
@@ -65,19 +69,19 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
 
   def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int  ): (RecordKey,RDDRecord) = kernel.mapReduce( input, context, batchIndex )
 
-  def reduce(mapresult: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
-    logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
-    runtime.printMemoryUsage
-    val t0 = System.nanoTime()
-    val nparts = mapresult.getNumPartitions
-    if( !kernel.parallelizable || (nparts==1) ) { mapresult.collect()(0) }
-    else {
-      val result = mapresult treeReduce kernel.getReduceOp(context)
-      logger.debug("\n\n ----------------------- FINISHED reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
-      context.addTimestamp( "FINISHED reduce Operation" )
-      result
-    }
-  }
+//  def reduce(mapresult: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+//    logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
+//    runtime.printMemoryUsage
+//    val t0 = System.nanoTime()
+//    val nparts = mapresult.getNumPartitions
+//    if( !kernel.parallelizable || (nparts==1) ) { mapresult.collect()(0) }
+//    else {
+//      val result = mapresult treeReduce kernel.getReduceOp(context)
+//      logger.debug("\n\n ----------------------- FINISHED reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
+//      context.addTimestamp( "FINISHED reduce Operation" )
+//      result
+//    }
+//  }
 
 
   //  def collect(mapresult: RDD[(PartitionKey,RDDPartition)], context: KernelContext ): RDDPartition = {
@@ -173,7 +177,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def executeRequest(requestCx: RequestContext): Seq[ WPSProcessExecuteResponse ] = {
     linkNodes( requestCx )
-    val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ), requestCx )
+    val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ), requestCx ).map( _.markAsSubworkflowRoot )
     val productNodeOpts = for( subworkflow_root_node <- subworkflow_root_nodes ) yield {
       val subworkflowInputs: Map[String, OperationInput] = getSubworkflowInputs( requestCx, subworkflow_root_node )
       logger.info( "\n\n ----------------------- Execute PRODUCT Node: %s -------\n".format( subworkflow_root_node.getNodeId ))
@@ -290,7 +294,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def getSubWorkflow(rootNode: WorkflowNode): List[WorkflowNode] = {
-    val filter = (node: DAGNode) => !WorkflowNode(node).doesTimeElimination
+    val filter = (node: DAGNode) => !WorkflowNode(node).isSubworkflowRoot
     ( rootNode.predecesors(filter).map( WorkflowNode.promote ) += rootNode ).toList
   }
 
@@ -379,7 +383,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
           //          val opSection: Option[ma2.Section] = getOpSectionIntersection( directInput.getGrid, node )
           //          executionMgr.serverContext.spark.getRDD( uid, directInput, batchRequest.request, opSection, node, batchIndex, kernelContext ) map ( result => uid -> result )
 
-          val varSpec = directInput.getRDDVariableSpec(uid )
+          val varSpec = directInput.getRDDVariableSpec(uid)
           val opSection: Option[CDSection] = getOpSectionIntersection( directInput.getGrid, node ).map( CDSection(_) )
           logger.info("\n\n ----------------------- getKernelInputs: NODE %s, VarSpec: %s, batch id: %d  -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(batchRequest) ) )
           batchRequest.getKernelInputs( executionMgr.serverContext, List(varSpec), opSection, batchIndex ).map( uid -> _ )
