@@ -983,7 +983,6 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
     if( mapCombineOp.isDefined ) {
       val t0 = System.nanoTime
-      val startIndex = inputs.metadata.getOrElse("startIndex","0").toInt
       val input_keys = inputs.elements.keys.map( key => if(key.contains('.')) { key.split('.').dropRight(1).mkString(".") } else { key } )
       val keyMap: Map[String,Iterable[String]] = Map( input_keys.map( key => key -> inputs.elements.keys.filter( _.startsWith(key) ) ).toSeq: _* )
       val dataMap: Map[String,Map[Int,HeapFltArray]] = keyMap.mapValues( keys => Map( keys.map( key => ( if(key.contains('.')) { key.split('.').last.toInt } else { 0 } ) -> inputs.elements.getOrElse(key,HeapFltArray.empty(0)) ).toSeq: _* ) )
@@ -999,6 +998,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
         context.addTimestamp("Map Op complete")
         RDDRecord(TreeMap(context.operation.rid -> HeapFltArray(result_array, input_arrays(0).origin, result_metadata, None)), inputs.metadata, inputs.partition)
       } else {
+        val startIndex = inputs.metadata.getOrElse("startIndex","0").toInt
         val result_array: HeapFltArray = mergeBinnedArrays( input_array_maps, context, mapCombineOp.get, startIndex )
         val result_metadata = result_array.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
         logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))

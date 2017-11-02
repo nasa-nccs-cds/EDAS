@@ -43,6 +43,8 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
   def getResultId: String = operation.rid
   def getNodeId: String = operation.identifier
 
+  def isSubworkflowBoundayNode: Boolean = isRoot || doesTimeElimination
+
   def cacheProduct( key: RecordKey, result: RDDRecord  ): Unit = {
     logger.info( s"WorkflowNode CACHE PRODUCT: ${operation.rid}" )
     WorkflowNode.addProduct( operation.rid, (key,result))
@@ -166,7 +168,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def pruneProductNodeList( product_nodes: Seq[WorkflowNode], requestCx: RequestContext ): Seq[WorkflowNode] = {
     val pruned_node_list = mutable.ListBuffer.empty[WorkflowNode]
-    val node_input_map: Map[ String, Set[String] ] = Map( product_nodes.map( node => node.getNodeId -> getSubworkflowInputs(requestCx, node).keys.toSet ): _* )
+    val node_input_map: Map[ String, Set[String] ] = Map( product_nodes.map( node => node.getNodeId -> getSubworkflowInputs(requestCx, node, false ).keys.toSet ): _* )
     val node_stack = mutable.Queue[WorkflowNode]() ++= product_nodes
     while( node_stack.nonEmpty ) {
       val test_node = node_stack.dequeue()
@@ -177,9 +179,11 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def executeRequest(requestCx: RequestContext): Seq[ WPSProcessExecuteResponse ] = {
     linkNodes( requestCx )
-    val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ), requestCx ).map( _.markAsSubworkflowRoot )
+    val product_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ).toList
+    val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( product_nodes, requestCx ).map( _.markAsSubworkflowRoot )
+    print( s"\n\nsubworkflow_root_nodes: ${subworkflow_root_nodes.map(_.getNodeId).mkString(", ")}\n\n" )
     val productNodeOpts = for( subworkflow_root_node <- subworkflow_root_nodes ) yield {
-      val subworkflowInputs: Map[String, OperationInput] = getSubworkflowInputs( requestCx, subworkflow_root_node )
+      val subworkflowInputs: Map[String, OperationInput] = getSubworkflowInputs( requestCx, subworkflow_root_node, true )
       logger.info( "\n\n ----------------------- Execute PRODUCT Node: %s -------\n".format( subworkflow_root_node.getNodeId ))
       generateProduct( requestCx, subworkflowInputs, subworkflow_root_node )
     }
@@ -293,13 +297,13 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     return results.toList
   }
 
-  def getSubWorkflow(rootNode: WorkflowNode): List[WorkflowNode] = {
-    val filter = (node: DAGNode) => !WorkflowNode(node).isSubworkflowRoot
+  def getSubWorkflow(rootNode: WorkflowNode, merged: Boolean ): List[WorkflowNode] = {
+    val filter = (node: DAGNode) => if( merged ) { !WorkflowNode(node).isSubworkflowRoot } else { !WorkflowNode(node).isSubworkflowBoundayNode }
     ( rootNode.predecesors(filter).map( WorkflowNode.promote ) += rootNode ).toList
   }
 
-  def getSubworkflowInputs(requestCx: RequestContext, rootNode: WorkflowNode): Map[String, OperationInput] = {
-    val inputMaps = getSubWorkflow(rootNode).map( getNodeInputs( requestCx, _ ) )
+  def getSubworkflowInputs(requestCx: RequestContext, rootNode: WorkflowNode, merged: Boolean): Map[String, OperationInput] = {
+    val inputMaps = getSubWorkflow(rootNode,merged).map( getNodeInputs( requestCx, _ ) )
     inputMaps.foldLeft( mutable.HashMap.empty[String, OperationInput] )( _ ++= _ ).toMap
   }
 

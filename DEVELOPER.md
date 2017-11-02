@@ -131,6 +131,24 @@ commands in the **{EDAS}/bin/update.sh** script.
         >> anaconda upload <build-path>
         >> anaconda logout
         
+        
+#### Workflow Dyanamics
+
+    1) A workflow links a set of WorkflowNodes, ead representing a Kernel, into a processing pipeline.
+    2) To compute partitioning domains, note that:
+        A) Operations that eliminate the time axis do not propagate the partitioning.  Ignoring these links Allows us to split the 
+            workflow into a set of subworkflows (SWFs), which can be independently partitioned.
+        B) SWFs that shage external inputs should share the same partitioning.  These SWFs are merged.
+    3) A list of SWF root nodes is generated and sorted by pipeline dependency, predecessors before antecedents.
+    4) For each subworkflow a partitioning is computed as follows:
+        A) Gather all external inputs to all nodes of the SWF.
+        B) Choose the largest domain of all the inputs and use it to compute a data partitioning (which maps data time 
+        spans to partitions).  Apply this partitioning to all inputs.
+    5) Compute batches as a function of the input data size and Spark partition size limits.  Batches are processed sequentially
+        to prevent memory overflow. 
+    5) Each SWF is processed in order.  For each SWF an execution pipeline is constructed by starting from the root node and 
+        propagating backward through the dependency tree.   The pipeline is executed using parallel streaming map operations followed by
+        a final reduce and cache to generate a product for use in subsequent SWF processing. 
   
         
     
