@@ -331,7 +331,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 
   def blockingExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSResponse =  {
     logger.info("Blocking Execute { runargs: " + run_args.toString + ", request: " + request.toString + " }")
-    runtime.printMemoryUsage(logger)
+//    runtime.printMemoryUsage(logger)
     val t0 = System.nanoTime
     val req_ids = request.name.split('.')
     req_ids(0) match {
@@ -395,7 +395,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 
   def asyncExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): WPSReferenceExecuteResponse = {
     logger.info("Execute { runargs: " + run_args.toString + ",  request: " + request.toString + ",  jobId: " + jobId + " }")
-    runtime.printMemoryUsage(logger)
+//    runtime.printMemoryUsage(logger)
     val req_ids = request.name.split('.')
     req_ids(0) match {
       case "util" =>

@@ -28,7 +28,7 @@ object WorkflowNode {
     case workflowNode: WorkflowNode => workflowNode
     case _ => throw new Exception( "Unknown element in workflow: " + node.getClass.getName )
   }
-  def addProduct( uid: String, product: (RecordKey,RDDRecord) ): Unit = _productNodes += ( uid -> product )
+  def addProduct( uid: String, product: (RecordKey,RDDRecord) ): Unit = { _productNodes += ( uid -> product ) }
   def getProduct( uid: String ): Option[(RecordKey,RDDRecord)] = _productNodes.get(uid)
 }
 
@@ -381,6 +381,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
           val varSpec = directInput.getRDDVariableSpec(uid )
           val opSection: Option[CDSection] = getOpSectionIntersection( directInput.getGrid, node ).map( CDSection(_) )
+          logger.info("\n\n ----------------------- getKernelInputs: NODE %s, VarSpec: %s, batch id: %d  -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(batchRequest) ) )
           batchRequest.getKernelInputs( executionMgr.serverContext, List(varSpec), opSection, batchIndex ).map( uid -> _ )
 
         case ( kernelInput: DependencyOperationInput  ) => kernelInput.inputNode.getProduct match {

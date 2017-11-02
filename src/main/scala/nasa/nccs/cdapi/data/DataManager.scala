@@ -846,7 +846,7 @@ class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[Stri
   }
 
   def hasMultiTimeScales( trsOpt: Option[String]=None ): Boolean = {
-    if( elements.size == 0 ) return false
+    if( elements.isEmpty ) return false
     val ntimesteps = elements.values.head.shape(0)
     elements.exists( item => !(item._2.shape(0)==ntimesteps) )
   }

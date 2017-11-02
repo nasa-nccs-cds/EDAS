@@ -996,7 +996,7 @@ object NetcdfDatasetMgr extends Loggable {
           val t0 = System.nanoTime()
           val ma2array = variable.read(section)
           val sample_data = ( 0 until Math.min(16,ma2array.getSize).toInt ) map ma2array.getFloat
-          logger.info( "Reading variable %s, section shape: (%s), section origin: (%s), variable shape: (%s), size = %.2f M, read time = %.4f sec, sample data = [ %s ]".format( varShortName, section.getShape.mkString(","), section.getOrigin.mkString(","), variable.getShape.mkString(","), (section.computeSize*4.0)/MB, (System.nanoTime() - t0) / 1.0E9, sample_data.mkString(", ") ))
+          logger.info( "[T%d] Reading variable %s, section shape: (%s), section origin: (%s), variable shape: (%s), size = %.2f M, read time = %.4f sec, sample data = [ %s ]".format( Thread.currentThread().getId(), varShortName, section.getShape.mkString(","), section.getOrigin.mkString(","), variable.getShape.mkString(","), (section.computeSize*4.0)/MB, (System.nanoTime() - t0) / 1.0E9, sample_data.mkString(", ") ))
           ma2array
         } catch {
           case err: Exception =>
