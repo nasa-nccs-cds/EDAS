@@ -35,10 +35,10 @@ object WorkflowNode {
 class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) extends DAGNode with Loggable {
   import WorkflowNode._
   private val contexts = mutable.HashMap.empty[String,KernelContext]
-  private var _isSubworkflowRoot: Boolean = false;
+  private var _isMergedSubworkflowRoot: Boolean = false;
 
-  def markAsSubworkflowRoot: WorkflowNode = { _isSubworkflowRoot = true; this }
-  def isSubworkflowRoot: Boolean = _isSubworkflowRoot
+  def markAsMergedSubworkflowRoot: WorkflowNode = { _isMergedSubworkflowRoot = true; this }
+  def isMergedSubworkflowRoot: Boolean = _isMergedSubworkflowRoot
 
   def getResultId: String = operation.rid
   def getNodeId: String = operation.identifier
@@ -180,7 +180,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   def executeRequest(requestCx: RequestContext): Seq[ WPSProcessExecuteResponse ] = {
     linkNodes( requestCx )
     val product_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ).toList
-    val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( product_nodes, requestCx ).map( _.markAsSubworkflowRoot )
+    val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( product_nodes, requestCx ).map( _.markAsMergedSubworkflowRoot )
     print( s"\n\nsubworkflow_root_nodes: ${subworkflow_root_nodes.map(_.getNodeId).mkString(", ")}\n\n" )
     val productNodeOpts = for( subworkflow_root_node <- subworkflow_root_nodes ) yield {
       val subworkflowInputs: Map[String, OperationInput] = getSubworkflowInputs( requestCx, subworkflow_root_node, true )
@@ -298,7 +298,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def getSubWorkflow(rootNode: WorkflowNode, merged: Boolean ): List[WorkflowNode] = {
-    val filter = (node: DAGNode) => if( merged ) { !WorkflowNode(node).isSubworkflowRoot } else { !WorkflowNode(node).isSubworkflowBoundayNode }
+    val filter = (node: DAGNode) => if( merged ) { !WorkflowNode(node).isMergedSubworkflowRoot } else { !WorkflowNode(node).isSubworkflowBoundayNode }
     ( rootNode.predecesors(filter).map( WorkflowNode.promote ) += rootNode ).toList
   }
 
