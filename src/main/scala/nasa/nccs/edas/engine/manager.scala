@@ -118,7 +118,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 
   def describeWPSProcess( process: String, response_syntax: ResponseSyntax.Value ): xml.Elem = DescribeProcess( process, response_syntax  )
 
-  def getProcesses: Map[String,WPSProcess] = kernelManager.getKernelMap
+  def getProcesses: Map[String,WPSProcess] = kernelManager.getKernelMap(visibility)
 
   def getKernelModule( moduleName: String  ): KernelModule = {
     kernelManager.getModule( moduleName.toLowerCase ) match {

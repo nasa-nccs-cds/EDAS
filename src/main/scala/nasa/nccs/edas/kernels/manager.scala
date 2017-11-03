@@ -11,7 +11,7 @@ import scala.collection.immutable.Map
 
 class KernelMgr(  ) {
 
-  val kernelModules = KernelPackageTools.getKernelMap
+  val kernelModules: Map[String,KernelModule] = KernelPackageTools.getKernelModuleMap()
 
   def getModule( moduleName: String ): Option[KernelModule] = kernelModules.get( moduleName.toLowerCase )
 
@@ -25,7 +25,12 @@ class KernelMgr(  ) {
   }
 
   def getKernelMap: Map[String,Kernel] =
-    Map( kernelModules.values.map( _.getKernels ).flatten.map( k => k.identifier.toLowerCase -> k ).toSeq: _* )
+    Map( kernelModules.values.flatMap( _.getKernels ).map( k => k.identifier.toLowerCase -> k ).toSeq: _* )
+
+  def getKernelMap( visibility: String = "" ): Map[String,Kernel] = {
+    val visLevel = KernelStatus.parse(visibility)
+    Map(kernelModules.values.map( _.filter( visLevel ) ).flatMap( _.getKernels ).map(k => k.identifier.toLowerCase -> k).toSeq: _*)
+  }
 
 }
 
@@ -40,29 +45,15 @@ object KernelPackageTools {
     kernelPackagePaths.flatMap( package_path => classpath.getTopLevelClassesRecursive( package_path ).toList )
   }
 
-  def getKernelMap: Map[String,KernelModule] = {
-    val visibility = KernelStatus.parse( appParameters("kernels.visibility","public") )
-    val internal_kernels: Map[String,KernelModule] = getKernelClasses.map(ClassInfoRec( _ )).groupBy( _.module.toLowerCase ).mapValues( KernelModule(_) filter visibility )
+  def getKernelModuleMap( visibility: String = "" ): Map[String,KernelModule] = {
+    val visLevel = KernelStatus.parse( if( visibility.isEmpty ) { appParameters("kernels.visibility","public") } else visibility )
+    val internal_kernels: Map[String,KernelModule] = getKernelClasses.map(ClassInfoRec( _ )).groupBy( _.module.toLowerCase ).mapValues( KernelModule(_) filter visLevel )
     val capabilities_data = PythonWorkerPortal.getInstance().getCapabilities()
-    val python_kernels: Array[KernelModule] = capabilities_data map ( KernelModule(_) filter visibility )
+    val python_kernels: Array[KernelModule] = capabilities_data map ( KernelModule(_) filter visLevel )
     val external_kernel_map: Map[String,KernelModule] = Map( python_kernels.map( km => km.getName -> km ): _* )
     ( internal_kernels ++ external_kernel_map ) filter { case (_,kmod) => kmod.nonEmpty }
   }
-}
 
-class ClasspathToolsTest {
-  val kmap = KernelPackageTools.getKernelMap
-  kmap.get("CDSpark") match {
-    case Some( kmod ) =>
-      println( "Got module ")
-      kmod.getKernel("min") match {
-        case Some( kernel ) =>
-          println( "Got kernel " + kernel.getClass.getName )
-          cdsutils.testSerializable(kernel)
-        case None => println( "No kernel ")
-      }
-    case None => println( "No Module ")
-  }
 }
 
 

@@ -1031,7 +1031,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
 //  }
 //}
 
-class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True" ), false, "public" ) {
+class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True" ), false, "restricted" ) {
 
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
     logger.info("&&MAP&&")

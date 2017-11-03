@@ -2,6 +2,7 @@ package nasa.nccs.wps
 import nasa.nccs.edas.utilities.appParameters
 
 trait WPSServer extends WPSResponse {
+  def visibility = "public"
   def getProcesses: Map[String, WPSProcess]
 
   def toXml(response_syntax: ResponseSyntax.Value): xml.Elem = GetCapabilities(response_syntax)
