@@ -374,7 +374,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def domainRDDPartition(  node: WorkflowNode, batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
-    val enableRegridding = false
+    val enableRegridding = true
     kernelContext.addTimestamp( "Generating RDD for inputs: " + batchRequest.subworkflowInputs.keys.mkString(", "), true )
     val inputs: List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => batchRequest.subworkflowInputs.get( uid ).map ( uid -> _ ) )
     val rawRddList: List[(String,RDD[(RecordKey,RDDRecord)])] = inputs.flatMap { case (uid, opinput) =>

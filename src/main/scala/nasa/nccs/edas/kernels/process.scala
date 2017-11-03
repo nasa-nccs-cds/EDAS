@@ -23,7 +23,6 @@ import ucar.{ma2, nc2}
 import scala.collection.JavaConversions._
 import scala.collection.immutable.{SortedMap, TreeMap}
 import scala.collection.mutable
-import scala.collection.mutable.SortedSet
 
 object Port {
   def apply( name: String, cardinality: String, description: String="", datatype: String="", identifier: String="" ) = {
@@ -45,8 +44,8 @@ class Port( val name: String, val cardinality: String, val description: String, 
 class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],  _configuration: Map[String,String], val profiler: ProfilingTool ) extends Loggable with Serializable with ScopeContext {
   val crsOpt = getCRS
   val trsOpt = getTRS
-  val timings: SortedSet[(Float,String)] = SortedSet.empty
-  val configuration = crsOpt.map( crs => _configuration + ("crs" -> crs ) ) getOrElse( _configuration )
+  val timings: mutable.SortedSet[(Float,String)] = mutable.SortedSet.empty
+  val configuration = crsOpt.map( crs => _configuration + ("crs" -> crs ) ) getOrElse _configuration
   lazy val grid: GridContext = getTargetGridContext
   def findGrid( varUid: String ): Option[GridContext] = grids.find( item => item._1.split('-')(0).equals(varUid) ).flatMap( _._2 )
   def getConfiguration = configuration ++ operation.getConfiguration
@@ -54,11 +53,12 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   def getContextStr: String = getConfiguration map { case ( key, value ) => key + ":" + value } mkString ";"
   def getDomainMetadata(domId: String): Map[String,String] = domains.get(domId) match { case Some(dc) => dc.metadata; case None => Map.empty }
   def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
+  def getGridConfiguration( key: String ): Option[String] = _configuration.get( "crs" ).orElse( getDomains.flatMap ( _.metadata.get("crs") ).headOption )
 
   def getDomains: List[DomainContainer] = operation.getDomains flatMap domains.get
   def getDomainSections: List[CDSection] = operation.getDomains.flatMap( sectionMap.get ).flatten
-  private def getCRS: Option[String] = getDomains.headOption.flatMap ( dc => dc.metadata.get("crs") )
-  private def getTRS: Option[String] = getDomains.headOption.flatMap ( dc => dc.metadata.get("trs") )
+  private def getCRS: Option[String] = getGridConfiguration( "crs" )
+  private def getTRS: Option[String] = getGridConfiguration( "trs" )
 
   def conf( params: Map[String,String] ): KernelContext = new KernelContext( operation, grids, sectionMap, domains, configuration ++ params, profiler )
   def commutativeReduction: Boolean = if( getAxes.includes(0) ) { true } else { false }

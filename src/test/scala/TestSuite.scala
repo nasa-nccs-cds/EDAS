@@ -286,7 +286,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val datainputs = s"""[
              variable=[$GISS_H_variables],
              domain=[       {"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"}}],
-             operation=[    {"name":"CDSpark.eAve","input":"${GISS_H_vids.mkString(",")}","domain":"d0","axes":"t"} ]
+             operation=[    {"name":"CDSpark.eAve","input":"${GISS_H_vids.mkString(",")}","domain":"d0"} ]
             ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node, false ) )
@@ -299,7 +299,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val datainputs = s"""[
              variable=[$GISS_H_variables],
              domain=[       {"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"},"time":{"start":"1985-01-01T00:00:00Z","end":"1990-04-04T00:00:00Z"}}],
-             operation=[    {"name":"CDSpark.eAve","input":"${GISS_H_vids.mkString(",")}","domain":"d0","axes":"t"} ]
+             operation=[    {"name":"CDSpark.eAve","input":"${GISS_H_vids.mkString(",")}","domain":"d0"} ]
             ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node, false ) )
@@ -313,7 +313,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val datainputs = s"""[
              variable=[$GISS_H_variables],
              domain=[       {"name":"d0","time":{"start":"1985-01-01T00:00:00Z","end":"1985-04-04T00:00:00Z","system":"values"}}],
-             operation=[    {"name":"CDSpark.eAve","input":"${GISS_H_vids.mkString(",")}","domain":"d0","id":"eaGISS-H","axes":"t"} ]
+             operation=[    {"name":"CDSpark.eAve","input":"${GISS_H_vids.mkString(",")}","domain":"d0","id":"eaGISS-H"} ]
             ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node, false ).slice(0,0,10) )
