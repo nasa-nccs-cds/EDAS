@@ -18,7 +18,7 @@ import nasa.nccs.utilities.{Loggable, ProfilingTool}
 import nasa.nccs.wps.{WPSProcess, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import ucar.nc2.Attribute
-import ucar.{ma2, nc2}
+import ucar.{ma2, nc2}`
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable.{SortedMap, TreeMap}

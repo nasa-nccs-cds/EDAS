@@ -588,6 +588,46 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
     }
 
+//  test("Spatial Average Constant") {
+//    val nco_verified_result = 1.0
+//    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":$level_index,"end":$level_index,"system":"indices"},"time":{"start":$time_index,"end":$time_index,"system":"indices"}}],variable=[{"uri":"collection:/const.test","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"","axes":"xy"}]]"""
+//    val result_node = executeTest(datainputs)
+//    logger.info( "Test Result: " + printer.format(result_node) )
+//    val data_nodes: xml.NodeSeq = result_node \\ "Output" \\ "Data" \\ "LiteralData"
+//    val result_value = data_nodes.head.text.toFloat
+//    assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value ($result_value vs $nco_verified_result) computed for Sum")
+//  }
+//
+//  test("Weighted Spatial Average Constant") {
+//    val nco_verified_result = 1.0
+//    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":$level_index,"end":$level_index,"system":"indices"},"time":{"start":$time_index,"end":$time_index,"system":"indices"}}],variable=[{"uri":"collection:/const.test","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","weights":"cosine","axes":"xy"}]]"""
+//    val result_node = executeTest(datainputs)
+//    logger.info( "Test Result: " + printer.format(result_node) )
+//    val data_nodes: xml.NodeSeq = result_node \\ "Output" \\ "Data" \\ "LiteralData"
+//    val result_value = data_nodes.head.text.toFloat
+//    assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value ($result_value vs $nco_verified_result) computed for Sum")
+//  }
+//
+//  test("Spatial Average") {
+//    val nco_verified_result = 270.092
+//    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":$level_index,"end":$level_index,"system":"indices"},"time":{"start":$time_index,"end":$time_index,"system":"indices"}}],variable=[{"uri":"collection:/merra.test","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"","axes":"xy"}]]"""
+//    val result_node = executeTest(datainputs)
+//    logger.info( "Test Result: " + printer.format(result_node) )
+//    val data_nodes: xml.NodeSeq =  result_node \\ "Output" \\ "Data" \\ "LiteralData"
+//    val result_value = data_nodes.head.text.toFloat
+//    assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value ($result_value vs $nco_verified_result) computed for Sum")
+//  }
+//
+//  test("Weighted Spatial Average") {
+//    val nco_verified_result = 275.4043
+//    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":$level_index,"end":$level_index,"system":"indices"},"time":{"start":$time_index,"end":$time_index,"system":"indices"}}],variable=[{"uri":"collection:/merra.test","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"xy"}]]"""
+//    val result_node = executeTest(datainputs)
+//    logger.info( "Test Result: " + printer.format(result_node) )
+//    val data_nodes: xml.NodeSeq =  result_node \\ "Output" \\ "Data" \\ "LiteralData"
+//    val result_value = data_nodes.head.text.toFloat
+//    assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value ($result_value vs $nco_verified_result) computed for Sum")
+//  }
+
   test("Maximum-values") {
     val datainputs = s"""[domain=[{"name":"d0","time":{"start":50,"end":50,"system":"indices"},"lon":{"start":180,"end":360,"system":"values"},"lat":{"start":0,"end":90,"system":"values"} }],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","axes":"t"}]]"""
     val result_node = executeTest(datainputs, Map( "response"->"file" ) )
@@ -1037,45 +1077,6 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 //    }
 //  }
 
-  test("Spatial Average Constant") {
-    val nco_verified_result = 1.0
-    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":$level_index,"end":$level_index,"system":"indices"},"time":{"start":$time_index,"end":$time_index,"system":"indices"}}],variable=[{"uri":"collection:/const.test","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"","axes":"xy"}]]"""
-    val result_node = executeTest(datainputs)
-    logger.info( "Test Result: " + printer.format(result_node) )
-    val data_nodes: xml.NodeSeq = result_node \\ "Output" \\ "Data" \\ "LiteralData"
-    val result_value = data_nodes.head.text.toFloat
-    assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value ($result_value vs $nco_verified_result) computed for Sum")
-  }
-
-  test("Weighted Spatial Average Constant") {
-    val nco_verified_result = 1.0
-    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":$level_index,"end":$level_index,"system":"indices"},"time":{"start":$time_index,"end":$time_index,"system":"indices"}}],variable=[{"uri":"collection:/const.test","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","weights":"cosine","axes":"xy"}]]"""
-    val result_node = executeTest(datainputs)
-    logger.info( "Test Result: " + printer.format(result_node) )
-    val data_nodes: xml.NodeSeq = result_node \\ "Output" \\ "Data" \\ "LiteralData"
-    val result_value = data_nodes.head.text.toFloat
-    assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value ($result_value vs $nco_verified_result) computed for Sum")
-  }
-
-  test("Spatial Average") {
-    val nco_verified_result = 270.092
-    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":$level_index,"end":$level_index,"system":"indices"},"time":{"start":$time_index,"end":$time_index,"system":"indices"}}],variable=[{"uri":"collection:/merra.test","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"","axes":"xy"}]]"""
-    val result_node = executeTest(datainputs)
-    logger.info( "Test Result: " + printer.format(result_node) )
-    val data_nodes: xml.NodeSeq =  result_node \\ "Output" \\ "Data" \\ "LiteralData"
-    val result_value = data_nodes.head.text.toFloat
-    assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value ($result_value vs $nco_verified_result) computed for Sum")
-  }
-
-  test("Weighted Spatial Average") {
-    val nco_verified_result = 275.4043
-    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":$level_index,"end":$level_index,"system":"indices"},"time":{"start":$time_index,"end":$time_index,"system":"indices"}}],variable=[{"uri":"collection:/merra.test","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"xy"}]]"""
-    val result_node = executeTest(datainputs)
-    logger.info( "Test Result: " + printer.format(result_node) )
-    val data_nodes: xml.NodeSeq =  result_node \\ "Output" \\ "Data" \\ "LiteralData"
-    val result_value = data_nodes.head.text.toFloat
-    assert(Math.abs(result_value - nco_verified_result) / nco_verified_result < eps, s" Incorrect value ($result_value vs $nco_verified_result) computed for Sum")
-  }
 
   //  test("Seasonal Cycle") {
   //    readVerificationData( "/data/ta_subset_0_0.nc", "ta" ) match {
