@@ -662,6 +662,7 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
 
   def section( new_section: ma2.Section ): HeapFltArray = {
     val current_section = new ma2.Section(origin,shape)
+    logger.info( s"HeapFltArray.section: current_section = ${current_section.toString}, new_section = ${new_section.toString}" )
     if( new_section.contains( current_section ) ) { this } else {
       val sub_section = new_section.intersect(current_section).shiftOrigin(current_section)
       val ucarArray: ucar.ma2.Array = toUcarFloatArray.sectionNoReduce( sub_section.getRanges )
@@ -839,6 +840,7 @@ class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[Stri
   }
   def section( optSection: Option[CDSection] ): RDDRecord = optSection match {
     case Some( section ) =>
+      logger.info( s"RDDRecord-section[${section.toString()}]: elsems = ${elements.keys.mkString(", ")}")
       val new_elements = elements.mapValues( _.section( section.toSection ) )
       RDDRecord( new_elements, metadata, partition )
     case None =>
