@@ -277,7 +277,6 @@ public abstract class EDASPortal {
         String packaged_msg = StringUtils.join( request_args,  "!" );
         String timeStamp = timeFormatter.format( Calendar.getInstance().getTime() );
         logger.info( String.format( "@@ Sending response %s on request_socket @(%s): %s", msg.responseId, timeStamp, msg.toString() ) );
-        logger.info( getCurrentStackTrace() );
         request_socket.send( packaged_msg.getBytes(),0 );
         return packaged_msg;
     }
