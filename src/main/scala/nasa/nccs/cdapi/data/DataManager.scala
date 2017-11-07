@@ -463,15 +463,15 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
   def toCDFloatArray = CDFloatArray.factory(array,missing)
   def toFloatArray = CDFloatArray.factory(array,missing).getArrayData()
 
-  def weightedSum( axes: Array[Int], wtsOpt: Option[FastMaskedArray] ): ( FastMaskedArray, FastMaskedArray ) = {
-    val wtsIterOpt = wtsOpt.map( _.array.getIndexIterator )
-    wtsOpt match {
-      case Some( wts ) => if( !wts.array.getShape.sameElements(array.getShape) ) { throw new Exception( s"Weights shape [${wts.array.getShape().mkString(",")}] does not match data shape [${array.getShape.mkString(",")}]") }
-      case None => Unit
+  def weightedSum( op_axes: Array[Int], wtsOpt: Option[FastMaskedArray] ): ( FastMaskedArray, FastMaskedArray ) = {
+    val ( shape_comparison, broadcast_axes ) = wtsOpt match {
+      case Some( wts ) =>   compareShapes( wts.array.getShape )
+      case None =>          ( 0, Array.emptyIntArray )
     }
     val rank = array.getRank
-    val iter: IndexIterator = array.getIndexIterator()
-    if( axes.length == rank ) {
+    val iter: IndexIterator = array.getIndexIterator
+    if( shape_comparison == 0  ) {
+      val wtsIterOpt = wtsOpt.map( _.array.getIndexIterator )
       var result = 0f
       var count = 0f
       var result_shape = Array.fill[Int](rank)(1)
@@ -491,17 +491,20 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
       }
       ( FastMaskedArray(result_shape,Array(result),missing), FastMaskedArray(result_shape,Array(count),missing) )
     } else {
-      val target_shape: Array[Int] = getReducedShape( axes )
+      val target_shape: Array[Int] = getReducedShape( op_axes )
       val target_array = FastMaskedArray( target_shape, 0.0f, missing )
       val weights_array = FastMaskedArray( target_shape, 0.0f, missing )
       val targ_index: Index =	target_array.array.getIndex()
+      val wtsIndexOpt: Option[Index] = wtsOpt.map( _.array.getIndex )
       while ( iter.hasNext ) {
         val fval = iter.getFloatNext
+        val wts: ma2.Array = wtsOpt.get.array
         if( ( fval != missing ) && !fval.isNaN ) {
-          val current_index = getReducedFlatIndex( targ_index, axes, iter )
-          wtsIterOpt match {
-            case Some(wtsIter) =>
-              val wtval = wtsIter.getFloatNext
+          val current_index = getReducedFlatIndex( targ_index, op_axes, iter )
+          wtsIndexOpt match {
+            case Some(wtsIndex) =>
+              val reduced_flat_index: Int = getReducedFlatIndex( wtsIndex, broadcast_axes, iter )
+              val wtval: Float = wts.getFloat( reduced_flat_index )
               target_array.array.setFloat(current_index, target_array.array.getFloat(current_index) + fval*wtval )
               weights_array.array.setFloat(current_index, weights_array.array.getFloat(current_index) + wtval )
             case None =>

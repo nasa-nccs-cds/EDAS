@@ -46,14 +46,17 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float,String)] = mutable.SortedSet.empty
   val configuration = crsOpt.map( crs => _configuration + ("crs" -> crs ) ) getOrElse _configuration
+  val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
+
   lazy val grid: GridContext = getTargetGridContext
   def findGrid( varUid: String ): Option[GridContext] = grids.find( item => item._1.split('-')(0).equals(varUid) ).flatMap( _._2 )
-  def getConfiguration = configuration ++ operation.getConfiguration
+  def getConfiguration: Map[String,String] = configuration ++ operation.getConfiguration
   def getAxes: AxisIndices = grid.getAxisIndices( config("axes", "") )
   def getContextStr: String = getConfiguration map { case ( key, value ) => key + ":" + value } mkString ";"
   def getDomainMetadata(domId: String): Map[String,String] = domains.get(domId) match { case Some(dc) => dc.metadata; case None => Map.empty }
   def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
   def getGridConfiguration( key: String ): Option[String] = _configuration.get( "crs" ).orElse( getDomains.flatMap ( _.metadata.get("crs") ).headOption )
+  def getWeightMode: Option[String] = _weightsOpt
 
   def getDomains: List[DomainContainer] = operation.getDomains flatMap domains.get
   def getDomainSections: List[CDSection] = operation.getDomains.flatMap( sectionMap.get ).flatten
@@ -259,7 +262,6 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val identifier = name
   def matchesSpecs( specs: Array[String] ): Boolean = { (specs.size >= 2) && specs(0).equals(module) && specs(1).equals(operation) }
   val nOutputsPerInput: Int = options.getOrElse("nOutputsPerInput","1").toInt
-  val weightsOpt: Option[String] = options.get("weights")
 
   val mapCombineOp: Option[ReduceOpFlt] = options.get("mapOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
   val mapCombineNOp: Option[ReduceNOpFlt] = None
@@ -294,7 +296,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def addWeights( context: KernelContext ): Boolean = {
-    weightsOpt match {
+    context.getWeightMode match {
       case Some( weights ) =>
         val axes = context.operation.getConfiguration("axes")
         if( weights == "cosine" ) { axes.indexOf( "y" ) > -1 }
@@ -1100,7 +1102,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
       for( input_id <- context.operation.inputs ) inputs.element(input_id) match {
         case Some( input_array ) =>
           if( addWeights( context ) ) {
-            val weights: CDFloatArray = KernelUtilities.getWeights(input_id, context, weightsOpt, false )
+            val weights: CDFloatArray = KernelUtilities.getWeights(input_id, context, context.getWeightMode, false )
             worker.sendRequestInput(input_id, HeapFltArray(input_array, weights))
           } else {
             worker.sendRequestInput(input_id, input_array)
