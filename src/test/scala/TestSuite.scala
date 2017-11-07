@@ -306,6 +306,18 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     println( " ** Op Result:         " + result_data.mkDataString(", ") )
   }
 
+  test("time_bounds_test") {
+    val datainputs = s"""[
+             variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+             domain=[       {"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"},"time":{"start":"1985-01-01T00:00:00Z","end":"1985-12-31T23:00:00Z"}}],
+             operation=[    {"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"} ]
+            ]""".replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = CDFloatArray( getResultData( result_node, false ) )
+    assert( result_data.getSize == 12, s" Incorrect number of time values in output" )
+    println( " ** Op Result:         " + result_data.mkDataString(", ") )
+  }
+
   test("ensemble_time_ave2") {
     val unverified_result: CDFloatArray = CDFloatArray(  Array( 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167 ).map(_.toFloat), Float.MaxValue )
     val GISS_H_vids = ( 1 to nExp ) map { index => s"vH$index" }
@@ -437,7 +449,7 @@ class CurrentTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       assert(Math.abs(results(0) - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
     }}
 
-    test("Maximum-local") {
+  test("Maximum-local") {
       val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
       val result_node = executeTest(datainputs, Map("response"->"xml"))
       val results = getResults(result_node)
