@@ -584,7 +584,8 @@ class DataFragmentSpec(val uid: String = "",
     case Some(targetGrid) =>
       targetGrid.addSectionMetadata(_section)
   }
-  def cdsection: CDSection = CDSection(roi)
+  def cdsection: CDSection =
+    CDSection(roi)
 
   def domainSectOpt = _domSectOpt.map(sect => new ma2.Section(sect))
 

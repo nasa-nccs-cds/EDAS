@@ -181,7 +181,6 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     linkNodes( requestCx )
     val product_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ).toList
     val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( product_nodes, requestCx ).map( _.markAsMergedSubworkflowRoot )
-    print( s"\n\nsubworkflow_root_nodes: ${subworkflow_root_nodes.map(_.getNodeId).mkString(", ")}\n\n" )
     val productNodeOpts = for( subworkflow_root_node <- subworkflow_root_nodes ) yield {
       val subworkflowInputs: Map[String, OperationInput] = getSubworkflowInputs( requestCx, subworkflow_root_node, true )
       logger.info( "\n\n ----------------------- Execute PRODUCT Node: %s -------\n".format( subworkflow_root_node.getNodeId ))
