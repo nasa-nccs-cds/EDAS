@@ -122,7 +122,7 @@ class Responder extends Thread {
     String doSendMessage( ZMQ.Socket socket, Message msg  ) {
         List<String> request_args = Arrays.asList( msg.id(), "response", msg.message() );
         String packaged_msg = StringUtils.join( request_args,  "!" );
-        logger.info( " Sending message to client, msgId=" + msg.id() + ", content: " + packaged_msg );
+//        logger.info( " Sending message to client, msgId=" + msg.id() + ", content: " + packaged_msg );
         socket.send( packaged_msg.getBytes() );
         return packaged_msg;
     }
