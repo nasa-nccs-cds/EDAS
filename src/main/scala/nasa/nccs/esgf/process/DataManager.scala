@@ -355,19 +355,25 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     print( s"\n findTimeIndicesFromCalendarDates, ndates: ${_dates.size.toString}\n")
     for( date <- _dates ) {
       dateIndex += 1
-      print( s"\n index: ${dateIndex}  date: ${date.toString}\n")
       start_index_opt match {
         case None =>
-          if( date.getMillis >= start_date.getMillis ) { print( "."); start_index_opt = Some(dateIndex) }
-          if( date.getMillis >= end_date.getMillis ) {  print( "X"); end_index_opt = Some(dateIndex) }
+          if( date.getMillis >= start_date.getMillis ) {
+            print( s"\n SS index: ${dateIndex}  date: ${date.toString}\n")
+            start_index_opt = Some(dateIndex)
+          }
+          if( date.getMillis >= end_date.getMillis ) {
+            print( s"\n XX index: ${dateIndex}  date: ${date.toString}\n")
+            end_index_opt = Some(dateIndex)
+          }
         case Some( start_index ) => end_index_opt match {
           case None => if( date.getMillis >= end_date.getMillis ) {
-            printMarker( 9 )
+            print( s"\n EE index: ${dateIndex}  date: ${date.toString}\n")
             end_index_opt = Some(dateIndex-1)
           }
           case Some( end_index ) =>
-            printMarker( 10 )
-            return ( start_index_opt.get, end_index_opt.get )
+            val rv = ( start_index_opt.get, end_index_opt.get )
+            print( s"\n RR: ${rv.toString}\n")
+            rv
         }
       }
     }
