@@ -22,7 +22,7 @@ import scala.collection.mutable.ListBuffer
 class DASSTestSuite extends EDASTestSuite {
 
   test("SpaceAve-weighted") {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":"1960-01-01T00:00:00","end":"1960-01-01T00:00:00","system":"timestamps"}}],variable=[{"uri":"collection://iap-ua_eraint_tas1hr","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"t"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":"1960-01-01T00:00:00","end":"1961-01-01T00:00:00","system":"timestamps"}}],variable=[{"uri":"collection://iap-ua_eraint_tas1hr","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"t"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node ).sample(35)
     println( "Op Result:       " + result_data.mkBoundedDataString(", ", 35) )
