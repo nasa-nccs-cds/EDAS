@@ -81,9 +81,9 @@ object EDASLogManager extends Serializable {
   private var _test = false
   private var _master = false
   lazy private val _logger: Logger = new Logger("edas",_test,_master)
-  def testing = { _test = true }
-  def isMaster = { _master = true }
-  def getCurrentLogger() = { _logger }
+  def testing(): Unit = { _test = true }
+  def isMaster(): Unit = { _master = true }
+  def getCurrentLogger: Logger = { _logger }
 
 //  def getLogger( name: String ) = {
 //    val console = new ConsoleAppender();
@@ -107,13 +107,14 @@ object EDASLogManager extends Serializable {
 }
 
 trait Loggable extends Serializable {
-  def logger = EDASLogManager.getCurrentLogger()
+  def logger: Logger = EDASLogManager.getCurrentLogger
 
-  def logError( err: Throwable, msg: String ) = {
+  def logError( err: Throwable, msg: String ): Unit = {
     logger.error(msg)
     logger.error(err.getMessage)
     logger.error( err.getStackTrace.mkString("\n") )
   }
+  def printMarker( index: Int ): Unit = print( s"\n\n@@@@ ${index.toString} @@@@\n\n")
 }
 
 object cdsutils {

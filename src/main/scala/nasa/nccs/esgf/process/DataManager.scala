@@ -225,6 +225,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   private lazy val ( _dates, _dateRangeOpt ) = getCalendarDates
   private val _data: Array[Double] = getCoordinateValues
   val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
+  printMarker( 1 )
   def getData: Array[Double] = _data
   def getAxisType: AxisType = coordAxis.getAxisType
 
@@ -271,6 +272,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   def getBoundedCalDate( caldate: CalendarDate, role: BoundsRole.Value, strict: Boolean = false): Option[CalendarDate] = _dateRangeOpt match {
     case None => Some(caldate)
     case Some(date_range) => {
+      printMarker( 2 )
       if (!date_range.includes(caldate)) {
         if (strict) throw new IllegalStateException("CDS2-CDSVariable: Time value %s outside of time bounds %s".format(caldate.toString, date_range.toString))
         else {
@@ -309,6 +311,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
 
   def getCoordinateValues: Array[Double] = coordAxis.getAxisType match {
     case AxisType.Time =>
+      printMarker( 3 )
       val timeCalValues: List[CalendarDate] = _optRange match {
         case None =>          _dates
         case Some(range) =>   _dates.subList( range.first(), range.last()+1 ).toList
@@ -332,6 +335,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   }
 
   def getTimeCoordIndices( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
+    printMarker( 4 )
     val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
     val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
     getBoundedCalDate( startDate, BoundsRole.Start, strict ) flatMap  ( boundedStartDate =>
@@ -344,6 +348,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   //  def getTimeIndex
 
   def findTimeIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): ( Int, Int ) = {
+    printMarker( 5 )
     var start_index_opt: Option[Int] = None
     var end_index_opt: Option[Int] = None
     for( index <-_dates.indices; date = _dates.get(index) ) {
@@ -391,6 +396,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   }
 
   def getGridCoordIndex(cval: Double, role: BoundsRole.Value, strict: Boolean = true) = {
+    printMarker( 6 )
     val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
     val ncval = getNormalizedCoordinate( cval )
     findCoordElement( coordAxis1D, ncval ) match {
@@ -419,7 +425,10 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
       new ma2.Range( getCFAxisName, startIndex, endIndex ) ) )
 
   def getIndexBounds( startval: GenericNumber, endval: GenericNumber, strict: Boolean = false): Option[ma2.Range] = {
-    if (coordAxis.getAxisType == nc2.constants.AxisType.Time) getTimeCoordIndices( startval.toString, endval.toString ) else getGridIndexBounds( startval, endval )
+    printMarker( 7 )
+    val rv = if (coordAxis.getAxisType == nc2.constants.AxisType.Time) getTimeCoordIndices( startval.toString, endval.toString ) else getGridIndexBounds( startval, endval )
+    printMarker( 8 )
+    rv
     //    assert(indexRange.last >= indexRange.first, "CDS2-CDSVariable: Coordinate bounds appear to be inverted: start = %s, end = %s".format(startval.toString, endval.toString))
     //    indexRange
   }
