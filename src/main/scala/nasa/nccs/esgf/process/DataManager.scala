@@ -229,7 +229,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   private val _optRange: Option[ma2.Range] = getAxisRange( coordAxis, domainAxisOpt )
   private lazy val ( _dates, _dateRangeOpt ) = getCalendarDates
   private val _data: Array[Double] = getCoordinateValues
-  private val _rangeCache: mutable.Map[String, (Int,Int)] = new mutable.HashMap[String, (Int,Int)]()
+  private val _rangeCache: mutable.Map[String, (Int,Int)] = mutable.HashMap.empty[String, (Int,Int)]
   val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
   def getData: Array[Double] = _data
   def getAxisType: AxisType = coordAxis.getAxisType
