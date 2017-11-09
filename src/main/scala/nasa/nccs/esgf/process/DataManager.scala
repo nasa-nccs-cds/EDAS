@@ -353,7 +353,8 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     var end_index_opt: Option[Int] = None
     var dateIndex: Int = -1
     print( s"\n findTimeIndicesFromCalendarDates, ndates: ${_dates.size.toString}\n")
-    for( date <-_dates; dateIndex += 1 ) {
+    for( date <- _dates ) {
+      dateIndex += 1
       print( s"\n index: ${dateIndex}  date: ${date.toString}\n")
       start_index_opt match {
         case None =>
