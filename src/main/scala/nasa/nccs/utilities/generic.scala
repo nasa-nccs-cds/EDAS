@@ -114,7 +114,7 @@ trait Loggable extends Serializable {
     logger.error(err.getMessage)
     logger.error( err.getStackTrace.mkString("\n") )
   }
-  def printMarker( index: Int ): Unit = print( s"\n\n@@@@ ${index.toString} @@@@\n\n")
+  def printMarker( index: Int ): Unit = print( s"\n@@@@ ${index.toString} @@@@\n")
 }
 
 object cdsutils {

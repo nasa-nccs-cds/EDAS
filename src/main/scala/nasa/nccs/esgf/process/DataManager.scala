@@ -352,17 +352,22 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     var start_index_opt: Option[Int] = None
     var end_index_opt: Option[Int] = None
     for( index <-_dates.indices; date = _dates.get(index) ) {
+      print( s"\n index: ${index}  date: ${date.toString}\n\n")
       start_index_opt match {
         case None =>
-          if( date.getMillis >= start_date.getMillis ) { start_index_opt = Some(index) }
-          if( date.getMillis >= end_date.getMillis ) { end_index_opt = Some(index) }
+          if( date.getMillis >= start_date.getMillis ) { print( "."); start_index_opt = Some(index) }
+          if( date.getMillis >= end_date.getMillis ) {  print( "X"); end_index_opt = Some(index) }
         case Some( start_index ) => end_index_opt match {
-          case None => if( date.getMillis >= end_date.getMillis ) { end_index_opt = Some(index-1) }
-          case Some( end_index ) => return ( start_index_opt.get, end_index_opt.get )
+          case None => if( date.getMillis >= end_date.getMillis ) {
+            printMarker( 9 )
+            end_index_opt = Some(index-1)
+          }
+          case Some( end_index ) =>
+            printMarker( 10 )
+            return ( start_index_opt.get, end_index_opt.get )
         }
       }
     }
-    printMarker( 9 )
     return ( start_index_opt.getOrElse(_dates.length-1), end_index_opt.getOrElse(_dates.length-1) )
   }
 
