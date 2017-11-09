@@ -373,7 +373,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
           case Some( end_index ) =>
             val rv = ( start_index_opt.get, end_index_opt.get )
             print( s"\n RR: ${rv.toString}\n")
-            rv
+            return rv
         }
       }
     }
