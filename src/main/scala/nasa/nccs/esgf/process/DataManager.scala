@@ -369,6 +369,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
         }
       }
     }
+    printMarker( 11 )
     return ( start_index_opt.getOrElse(_dates.length-1), end_index_opt.getOrElse(_dates.length-1) )
   }
 
