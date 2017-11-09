@@ -88,6 +88,7 @@ class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[Stri
 
   private def addFileInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
+    logger.info(s"BatchReq[${System.identityHashCode(this)}]----> addFileInputs, vspecs = [ ${vSpecs.map(_.uid).mkString(", ")} ]\n")
     val optRdd = _optInputsRDD map ( _.mapValues( rddRec => vSpecs.foldLeft(rddRec)( _.extend(_) ) ) )
     optRdd.map( rdd => { rdd.cache; rdd.count } )
     _optInputsRDD = optRdd
