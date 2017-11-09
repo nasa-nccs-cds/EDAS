@@ -9,6 +9,7 @@ import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArra
 import nasa.nccs.edas.engine.WorkflowNode
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
+import nasa.nccs.edas.portal.TestReadApplication.logger
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}
@@ -351,6 +352,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     printMarker( 5 )
     var start_index_opt: Option[Int] = None
     var end_index_opt: Option[Int] = None
+    val t0 = System.nanoTime()
     var dateIndex: Int = -1
     print( s"\n findTimeIndicesFromCalendarDates, ndates: ${_dates.size.toString}\n")
     for( date <- _dates ) {
@@ -372,7 +374,8 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
           }
           case Some( end_index ) =>
             val rv = ( start_index_opt.get, end_index_opt.get )
-            print( s"\n RR: ${rv.toString}\n")
+            val t1 = System.nanoTime()
+            print( s"\n RR: ${rv.toString}   id: ${System.identityHashCode(this).toString}   time:${ ( (t1 - t0) / 1.0E9 ).toString }\n")
             return rv
         }
       }
