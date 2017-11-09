@@ -351,17 +351,18 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     printMarker( 5 )
     var start_index_opt: Option[Int] = None
     var end_index_opt: Option[Int] = None
+    var dateIndex: Int = -1
     print( s"\n findTimeIndicesFromCalendarDates, ndates: ${_dates.size.toString}\n")
-    for( index <-_dates.indices; date = _dates.get(index) ) {
-      print( s"\n index: ${index}  date: ${date.toString}\n")
+    for( date <-_dates; dateIndex += 1 ) {
+      print( s"\n index: ${dateIndex}  date: ${date.toString}\n")
       start_index_opt match {
         case None =>
-          if( date.getMillis >= start_date.getMillis ) { print( "."); start_index_opt = Some(index) }
-          if( date.getMillis >= end_date.getMillis ) {  print( "X"); end_index_opt = Some(index) }
+          if( date.getMillis >= start_date.getMillis ) { print( "."); start_index_opt = Some(dateIndex) }
+          if( date.getMillis >= end_date.getMillis ) {  print( "X"); end_index_opt = Some(dateIndex) }
         case Some( start_index ) => end_index_opt match {
           case None => if( date.getMillis >= end_date.getMillis ) {
             printMarker( 9 )
-            end_index_opt = Some(index-1)
+            end_index_opt = Some(dateIndex-1)
           }
           case Some( end_index ) =>
             printMarker( 10 )
