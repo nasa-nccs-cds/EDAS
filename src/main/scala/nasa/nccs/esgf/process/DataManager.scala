@@ -229,7 +229,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   private val _optRange: Option[ma2.Range] = getAxisRange( coordAxis, domainAxisOpt )
   private lazy val ( _dates, _dateRangeOpt ) = getCalendarDates
   private val _data: Array[Double] = getCoordinateValues
-  private val _rangeCache: mutable.Map[String, (Int,Int)] = mutable.HashMap.empty[String, (Int,Int)]
+  private val _rangeCache: mutable.HashMap[String, (Int,Int)] = mutable.HashMap.empty[String, (Int,Int)]
   val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
   def getData: Array[Double] = _data
   def getAxisType: AxisType = coordAxis.getAxisType
@@ -344,7 +344,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     CoordinateAxis1DTime.factory( gridDS, coordAxis, new java.util.Formatter() )
   }
 
-  def getTimeCoordIndices( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
+  def getTimeCoordIndicesCached( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {     // TODO: Fix this
     val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
     val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
     getBoundedCalDate( startDate, BoundsRole.Start, strict ) flatMap ( boundedStartDate =>
@@ -359,6 +359,16 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
         new ma2.Range( getCFAxisName, indices._1, indices._2 )
       })
       )
+  }
+
+  def getTimeCoordIndices( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
+    val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
+    val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
+    getBoundedCalDate( startDate, BoundsRole.Start, strict ) flatMap ( boundedStartDate =>
+      getBoundedCalDate( endDate, BoundsRole.End, strict) map ( boundedEndDate => {
+        val indices = findTimeIndicesFromCalendarDates(boundedStartDate, boundedEndDate)
+        new ma2.Range(getCFAxisName, indices._1, indices._2)
+      }))
   }
 
   def findTimeIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): ( Int, Int ) = {
