@@ -283,7 +283,7 @@ class DefaultTestSuite extends EDASTestSuite {
             ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node, false ) )
-    println( " ** Op Result:         " + result_data.mkDataString(", ") )
+    println( " ** Op Result:         " + result_data.mkBoundedDataString( ", ", 100 ) )
   }
 
   test("ensemble_time_ave1") {
@@ -296,7 +296,7 @@ class DefaultTestSuite extends EDASTestSuite {
             ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node, false ) )
-    println( " ** Op Result:         " + result_data.mkDataString(", ") )
+    println( " ** Op Result:         " + result_data.mkBoundedDataString(", ", 100) )
   }
 
   test("time_bounds_test") {
@@ -308,7 +308,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node, false ) )
     assert( result_data.getSize == 12, s" Incorrect number of time values in output" )
-    println( " ** Op Result:         " + result_data.mkDataString(", ") )
+    println( " ** Op Result:         " + result_data.mkBoundedDataString(", ", 100) )
   }
 
   test("ensemble_time_ave2") {
