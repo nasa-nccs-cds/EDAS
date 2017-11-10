@@ -690,6 +690,7 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
     val current_section = new ma2.Section(origin,shape)
     logger.info( s"HeapFltArray.section: current_section = ${current_section.toString}, new_section = ${new_section.toString}" )
     if( new_section.contains( current_section ) ) { this } else {
+      print( s" Intersect Sections: ${new_section.toString} <-> ${current_section.toString}")
       val sub_section = new_section.intersect(current_section).shiftOrigin(current_section)
       val ucarArray: ucar.ma2.Array = toUcarFloatArray.sectionNoReduce( sub_section.getRanges )
       HeapFltArray(CDArray(ucarArray, getMissing()), new_section.getOrigin, gridSpec, metadata, None)

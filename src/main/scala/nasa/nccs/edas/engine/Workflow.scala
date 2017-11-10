@@ -416,8 +416,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     } else {
       logger.info("\n\n ----------------------- Completed RDD input map[%d], keys: { %s }, thread: %s -------\n".format(batchIndex,rawRddMap.keys.mkString(", "), Thread.currentThread().getId ))
       val unifiedRDD = unifyRDDs(rawRddMap, kernelContext, batchRequest.request, node)
-      if( enableRegridding) { Some( unifyGrids(unifiedRDD, batchRequest.request, kernelContext, node) ) }
-      else { Some( unifiedRDD ) }
+      Some( unifiedRDD )
     }
   }
 
@@ -449,10 +448,14 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
         else { CDSparkContext.coalesce(repart_result,kernelContext) }
       })
     }
+    val matchedRdds = convertedRdds.map( rdd =>
+      if( needsRegrid(rdd,requestCx,kernelContext) ) node.regridRDDElems( rdd, kernelContext.conf(Map("gridSpec"->requestCx.getTargetGridSpec(kernelContext),"crs"->kernelContext.crsOpt.getOrElse(""))))
+      else rdd
+    )
     val t1 = System.nanoTime
     logger.info( "Merge RDDs, unify time = %.4f sec".format( (t1 - t0) / 1.0E9 ) )
-    val rv =  if( convertedRdds.size == 1 ) convertedRdds.head
-              else convertedRdds.tail.foldLeft( convertedRdds.head )( CDSparkContext.merge )
+    val rv =  if( matchedRdds.size == 1 ) matchedRdds.head
+              else matchedRdds.tail.foldLeft( matchedRdds.head )( CDSparkContext.merge )
     logger.info( "Completed MergeRDDs, time = %.4f sec".format( (System.nanoTime() - t1) / 1.0E9 ) )
     rv
   }

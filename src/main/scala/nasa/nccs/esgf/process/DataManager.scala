@@ -18,7 +18,7 @@ import ucar.nc2.Dimension
 import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
-import scala.collection.mutable
+import scala.collection.concurrent
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -229,7 +229,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   private val _optRange: Option[ma2.Range] = getAxisRange( coordAxis, domainAxisOpt )
   private lazy val ( _dates, _dateRangeOpt ) = getCalendarDates
   private val _data: Array[Double] = getCoordinateValues
-  private val _rangeCache: mutable.HashMap[String, (Int,Int)] = mutable.HashMap.empty[String, (Int,Int)]
+  private val _rangeCache: concurrent.TrieMap[String, (Int,Int)] = concurrent.TrieMap.empty[String, (Int,Int)]
   val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
   def getData: Array[Double] = _data
   def getAxisType: AxisType = coordAxis.getAxisType
@@ -239,6 +239,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     case None => logger.warn( "Using %s for CFAxisName".format(coordAxis.getShortName) ); coordAxis.getShortName
   }
 
+  val enable_range_caching = true;
   def cacheRange( startDate: CalendarDate, endDate: CalendarDate, range: (Int,Int) ): Unit = _cacheRange( _rangeKey(startDate,endDate), range )
   def getCachedRange( startDate: CalendarDate, endDate: CalendarDate ): Option[(Int,Int)] = _getCachedRange( _rangeKey(startDate,endDate) )
   private def _getCachedRange( key: String ): Option[(Int,Int)] = _rangeCache.get(key)
@@ -344,7 +345,11 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     CoordinateAxis1DTime.factory( gridDS, coordAxis, new java.util.Formatter() )
   }
 
-  def getTimeCoordIndicesCached( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {     // TODO: Fix this
+  def getTimeCoordIndices( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] =
+    if( enable_range_caching ) getTimeCoordIndicesCached( tvalStart, tvalEnd, strict )
+    else getTimeCoordIndicesNonCached( tvalStart, tvalEnd, strict )
+
+  def getTimeCoordIndicesCached( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
     val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
     val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
     getBoundedCalDate( startDate, BoundsRole.Start, strict ) flatMap ( boundedStartDate =>
@@ -361,7 +366,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
       )
   }
 
-  def getTimeCoordIndices( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
+  def getTimeCoordIndicesNonCached( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
     val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
     val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
     getBoundedCalDate( startDate, BoundsRole.Start, strict ) flatMap ( boundedStartDate =>
@@ -393,7 +398,6 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
           case Some( end_index ) =>
             val rv = ( start_index_opt.get, end_index_opt.get )
             val t1 = System.nanoTime()
-            print( s"\n findTimeIndicesFromCalendarDates: ${rv.toString} time:${ ( (t1 - t0) / 1.0E9 ).toString }\n")
             return rv
         }
       }
