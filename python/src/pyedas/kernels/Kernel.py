@@ -27,7 +27,7 @@ class Kernel:
         self.cacheReturn = [ False, True ]
 
     def getListParm( self, mdata, key ):
-        mdata.get( key, "" ).split(",")
+        return mdata.get( key, "" ).split(",")
 
     def name(self): return self._spec.name()
 

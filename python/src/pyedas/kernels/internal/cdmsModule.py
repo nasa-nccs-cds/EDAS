@@ -4,8 +4,13 @@ import cdms2, time, os, cdutil
 from pyedas.messageParser import mParse
 import numpy as np
 
-def sa2f( sarray ): return None if(not sarray) else [ float(x) for x in sarray ]
-def sa2i( sarray ): return None if(not sarray) else [ int(x) for x in sarray ]
+def sa2f( sarray ):
+    try: return [ float(x) for x in sarray ]
+    except: return None
+
+def sa2i( sarray ):
+    try: return [ int(x) for x in sarray ]
+    except: return None
 
 class RegridKernel(CDMSKernel):
 
