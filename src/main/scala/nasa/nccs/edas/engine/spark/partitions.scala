@@ -51,6 +51,7 @@ class LongRange(val start: Long, val end: Long ) extends Serializable {
 
 object RecordKey {
   def apply( start: Long, end: Long, elemStart: Int, numElems: Int ): RecordKey = new RecordKey( start, end, elemStart, numElems )
+  def apply(): RecordKey = new RecordKey( -1, -1, -1, -1 )
 
   def apply( ranges: Iterable[RecordKey] ): RecordKey = {
     val startMS = ranges.foldLeft( Long.MaxValue )( ( tval, key ) => Math.min( tval, key.start ) )

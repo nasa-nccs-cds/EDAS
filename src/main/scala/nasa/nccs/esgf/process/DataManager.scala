@@ -95,7 +95,15 @@ class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[Stri
   private def addOperationInput( serverContext: ServerContext, record: RDDRecord, batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
     print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
-    _optInputsRDD = _optInputsRDD map ( _.mapValues( rddRec => rddRec ++ record ) )
+    if( _optInputsRDD.isDefined ) {
+      _optInputsRDD = _optInputsRDD map (_.mapValues(rddRec => rddRec ++ record))
+    } else {
+      _optInputsRDD = Some( createUnpartitionedRDD( serverContext, record ) )
+    }
+  }
+
+  def createUnpartitionedRDD( serverContext: ServerContext, record: RDDRecord ): RDD[(RecordKey,RDDRecord)] = {
+    serverContext.spark.sparkContext parallelize Seq( ( RecordKey(),record ) )
   }
 
   def getKernelInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {

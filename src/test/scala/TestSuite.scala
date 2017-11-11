@@ -19,21 +19,22 @@ import ucar.nc2.Variable
 
 import scala.collection.mutable.ListBuffer
 
-class DASSTestSuite extends EDASTestSuite {
-
-  test("SpaceAve-weighted") {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":"1960-01-01T00:00:00:00Z","end":"1960-01-05T00:00:00:00Z","system":"timestamps"}}],variable=[{"uri":"collection://iap-ua_eraint_tas1hr","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"t"}]]"""
-    val result_node = executeTest( datainputs )
-    val result_data = getResultData( result_node ).sample(35)
-    println( "Op Result:       " + result_data.mkBoundedDataString(", ", 35) )
-  }
-}
+//class DASSTestSuite extends EDASTestSuite {
+//
+//  test("SpaceAve-weighted") {
+//    val datainputs = s"""[domain=[{"name":"d0","time":{"start":"1960-01-01T00:00:00:00Z","end":"1960-01-05T00:00:00:00Z","system":"timestamps"}}],variable=[{"uri":"collection://iap-ua_eraint_tas1hr","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"t"}]]"""
+//    val result_node = executeTest( datainputs )
+//    val result_data = getResultData( result_node ).sample(35)
+//    println( "Op Result:       " + result_data.mkBoundedDataString(", ", 35) )
+//  }
+//}
 
 class DefaultTestSuite extends EDASTestSuite {
 
   val nExp = 3
   val use_6hr_data = false
   val use_npana_data = false
+  val use_local_data = false
   val test_cache = false
   val test_python = false
   val test_binning = false
@@ -48,20 +49,6 @@ class DefaultTestSuite extends EDASTestSuite {
       case None => Unit
     }
     logger.info( "Successfully deleted all test collections" )
-  }
-
-  test("DiffWithRegrid")  {
-    print( s"Running test DiffWithRegrid" )
-    val GISS_mon_variable   = s"""{"uri":"collection:/GISS_r1i1p1","name":"tas:v0","domain":"d0"}"""
-    val MERRA2_mon_variable = s"""{"uri":"collection:/CIP_MERRA2_mon_ta","name":"ta:v1","domain":"d1"}"""
-    val datainputs =
-      s"""[   variable=[$GISS_mon_variable,$MERRA2_mon_variable],
-              domain=[  {"name":"d0","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}},
-                        {"name":"d1","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}, "level":{"start":2,"end":2,"system":"indices"} } ],
-              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d1","crs":"~GISS_r1i1p1"}]]""".stripMargin.replaceAll("\\s", "")
-    val result_node = executeTest(datainputs)
-    val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
-    println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
   }
 
   test("Aggregate") {
@@ -132,6 +119,20 @@ class DefaultTestSuite extends EDASTestSuite {
         runtime.printMemoryUsage
       }
   }}
+
+  test("DiffWithRegrid")  {
+    print( s"Running test DiffWithRegrid" )
+    val GISS_mon_variable   = s"""{"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"}"""
+    val MERRA2_mon_variable = s"""{"uri":"collection:/CIP_MERRA2_mon_ta","name":"ta:v1","domain":"d1"}"""
+    val datainputs =
+      s"""[   variable=[$GISS_mon_variable,$MERRA2_mon_variable],
+              domain=[  {"name":"d0","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}},
+                        {"name":"d1","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}, "level":{"start":2,"end":2,"system":"indices"} } ],
+              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d1","crs":"~GISS_r1i1p1"}]]""".stripMargin.replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
+    println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
+  }
 
   test("TimeConvertedDiff")  { if( use_6hr_data ) {
     print( s"Running test TimeConvertedDiff" )
@@ -217,13 +218,13 @@ class DefaultTestSuite extends EDASTestSuite {
   //    assert( result_data.sample(21).maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
   //  }
 
-  test("NCML-timeAveTestLocal") {
+  test("NCML-timeAveTestLocal") { if( use_local_data ) {
     val data_file = "file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA2-6hr-ana_Np.200001.ncml"
     val datainputs = s"""[domain=[{"name":"d0","lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":20,"end":20,"system":"indices"}}],variable=[{"uri":"%s","name":"T:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t"}]]""".format( data_file )
     val result_node = executeTest( datainputs, Map("numParts"->"2") )
     val result_data = CDFloatArray( getResultData( result_node ) )
     println( " ** CDMS Result:       " + result_data.mkBoundedDataString(", ",16) )
-  }
+  }}
 
   test("NCML-timeBinAveTestLocal")  { if(test_binning) {
     val data_file = "http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/CFSR/6hr/atmos/ta_2000s.ncml"
@@ -436,6 +437,34 @@ class DefaultTestSuite extends EDASTestSuite {
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
   }
 
+  test("time-ave-giss") {
+    val datainputs =
+      s"""[domain=[ {"name":"d0", "time": {"start":"1980-01-01T00:00:00", "end":"1981-01-01T00:00:00", "crs": "timestamps"}} ],
+          variable=[ {"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v0","domain":"d0"}],
+          operation=[ {"name":"CDSpark.ave","input":"v0","axes":"t","id":"v0ave"} ] ]""".stripMargin
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkBoundedDataString(", ",300) )
+  }
+
+  test("time-ave-domains-diff") {
+    val datainputs =
+      s"""[domain=[
+              {"name":"d0", "time": {"start":"1980-01-01T00:00:00", "end":"1981-01-01T00:00:00", "crs": "timestamps"}},
+              {"name":"d1", "time": {"start":"2000-01-01T00:00:00", "end":"2001-01-01T00:00:00", "crs": "timestamps"}}],
+          variable=[
+              {"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v0","domain":"d0"},
+              {"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v1","domain":"d1"}],
+          operation=[
+              {"name":"CDSpark.ave","input":"v0","axes":"t","id":"v0ave"},
+              {"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave"},
+              {"name":"CDSpark.eDiff","input":"v0ave,v1ave"}]
+          ]""".stripMargin
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
+  }
+
   test("pyMaximum-cache")  { if(test_python && test_cache ) {
     val nco_verified_result = 309.7112
     val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"xy"}]]"""
@@ -456,12 +485,12 @@ class DefaultTestSuite extends EDASTestSuite {
     assert(Math.abs(results(0) - nco_verified_result) / nco_verified_result < eps, s" Incorrect value computed for Max")
   }}
 
-  test("Maximum-local") {
+  test("Maximum-local") { if(use_local_data) {
     val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
     val result_node = executeTest(datainputs, Map("response"->"xml"))
     val results = getResults(result_node)
     println( "Op Result:       " + results.mkString(",") )
-  }
+  }}
 
   test("Maximum-dap") {
     val nco_verified_result = 309.7112
@@ -585,12 +614,12 @@ class DefaultTestSuite extends EDASTestSuite {
   }}
 
 
-  test("CherryPick") {
+  test("CherryPick") { if(use_local_data) {
     val datainputs = s"""[domain=[{"name":"d0","time":{"start":1,"end":1,"system":"indices"},"lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.compress","input":"v1","plev":"975,875,775,650,550"}]]"""
     val result_node = executeTest(datainputs)
     val results = getResults(result_node)
     println( "Op Result:       " + results.mkString(",") )
-  }
+  }}
 
   test("Maximum1") {
     val nco_verified_result: CDFloatArray = CDFloatArray( Array( 277.8863, 279.0432, 280.0728, 280.9739, 282.2123, 283.7078, 284.6707, 285.4793, 286.259, 286.9836, 287.6983 ).map(_.toFloat), Float.MaxValue )

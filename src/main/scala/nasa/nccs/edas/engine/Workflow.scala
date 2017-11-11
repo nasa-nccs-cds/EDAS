@@ -420,44 +420,46 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     }
   }
 
+  def getTimeReferenceRdd(rddMap: Map[String,RDD[(RecordKey,RDDRecord)]], kernelContext: KernelContext ): Option[RDD[(RecordKey,RDDRecord)]] = kernelContext.trsOpt map { trs =>
+    rddMap.keys.find( _.split('-').dropRight(1).mkString("-").equals(trs.substring(1)) ) match {
+      case Some(trsKey) => rddMap.getOrElse(trsKey, throw new Exception( s"Error retreiving key $trsKey from rddMap with keys {${rddMap.keys.mkString(",")}}" ) )
+      case None => throw new Exception( s"Unmatched trs $trs in kernel ${kernelContext.operation.name}, keys = {${rddMap.keys.mkString(",")}}" )
+    }
+  }
+
+  def applyTimeConversion( new_partitioner: RangePartitioner, kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode ) ( rdd: RDD[(RecordKey,RDDRecord)] ): RDD[(RecordKey,RDDRecord)] = {
+    CDSparkContext.getPartitioner(rdd) match {
+      case Some( partitioner ) =>
+        val repart_result = if (partitioner.equals (new_partitioner) ) { rdd }
+        else {
+          val convertedResult = if ( partitioner.numElems != new_partitioner.numElems ) {
+            node.timeConversion (rdd, new_partitioner, kernelContext, requestCx)
+          } else { rdd }
+          CDSparkContext.repartition (convertedResult, new_partitioner)
+        }
+        if ( node.kernel.parallelizable ) { repart_result }
+        else { CDSparkContext.coalesce(repart_result, kernelContext) }
+      case None => rdd
+    }
+  }
+
   def unifyRDDs(rddMap: Map[String,RDD[(RecordKey,RDDRecord)]], kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode ) : RDD[(RecordKey,RDDRecord)] = {
     logger.info( "unifyRDDs: " + rddMap.keys.mkString(", ") )
     val t0 = System.nanoTime
-    val parallelizable = node.kernel.parallelizable
-    val convertedRdds = if( node.kernel.extInputs ) { rddMap.values }
+    val convertedRdds: Iterable[RDD[(RecordKey,RDDRecord)]] = if( node.kernel.extInputs ) { rddMap.values }
     else {
-      val rdds = rddMap.values
-      val trsRdd: RDD[(RecordKey,RDDRecord)] = kernelContext.trsOpt match {
-        case Some(trs) => rddMap.keys.find( _.split('-').dropRight(1).mkString("-").equals(trs.substring(1)) ) match {
-          case Some(trsKey) => rddMap.getOrElse(trsKey, throw new Exception( s"Error retreiving key $trsKey from rddMap with keys {${rddMap.keys.mkString(",")}}" ) )
-          case None => throw new Exception( s"Unmatched trs $trs in kernel ${kernelContext.operation.name}, keys = {${rddMap.keys.mkString(",")}}" )
-        }
-        case None => rdds.head
+      val trsRdd: RDD[(RecordKey, RDDRecord)] = getTimeReferenceRdd(rddMap, kernelContext).getOrElse(rddMap.values.head)
+      CDSparkContext.getPartitioner(trsRdd) match {
+        case Some(timeRefPartitioner) => rddMap.values map applyTimeConversion(timeRefPartitioner, kernelContext, requestCx, node)
+        case None => rddMap.values
       }
-      val tPartitioner = CDSparkContext.getPartitioner(trsRdd)
-      rddMap.values map ( rdd => {
-        val partitioner = CDSparkContext.getPartitioner(rdd)
-        val repart_result = if (partitioner.equals(tPartitioner)) { rdd }
-        else {
-          val convertedResult = if (CDSparkContext.getPartitioner(rdd).numElems != tPartitioner.numElems) {
-            node.timeConversion(rdd, tPartitioner, kernelContext, requestCx)
-          } else { rdd }
-          CDSparkContext.repartition(convertedResult, tPartitioner)
-        }
-        if(parallelizable) { repart_result }
-        else { CDSparkContext.coalesce(repart_result,kernelContext) }
-      })
     }
     val matchedRdds = convertedRdds.map( rdd =>
       if( needsRegrid(rdd,requestCx,kernelContext) ) node.regridRDDElems( rdd, kernelContext.conf(Map("gridSpec"->requestCx.getTargetGridSpec(kernelContext),"crs"->kernelContext.crsOpt.getOrElse(""))))
       else rdd
     )
-    val t1 = System.nanoTime
-    logger.info( "Merge RDDs, unify time = %.4f sec".format( (t1 - t0) / 1.0E9 ) )
-    val rv =  if( matchedRdds.size == 1 ) matchedRdds.head
-              else matchedRdds.tail.foldLeft( matchedRdds.head )( CDSparkContext.merge )
-    logger.info( "Completed MergeRDDs, time = %.4f sec".format( (System.nanoTime() - t1) / 1.0E9 ) )
-    rv
+    logger.info( "Merge RDDs, unify time = %.4f sec".format( (System.nanoTime - t0) / 1.0E9 ) )
+    if( matchedRdds.size == 1 ) matchedRdds.head else matchedRdds.tail.foldLeft( matchedRdds.head )( CDSparkContext.merge )
   }
 
   //  def domainRDDPartition( opInputs: Map[String,OperationInput], kernelContext: KernelContext, requestCx: RequestContext, node: WorkflowNode ): RDD[(Int,RDDPartition)] = {
@@ -493,13 +495,13 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def getOpSectionIntersection( targetGrid: TargetGrid, node: WorkflowNode): Option[ ma2.Section ] = getOpSections(targetGrid,node) match {
-    case None => return None
+    case None => None
     case Some( sections ) =>
       if( sections.isEmpty ) None
       else {
         val result = sections.foldLeft(sections.head)( _.intersect(_) )
         if (result.computeSize() > 0) { Some(result) }
-        else return None
+        else  None
       }
   }
   def getOpCDSectionIntersection(targetGrid: TargetGrid, node: WorkflowNode): Option[ CDSection ] = getOpSectionIntersection(targetGrid, node).map( CDSection( _ ) )

@@ -71,6 +71,7 @@ object CDSparkContext extends Loggable {
   def apply( context: SparkContext ) : CDSparkContext = new CDSparkContext( context )
 
   def merge(rdd0: RDD[(RecordKey,RDDRecord)], rdd1: RDD[(RecordKey,RDDRecord)] ): RDD[(RecordKey,RDDRecord)] = {
+    val t0 = System.nanoTime()
     val mergedRdd = rdd0.join( rdd1 ) mapValues { case (part0,part1) => part0 ++ part1  } map identity
     if ( mergedRdd.isEmpty() ) {
       val keys0 = rdd0.keys.collect()
@@ -80,6 +81,7 @@ object CDSparkContext extends Loggable {
       throw new Exception(msg)
     }
     val result = rdd0.partitioner match { case Some(p) => mergedRdd.partitionBy(p); case None => rdd1.partitioner match { case Some(p) => mergedRdd.partitionBy(p); case None => mergedRdd } }
+    logger.info( "Completed MergeRDDs, time = %.4f sec".format( (System.nanoTime() - t0) / 1.0E9 ) )
     result
   }
 
@@ -110,23 +112,23 @@ object CDSparkContext extends Loggable {
 
   def addConfig( sc: SparkConf, spark_config_id: String, edas_config_id: String ) =  appParameters( edas_config_id ) map ( cval => sc.set( spark_config_id, cval ) )
 
-  def getPartitioner( rdd: RDD[(RecordKey,RDDRecord)] ): RangePartitioner = {
+  def getPartitioner( rdd: RDD[(RecordKey,RDDRecord)] ): Option[RangePartitioner] = {
     rdd.partitioner match {
       case Some( partitioner ) => partitioner match {
-        case range_partitioner: RangePartitioner => range_partitioner
-        case wtf => throw new Exception( "Found partitioner of wrong type: " + wtf.getClass.getName )
+        case range_partitioner: RangePartitioner => Some(range_partitioner)
+        case wtf => None
       }
-      case None =>
-        throw new Exception( "Missing partitioner for rdd"  )
+      case None => None
     }
   }
 
   def coalesce(rdd: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
     if ( rdd.getNumPartitions > 1 ) {
-//      val partitioner: RangePartitioner = getPartitioner(rdd).colaesce
-//      var repart_rdd = rdd repartitionAndSortWithinPartitions partitioner
-      val partitioner: RangePartitioner = getPartitioner(rdd)
-      rdd.sortByKey( true, 1 ) glom() map (_.fold((partitioner.range.startPoint, RDDRecord.empty))((x, y) => { (x._1 + y._1, x._2.append(y._2)) }))
+      getPartitioner(rdd) match {
+        case Some(partitioner) =>
+          rdd.sortByKey(true, 1) glom() map (_.fold((partitioner.range.startPoint, RDDRecord.empty))((x, y) => { (x._1 + y._1, x._2.append(y._2)) } ) )
+        case None => rdd
+      }
     } else { rdd }
   }
 
