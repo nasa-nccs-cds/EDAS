@@ -157,7 +157,7 @@ class Responder extends Thread {
         ZMQ.Socket socket  = context.socket(ZMQ.PUB);
         try{
             socket.bind(String.format("tcp://%s:%d", client_address, response_port));
-            logger.info( String.format("Bound response socket to client at %s on port: %d", client_address, response_port) );
+            logger.info( String.format(" --> Bound response socket to client at %s on port: %d", client_address, response_port) );
         } catch (Exception err ) { logger.error( String.format("Error initializing response socket on port %d: %s", response_port, err ) ); }
         try {
             while (active) {
@@ -217,7 +217,7 @@ public abstract class EDASPortal {
 
             try{
                 request_socket.bind(String.format("tcp://%s:%d", client_address, request_port));
-                logger.info(String.format("Bound request socket to client at %s on port: %d", client_address, request_port));
+                logger.info(String.format(" --> Bound request socket to client at %s on port: %d", client_address, request_port));
             } catch (Exception err ) { logger.error( String.format("Error initializing request socket on port %d: %s", request_port, err ) ); }
 
         } catch (Exception err ) {
