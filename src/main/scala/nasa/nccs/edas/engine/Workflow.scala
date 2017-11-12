@@ -246,6 +246,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
       case Some( ( key, rddPart ) ) =>
         ( key, rddPart.configure("gid", kernelContext.grid.uid) )
       case None =>
+        print("XXX")
         throw new Exception( s"---> No partitions in mapReduce for node ${node.getNodeId}" )
     }
   }
