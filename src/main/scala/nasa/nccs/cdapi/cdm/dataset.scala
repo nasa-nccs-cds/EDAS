@@ -417,7 +417,9 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     case _ => throw new Exception( "Unexpected attempt to create Collection data file from ctype " + ctype )
   }
 
-  def toFilePath(path: String): String = {
+  def toFilePath(path: String): String = path.split(':').last.trim
+
+  def toFilePath1(path: String): String = {
     if (path.startsWith("file:")) path.substring(5)
     else path
   }
