@@ -399,7 +399,7 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
       varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
       NCMLWriter.writeCollectionDirectory( collectionId, variableMap.toMap )
     }
-    _ncmlFile.toURI.toString
+    _ncmlFile.toString
   }
 
   def getDataFilePath( uri: String, collectionId: String ) : String = ctype match {
@@ -412,7 +412,7 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     case "file" =>
       val pathFile: File = new File(toFilePath(uri))
       if( pathFile.isDirectory ) createNCML( pathFile, collectionId )
-      else pathFile.toURI.toString
+      else pathFile.toString
     case "dap" => uri
     case _ => throw new Exception( "Unexpected attempt to create Collection data file from ctype " + ctype )
   }
