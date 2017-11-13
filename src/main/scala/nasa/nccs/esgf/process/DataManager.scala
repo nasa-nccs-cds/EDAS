@@ -6,7 +6,7 @@ import ucar.nc2.dataset._
 import nasa.nccs.caching.{CachePartitions, EDASPartitioner, FileToCacheStream, FragmentPersistence}
 import nasa.nccs.cdapi.data._
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
-import nasa.nccs.edas.engine.WorkflowNode
+import nasa.nccs.edas.engine.{SubWorkflowInput, WorkflowNode}
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
 import nasa.nccs.edas.portal.TestReadApplication.logger
@@ -18,6 +18,7 @@ import ucar.nc2.Dimension
 import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
+
 import scala.collection.concurrent
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -48,9 +49,12 @@ trait ScopeContext {
   def config( key: String ): Option[String] = __configuration__.get(key)
 }
 
-class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[String,OperationInput] ) extends Loggable  {
+class BatchRequest( val request: RequestContext, val inputSpec: SubWorkflowInput ) extends Loggable  {
   val optPartitioner: Option[EDASPartitioner] = generatePartitioning
   private var _optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = None
+  val node = inputSpec.rootNode
+  val nodeId = node.getNodeId
+  val subworkflowInputs = inputSpec.inputs
 
   private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
     case None => Unit

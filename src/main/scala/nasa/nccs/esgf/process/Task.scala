@@ -1197,7 +1197,8 @@ class OperationContext(val index: Int,
                        val resultType: OpResultType,
                        private val configuration: Map[String, String]) extends ContainerBase with ScopeContext with Serializable {
 
-  def getConfiguration = configuration
+  def getConfiguration: Map[String, String] = configuration
+  def getConfParm( key: String ): Option[String] = configuration.get(key)
   private val _domains = new scala.collection.mutable.HashSet[String]()
   configuration.get("domain").foreach( _addDomain )
   val moduleName: String = name.toLowerCase.split('.').head
