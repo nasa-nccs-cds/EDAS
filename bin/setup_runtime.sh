@@ -9,6 +9,7 @@ export CDSHELL_HOME_DIR=${CDSHELL_HOME_DIR:-${EDAS_HOME_DIR}/../EDASClientConsol
 export EDAS_SCALA_DIR=${EDAS_BIN_DIR}/../src/main/scala
 export EDAS_STAGE_DIR=${EDAS_HOME_DIR}/target/universal/stage
 # export CLASSPATH=${EDAS_SCALA_DIR}:${EDAS_CACHE_DIR}:${EDAS_STAGE_DIR}/conf:${EDAS_STAGE_DIR}/lib:${CONDA_PREFIX}/lib:${CLASSPATH}
+export CLASSPATH=${EDAS_SCALA_DIR}:${EDAS_CACHE_DIR}:${EDAS_STAGE_DIR}/conf:${EDAS_STAGE_DIR}/lib:${CONDA_PREFIX}/lib:${CLASSPATH}
 export UVCDAT_ANONYMOUS_LOG=no
 export EDAS_JAVA_ARGS="-J-Xmx$EDAS_MAX_MEM -J-Xms512M -J-Xss1M -J-XX:+CMSClassUnloadingEnabled -J-XX:+UseConcMarkSweepGC"
 export WPS_CMD="$CDWPS_HOME_DIR/target/universal/cdwps-1.1-SNAPSHOT/bin/cdwps $EDAS_JAVA_ARGS"
