@@ -7,7 +7,7 @@ import sbt.{SettingKey, _}
 
 
 val kernelPackages = settingKey[ Seq[String] ]("A list of user-defined Kernel packages")
-val EDAS_VERSION = sys.env.get("EDAS_VERSION")
+val EDAS_VERSION = sys.env.get("EDAS_VERSION").getOrElse("{UNDEFINED}")
 
 name := "EDAS"
 version := EDAS_VERSION + "-SNAPSHOT"
