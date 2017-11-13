@@ -7,9 +7,10 @@ import sbt.{SettingKey, _}
 
 
 val kernelPackages = settingKey[ Seq[String] ]("A list of user-defined Kernel packages")
+val EDAS_VERSION = sys.env.get("EDAS_VERSION")
 
 name := "EDAS"
-version := "1.0-SNAPSHOT"
+version := EDAS_VERSION + "-SNAPSHOT"
 scalaVersion := "2.10.5"
 organization := "nasa.nccs"
 
