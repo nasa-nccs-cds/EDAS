@@ -9,7 +9,7 @@ import sbt.{SettingKey, _}
 val kernelPackages = settingKey[ Seq[String] ]("A list of user-defined Kernel packages")
 
 name := "EDAS"
-version := "1.2.2-SNAPSHOT"
+version := "1.0-SNAPSHOT"
 scalaVersion := "2.10.5"
 organization := "nasa.nccs"
 
