@@ -1,7 +1,6 @@
 package nasa.nccs.edas.kernels
 
 import java.io._
-
 import java.nio.{ByteBuffer, ByteOrder, FloatBuffer}
 
 import nasa.nccs.cdapi.cdm._
@@ -9,6 +8,7 @@ import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.data.{HeapFltArray, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.{ReduceNOpFlt, ReduceOpFlt, ReduceWNOpFlt}
 import nasa.nccs.cdapi.tensors.{CDArray, CDCoordMap, CDFloatArray, CDTimeCoordMap}
+import nasa.nccs.edas.engine.WorkflowNode.regridKernel
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
@@ -41,15 +41,27 @@ class Port( val name: String, val cardinality: String, val description: String, 
   }
 }
 
-class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],  _configuration: Map[String,String], val profiler: ProfilingTool ) extends Loggable with Serializable with ScopeContext {
-  val crsOpt = getCRS
+object KernelContext {
+  def apply( operation: OperationContext, batchRequest: BatchRequest ): KernelContext = {
+    val sectionMap: Map[String, Option[CDSection]] = batchRequest.request.inputs.mapValues(_.map(_.cdsection)).map(identity)
+    val gridMapVars: Map[String,Option[GridContext]] = batchRequest.request.getTargetGrids.map { case (uid,tgridOpt) =>
+      uid -> tgridOpt.map( tg => GridContext(uid,tg))
+    }
+    val gridMapCols: Map[String,Option[GridContext]] = gridMapVars.flatMap { case ( uid, gcOpt ) => gcOpt.map( gc => ( gc.collectionId, Some(gc) ) ) }
+    new KernelContext( operation, gridMapVars ++ gridMapCols, sectionMap, batchRequest.request.domains, batchRequest.request.getConfiguration, batchRequest.workflow.crs, batchRequest.request.profiler )
+  }
+}
+
+class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],  _configuration: Map[String,String], val crsOpt: Option[String], val profiler: ProfilingTool ) extends Loggable with Serializable with ScopeContext {
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float,String)] = mutable.SortedSet.empty
   val configuration = crsOpt.map( crs => _configuration + ("crs" -> crs ) ) getOrElse _configuration
   val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
 
+  def addRddElements( vSpecs: List[DirectRDDVariableSpec] )( rddRec: RDDRecord ): RDDRecord =
+    regridKernel.map( this )( vSpecs.foldLeft(rddRec)( _.extend(_) ) )
   lazy val grid: GridContext = getTargetGridContext
-  def findGrid( varUid: String ): Option[GridContext] = grids.find( item => item._1.split('-')(0).equals(varUid) ).flatMap( _._2 )
+  def findGrid( gridRef: String ): Option[GridContext] = grids.find( item => ( item._1.equalsIgnoreCase(gridRef) || item._1.split('-')(0).equalsIgnoreCase(gridRef) ) ).flatMap( _._2 )
   def getConfiguration: Map[String,String] = configuration ++ operation.getConfiguration
   def getAxes: AxisIndices = grid.getAxisIndices( config("axes", "") )
   def getContextStr: String = getConfiguration map { case ( key, value ) => key + ":" + value } mkString ";"
@@ -63,7 +75,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   private def getCRS: Option[String] = getGridConfiguration( "crs" )
   private def getTRS: Option[String] = getGridConfiguration( "trs" )
 
-  def conf( params: Map[String,String] ): KernelContext = new KernelContext( operation, grids, sectionMap, domains, configuration ++ params, profiler )
+  def conf( params: Map[String,String] ): KernelContext = new KernelContext( operation, grids, sectionMap, domains, configuration ++ params, crsOpt, profiler )
   def commutativeReduction: Boolean = if( getAxes.includes(0) ) { true } else { false }
   def doesTimeReduction: Boolean = getAxes.includes(0)
   def addTimestamp( label: String, log: Boolean = false ): Unit = {

@@ -4,8 +4,9 @@ import java.util
 import nasa.nccs.cdapi.cdm._
 import ucar.nc2.dataset._
 import nasa.nccs.caching.{CachePartitions, EDASPartitioner, FileToCacheStream, FragmentPersistence}
-import nasa.nccs.cdapi.data._
+import nasa.nccs.cdapi.data.{RDDRecord, _}
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
+import nasa.nccs.edas.engine.WorkflowNode.regridKernel
 import nasa.nccs.edas.engine.{WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
@@ -54,6 +55,7 @@ class BatchRequest( val request: RequestContext, val workflow: WorkflowContext )
   private var _optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = None
   val node = workflow.rootNode
   val nodeId = node.getNodeId
+  private val _inputUids = mutable.HashSet.empty[String]
 
   private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
     case None => Unit
@@ -87,11 +89,12 @@ class BatchRequest( val request: RequestContext, val workflow: WorkflowContext )
   //      directInput.getRDDVariableSpec(uid, opSection)
   //    }
 
-
-  private def addFileInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
+  private def addFileInputs( serverContext: ServerContext, kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
-    val optRdd = _optInputsRDD map ( _.mapValues( rddRec => vSpecs.foldLeft(rddRec)( _.extend(_) ) ) )
-    optRdd.map( rdd => { rdd.cache; rdd.count } )
+    val newVSpecs = vSpecs.filter( vspec => !_inputUids.contains(vspec.uid) )
+    val optRdd: Option[RDD[(RecordKey,RDDRecord)]] = if( newVSpecs.nonEmpty ) { _optInputsRDD map ( _.mapValues( kernelContext.addRddElements( newVSpecs ) ) ) } else { _optInputsRDD }
+    _inputUids ++= vSpecs.map( _.uid ).toSet
+    optRdd.foreach( rdd => { rdd.cache; rdd.count } )
     _optInputsRDD = optRdd
   }
 
@@ -109,9 +112,10 @@ class BatchRequest( val request: RequestContext, val workflow: WorkflowContext )
     serverContext.spark.sparkContext parallelize Seq( ( RecordKey(),record ) )
   }
 
-  def getKernelInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
-    addFileInputs( serverContext, vSpecs, batchIndex )
-    _optInputsRDD.map( rdd => rdd.mapValues( rddRec => rddRec.section( section ) ) )
+  def getKernelInputs( serverContext: ServerContext, kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+    addFileInputs( serverContext, kernelContext, vSpecs, batchIndex )
+    val result = _optInputsRDD.map( rdd => rdd.mapValues( rddRec => rddRec.section( section ) ) )
+    result
   }
 
   def getOperationInput( serverContext: ServerContext, record: RDDRecord, section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
@@ -181,7 +185,10 @@ class BatchRequest( val request: RequestContext, val workflow: WorkflowContext )
     })
     if( fragments.isEmpty ) { None  }
     else {
-      val largestInput: DataFragmentSpec = fragments.foldLeft(fragments.head)((x, y) => if(x.getSize > y.getSize) x else y )
+      val crsOpt = workflow.getReferenceCollection
+      val crsFrags =  crsOpt.fold(fragments)( crs => fragments.filter( _.matchesReference(crs) ) )
+      assert( crsFrags.nonEmpty, "No inputs matching crs: " + workflow.crs.toString + " in subworkflow with root node " + workflow.rootNode.getNodeId )
+      val largestInput: DataFragmentSpec = crsFrags.foldLeft(crsFrags.head)((x, y) => if(x.getSize > y.getSize) x else y )
       Some( new EDASPartitioner( largestInput.uid, largestInput.roi, request.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles ) )
     }
   }
@@ -614,11 +621,11 @@ object GridContext extends Loggable {
     val timeAxis: Option[ HeapLongArray ] = targetGrid.getTimeAxisData
     val cfAxisNames: Array[String] = ( 0 until targetGrid.getRank ).map( dim_index => targetGrid.getCFAxisName( dim_index ) ).toArray
     val axisIndexMap: Map[String,Int] = Map( cfAxisNames.map( cfAxisName => cfAxisName.toLowerCase -> targetGrid.getAxisIndex(cfAxisName) ):_* )
-    new GridContext(uid,axisMap,timeAxis,cfAxisNames,axisIndexMap)
+    new GridContext( uid, axisMap, timeAxis, cfAxisNames,axisIndexMap, targetGrid.collection.id )
   }
 }
 
-class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblArray )]], val timeAxis: Option[ HeapLongArray ], val cfAxisNames: Array[String], val axisIndexMap: Map[String,Int] ) extends Serializable {
+class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblArray )]], val timeAxis: Option[ HeapLongArray ], val cfAxisNames: Array[String], val axisIndexMap: Map[String,Int], val collectionId: String ) extends Serializable {
   def getAxisIndices( axisConf: String ): AxisIndices = new AxisIndices( axisIds=axisConf.map( ch => getAxisIndex( ch.toString.toLowerCase ) ).toSet )
   def getAxisIndex( cfAxisName: String ): Int = axisIndexMap.getOrElse( cfAxisName, throw new Exception( "Unrecognized axis name ( should be 'x', 'y', 'z', or 't' ): " + cfAxisName ) )
   def getCFAxisName( dimension_index: Int ): String = cfAxisNames(dimension_index)

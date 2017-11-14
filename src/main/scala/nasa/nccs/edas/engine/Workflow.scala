@@ -59,14 +59,8 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
   def getKernelOption( key: String , default: String = ""): String = kernel.options.getOrElse(key,default)
   def doesTimeElimination: Boolean = operation.operatesOnAxis('t' ) && kernel.doesAxisElimination
 
-  def getKernelContext( requestCx: RequestContext, profiler: ProfilingTool ): KernelContext =
-    contexts.getOrElseUpdate(requestCx.jobId, generateKernelContext( requestCx, profiler) )
+  def getKernelContext( batchRequest: BatchRequest ): KernelContext = contexts.getOrElseUpdate( batchRequest.request.jobId, KernelContext( operation, batchRequest ) )
 
-  private def generateKernelContext( requestCx: RequestContext, profiler: ProfilingTool ): KernelContext = {
-    val sectionMap: Map[String, Option[CDSection]] = requestCx.inputs.mapValues(_.map(_.cdsection)).map(identity)
-    val gridMap: Map[String,Option[GridContext]] = requestCx.getTargetGrids.map { case (uid,tgridOpt) => uid -> tgridOpt.map( tg => GridContext(uid,tg)) }
-    new KernelContext( operation, gridMap, sectionMap, requestCx.domains, requestCx.getConfiguration, profiler )
-  }
   def map(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = kernel.mapRDD( input, context )
 
   def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int  ): (RecordKey,RDDRecord) = kernel.mapReduce( input, context, batchIndex )
@@ -138,14 +132,22 @@ object Workflow {
 class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: WorkflowNode ) {
   val crs: Option[String] = getSubworkflowCRS
 
+  def getReferenceCollection: Option[String] = crs match {
+    case Some( crs ) =>
+      if( crs.startsWith("~") ) Some( crs.substring(1).toLowerCase )
+      else throw new Exception( "References to collections or variables in 'crs' declarations must start with '~', e.g.:  'crs':'~giss_r1i1p1'  or   'crs':'~v1' "  )
+    case None => None
+  }
+
   def getSubworkflowCRS: Option[String] = {
     val antecedents = rootNode.antecedents( (node: DAGNode) => !WorkflowNode(node).isMergedSubworkflowRoot  ) += rootNode
     val optCrsNode = antecedents.find( node => WorkflowNode(node).operation.getConfiguration.exists { case (key, value) => key.toLowerCase == "crs" } )     // TODO: Check search ordering
     val OptCrs = optCrsNode.flatMap( WorkflowNode(_).operation.getConfParm("crs") )
-    if( OptCrs.isEmpty ) {
+    val result = if( OptCrs.isEmpty ) {
       val dataInputs = inputs.values.flatMap { case data_input: OperationDataInput => Some(data_input); case _ => None }
-      dataInputs.headOption.map( "~" + _.fragmentSpec.getCollection.collId )
+      dataInputs.headOption.map( "~" + _.fragmentSpec.getCollection.id )
     } else { OptCrs }
+    result
   }
 }
 
@@ -155,20 +157,21 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def createKernel(id: String): Kernel = executionMgr.getKernel(id)
 
-  def generateProduct( requestCx: RequestContext, subWorkflowInput: WorkflowContext ): Option[WPSProcessExecuteResponse] = {
-    val ( key: RecordKey, result: RDDRecord ) = executeKernel( requestCx, subWorkflowInput )
-    if( subWorkflowInput.rootNode.isRoot ) { createResponse( result, requestCx, subWorkflowInput.rootNode ) }
-    else { subWorkflowInput.rootNode.cacheProduct( key, result ); None }
+  def generateProduct( requestCx: RequestContext, workflowCx: WorkflowContext ): Option[WPSProcessExecuteResponse] = {
+    val ( key: RecordKey, result: RDDRecord ) = executeKernel( requestCx, workflowCx )
+    if( workflowCx.rootNode.isRoot ) { createResponse( result, requestCx, workflowCx.rootNode ) }
+    else { workflowCx.rootNode.cacheProduct( key, result ); None }
   }
 
-  def executeKernel( requestCx: RequestContext, subWorkflowInput: WorkflowContext  ):  ( RecordKey, RDDRecord ) = {
+  def executeKernel(requestCx: RequestContext, workflowCx: WorkflowContext  ):  ( RecordKey, RDDRecord ) = {
     val t0 = System.nanoTime()
-    val root_node = subWorkflowInput.rootNode
-    val kernelContext: KernelContext  = root_node.getKernelContext( requestCx, requestCx.profiler )
-    kernelContext.addTimestamp( s"Executing Kernel for node ${root_node.getNodeId}" )
-    var ( key: RecordKey, pre_result: RDDRecord )= mapReduce( subWorkflowInput, kernelContext, requestCx )
+    val root_node = workflowCx.rootNode
+    val batchRequest = new BatchRequest( requestCx, workflowCx )
+    val kernelCx: KernelContext  = root_node.getKernelContext( batchRequest )
+    kernelCx.addTimestamp( s"Executing Kernel for node ${root_node.getNodeId}" )
+    var ( key: RecordKey, pre_result: RDDRecord )= mapReduce( batchRequest, kernelCx )
     val t1 = System.nanoTime()
-    val result = root_node.kernel.postRDDOp( root_node.kernel.orderElements( pre_result, kernelContext ), kernelContext  )
+    val result = root_node.kernel.postRDDOp( root_node.kernel.orderElements( pre_result, kernelCx ), kernelCx  )
     if( Try( requestCx.config("unitTest","false").toBoolean ).getOrElse(false)  ) { root_node.kernel.cleanUp(); }
     val t2 = System.nanoTime()
     logger.info(s"********** Completed Execution of Kernel[%s(%s)]: %s , total time = %.3f sec, postOp time = %.3f sec   ********** \n".format(root_node.kernel.name,root_node.kernel.id, root_node.operation.identifier, (t2 - t0) / 1.0E9, (t2 - t1) / 1.0E9))
@@ -205,14 +208,14 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def mapReduceBatch( batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ): Option[ ( RecordKey, RDDRecord ) ] = {
-    domainRDDPartition( batchRequest, kernelContext, batchIndex ) map { rdd =>
-      kernelContext.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${batchRequest.nodeId}", true)
-      val result: (RecordKey, RDDRecord) = batchRequest.node.mapReduce (rdd, kernelContext, batchIndex)
+    domainRDDPartition( batchRequest.node, batchRequest, kernelContext, batchIndex) map { rdd =>
+      kernelContext.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ batchRequest.node.getNodeId}", true)
+      val result: (RecordKey, RDDRecord) =  batchRequest.node.mapReduce (rdd, kernelContext, batchIndex)
       logger.info (s"Completed Reduce op, result metadata: ${result._2.metadata.mkString (", ")}")
       if( batchRequest.hasBatch (batchIndex + 1) ) {
-        mapReduceBatch( batchRequest, kernelContext, batchIndex + 1 ) match {
+        mapReduceBatch ( batchRequest, kernelContext, batchIndex + 1) match {
           case Some (next_result) =>
-            val reduceOp = batchRequest.node.kernel.getReduceOp(kernelContext)
+            val reduceOp =  batchRequest.node.kernel.getReduceOp(kernelContext)
             reduceOp (result, next_result)
           case None =>result
         }
@@ -223,7 +226,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def streamMapReduceBatch( node: WorkflowNode, batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] =
-    domainRDDPartition( batchRequest, kernelContext, batchIndex) map { rdd =>
+    domainRDDPartition(node, batchRequest, kernelContext, batchIndex) map { rdd =>
       logger.info( s"Executing STREAM mapReduce Batch ${batchIndex.toString}" )
       val mapresult = node.map( rdd, kernelContext )
       mapresult mapValues ( array => node.kernel.postRDDOp( array, kernelContext ) )
@@ -255,19 +258,15 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 //    } else { mapresult }
 //  }
 
-  def mapReduce(subWorkflowInput: WorkflowContext, kernelContext: KernelContext, requestCx: RequestContext ): ( RecordKey, RDDRecord ) = {
-    val batchRequest = new BatchRequest( requestCx, subWorkflowInput )
+  def mapReduce( batchRequest: BatchRequest, kernelContext: KernelContext ): ( RecordKey, RDDRecord ) = {
     mapReduceBatch( batchRequest, kernelContext, 0 ) match {
-      case Some( ( key, rddPart ) ) =>
-        ( key, rddPart.configure("gid", kernelContext.grid.uid) )
-      case None =>
-        print("XXX")
-        throw new Exception( s"---> No partitions in mapReduce for node ${subWorkflowInput.rootNode.getNodeId}" )
+      case Some( ( key, rddPart ) ) => ( key, rddPart.configure("gid", kernelContext.grid.uid) )
+      case None => throw new Exception( s"---> No partitions in mapReduce for node ${batchRequest.nodeId}" )
     }
   }
 
   def stream(node: WorkflowNode, batchRequest: BatchRequest, batchIndex: Int ): Option[ RDD[ (RecordKey,RDDRecord) ] ] = {
-    val kernelContext = node.getKernelContext( batchRequest.request, batchRequest.request.profiler )
+    val kernelContext = node.getKernelContext( batchRequest )
     streamMapReduceBatch( node, batchRequest, kernelContext, batchIndex )
   }
 
@@ -398,10 +397,10 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     else rdd
   }
 
-  def domainRDDPartition(  batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+  def domainRDDPartition(  node: WorkflowNode, batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
     val enableRegridding = true
     kernelContext.addTimestamp( "Generating RDD for inputs: " + batchRequest.workflow.inputs.keys.mkString(", "), true )
-    val inputs: List[(String,OperationInput)] = batchRequest.node.operation.inputs.flatMap( uid => batchRequest.workflow.inputs.get( uid ).map ( uid -> _ ) )
+    val inputs: List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => batchRequest.workflow.inputs.get( uid ).map ( uid -> _ ) )
     val rawRddList: List[(String,RDD[(RecordKey,RDDRecord)])] = inputs.flatMap { case (uid, opinput) =>
       opinput match {
         case ( dataInput: PartitionedFragment) =>
@@ -413,18 +412,18 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
           //          executionMgr.serverContext.spark.getRDD( uid, directInput, batchRequest.request, opSection, node, batchIndex, kernelContext ) map ( result => uid -> result )
 
           val varSpec = directInput.getRDDVariableSpec(uid)
-          val opSection: Option[CDSection] = getOpSectionIntersection( directInput.getGrid, batchRequest.node ).map( CDSection(_) )
-          logger.info("\n\n ----------------------- getKernelInputs: NODE %s, VarSpec: %s, batch id: %d  -------\n".format( batchRequest.nodeId, varSpec.uid, System.identityHashCode(batchRequest) ) )
-          batchRequest.getKernelInputs( executionMgr.serverContext, List(varSpec), opSection, batchIndex ).map( uid -> _ )
+          val opSection: Option[CDSection] = getOpSectionIntersection( directInput.getGrid, node ).map( CDSection(_) )
+          logger.info("\n\n ----------------------- getKernelInputs: NODE %s, VarSpec: %s, batch id: %d  -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(batchRequest) ) )
+          batchRequest.getKernelInputs( executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex ).map( uid -> _ )
 
         case ( kernelInput: DependencyOperationInput  ) => kernelInput.inputNode.getProduct match {
             case None =>
               val keyValOpt: Option[RDD[(RecordKey, RDDRecord)]] = stream(kernelInput.inputNode, batchRequest, batchIndex)
-              logger.info("\n\n ----------------------- NODE %s => Stream DEPENDENCY Node: %s, batch = %d, rID = %s, nParts = %d -------\n".format( batchRequest.nodeId, kernelInput.inputNode.getNodeId, batchIndex, kernelInput.inputNode.getResultId, keyValOpt.map(_.partitions.length).getOrElse(-1)))
+              logger.info("\n\n ----------------------- NODE %s => Stream DEPENDENCY Node: %s, batch = %d, rID = %s, nParts = %d -------\n".format( node.getNodeId, kernelInput.inputNode.getNodeId, batchIndex, kernelInput.inputNode.getResultId, keyValOpt.map(_.partitions.length).getOrElse(-1)))
               keyValOpt.map( uid -> _ )
             case Some((key: RecordKey, result: RDDRecord)) =>
               val opSection: Option[CDSection] = kernelContext.getDomainSections.headOption
-              logger.info("\n\n ----------------------- NODE %s => Get Cached Result: %s, batch = %d, rID = %s, opSection= %s -------\n".format( batchRequest.nodeId, kernelInput.inputNode.getNodeId, batchIndex, kernelInput.inputNode.getResultId, opSection.map(_.toString()).getOrElse("(EMPTY)") ) )
+              logger.info("\n\n ----------------------- NODE %s => Get Cached Result: %s, batch = %d, rID = %s, opSection= %s -------\n".format( node.getNodeId, kernelInput.inputNode.getNodeId, batchIndex, kernelInput.inputNode.getResultId, opSection.map(_.toString()).getOrElse("(EMPTY)") ) )
               batchRequest.getOperationInput(executionMgr.serverContext, result, opSection, batchIndex).map(uid -> _)
           }
         case ( extInput: ExternalDataInput ) =>

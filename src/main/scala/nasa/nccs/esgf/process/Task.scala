@@ -63,9 +63,7 @@ class TaskRequest(val id: UID,
     errorReports += error_rep
   }
   def getTargetGrid(dataContainer: DataContainer): TargetGrid =
-    targetGridMap.getOrElseUpdate(dataContainer.uid,
-                                  createTargetGrid(dataContainer))
-
+    targetGridMap.getOrElseUpdate( dataContainer.uid, createTargetGrid(dataContainer) )
   def getTargetGrid(uid: String): Option[TargetGrid] = targetGridMap.get(uid)
 
   private def createTargetGrid(dataContainer: DataContainer): TargetGrid = {
@@ -76,9 +74,7 @@ class TaskRequest(val id: UID,
     val t1 = System.nanoTime
     val rv = new TargetGrid(variable, roiOpt)
     val t2 = System.nanoTime
-    logger.info(
-      " CreateTargetGridT: %.4f %.4f ".format((t1 - t0) / 1.0E9,
-                                              (t2 - t1) / 1.0E9))
+    logger.info( " CreateTargetGridT: %.4f %.4f ".format((t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9))
     rv
   }
 
@@ -522,6 +518,7 @@ class DataFragmentSpec(val uid: String = "",
         <input uid={uid} varname={varname} longname={longname} units={units} roi={roi.toString} mask={maskId} >{collection.toXml}</input>
     }
   }
+  def matchesReference( fragRef: String ): Boolean = fragRef.equalsIgnoreCase(collection.id) || fragRef.equalsIgnoreCase( uid.split('-').head )
   def getMetadata( key: String ): Option[String] = _metadata.get( key )
 
   def domainSection: Option[ DataFragmentSpec ] = {
