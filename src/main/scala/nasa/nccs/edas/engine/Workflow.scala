@@ -135,7 +135,7 @@ object Workflow {
   }
 }
 
-class SubWorkflowInput( val inputs: Map[String, OperationInput], val rootNode: WorkflowNode ) {
+class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: WorkflowNode ) {
   val crs: Option[String] = getSubworkflowCRS
 
   def getSubworkflowCRS: Option[String] = {
@@ -155,13 +155,13 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def createKernel(id: String): Kernel = executionMgr.getKernel(id)
 
-  def generateProduct( requestCx: RequestContext, subWorkflowInput: SubWorkflowInput ): Option[WPSProcessExecuteResponse] = {
+  def generateProduct( requestCx: RequestContext, subWorkflowInput: WorkflowContext ): Option[WPSProcessExecuteResponse] = {
     val ( key: RecordKey, result: RDDRecord ) = executeKernel( requestCx, subWorkflowInput )
     if( subWorkflowInput.rootNode.isRoot ) { createResponse( result, requestCx, subWorkflowInput.rootNode ) }
     else { subWorkflowInput.rootNode.cacheProduct( key, result ); None }
   }
 
-  def executeKernel( requestCx: RequestContext, subWorkflowInput: SubWorkflowInput  ):  ( RecordKey, RDDRecord ) = {
+  def executeKernel( requestCx: RequestContext, subWorkflowInput: WorkflowContext  ):  ( RecordKey, RDDRecord ) = {
     val t0 = System.nanoTime()
     val root_node = subWorkflowInput.rootNode
     val kernelContext: KernelContext  = root_node.getKernelContext( requestCx, requestCx.profiler )
@@ -197,7 +197,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     val product_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ).toList
     val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( product_nodes, requestCx ).map( _.markAsMergedSubworkflowRoot )
     val productNodeOpts = for( subworkflow_root_node <- subworkflow_root_nodes ) yield {
-      val subWorkflowInput = new SubWorkflowInput( getSubworkflowInputs( requestCx, subworkflow_root_node, true ), subworkflow_root_node )
+      val subWorkflowInput = new WorkflowContext( getSubworkflowInputs( requestCx, subworkflow_root_node, true ), subworkflow_root_node )
       logger.info( "\n\n ----------------------- Execute PRODUCT Node: %s -------\n".format( subworkflow_root_node.getNodeId ))
       generateProduct( requestCx, subWorkflowInput )
     }
@@ -255,7 +255,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 //    } else { mapresult }
 //  }
 
-  def mapReduce( subWorkflowInput: SubWorkflowInput, kernelContext: KernelContext, requestCx: RequestContext ): ( RecordKey, RDDRecord ) = {
+  def mapReduce(subWorkflowInput: WorkflowContext, kernelContext: KernelContext, requestCx: RequestContext ): ( RecordKey, RDDRecord ) = {
     val batchRequest = new BatchRequest( requestCx, subWorkflowInput )
     mapReduceBatch( batchRequest, kernelContext, 0 ) match {
       case Some( ( key, rddPart ) ) =>
@@ -400,8 +400,8 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def domainRDDPartition(  batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
     val enableRegridding = true
-    kernelContext.addTimestamp( "Generating RDD for inputs: " + batchRequest.inputSpec.inputs.keys.mkString(", "), true )
-    val inputs: List[(String,OperationInput)] = batchRequest.node.operation.inputs.flatMap( uid => batchRequest.subworkflowInputs.get( uid ).map ( uid -> _ ) )
+    kernelContext.addTimestamp( "Generating RDD for inputs: " + batchRequest.workflow.inputs.keys.mkString(", "), true )
+    val inputs: List[(String,OperationInput)] = batchRequest.node.operation.inputs.flatMap( uid => batchRequest.workflow.inputs.get( uid ).map ( uid -> _ ) )
     val rawRddList: List[(String,RDD[(RecordKey,RDDRecord)])] = inputs.flatMap { case (uid, opinput) =>
       opinput match {
         case ( dataInput: PartitionedFragment) =>
