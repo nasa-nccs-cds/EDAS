@@ -132,7 +132,7 @@ object Workflow {
 class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: WorkflowNode ) {
   val crs: Option[String] = getSubworkflowCRS
 
-  def getReferenceCollection: Option[String] = crs match {
+  def getGridObjectRef: Option[String] = crs match {
     case Some( crs ) =>
       if( crs.startsWith("~") ) Some( crs.substring(1).toLowerCase )
       else throw new Exception( "References to collections or variables in 'crs' declarations must start with '~', e.g.:  'crs':'~giss_r1i1p1'  or   'crs':'~v1' "  )

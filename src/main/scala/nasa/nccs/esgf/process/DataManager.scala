@@ -15,6 +15,7 @@ import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}
 import org.apache.spark.rdd.RDD
+import ucar.ma2.Section
 import ucar.nc2.Dimension
 import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
@@ -50,12 +51,20 @@ trait ScopeContext {
   def config( key: String ): Option[String] = __configuration__.get(key)
 }
 
+object RegridSpec {
+  def apply( target_input: DataFragmentSpec  ): RegridSpec = new RegridSpec( target_input.collection.getGridFilePath, target_input.cdsection.toSection.toString  )
+}
+class RegridSpec( val gridFile: String, val subgrid: String ) extends Serializable {
+
+}
+
 class BatchRequest( val request: RequestContext, val workflow: WorkflowContext ) extends Loggable  {
   val optPartitioner: Option[EDASPartitioner] = generatePartitioning
   private var _optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = None
   val node = workflow.rootNode
   val nodeId = node.getNodeId
   private val _inputUids = mutable.HashSet.empty[String]
+  def getRegridSpec: Option[RegridSpec] = optPartitioner.map( _.regridSpec )
 
   private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
     case None => Unit
@@ -185,11 +194,11 @@ class BatchRequest( val request: RequestContext, val workflow: WorkflowContext )
     })
     if( fragments.isEmpty ) { None  }
     else {
-      val crsOpt = workflow.getReferenceCollection
+      val crsOpt = workflow.getGridObjectRef
       val crsFrags =  crsOpt.fold(fragments)( crs => fragments.filter( _.matchesReference(crs) ) )
       assert( crsFrags.nonEmpty, "No inputs matching crs: " + workflow.crs.toString + " in subworkflow with root node " + workflow.rootNode.getNodeId )
       val largestInput: DataFragmentSpec = crsFrags.foldLeft(crsFrags.head)((x, y) => if(x.getSize > y.getSize) x else y )
-      Some( new EDASPartitioner( largestInput.uid, largestInput.roi, request.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles ) )
+      Some( new EDASPartitioner( largestInput.uid, largestInput.roi, request.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles, RegridSpec(largestInput) ) )
     }
   }
 }

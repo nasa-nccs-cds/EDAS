@@ -16,7 +16,14 @@ class RegridKernel(CDMSKernel):
 
     def __init__( self ):
         Kernel.__init__( self, KernelSpec("regrid", "Regridder", "Regrids the inputs using UVCDAT", parallelize=True ) )
-        self._debug = False
+        self._debug = True
+
+    def getGrid( self, gridFile, latInterval=None, lonInterval=None ):
+        import cdms2
+        gridfile = cdms2.open(gridFile)
+        baseGrid = gridfile.grids.values()[0]
+        if ( (latInterval == None) and (lonInterval == None)  ):  return baseGrid
+        else: return baseGrid.subGrid( latInterval, lonInterval )
 
     def executeOperations(self, task, _inputs):
         """
@@ -29,10 +36,11 @@ class RegridKernel(CDMSKernel):
         self.logger.info( " Execute REGRID Task with metadata: " + str( task.metadata ) )
         gridType = str( mdata.get("grid","uniform") ).lower()
         target = str( mdata.get("target","") )
-        gridSpec = str( mdata.get("spec","") )
+        gridSpec = str( mdata.get("gridSpec","") )
         method = str( mdata.get("method","linear") ).lower()
         res = sa2f( self.getListParm( mdata, "res" ) )
         shape = sa2i( self.getListParm( mdata, "shape" ) )
+        gridSection = str( mdata.get('gridSection',"") )
         plev = sa2f( self.getListParm( mdata, "plev" ) )
         toGrid = None
         if( target ):
@@ -42,6 +50,10 @@ class RegridKernel(CDMSKernel):
         else :
             if( gridSpec ):
                 toGrid = self.getGrid( gridSpec )
+                if( gridSection ):
+                    subGridSpec = gridSection.split(",")[-2:]
+                    subGridIndices = [ map(int,x.split(':')) for x in subGridSpec ]
+                    toGrid = toGrid.subGrid( subGridIndices[0], subGridIndices[1] )
             else:
                 if( "gaussian" in gridType ):
                     toGrid = cdms2.createGaussianGrid( shape[0] )

@@ -38,7 +38,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val test_cache = false
   val test_python = false
   val test_binning = false
-  val test_regrid = true
+  val test_regrid = false
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
 
@@ -120,19 +120,18 @@ class DefaultTestSuite extends EDASTestSuite {
       }
   }}
 
-  test("DiffWithRegrid")  {
+  test("DiffWithRegrid")  { if(test_regrid) {
     print( s"Running test DiffWithRegrid" )
-    val GISS_mon_variable   = s"""{"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"}"""
-    val MERRA2_mon_variable = s"""{"uri":"collection:/CIP_MERRA2_mon_ta","name":"ta:v1","domain":"d1"}"""
+    val GISS_mon_variable   = s"""{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml","name":"tas:v0"}"""
+    val MERRA2_mon_variable = s"""{"uri":"collection:/giss_r1i1p1","name":"tas:v1"}"""
     val datainputs =
       s"""[   variable=[$GISS_mon_variable,$MERRA2_mon_variable],
-              domain=[  {"name":"d0","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}},
-                        {"name":"d1","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}, "level":{"start":2,"end":2,"system":"indices"} } ],
-              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d1","crs":"~GISS_r1i1p1"}]]""".stripMargin.replaceAll("\\s", "")
+              domain=[  {"name":"d0","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}} ],
+              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d0","crs":"~giss_r1i1p1"}]]""".stripMargin.replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
     println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
-  }
+  }}
 
   test("TimeConvertedDiff")  { if( use_6hr_data ) {
     print( s"Running test TimeConvertedDiff" )

@@ -241,8 +241,8 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
   override def toString = gridFilePath
   def getCoordinateAxes: List[CoordinateAxis] = coordAxes
 
-  def getGridSpec: String = "file:/" + gridFilePath
-  def getGridFile: String = "file:/" + gridFilePath
+  def getGridSpec: String = "file://" + gridFilePath
+  def getGridFile: String = "file://" + gridFilePath
 
   def findCoordinateAxis(name: String): Option[CoordinateAxis] = {
     val gridDS = NetcdfDatasetMgr.openFile(gridFilePath)
@@ -366,7 +366,7 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
   }
   def url(varName: String = "") = ctype match {
     case "http" => dataPath
-    case _ => "file:/" + dataPath
+    case _ => "file://" + dataPath
   }
 
 
@@ -868,7 +868,7 @@ class ncReadTest extends Loggable {
   import java.nio.file.StandardOpenOption._
   import TestType._
 
-  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/NCML/merra_daily_2005.xml"
+  val url = "file:///att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/NCML/merra_daily_2005.xml"
 //  val outputFile = "/Users/tpmaxwel/.edas/cache/test/testBinaryFile.out"
   val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/test/testBinaryFile.out"
 //  val outputNcFile = "/Users/tpmaxwel/.edas/cache/test/testFile.nc"
@@ -998,7 +998,7 @@ object NetcdfDatasetMgr extends Loggable {
           val t0 = System.nanoTime()
           val ma2array = variable.read(section)
           val sample_data = ( 0 until Math.min(16,ma2array.getSize).toInt ) map ma2array.getFloat
-          logger.info( "[T%d] Reading variable %s, section shape: (%s), section origin: (%s), variable shape: (%s), size = %.2f M, read time = %.4f sec, sample data = [ %s ]".format( Thread.currentThread().getId(), varShortName, section.getShape.mkString(","), section.getOrigin.mkString(","), variable.getShape.mkString(","), (section.computeSize*4.0)/MB, (System.nanoTime() - t0) / 1.0E9, sample_data.mkString(", ") ))
+          logger.info( "[T%d] Reading variable %s from path %s, section shape: (%s), section origin: (%s), variable shape: (%s), size = %.2f M, read time = %.4f sec, sample data = [ %s ]".format( Thread.currentThread().getId(), varShortName, dataPath, section.getShape.mkString(","), section.getOrigin.mkString(","), variable.getShape.mkString(","), (section.computeSize*4.0)/MB, (System.nanoTime() - t0) / 1.0E9, sample_data.mkString(", ") ))
           ma2array
         } catch {
           case err: Exception =>

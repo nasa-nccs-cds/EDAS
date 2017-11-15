@@ -685,6 +685,7 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def sameGrid( other: HeapFltArray) = gridSpec.equals( other.gridSpec )
   def hasData = (data.length > 0)
   def toVector: DenseVector = new DenseVector( data.map(_.toDouble ) )
+  val test = 0
 
   def section( new_section: ma2.Section ): HeapFltArray = {
     val current_section = new ma2.Section(origin,shape)
@@ -755,7 +756,7 @@ object HeapFltArray extends Loggable {
   val bb = java.nio.ByteBuffer.allocate(4)
 
   def apply( cdarray: CDFloatArray, origin: Array[Int], metadata: Map[String,String], optWeights: Option[Array[Float]] ): HeapFltArray = {
-    val gridSpec = metadata.get( "gridfile" ).map( "file:/" + _ ).getOrElse("")
+    val gridSpec = metadata.get( "gridfile" ).map( "file://" + _ ).getOrElse("")
     new HeapFltArray(cdarray.getShape, origin, cdarray.getArrayData(), Some(cdarray.getInvalid), gridSpec, metadata, optWeights, cdarray.getCoordMaps)
   }
   def apply( shape: Array[Int], origin: Array[Int], metadata: Map[String,String] ): HeapFltArray = {
