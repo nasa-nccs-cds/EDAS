@@ -1056,11 +1056,8 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val input_arrays: List[HeapFltArray] = context.operation.inputs.map(id => inputs.findElements(id)).foldLeft(List[HeapFltArray]())(_ ++ _)
       assert(input_arrays.nonEmpty, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
 
-      val (acceptable_arrays, regrid_arrays) = input_arrays.partition(_.gridSpec.equals(regridSpec.gridFile))
-      if (regrid_arrays.isEmpty) {
-        logger.info("&MAP: NoOp for Kernel %s".format(name))
-        inputs
-      } else {
+      val (acceptable_arrays, regrid_arrays) = input_arrays.partition(_.gridFilePath.equals(regridSpec.gridFile))
+      if (regrid_arrays.isEmpty) { inputs } else {
         for (input_array <- acceptable_arrays) { worker.sendArrayMetadata( input_array.uid, input_array) }
         for (input_array <- regrid_arrays)     { worker.sendRequestInput(input_array.uid, input_array) }
         val acceptable_array_map = Map(acceptable_arrays.map(array => array.uid -> array): _*)

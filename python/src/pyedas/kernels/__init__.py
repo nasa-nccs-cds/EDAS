@@ -1,7 +1,7 @@
-import logging, os, cdms2
+import logging, os, getpass
 
-lname = "worker"
-log_file = os.path.expanduser('~/.edas/' + lname + "-" + str(os.getpid()) +'.log')
+lname = "edas-python-worker"
+log_file = os.path.expanduser('/tmp/' + getpass.getuser() + '/logs/' + lname + "-" + str(os.getpid()) +'.log')
 logger = logging.getLogger( lname )
 formatter = logging.Formatter(lname + ': %(asctime)s %(levelname)s %(message)s')
 handler = logging.FileHandler( log_file )

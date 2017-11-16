@@ -682,10 +682,10 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   override def toCDWeightsArray: Option[CDFloatArray] = _optWeights.map( CDFloatArray( shape, _, getMissing() ) )
   override def toMa2WeightsArray: Option[FastMaskedArray] = _optWeights.map( FastMaskedArray( shape, _, getMissing() ) )
   def getMissing( default: Float = Float.MaxValue ): Float = _missing.getOrElse(default)
-  def sameGrid( other: HeapFltArray) = gridSpec.equals( other.gridSpec )
-  def hasData = (data.length > 0)
+  def sameGrid( other: HeapFltArray): Boolean = gridFilePath.equals( other.gridFilePath )
+  def hasData: Boolean = (data.length > 0)
   def toVector: DenseVector = new DenseVector( data.map(_.toDouble ) )
-  val test = 0
+  val gridFilePath: String = NetcdfDatasetMgr.cleanPath(gridSpec)
 
   def section( new_section: ma2.Section ): HeapFltArray = {
     val current_section = new ma2.Section(origin,shape)

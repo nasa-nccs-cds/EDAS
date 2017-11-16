@@ -1034,7 +1034,8 @@ object NetcdfDatasetMgr extends Loggable {
   }
 
   def cleanPath( path: String ): String =
-    if( path.startsWith("file://") ) path.substring(6)
+    if( path.startsWith("file:///") ) path.substring(7)
+    else if( path.startsWith("file://") ) path.substring(6)
     else if( path.startsWith("file:/") ) path.substring(5)
     else path
 

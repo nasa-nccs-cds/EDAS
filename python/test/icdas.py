@@ -1,7 +1,7 @@
 from py4j.clientserver import ClientServer, JavaParameters, PythonParameters
 from py4j.java_gateway import  DEFAULT_ADDRESS
 import logging, os, sys, traceback, array, time, socket
-import cdms2
+import cdms2, getpass
 import numpy as np
 
 def getIntArg( index, default ): return int(sys.argv[index]) if index < len( sys.argv ) else default
@@ -143,7 +143,7 @@ class IEDAS(object):
         return logger
 
     def getLogFile( self, index ):
-        log_file = os.path.expanduser('~/.edas/pyedas-{0}.log'.format(index))
+        log_file = os.path.expanduser('/tmp/' + getpass.getuser() + '/logs/pyedas-{0}.log'.format(index))
         try: os.remove(log_file)
         except Exception: pass
         return log_file
