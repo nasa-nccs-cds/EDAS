@@ -139,6 +139,8 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
     case None => None
   }
 
+  def getGridRefInput: Option[OperationDataInput] = inputs.values.find( _.matchesReference( getGridObjectRef ) ).asInstanceOf[Option[OperationDataInput]]
+
   def getSubworkflowCRS: Option[String] = {
     val antecedents = rootNode.antecedents( (node: DAGNode) => !WorkflowNode(node).isMergedSubworkflowRoot  ) += rootNode
     val optCrsNode = antecedents.find( node => WorkflowNode(node).operation.getConfiguration.exists { case (key, value) => key.toLowerCase == "crs" } )     // TODO: Check search ordering
@@ -410,9 +412,9 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
         case ( directInput: EDASDirectDataInput ) =>
           //          val opSection: Option[ma2.Section] = getOpSectionIntersection( directInput.getGrid, node )
           //          executionMgr.serverContext.spark.getRDD( uid, directInput, batchRequest.request, opSection, node, batchIndex, kernelContext ) map ( result => uid -> result )
-
+          val gridRefInput: OperationDataInput =  batchRequest.getGridRefInput.getOrElse( throw new Exception("No grid ref input found for domainRDDPartition") )
           val varSpec = directInput.getRDDVariableSpec(uid)
-          val opSection: Option[CDSection] = getOpSectionIntersection( directInput.getGrid, node ).map( CDSection(_) )
+          val opSection: Option[CDSection] = getOpSectionIntersection( gridRefInput.getGrid, node ).map( CDSection(_) )
           logger.info("\n\n ----------------------- getKernelInputs: NODE %s, VarSpec: %s, batch id: %d  -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(batchRequest) ) )
           batchRequest.getKernelInputs( executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex ).map( uid -> _ )
 

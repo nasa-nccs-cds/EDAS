@@ -771,7 +771,7 @@ object HeapFltArray extends Loggable {
   }
   def apply( ucarray: ucar.ma2.Array, origin: Array[Int], gridSpec: String, metadata: Map[String,String], missing: Float ): HeapFltArray = HeapFltArray( CDArray(ucarray,missing), origin, gridSpec, metadata, None )
 
-  def apply( tvar: TransVar, _gridSpec: Option[String] = None ): HeapFltArray = {
+  def apply( tvar: TransVar, _gridSpec: Option[String] = None, _origin: Option[Array[Int]] = None ): HeapFltArray = {
     val buffer = tvar.getDataBuffer()
     val buff_size = buffer.capacity()
     val undef = buffer.getFloat(buff_size-4)
@@ -780,7 +780,8 @@ object HeapFltArray extends Loggable {
     val ucarray: ma2.Array = ma2.Array.factory( ma2.DataType.FLOAT, tvar.getShape, data_buffer )
     val floatArray: CDFloatArray = CDFloatArray.cdArrayConverter(CDArray[Float](ucarray, undef ) )
     val gridSpec = _gridSpec.getOrElse("file:/" + tvar.getMetaData.get("gridfile"))
-    new HeapFltArray( tvar.getShape, tvar.getOrigin, floatArray.getStorageArray, Some(undef), gridSpec, tvar.getMetaData.asScala.toMap )
+    val origin = _origin.getOrElse(tvar.getOrigin)
+    new HeapFltArray( tvar.getShape, origin, floatArray.getStorageArray, Some(undef), gridSpec, tvar.getMetaData.asScala.toMap )
   }
   def empty(rank:Int) = HeapFltArray( CDFloatArray.empty, Array.fill(rank)(0), "", Map.empty[String,String], None )
   def toHeapFloatArray( fltBaseArray: ArrayBase[Float] ): HeapFltArray = fltBaseArray match {

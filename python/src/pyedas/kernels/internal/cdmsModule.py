@@ -25,6 +25,11 @@ class RegridKernel(CDMSKernel):
         if ( (latInterval == None) and (lonInterval == None)  ):  return baseGrid
         else: return baseGrid.subGrid( latInterval, lonInterval )
 
+    def getAxisBounds(self, gridSection):
+        subGridSpec = gridSection.split(",")[-2:]
+        subGridIndices = [map(int, x.split(':')) for x in subGridSpec]
+        return ( [subGridIndices[0][0],subGridIndices[0][1]+1], [subGridIndices[1][0],subGridIndices[1][1]+1]  )
+
     def executeOperations(self, task, _inputs):
         """
         :type task: Task
@@ -51,9 +56,8 @@ class RegridKernel(CDMSKernel):
             if( gridSpec ):
                 toGrid = self.getGrid( gridSpec )
                 if( gridSection ):
-                    subGridSpec = gridSection.split(",")[-2:]
-                    subGridIndices = [ map(int,x.split(':')) for x in subGridSpec ]
-                    toGrid = toGrid.subGrid( subGridIndices[0], subGridIndices[1] )
+                    ( bounds0, bounds1 ) = self.getAxisBounds( gridSection )
+                    toGrid = toGrid.subGrid( bounds0, bounds1 )
             else:
                 if( "gaussian" in gridType ):
                     toGrid = cdms2.createGaussianGrid( shape[0] )
@@ -77,6 +81,7 @@ class RegridKernel(CDMSKernel):
             inlatBounds, inlonBounds = ingrid.getBounds()
             self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) )
             self.logger.info( " >> in LON Bounds shape: " + str(inlonBounds.shape) )
+            self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
             outlatBounds, outlonBounds = toGrid.getBounds()
             self.logger.info( " >> out LAT Bounds shape: " + str(outlatBounds.shape) )
             self.logger.info( " >> out LON Bounds shape: " + str(outlonBounds.shape) )

@@ -518,7 +518,7 @@ class DataFragmentSpec(val uid: String = "",
         <input uid={uid} varname={varname} longname={longname} units={units} roi={roi.toString} mask={maskId} >{collection.toXml}</input>
     }
   }
-  def matchesReference( fragRef: String ): Boolean = fragRef.equalsIgnoreCase(collection.id) || fragRef.equalsIgnoreCase( uid.split('-').head )
+  def matchesReference( objRefOpt: Option[String] ): Boolean = objRefOpt.fold(true)( objRef => objRef.equalsIgnoreCase(collection.id) || objRef.equalsIgnoreCase( uid.split('-').head ) )
   def getMetadata( key: String ): Option[String] = _metadata.get( key )
 
   def domainSection: Option[ DataFragmentSpec ] = {

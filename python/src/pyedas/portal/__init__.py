@@ -1,7 +1,8 @@
 import logging, os, getpass
 
-lname = "edas-python-portal"
-log_file = os.path.expanduser( '/tmp/' + getpass.getuser() + '/logs/' + lname + '.log')
+lname = "portal"
+lFilename = "edas-python-" + lname
+log_file = os.path.expanduser( '/tmp/' + getpass.getuser() + '/logs/' + lFilename + '.log')
 try: os.remove(log_file)
 except Exception: pass
 

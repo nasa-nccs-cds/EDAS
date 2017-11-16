@@ -55,7 +55,7 @@ object RegridSpec {
   def apply( target_input: DataFragmentSpec  ): RegridSpec = new RegridSpec( target_input.collection.getGridFilePath, target_input.cdsection.toSection.toString  )
 }
 class RegridSpec( val gridFile: String, val subgrid: String ) extends Serializable {
-
+  def test = 0;
 }
 
 class BatchRequest( val request: RequestContext, val workflow: WorkflowContext ) extends Loggable  {
@@ -65,6 +65,7 @@ class BatchRequest( val request: RequestContext, val workflow: WorkflowContext )
   val nodeId = node.getNodeId
   private val _inputUids = mutable.HashSet.empty[String]
   def getRegridSpec: Option[RegridSpec] = optPartitioner.map( _.regridSpec )
+  def getGridRefInput: Option[OperationDataInput] = workflow.getGridRefInput
 
   private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
     case None => Unit
@@ -195,7 +196,7 @@ class BatchRequest( val request: RequestContext, val workflow: WorkflowContext )
     if( fragments.isEmpty ) { None  }
     else {
       val crsOpt = workflow.getGridObjectRef
-      val crsFrags =  crsOpt.fold(fragments)( crs => fragments.filter( _.matchesReference(crs) ) )
+      val crsFrags = fragments.filter( _.matchesReference(crsOpt) )
       assert( crsFrags.nonEmpty, "No inputs matching crs: " + workflow.crs.toString + " in subworkflow with root node " + workflow.rootNode.getNodeId )
       val largestInput: DataFragmentSpec = crsFrags.foldLeft(crsFrags.head)((x, y) => if(x.getSize > y.getSize) x else y )
       Some( new EDASPartitioner( largestInput.uid, largestInput.roi, request.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles, RegridSpec(largestInput) ) )

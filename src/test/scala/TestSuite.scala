@@ -120,18 +120,19 @@ class DefaultTestSuite extends EDASTestSuite {
       }
   }}
 
-  test("DiffWithRegrid")  { if(test_regrid) {
+  test("DiffWithRegrid")   {
     print( s"Running test DiffWithRegrid" )
     val GISS_mon_variable   = s"""{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml","name":"tas:v0"}"""
     val MERRA2_mon_variable = s"""{"uri":"collection:/giss_r1i1p1","name":"tas:v1"}"""
     val datainputs =
       s"""[   variable=[$GISS_mon_variable,$MERRA2_mon_variable],
-              domain=[  {"name":"d0","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}} ],
-              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d0","crs":"~giss_r1i1p1"}]]""".stripMargin.replaceAll("\\s", "")
+              domain=[  {"name":"d0","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}},
+                        {"name":"d1","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"},"lat":{"start":0,"end":40,"system":"values"},"lon":{"start":0,"end":40,"system":"values"}} ],
+              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d1","crs":"~giss_r1i1p1"}]]""".stripMargin.replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
     println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
-  }}
+  }
 
   test("TimeConvertedDiff")  { if( use_6hr_data ) {
     print( s"Running test TimeConvertedDiff" )

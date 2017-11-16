@@ -996,31 +996,51 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
   override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
     if( mapCombineOp.isDefined ) {
       val t0 = System.nanoTime
-      val input_keys = inputs.elements.keys.map( key => if(key.contains('.')) { key.split('.').dropRight(1).mkString(".") } else { key } )
-      val keyMap: Map[String,Iterable[String]] = Map( input_keys.map( key => key -> inputs.elements.keys.filter( _.startsWith(key) ) ).toSeq: _* )
-      val dataMap: Map[String,Map[Int,HeapFltArray]] = keyMap.mapValues( keys => Map( keys.map( key => ( if(key.contains('.')) { key.split('.').last.toInt } else { 0 } ) -> inputs.elements.getOrElse(key,HeapFltArray.empty(0)) ).toSeq: _* ) )
-      val input_array_maps: List[Map[Int,HeapFltArray]] = context.operation.inputs.flatMap(id => dataMap.get(id))
-//      val input_arrays: List[ArrayBase[Float]] = context.operation.inputs.map(id => inputs.findElements(id)).foldLeft(List[ArrayBase[Float]]())(_ ++ _)
-      assert(input_array_maps.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      if( input_array_maps.forall( _.size == 1 ) ) {
-        val input_arrays = input_array_maps.map( _.head._2 )
-        val ma2_input_arrays = input_arrays.map( _.toFastMaskedArray )
-        val result_array: CDFloatArray = ma2_input_arrays.tail.fold(ma2_input_arrays.head)(_.merge(_, mapCombineOp.get)).toCDFloatArray
-        val result_metadata = input_arrays.head.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
-        logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
-        context.addTimestamp("Map Op complete")
-        RDDRecord(TreeMap(context.operation.rid -> HeapFltArray(result_array, input_arrays(0).origin, result_metadata, None)), inputs.metadata, inputs.partition)
-      } else {
-        val startIndex = inputs.metadata.getOrElse("startIndex","0").toInt
-        val result_array: HeapFltArray = mergeBinnedArrays( input_array_maps, context, mapCombineOp.get, startIndex )
-        val result_metadata = result_array.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
-        logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
-        context.addTimestamp("Map Op complete")
-        RDDRecord( TreeMap( context.operation.rid -> result_array ), inputs.metadata, inputs.partition)
-      }
+      assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
+      val input_arrays: Iterable[HeapFltArray] = inputs.elements.values
+      val ma2_input_arrays = input_arrays.map( _.toFastMaskedArray )
+      val result_array: CDFloatArray = ma2_input_arrays.tail.fold(ma2_input_arrays.head)(_.merge(_, mapCombineOp.get)).toCDFloatArray
+      val result_metadata = input_arrays.head.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
+      logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
+      context.addTimestamp("Map Op complete")
+      RDDRecord(TreeMap(context.operation.rid -> HeapFltArray(result_array, input_arrays.head.origin, result_metadata, None)), inputs.metadata, inputs.partition)
     } else { inputs }
   }
 }
+
+
+//abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(options)  {
+//  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
+//    if( mapCombineOp.isDefined ) {
+//      val t0 = System.nanoTime
+////      val input_keys = inputs.elements.keys
+////      val input_keys = inputs.elements.keys.map( key => if(key.contains('.')) { key.split('.').dropRight(1).mkString(".") } else { key } )
+////      val keyMap: Map[String,Iterable[String]] = Map( input_keys.map( key => key -> inputs.elements.keys.filter( _.startsWith(key) ) ).toSeq: _* )
+////      val dataMap: Map[String,Map[Int,HeapFltArray]] = keyMap.mapValues( keys => Map( keys.map( key => ( if(key.contains('.')) { key.split('.').last.toInt } else { 0 } ) -> inputs.elements.getOrElse(key,HeapFltArray.empty(0)) ).toSeq: _* ) )
+////      val input_array_maps: List[Map[Int,HeapFltArray]] = context.operation.inputs.flatMap(id => dataMap.find( { case (key,value) => key.endsWith(id) } ).map( _._2 ) )
+////      val input_arrays: List[ArrayBase[Float]] = context.operation.inputs.map(id => inputs.findElements(id)).foldLeft(List[ArrayBase[Float]]())(_ ++ _)
+//
+//      val inputMap = inputs.elements
+//      assert(inputMap.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
+//      if( input_array_maps.forall( _.size == 1 ) ) {
+//        val input_arrays = input_array_maps.map( _.head._2 )
+//        val ma2_input_arrays = input_arrays.map( _.toFastMaskedArray )
+//        val result_array: CDFloatArray = ma2_input_arrays.tail.fold(ma2_input_arrays.head)(_.merge(_, mapCombineOp.get)).toCDFloatArray
+//        val result_metadata = input_arrays.head.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
+//        logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
+//        context.addTimestamp("Map Op complete")
+//        RDDRecord(TreeMap(context.operation.rid -> HeapFltArray(result_array, input_arrays(0).origin, result_metadata, None)), inputs.metadata, inputs.partition)
+//      } else {
+//        val startIndex = inputs.metadata.getOrElse("startIndex","0").toInt
+//        val result_array: HeapFltArray = mergeBinnedArrays( input_array_maps, context, mapCombineOp.get, startIndex )
+//        val result_metadata = result_array.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
+//        logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
+//        context.addTimestamp("Map Op complete")
+//        RDDRecord( TreeMap( context.operation.rid -> result_array ), inputs.metadata, inputs.partition)
+//      }
+//    } else { inputs }
+//  }
+//}
 
 //abstract class MultiRDDKernel( options: Map[String,String] ) extends Kernel(options)  {
 //
@@ -1069,7 +1089,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
         val resultItems = for (input_array <- regrid_arrays) yield {
           val tvar = worker.getResult
-          val result = HeapFltArray( tvar, Some(regridSpec.gridFile) )
+          val result = HeapFltArray( tvar, Some(regridSpec.gridFile), Some(inputs.partition.origin) )
           context.operation.rid + ":" + input_array.uid -> result
         }
         val array_metadata = inputs.metadata ++ input_arrays.head.metadata ++ List("uid" -> context.operation.rid, "gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid  )
