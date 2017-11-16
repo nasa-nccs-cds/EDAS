@@ -139,6 +139,13 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
     case None => None
   }
 
+  def getDataFragmentSpec( id: String ): Option[DataFragmentSpec] = inputs.get( id ) flatMap  {
+    case opDataInput: OperationDataInput => Some(opDataInput.fragmentSpec);
+    case _ => None
+  }
+
+  def getCollectionIds: List[String] = Set( inputs.keys.flatMap( id => getDataFragmentSpec(id)).map ( _.collection.collId ).toSeq: _* ).toList
+
   def getGridRefInput: Option[OperationDataInput] = inputs.values.find( _.matchesReference( getGridObjectRef ) ).asInstanceOf[Option[OperationDataInput]]
 
   def getSubworkflowCRS: Option[String] = {
@@ -204,9 +211,19 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     val productNodeOpts = for( subworkflow_root_node <- subworkflow_root_nodes ) yield {
       val subWorkflowInput = new WorkflowContext( getSubworkflowInputs( requestCx, subworkflow_root_node, true ), subworkflow_root_node )
       logger.info( "\n\n ----------------------- Execute PRODUCT Node: %s -------\n".format( subworkflow_root_node.getNodeId ))
-      generateProduct( requestCx, subWorkflowInput )
+      generateProduct( requestCx, safety_check( subWorkflowInput ) )
     }
     productNodeOpts.flatten
+  }
+
+  def safety_check ( workflowCx: WorkflowContext ): WorkflowContext = {
+    import DomainAxis._
+    if( workflowCx.getCollectionIds.length > 1 ) {
+      for( domain <- request.domainMap.values; axis <- domain.axes ) {
+        if( axis.system=="indices" ) { throw new Exception( "Use of 'system'='indices' is not currently permitted in workflows with inputs from different collections") }
+      }
+    }
+    workflowCx
   }
 
   def mapReduceBatch( batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ): Option[ ( RecordKey, RDDRecord ) ] = {

@@ -127,7 +127,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[   variable=[$GISS_mon_variable,$MERRA2_mon_variable],
               domain=[  {"name":"d0","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}},
-                        {"name":"d1","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"},"lat":{"start":0,"end":40,"system":"values"},"lon":{"start":0,"end":40,"system":"values"}} ],
+                        {"name":"d1","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":50,"system":"indices"},"lon":{"start":30,"end":40,"system":"indices"}} ],
               operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d1","crs":"~giss_r1i1p1"}]]""".stripMargin.replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
