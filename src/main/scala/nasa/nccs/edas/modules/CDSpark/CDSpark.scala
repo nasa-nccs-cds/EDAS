@@ -68,7 +68,7 @@ class partition extends Kernel() {
 }
 
 class compress extends Kernel() {
-  override val status = KernelStatus.restricted
+  override val status = KernelStatus.public
   val inputs = List(WPSDataInput("input variable", 1, 1))
   val outputs = List(WPSProcessOutput("operation result"))
   val title = "Compress"

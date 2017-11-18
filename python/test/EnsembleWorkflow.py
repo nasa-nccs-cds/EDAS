@@ -13,21 +13,21 @@ try:
     portal = EDASPortal(  edas_server, request_port, response_port )
     response_manager = portal.createResponseManager()
     datainputs = """[   domain=[
-                            {"name":"d0","time":{"start":"1980-01-01T00:00:00","end":"1980-12-31T23:00:00","system":"values"}}
+                            { "name":"d0", "time":{"start":"1980-01-01T00:00:00","end":"1980-12-31T23:00:00","system":"values"} }
                         ],
                         variable=[
-                            {"uri":"collection:/ecmwf_ifs-cy31r2_6hr_ta","name":"ta:v1","domain":"d0"},
-                            {"uri":"collection:/geos-5_merra_6hr_ta","name":"ta:v2","domain":"d0"},
-                            {"uri":"collection:/geos-5_merra2_6hr_ta","name":"ta:v3","domain":"d0"},
-                            {"uri":"collection:/jma_jra-55_6hr_ta","name":"ta:v4","domain":"d0"}
+                            { "uri":"collection:/ecmwf_ifs-cy31r2_6hr_ta", "name":"ta:v1" },
+                            { "uri":"collection:/geos-5_merra_6hr_ta", "name":"ta:v2" },
+                            { "uri":"collection:/geos-5_merra2_6hr_ta", "name":"ta:v3" },
+                            { "uri":"collection:/jma_jra-55_6hr_ta", "name":"ta:v4" }
                         ],
                         operation=[
-                            {"name":"CDSpark.compress","id":"cmp","input":"v1,v2,v3,v4","plev":"100000, 97500, 95000, 92500, 90000, 87500, 85000, 82500, 80000, 77500, 75000, 70000, 65000, 60000, 55000, 50000, 45000, 40000, 35000, 30000, 25000, 20000, 15000, 10000" },
-                            {"name":"CDSpark.eAve","input":"cmp","domain":"d0","crs":"~v4"}
+                            { "name":"CDSpark.compress", "id":"cmp", "input":"v1,v2,v3,v4", "plev":"100000, 97500, 95000, 92500, 90000, 87500, 85000, 82500, 80000, 77500, 75000, 70000, 65000, 60000, 55000, 50000, 45000, 40000, 35000, 30000, 25000, 20000, 15000, 10000" },
+                            { "name":"CDSpark.eAve", "input":"cmp", "domain":"d0", "crs":"~v4" }
                         ]
-                    ]"""
+                    ]""".stripMargin.replaceAll("\\s", "")
 
-    rId1 = portal.sendMessage("execute", [ "WPS", datainputs, '{ "period":"month" }' ] )
+    rId1 = portal.sendMessage("execute", [ "WPS", datainputs ] )
     responses = response_manager.getResponses(rId1)
     vars = response_manager.getResponseVariables(rId1)
 

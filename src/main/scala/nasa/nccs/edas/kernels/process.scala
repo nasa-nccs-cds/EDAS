@@ -1079,7 +1079,10 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val (acceptable_arrays, regrid_arrays) = input_arrays.partition(_.gridFilePath.equals(regridSpec.gridFile))
       if (regrid_arrays.isEmpty) { inputs } else {
         for (input_array <- acceptable_arrays) { worker.sendArrayMetadata( input_array.uid, input_array) }
-        for (input_array <- regrid_arrays)     { worker.sendRequestInput(input_array.uid, input_array) }
+        for (input_array <- regrid_arrays) {
+          logger.info( s"Sending Array ${input_array.uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]")
+          worker.sendRequestInput( input_array.uid, input_array )
+        }
         val acceptable_array_map = Map(acceptable_arrays.map(array => array.uid -> array): _*)
 
         logger.info("Gateway: Executing operation %s".format( context.operation.identifier ) )
