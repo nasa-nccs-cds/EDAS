@@ -193,7 +193,7 @@ public abstract class Worker {
     }
 
     private void _sendArrayData( String id, int[] origin, int[] shape, byte[] data, Map<String, String> metadata ) {
-        logger.debug( String.format("*%* Kernel: Sending data to worker for input %s, nbytes=%d, origin=%s, shape=%s, metadata=%s", id, data.length, ia2s(origin), ia2s(shape), m2s(metadata) ));
+        logger.debug( String.format(">>>---> Kernel: Sending data to worker for input %s, nbytes=%d, origin=%s, shape=%s, metadata=%s", id, data.length, ia2s(origin), ia2s(shape), m2s(metadata) ));
         List<String> slist = Arrays.asList( "array", id, ia2s(origin), ia2s(shape), m2s(metadata), withData );
         String header = StringUtils.join(slist,"|");
         sendDataPacket( header, data );
