@@ -50,7 +50,6 @@ object CDS2ExecutionManager extends Loggable {
 
   def shutdown() = {
     print( "Shutting down CDS2ExecutionManager")
-    shutdown_python_workers()
     cleanup_spark_workers()
   }
 
