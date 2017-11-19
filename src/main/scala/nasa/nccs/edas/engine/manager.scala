@@ -55,6 +55,7 @@ object CDS2ExecutionManager extends Loggable {
 
   def shutdown_python_workers() = {
     import sys.process._
+    logger.info( "Shutting down python workers.")
     val slaves_file = Paths.get( sys.env("SPARK_HOME"), "conf", "slaves" ).toFile
     val shutdown_script = Paths.get( sys.env("HOME"), ".edas", "sbin", "shutdown_python_worker.sh" ).toFile
     if( slaves_file.exists && slaves_file.canRead ) {
@@ -75,6 +76,7 @@ object CDS2ExecutionManager extends Loggable {
 
   def cleanup_spark_workers() = {
     import sys.process._
+    logger.info( "Cleaning up spark workers.")
     val slaves_file = Paths.get( sys.env("SPARK_HOME"), "conf", "slaves" ).toFile
     val shutdown_script = Paths.get( sys.env("HOME"), ".edas", "sbin", "cleanup_spark_workers.sh" ).toFile
     if( slaves_file.exists && slaves_file.canRead ) {
