@@ -75,7 +75,7 @@ class BatchRequest( val request: RequestContext, val workflow: WorkflowContext )
       val batch = partitions.getBatch(batchIndex)
       val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec(partition, tgrid))
       if (rddPartSpecs.length > 0) {
-        logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
+        logger.info("\n **************************************************************** \n ---> Processing Batch [%d]: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
         val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
         val recordSpecs = rddPartSpecs.flatMap(_.getRDDRecordSpecs())
         val parallelized_rddspecs: RDD[(RecordKey,DirectRDDRecordSpec)] = serverContext.spark.sparkContext parallelize recordSpecs keyBy (_.timeRange) partitionBy rdd_partitioner
