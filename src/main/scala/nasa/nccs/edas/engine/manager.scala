@@ -83,7 +83,7 @@ object CDS2ExecutionManager extends Loggable {
     if( slaves_file.exists && slaves_file.canRead ) {
       val shutdown_futures = for (slave <- Source.fromFile(slaves_file).getLines(); slave_node = slave.trim; if !slave_node.isEmpty && !slave_node.startsWith("#") ) yield  {
         val remote_shutdown_script = "ssh %s \"%s\"".format(slave_node,shutdown_script.toString)
-        print( s"Cleaning up spark worker ${slave_node} with shutdown script: '${remote_shutdown_script}'"  )
+        print( s"\nCleaning up spark worker ${slave_node} with shutdown script: '${remote_shutdown_script}'"  )
         Future {  try { remote_shutdown_script ! }
         catch { case err: Exception => println( "Error shutting down spark workers on slave_node '" + slave_node + "' using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
         }
