@@ -70,6 +70,8 @@ lazy val edasStandaloneRunScript = settingKey[File]("The edas spark-cluster star
 lazy val edasDefaultStandaloneRunScript = settingKey[File]("The default edas spark-cluster startup script")
 lazy val edasPythonShutdownScript = settingKey[File]("The edas python worker shutdown script")
 lazy val edasDefaultPythonShutdownScript = settingKey[File]("The default edas python worker shutdown script")
+lazy val edasSparkCleanupScript = settingKey[File]("The edas spark worker cleanup script")
+lazy val edasDefaultSparkCleanupScript = settingKey[File]("The default edas spark worker cleanup script")
 lazy val edasSetupScript = settingKey[File]("The edas setup runtime script")
 lazy val edasDefaultSetupScript = settingKey[File]("The default edas setup runtime script")
 lazy val edasLocalCollectionsFile = settingKey[File]("The edas local Collections file")
@@ -124,6 +126,8 @@ edasStandaloneRunScript := edas_sbin_dir.value / "startup_edas_standalone.sh"
 edasDefaultStandaloneRunScript := baseDirectory.value / "bin" / "startup_edas_standalone.sh"
 edasPythonShutdownScript := edas_sbin_dir.value / "shutdown_python_worker.sh"
 edasDefaultPythonShutdownScript := baseDirectory.value / "bin" / "shutdown_python_worker.sh"
+edasSparkCleanupScript := edas_sbin_dir.value / "cleanup_spark_workers.sh"
+edasDefaultSparkCleanupScript := baseDirectory.value / "bin" / "cleanup_spark_workers.sh"
 edasSetupScript := edas_sbin_dir.value / "setup_runtime.sh"
 edasDefaultSetupScript := baseDirectory.value / "bin" / "setup_runtime.sh"
 
@@ -147,6 +151,8 @@ upscr := {
   copy( edasDefaultPythonRunScript.value.toPath, edasPythonRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
   println("Copying default python shutdown script: " + edasDefaultPythonShutdownScript.value.toString )
   copy( edasDefaultPythonShutdownScript.value.toPath, edasPythonShutdownScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
+  println("Copying default spark cleanup script: " + edasDefaultSparkCleanupScript.value.toString )
+  copy( edasDefaultSparkCleanupScript.value.toPath, edasSparkCleanupScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
   println("Copying default edas spark-cluster startup script: " + edasDefaultStandaloneRunScript.value.toString  + " to " + edasStandaloneRunScript.value.toString )
   copy( edasDefaultStandaloneRunScript.value.toPath, edasStandaloneRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
   if( !edasSetupScript.value.exists() ) {

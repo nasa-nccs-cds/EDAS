@@ -50,6 +50,7 @@ object CDS2ExecutionManager extends Loggable {
 
   def shutdown() = {
     shutdown_python_workers()
+    cleanup_spark_workers()
   }
 
   def shutdown_python_workers() = {
@@ -69,6 +70,26 @@ object CDS2ExecutionManager extends Loggable {
       catch { case err: Exception => println( "Error shutting down local python workers using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
     } catch {
       case err: Exception => logger.error( "Error shutting down python workers: " + err.toString )
+    }
+  }
+
+  def cleanup_spark_workers() = {
+    import sys.process._
+    val slaves_file = Paths.get( sys.env("SPARK_HOME"), "conf", "slaves" ).toFile
+    val shutdown_script = Paths.get( sys.env("HOME"), ".edas", "sbin", "cleanup_spark_workers.sh" ).toFile
+    if( slaves_file.exists && slaves_file.canRead ) {
+      val shutdown_futures = for (slave <- Source.fromFile(slaves_file).getLines(); slave_node = slave.trim; if !slave_node.isEmpty && !slave_node.startsWith("#") ) yield  {
+        Future {  try { "ssh %s \"%s\"".format(slave_node,shutdown_script.toString) ! }
+        catch { case err: Exception => println( "Error shutting down spark workers on slave_node '" + slave_node + "' using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
+        }
+      }
+      Future.sequence( shutdown_futures )
+    } else try {
+      logger.info( "No slaves file found, shutting down python workers locally:")
+      try { shutdown_script.toString ! }
+      catch { case err: Exception => println( "Error cleaning up local spark workers using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
+    } catch {
+      case err: Exception => logger.error( "Error cleaning up spark workers: " + err.toString )
     }
   }
 
