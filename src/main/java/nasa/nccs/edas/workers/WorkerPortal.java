@@ -64,20 +64,4 @@ public abstract class WorkerPortal extends Thread {
         while( !busyWorkers.isEmpty() ) { busyWorkers.poll().quit(); }
         try { Thread.sleep(2000); } catch ( Exception ex ) {;}
     }
-
-    private void printPythonLog( String ltype ) {
-        try {
-            Path path = FileSystems.getDefault().getPath(System.getProperty("user.home"), ".edas", ltype + ".log");
-            BufferedReader br = new BufferedReader(new FileReader(path.toString()));
-            logger.info( "\tPYTHON LOG: " + ltype + "-" );
-            String line = br.readLine();
-            while (line != null) {
-                System.out.println( line );
-                line = br.readLine();
-            }
-            br.close();
-        } catch ( IOException ex ) {
-            logger.info( "Error reading log file : " + ex.toString() );
-        }
-    }
 }

@@ -179,7 +179,7 @@ def getEDASbinDir: File = {
 }
 
 def getEDASlogsDir: File = {
-  val log_dir =  file(System.getProperty("user.home")) / ".edas" / "logs";
+  val log_dir =  file("/tmp") / System.getProperty("user.name") / "logs";
   log_dir.mkdirs();
   log_dir
 }
