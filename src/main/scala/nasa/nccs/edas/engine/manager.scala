@@ -83,7 +83,7 @@ object CDS2ExecutionManager extends Loggable {
         val remote_shutdown_script = "ssh %s bash -c \"'pkill -u $USER java; pkill -u $USER java'\"".format(slave_node)
         print( s"\nCleaning up spark worker ${slave_node} with shutdown script: '${remote_shutdown_script}'"  )
         try { remote_shutdown_script ! }
-        catch { case err: Exception => println( "Error shutting down spark workers on slave_node '" + slave_node + "' using shutdown script '" + shutdown_script.toString + "': " + err.toString ); }
+        catch { case err: Exception => println( "Error shutting down spark workers on slave_node '" + slave_node + "' using shutdown script '" + remote_shutdown_script.toString + "': " + err.toString ); }
       }
     } else try {
       logger.info( "No slaves file found, shutting down python workers locally:")
