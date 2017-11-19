@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
-import nasa.nccs.edas.engine.ExecutionCallback
+import nasa.nccs.edas.engine.{CDS2ExecutionManager, ExecutionCallback}
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.loaders.Collections.refreshCollectionList
 import nasa.nccs.edas.portal.EDASApplication.logger
@@ -203,6 +203,12 @@ object EDASApplication extends Loggable {
     sys.exit();
   }
 
+}
+
+object SparkCleanup extends Loggable {
+  def main(args: Array[String]): Unit = {
+    CDS2ExecutionManager.cleanup_spark_workers()
+  }
 }
 
 object TestApplication extends Loggable {
