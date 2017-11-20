@@ -1,6 +1,6 @@
 package nasa.nccs.edas.engine.spark
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import nasa.nccs.caching._
 import nasa.nccs.cdapi.cdm._
@@ -20,8 +20,10 @@ import java.lang.management.ManagementFactory
 import com.sun.management.OperatingSystemMXBean
 import nasa.nccs.cdapi.tensors.CDCoordMap
 import ucar.nc2.dataset.CoordinateAxis1DTime
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.io.Source
 
 object CDSparkContext extends Loggable {
   import org.apache.log4j.Logger
@@ -97,6 +99,15 @@ object CDSparkContext extends Loggable {
       .set("spark.kryoserializer.buffer.max", "1000m" )
 //      .set("spark.driver.maxResultSize", "8000m" )
       .registerKryoClasses( Array(classOf[DirectRDDRecordSpec], classOf[RecordKey], classOf[RDDRecord], classOf[DirectRDDVariableSpec], classOf[CDSection], classOf[HeapFltArray], classOf[Partition], classOf[CDCoordMap] ) )
+
+    val sparkConfigFile: Path = Paths.get( System.getenv("SPARK_HOME"), "conf", "spark-defaults.conf" )
+    for ( raw_line <- Source.fromFile( sparkConfigFile.toFile ).getLines; line = raw_line.trim; if !(line.startsWith("#") || line.isEmpty); keyVal = line.split("\\s+") ) {
+      try{
+        val (key, value) = ( keyVal(0).trim, keyVal(1).trim )
+        sc.set( key, value )
+        logger.info( s"Add spark config value: ${key} -> ${value}")
+      } catch { case ex: Exception => _ }
+    }
 
     if( enableMetrics ) sc.set("spark.metrics.conf", getClass.getResource("/spark.metrics.properties").getPath )
     appParameters( "spark.master" ) match {
