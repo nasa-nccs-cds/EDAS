@@ -56,7 +56,7 @@ class Kernel:
         return self.executeOperation(task,input)
 
     def validate( self, input ) :
-        if( input.array == None ):
+        if( input.array is None ):
             raise Exception( "Missing data for input " + str(input.name) + " in Kernel " + str(self._spec) )
 
     def executeOperation( self, task, input ): raise Exception( "Attempt to execute Kernel with undefined executeOperation method")
@@ -66,13 +66,13 @@ class Kernel:
 
     def getAxes( self, metadata ):
         axes = metadata.get("axes")
-        if axes == None: return None
+        if axes is None: return None
         else: return tuple( [ int(item) for item in axes ] )
 
     def saveGridFile( self, resultId, variable  ):
         grid = variable.getGrid()
         outpath = None
-        if( grid != None ):
+        if not (grid is None):
             axes = variable.getAxisList()
             outdir = os.path.dirname( variable.gridfile )
             outpath = os.path.join(outdir, resultId + ".nc" )

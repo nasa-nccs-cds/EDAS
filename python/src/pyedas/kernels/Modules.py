@@ -37,7 +37,7 @@ class KernelModule(OperationModule):
     def executeTask( self, task, inputs ):
         key = task.op.lower()
         kernel = self._kernels.get( key )
-        if( kernel == None ): raise Exception( "Unrecognized kernel key: "+ key +", registered kernels = " + ", ".join( self._kernels.keys() ) )
+        if( kernel is None ): raise Exception( "Unrecognized kernel key: "+ key +", registered kernels = " + ", ".join( self._kernels.keys() ) )
         self.logger.info( "Executing Kernel: " + kernel.name() )
         action = task.metadata.get("action","execute")
         if( action == "execute"): return kernel.executeTask(task, inputs)

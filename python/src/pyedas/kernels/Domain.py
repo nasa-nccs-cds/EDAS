@@ -192,7 +192,7 @@ class Region(JSONObject):
 
     def setStepSize( self, coord, step_size, axis ):
         axis_spec = self[ CDAxis.AXIS_LIST[ coord ] ]
-        if axis_spec == None:
+        if axis_spec is None:
             axis_spec = { 'config':{'system':'indices'}, 'bounds':[], 'axis':'time' }
             self[ CDAxis.AXIS_LIST[ coord ] ] = axis_spec
         c = axis_spec['config']

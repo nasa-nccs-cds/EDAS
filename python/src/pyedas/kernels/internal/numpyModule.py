@@ -63,7 +63,7 @@ class AverageKernel(Kernel):
         self.logger.info("  ~~~~~~~~~~~~~~~~~~~~~~~~~~ Execute Operations, inputs: " + str( task.inputs ) + ", task metadata = " + str(task.metadata) + ", axes = " + str(axes) )
         for input in kernel_inputs:
             t0 = time.time()
-            if( input.array == None ): raise Exception( "Missing data for input " + input.name + " in Average Kernel" )
+            if( input.array is None ): raise Exception( "Missing data for input " + input.name + " in Average Kernel" )
             result_array = input.array.sum( axis=axes,   keepdims=True )
             mask_array = input.array.count(axis=self.getAxes(task.metadata), keepdims=True )
             results.append( npArray.createResult( task, input, result_array.filled( input.array.fill_value )  ) )
@@ -88,9 +88,9 @@ class WeightedAverageKernel(Kernel):
         results = []
         for input_pair in inputs_with_weights:
             input = inputs.get( input_pair[0] )  # npArray
-            if( input == None ): raise Exception( "Can't find input " + input_pair[0] + " in numpyModule.WeightedAverageKernel")
+            if( input is None ): raise Exception( "Can't find input " + input_pair[0] + " in numpyModule.WeightedAverageKernel")
             else :
-                weights = inputs.get( input_pair[1] ).array if( input_pair[1] != None ) else None
+                weights = inputs.get( input_pair[1] ).array if not (input_pair[1] is None) else None
                 axes = self.getOrderedAxes(task,input)
                 self.logger.info("\n Executing average, input: " + str( input_pair[0] ) + ", shape = " + str(input.array.shape)+ ", task metadata = " + str(task.metadata) + " Input metadata: " + str( input.metadata ) )
                 t0 = time.time()
@@ -114,7 +114,7 @@ class WeightedAverageKernel(Kernel):
         dimensions = input.metadata.get("dimensions","").split(',')
         axis_map = { dimensions[axis]: axis for axis in axes }
         y_axis = axis_map.get("lat",None)
-        if( y_axis != None ):
+        if not ( y_axis is None ):
             y_axis_index = axes.index( y_axis )
             if( y_axis_index > 0 ):
                 axes[0], axes[y_axis_index] = axes[y_axis_index], axes[0]

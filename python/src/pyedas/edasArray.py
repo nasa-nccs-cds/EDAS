@@ -58,12 +58,12 @@ class CDArray:
     @abstractmethod
     def toBytes( self, dtype ): pass
 
-    def getAxisSection( self, axis ): return None if self.roi == None else self.roi.get( axis.lower(), None )
+    def getAxisSection( self, axis ): return None if self.roi is None else self.roi.get( axis.lower(), None )
 
     def parseRoi(self):
         roiSpec = self.metadata.get("roi")
         roiMap = {}
-        if( roiSpec != None ):
+        if not (roiSpec is None):
             self.logger.info(" ***->> Parsing ROI spec: {0}".format( roiSpec ) )
             for roiTok in roiSpec.split('+'):
                 axisToks = roiTok.split(',')
@@ -159,7 +159,7 @@ class npArray(CDArray):
             kargs[axis.id] = slice(*interval)
         return kargs
 
-    def nbytes(self): return self.array.nbytes if (self.array != None) else 0
+    def nbytes(self): return self.array.nbytes if not (self.array is None) else 0
     def array(self): return self.array
 
     def getGrid1(self):
@@ -179,7 +179,7 @@ class npArray(CDArray):
         gridfile = cdms2.open(self.gridFile)
         baseGrid = gridfile.grids.values()[0]
         (latInterval, lonInterval) = ( self.getAxisSection('y'), self.getAxisSection('x') )
-        if ( (latInterval == None) or (lonInterval == None)  ):  return baseGrid
+        if ( (latInterval is None) or (lonInterval is None)  ):  return baseGrid
         else: return baseGrid.subGrid( latInterval, lonInterval )
 
     def getVariable( self, gridFilePath = None ):
@@ -254,12 +254,12 @@ class cdmsArray(CDArray):
     def getGrid(self):
         baseGrid = self.variable.getGrid()
         (latInterval, lonInterval) = ( self.getAxisSection('y'), self.getAxisSection('x') )
-        if ( (latInterval == None) or (lonInterval == None)  ):  return baseGrid
+        if ( (latInterval is None) or (lonInterval is None)  ):  return baseGrid
         else: return baseGrid.subGrid( latInterval, lonInterval )
 
     def getGrid1(self):
         gridBnds = self.getGridBounds()
-        if ( gridBnds == None ):  return self.variable.getGrid()
+        if ( gridBnds is None ):  return self.variable.getGrid()
         else:
             (lataxis, lonaxis) = (self.variable.getLatitude(), self.variable.getLongitude())
             (latInterval, lonInterval) = (lataxis.mapInterval( gridBnds[0] ), lonaxis.mapInterval( gridBnds[1] ))

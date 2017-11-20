@@ -22,7 +22,7 @@ class RegridKernel(CDMSKernel):
         import cdms2
         gridfile = cdms2.open(gridFile)
         baseGrid = gridfile.grids.values()[0]
-        if ( (latInterval == None) and (lonInterval == None)  ):  return baseGrid
+        if ( (latInterval is None) and (lonInterval is None)  ):  return baseGrid
         else: return baseGrid.subGrid( latInterval, lonInterval )
 
     def getAxisBounds(self, gridSection):

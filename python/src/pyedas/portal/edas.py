@@ -263,7 +263,7 @@ class EDASPortal:
                 self.log( "Shutdown Response: " + response )
                 self.application_thread.term()
                 self.application_thread = None
-            if self.response_manager != None:
+            if not (self.response_manager is None):
                 self.log(  " Terminate Response Manager " )
                 self.response_manager.term()
                 self.response_manager = None
@@ -311,7 +311,7 @@ class AppThread(Thread):
             self.process.kill()
 
     def term(self):
-        if(self.process != None):
+        if not (self.process is None):
             self.process.terminate()
 
     def join(self):

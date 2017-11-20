@@ -32,7 +32,7 @@ class EnsembleWorkflowKernel(CDMSKernel):
         resultDir = task.metadata.get("resultDir")
 
         target_input = _inputs.get( target, None )
-        if( target_input == None ):
+        if( target_input is None ):
             raise Exception( "Must set the 'target' parameter in EnsembleWorkflowKernel to the id of the input that determines the output grid")
 
         outgrid = target_input.getGrid()
