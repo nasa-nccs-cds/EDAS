@@ -207,6 +207,7 @@ object EDASApplication extends Loggable {
 
 object SparkCleanup extends Loggable {
   def main(args: Array[String]): Unit = {
+    CDS2ExecutionManager.shutdown_python_workers()
     CDS2ExecutionManager.cleanup_spark_workers()
   }
 }

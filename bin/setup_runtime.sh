@@ -31,6 +31,8 @@ alias cdupy='cd $EDAS_HOME_DIR; python setup.py install; rm ~/.edas/logs/*.log; 
 alias rncml='rm $EDAS_CACHE_DIR/collections/NCML/*'
 alias rfrag='rm $EDAS_CACHE_DIR/fragment/*'
 alias sclean='cd $EDAS_HOME_DIR; sbt "runMain nasa.nccs.edas.portal.SparkCleanup"'
+alias espark='stop-all.sh; cd $EDAS_HOME_DIR; sbt "runMain nasa.nccs.edas.portal.SparkCleanup"'
+alias sspark='start-all.sh'
 
 umask 002
 
