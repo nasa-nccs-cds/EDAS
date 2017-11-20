@@ -89,7 +89,7 @@ object CDS2ExecutionManager extends Loggable {
       Future.sequence( shutdown_futures )
     } else try {
       logger.info( "No slaves file found, shutting down python workers locally:")
-      try { "bash -c \"'pkill -u $USER java; pkill -u $USER java'\"" ! }
+      try { "bash -c \"'pkill -u $USER python'\"" ! }
       catch { case err: Exception => println( "Error cleaning up local python workers: " + err.toString ); }
     } catch {
       case err: Exception => logger.error( "Error cleaning up python workers: " + err.toString )
@@ -103,7 +103,7 @@ object CDS2ExecutionManager extends Loggable {
     if( slaves_file.exists && slaves_file.canRead ) {
       val shutdown_futures = for (slave <- Source.fromFile(slaves_file).getLines(); slave_node = slave.trim; if !slave_node.isEmpty && !slave_node.startsWith("#") ) yield Future {
         print( s"\nCleaning up spark worker ${slave_node} " )
-        try { Seq("ssh", slave_node, "bash", "-c", "'pkill -u $USER java'" ).! }
+        try { Seq("ssh", slave_node, "bash", "-c", "'pkill -u $USER java; pkill -u $USER python'" ).! }
         catch { case err: Exception => println( "Error shutting down spark workers on slave_node '" + slave_node + ": " + err.toString ); }
       }
       Future.sequence( shutdown_futures )
