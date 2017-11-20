@@ -19,6 +19,7 @@ import java.lang.management.ManagementFactory
 
 import com.sun.management.OperatingSystemMXBean
 import nasa.nccs.cdapi.tensors.CDCoordMap
+import nasa.nccs.edas.engine.CDS2ExecutionManager.logger
 import ucar.nc2.dataset.CoordinateAxis1DTime
 
 import scala.collection.JavaConversions._
@@ -106,7 +107,7 @@ object CDSparkContext extends Loggable {
         val (key, value) = ( keyVal(0).trim, keyVal(1).trim )
         sc.set( key, value )
         logger.info( s"Add spark config value: ${key} -> ${value}")
-      } catch { case ex: Exception => _ }
+      } catch { case ex: Exception => logger.error( "Error parsing spark parameter '" + line + ": " + ex.toString ); }
     }
 
     if( enableMetrics ) sc.set("spark.metrics.conf", getClass.getResource("/spark.metrics.properties").getPath )
