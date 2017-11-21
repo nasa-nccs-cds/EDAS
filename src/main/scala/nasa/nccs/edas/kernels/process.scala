@@ -259,6 +259,34 @@ object KernelStatus {
   }
 }
 
+class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
+  private var _rdd = init_value
+  def map( kernel: Kernel, context: KernelContext ): Unit = {
+    _rdd = _rdd.mapValues( rec => rec ++ kernel.postRDDOp( kernel.map(context)(rec), context ) )
+  }
+  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+    node.mapReduce(_rdd,context,batchIndex)
+  }
+  def value: RDD[(RecordKey,RDDRecord)] = _rdd
+  def update = { _rdd.cache; _rdd.count }
+
+  private def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
+    _rdd.mapValues( rec => rec ++ kernelContext.addRddElements( vSpecs )(rec) )
+    update
+  }
+
+  private def addOperationInput( serverContext: ServerContext, record: RDDRecord, batchIndex: Int ): Unit = {
+    initializeInputsRDD( serverContext, batchIndex )
+    print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
+    if( _optInputsRDD.isDefined ) {
+      _optInputsRDD = _optInputsRDD map ( _.mapValues(rddRec => rddRec ++ record ) )
+    } else {
+      _optInputsRDD = Some( createUnpartitionedRDD( serverContext, record ) )
+    }
+  }
+
+}
+
 abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Loggable with Serializable with WPSProcess {
   import Kernel._
   val identifiers = this.getClass.getName.split('$').flatMap(_.split('.'))
