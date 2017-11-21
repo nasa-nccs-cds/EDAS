@@ -422,7 +422,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     val enableRegridding = true
     kernelContext.addTimestamp( "Generating RDD for inputs: " + batchRequest.workflowCx.inputs.keys.mkString(", "), true )
     val inputs: List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => batchRequest.workflowCx.inputs.get( uid ).map ( uid -> _ ) )
-    val rawRddList: List[(String,RDD[(RecordKey,RDDRecord)])] = inputs.flatMap { case (uid, opinput) =>
+    inputs.foreach { case (uid, opinput) =>
       opinput match {
         case ( dataInput: PartitionedFragment) =>
           //          val opSection: Option[ma2.Section] = getOpSectionIntersection( dataInput.getGrid, node )
@@ -456,14 +456,8 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
         case (  x ) =>
           throw new Exception( "Unsupported OperationInput class: " + x.getClass.getName )
     }}
-    val rawRddMap: Map[String,RDD[(RecordKey,RDDRecord)]] = Map( rawRddList:_* )
-    if( rawRddMap.isEmpty ) {
-      None
-    } else {
-      logger.info("\n\n ----------------------- Completed RDD input map[%d], keys: { %s }, thread: %s -------\n".format(batchIndex,rawRddMap.keys.mkString(", "), Thread.currentThread().getId ))
-      val unifiedRDD = unifyRDDs(rawRddMap, kernelContext, batchRequest.requestCx, batchRequest.node )
-      Some( unifiedRDD )
-    }
+    logger.info("\n\n ----------------------- Completed RDD input map[%d], thread: %s -------\n".format(batchIndex, Thread.currentThread().getId ))
+    batchRequest.optInputsRDD
   }
 
   def getTimeReferenceRdd(rddMap: Map[String,RDD[(RecordKey,RDDRecord)]], kernelContext: KernelContext ): Option[RDD[(RecordKey,RDDRecord)]] = kernelContext.trsOpt map { trs =>

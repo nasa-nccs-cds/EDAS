@@ -75,7 +75,7 @@ class compress extends Kernel() {
   val doesAxisElimination: Boolean = false
   val description = "Compress data by cherry-picking slices, etc."
 
-  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
+  override def map ( context: KernelContext ) ( inputs: RDDRecord ): RDDRecord = {
     val input_array_map: Map[String,HeapFltArray] = Map( context.operation.inputs.map( id => id -> inputs.findElements(id).head ):_*)
     val input_fastArray_map:  Map[String,FastMaskedArray] = input_array_map.mapValues(_.toFastMaskedArray)
     val levels: String = context.config("plev","")
