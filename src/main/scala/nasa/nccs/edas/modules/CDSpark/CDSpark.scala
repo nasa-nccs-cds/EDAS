@@ -80,9 +80,8 @@ class compress extends Kernel() {
     val input_fastArray_map:  Map[String,FastMaskedArray] = input_array_map.mapValues(_.toFastMaskedArray)
     val levels: String = context.config("plev","")
     val inputId = context.operation.inputs.head
-    val input_data = inputs.element(inputId).getOrElse( throw new Exception( s"Can't find input ${inputId} in 'compress' Kernel, inputs = ${inputs.elements.keys.mkString(",")}"))
+    val (ikey,input_data) = inputs.elements.find { case (key,value) => inputId.split(':').last.equals( key.split(':').last ) }.getOrElse( throw new Exception( s"Can't find input ${inputId} in 'compress' Kernel, inputs = ${inputs.elements.keys.mkString(",")}"))
     val t0 = System.nanoTime
-
     if( !levels.isEmpty ) {
       val levelValues = levels.split(',').map( _.toFloat )
       val ( axisIndex: Int, levelIndices: Array[Int] ) = context.grid.coordValuesToIndices( 'z', levelValues )
