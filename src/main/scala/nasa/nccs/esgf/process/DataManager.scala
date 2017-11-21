@@ -58,20 +58,20 @@ class RegridSpec( val gridFile: String, val subgrid: String ) extends Serializab
   def test = 0;
 }
 
-class BatchRequest( val request: RequestContext, val workflow: WorkflowContext ) extends Loggable  {
+class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
   val optPartitioner: Option[EDASPartitioner] = generatePartitioning
   private var _optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = None
-  val node = workflow.rootNode
+  val node = workflowCx.rootNode
   val nodeId = node.getNodeId
   private val _inputUids = mutable.HashSet.empty[String]
   def getRegridSpec: Option[RegridSpec] = optPartitioner.map( _.regridSpec )
-  def getGridRefInput: Option[OperationDataInput] = workflow.getGridRefInput
+  def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
 
   private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
     case None => Unit
     case Some(partitioner) =>
       val partitions = partitioner.partitions
-      val tgrid: TargetGrid = request.getTargetGrid(partitioner.uid)
+      val tgrid: TargetGrid = requestCx.getTargetGrid(partitioner.uid)
       val batch = partitions.getBatch(batchIndex)
       val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec(partition, tgrid))
       if (rddPartSpecs.length > 0) {
@@ -189,17 +189,17 @@ class BatchRequest( val request: RequestContext, val workflow: WorkflowContext )
   //  }
 
   def generatePartitioning: Option[EDASPartitioner] = {
-    val fragments: Iterable[DataFragmentSpec] = workflow.inputs.values.flatMap ( _ match {
+    val fragments: Iterable[DataFragmentSpec] = workflowCx.inputs.values.flatMap ( _ match {
       case directInput: EDASDirectDataInput => Some(directInput.fragmentSpec)
       case x => None
     })
     if( fragments.isEmpty ) { None  }
     else {
-      val crsOpt = workflow.getGridObjectRef
+      val crsOpt = workflowCx.getGridObjectRef
       val crsFrags = fragments.filter( _.matchesReference(crsOpt) )
-      assert( crsFrags.nonEmpty, "No inputs matching crs: " + workflow.crs.toString + " in subworkflow with root node " + workflow.rootNode.getNodeId )
+      assert( crsFrags.nonEmpty, "No inputs matching crs: " + workflowCx.crs.toString + " in subworkflow with root node " + workflowCx.rootNode.getNodeId )
       val largestInput: DataFragmentSpec = crsFrags.foldLeft(crsFrags.head)((x, y) => if(x.getSize > y.getSize) x else y )
-      Some( new EDASPartitioner( largestInput.uid, largestInput.roi, request.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles, RegridSpec(largestInput) ) )
+      Some( new EDASPartitioner( largestInput.uid, largestInput.roi, requestCx.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles, fragments.size, RegridSpec(largestInput) ) )
     }
   }
 }

@@ -59,7 +59,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
   def getKernelOption( key: String , default: String = ""): String = kernel.options.getOrElse(key,default)
   def doesTimeElimination: Boolean = operation.operatesOnAxis('t' ) && kernel.doesAxisElimination
 
-  def getKernelContext( batchRequest: BatchRequest ): KernelContext = contexts.getOrElseUpdate( batchRequest.request.jobId, KernelContext( operation, batchRequest ) )
+  def getKernelContext( batchRequest: BatchRequest ): KernelContext = contexts.getOrElseUpdate( batchRequest.requestCx.jobId, KernelContext( operation, batchRequest ) )
 
   def map(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = kernel.mapRDD( input, context )
 
@@ -418,8 +418,8 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def domainRDDPartition(  node: WorkflowNode, batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
     val enableRegridding = true
-    kernelContext.addTimestamp( "Generating RDD for inputs: " + batchRequest.workflow.inputs.keys.mkString(", "), true )
-    val inputs: List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => batchRequest.workflow.inputs.get( uid ).map ( uid -> _ ) )
+    kernelContext.addTimestamp( "Generating RDD for inputs: " + batchRequest.workflowCx.inputs.keys.mkString(", "), true )
+    val inputs: List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => batchRequest.workflowCx.inputs.get( uid ).map ( uid -> _ ) )
     val rawRddList: List[(String,RDD[(RecordKey,RDDRecord)])] = inputs.flatMap { case (uid, opinput) =>
       opinput match {
         case ( dataInput: PartitionedFragment) =>
@@ -459,7 +459,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
       None
     } else {
       logger.info("\n\n ----------------------- Completed RDD input map[%d], keys: { %s }, thread: %s -------\n".format(batchIndex,rawRddMap.keys.mkString(", "), Thread.currentThread().getId ))
-      val unifiedRDD = unifyRDDs(rawRddMap, kernelContext, batchRequest.request, batchRequest.node )
+      val unifiedRDD = unifyRDDs(rawRddMap, kernelContext, batchRequest.requestCx, batchRequest.node )
       Some( unifiedRDD )
     }
   }

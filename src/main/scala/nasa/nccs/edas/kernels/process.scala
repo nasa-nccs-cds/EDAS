@@ -43,12 +43,12 @@ class Port( val name: String, val cardinality: String, val description: String, 
 
 object KernelContext {
   def apply( operation: OperationContext, batchRequest: BatchRequest ): KernelContext = {
-    val sectionMap: Map[String, Option[CDSection]] = batchRequest.request.inputs.mapValues(_.map(_.cdsection)).map(identity)
-    val gridMapVars: Map[String,Option[GridContext]] = batchRequest.request.getTargetGrids.map { case (uid,tgridOpt) =>
+    val sectionMap: Map[String, Option[CDSection]] = batchRequest.requestCx.inputs.mapValues(_.map(_.cdsection)).map(identity)
+    val gridMapVars: Map[String,Option[GridContext]] = batchRequest.requestCx.getTargetGrids.map { case (uid,tgridOpt) =>
       uid -> tgridOpt.map( tg => GridContext(uid,tg))
     }
     val gridMapCols: Map[String,Option[GridContext]] = gridMapVars.flatMap { case ( uid, gcOpt ) => gcOpt.map( gc => ( gc.collectionId, Some(gc) ) ) }
-    new KernelContext( operation, gridMapVars ++ gridMapCols, sectionMap, batchRequest.request.domains, batchRequest.request.getConfiguration, batchRequest.workflow.crs, batchRequest.getRegridSpec, batchRequest.request.profiler )
+    new KernelContext( operation, gridMapVars ++ gridMapCols, sectionMap, batchRequest.requestCx.domains, batchRequest.requestCx.getConfiguration, batchRequest.workflowCx.crs, batchRequest.getRegridSpec, batchRequest.requestCx.profiler )
   }
 }
 

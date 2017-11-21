@@ -172,9 +172,9 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
 
 class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {
   val test = 1
-  def getPartitioner( optSection: Option[ma2.Section] = None ): Option[EDASPartitioner] = domainSection( optSection ) map {
-    case( frag1, section) => new EDASPartitioner( fragSpec.uid, section, partsConfig, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles, RegridSpec(fragSpec) )
-  }
+//  def getPartitioner( optSection: Option[ma2.Section] = None ): Option[EDASPartitioner] = domainSection( optSection ) map {
+//    case( frag1, section) => new EDASPartitioner( fragSpec.uid, section, partsConfig, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles, RegridSpec(fragSpec) )
+//  }
   override def data(partIndex: Int ): CDFloatArray = {
     CDFloatArray.empty
   }

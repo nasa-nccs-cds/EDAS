@@ -306,8 +306,8 @@ object EDASPartitioner {
   val nCoresPerPart = 1
 }
 
-class EDASCachePartitioner( uid: String,  val cache_id: String, _section: ma2.Section, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], numDataFiles: Int, regridSpec: RegridSpec, dataType: ma2.DataType = ma2.DataType.FLOAT, cacheType: String = "fragment")
-  extends EDASPartitioner(uid,_section,partsConfig,timeAxisOpt,numDataFiles,regridSpec,dataType,cacheType) {
+class EDASCachePartitioner( uid: String,  val cache_id: String, _section: ma2.Section, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], timeAxisOpt: Option[CoordinateAxis1DTime], numDataFiles: Int, numElem: Int, regridSpec: RegridSpec, dataType: ma2.DataType = ma2.DataType.FLOAT, cacheType: String = "fragment")
+  extends EDASPartitioner(uid,_section,partsConfig,timeAxisOpt,numDataFiles,numElem,regridSpec,dataType,cacheType) {
 
   def getCacheFilePath(partIndex: Int): String = {
     val cache_file = cache_id + "-" + partIndex.toString
@@ -379,7 +379,7 @@ case class PartitionConstraints( partsConfig: Map[String,String] ) {
   override val toString = { s"{ numDataFiles: ${_numDataFiles.toString}, numParts: ${_numParts.toString}, period: ${period}, nSlicesPerRecord: ${nSlicesPerRecord.toString}, oneRecPerSlice: ${oneRecPerSlice.toString} , numParts: ${numParts.toString} }"}
 }
 
-class EDASPartitioner( val uid: String, private val _section: ma2.Section, val partsConfig: Map[String,String], timeAxisOpt: Option[CoordinateAxis1DTime], val numDataFiles: Int, val regridSpec: RegridSpec, dataType: ma2.DataType = ma2.DataType.FLOAT, val cacheType: String = "fragment") extends Loggable {
+class EDASPartitioner( val uid: String, private val _section: ma2.Section, val partsConfig: Map[String,String], timeAxisOpt: Option[CoordinateAxis1DTime], val numDataFiles: Int, val numElements: Int, val regridSpec: RegridSpec, dataType: ma2.DataType = ma2.DataType.FLOAT, val cacheType: String = "fragment") extends Loggable {
   import EDASPartitioner._
 
   val elemSize = dataType.getSize
@@ -600,7 +600,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
   def getMemorySize(nSlices: Int = -1): Long = {
     var full_shape = baseShape.clone()
     if (nSlices > 0) { full_shape(0) = nSlices }
-    full_shape.foldLeft(4L)(_ * _)
+    full_shape.foldLeft(4L)(_ * _)  * numElements
   }
 
 //  def computePartitions = {
@@ -654,7 +654,7 @@ class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[Str
   val sType = getAttributeValue("dtype", "FLOAT")
   val dType = ma2.DataType.getType( sType )
   def roi: ma2.Section = new ma2.Section(_section.getRanges)
-  val partitioner = new EDASCachePartitioner(fragmentSpec.uid, cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, RegridSpec(fragmentSpec), dType )
+  val partitioner = new EDASCachePartitioner(fragmentSpec.uid, cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, 1, RegridSpec(fragmentSpec), dType )
   def getAttributeValue(key: String, default_value: String) =
     attributes.get(key) match {
       case Some(attr_val) => attr_val.toString.split('=').last.replace('"',' ').trim
@@ -790,7 +790,7 @@ object FragmentPersistence extends DiskCachable with FragSpecKeySet {
               case Some(cache_id_fut) =>
                 Some(cache_id_fut.map((cache_id: String) => {
                   val roi = DataFragmentKey(foundFragKey).getRoi
-                  val partitioner = new EDASCachePartitioner( fragSpec.uid, cache_id, roi, partsConfig, workflowNodeOpt, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles, RegridSpec(fragSpec) )
+                  val partitioner = new EDASCachePartitioner( fragSpec.uid, cache_id, roi, partsConfig, workflowNodeOpt, fragSpec.getTimeCoordinateAxis, fragSpec.numDataFiles, 1, RegridSpec(fragSpec) )
                   fragSpec.cutIntersection(roi) match {
                     case Some(section) =>
                       new PartitionedFragment( new CachePartitions( cache_id, roi, partitioner.getCachePartitions ), None, section)
