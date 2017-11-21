@@ -43,7 +43,7 @@ object Collection extends Loggable {
   }
   def apply( id: String,  dataPath: String, fileFilter: String = "", scope: String="", title: String= "", vars: List[String] = List() ) = {
     val ctype = dataPath match {
-      case url if(url.startsWith("http:")) => "dap"
+      case url if(url.startsWith("http")) => "dap"
       case url if(url.startsWith("file:")) => "file"
       case col if(col.startsWith("collection:")) => "collection"
       case dpath if(dpath.toLowerCase.endsWith(".csv")) => "csv"

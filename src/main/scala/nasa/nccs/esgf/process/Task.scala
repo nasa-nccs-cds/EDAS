@@ -863,15 +863,15 @@ class DataContainer(val uid: String, private val source: Option[DataSource] = No
       if (source.isDefined) source.get.toXml else operation.get.toXml
     <dataset uid={uid}> embedded_xml </dataset>
   }
-  def isSource = source.isDefined
+  def isSource: Boolean = source.isDefined
 
-  def isOperation = operation.isDefined
+  def isOperation: Boolean = operation.isDefined
 
-  def getSource = {
+  def getSource: DataSource = {
     assert( isSource, s"Attempt to access an operation based DataContainer($uid) as a data source" )
     source.get
   }
-  def getOperation = {
+  def getOperation: OperationContext = {
     assert( isOperation, s"Attempt to access a source based DataContainer($uid) as an operation")
     operation.get
   }
@@ -1020,7 +1020,7 @@ object DataContainer extends ContainerBase {
       val recognizedUrlTypes = List("file", "collection", "fragment")
       val uri_parts = uri.split(":")
       val url_type = normalize(uri_parts.head)
-      if (url_type == "http") {
+      if ( url_type.startsWith("http") ) {
         uri
       } else {
         if (recognizedUrlTypes.contains(url_type)) {

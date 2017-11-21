@@ -209,8 +209,10 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     val profiler = ProfilingTool( serverContext.spark.sparkContext )
     val sourceContainers = request.variableMap.values.filter(_.isSource)
     val t1 = System.nanoTime
-    val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource; domain <- data_container.getSource.getDomain.map(request.getDomain) )
-      yield serverContext.createInputSpec( data_container, domain, request )
+    val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource ) yield {
+      val domainOpt: Option[DomainContainer] = data_container.getSource.getDomain.flatMap(request.getDomain)
+      serverContext.createInputSpec( data_container, domainOpt, request )
+    }
     val t2 = System.nanoTime
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
     val rv = new RequestContext ( jobId, sourceMap, request, profiler, run_args )
