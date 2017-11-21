@@ -34,7 +34,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val nExp = 3
   val use_6hr_data = false
   val use_npana_data = false
-  val use_local_data = false
+  val use_local_data = true
   val test_cache = false
   val test_python = false
   val test_binning = false
@@ -235,7 +235,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }}
 
   test("pyMaxTestLocal")  { if(test_python) {
-    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"tzyx"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"tzyx"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ) )
     println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
@@ -486,7 +486,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }}
 
   test("Maximum-local") { if(use_local_data) {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
     val result_node = executeTest(datainputs, Map("response"->"xml"))
     val results = getResults(result_node)
     println( "Op Result:       " + results.mkString(",") )
@@ -615,10 +615,12 @@ class DefaultTestSuite extends EDASTestSuite {
 
 
   test("CherryPick") { if(use_local_data) {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":1,"end":1,"system":"indices"},"lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA_DAILY.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.compress","input":"v1","plev":"975,875,775,650,550"}]]"""
+    val unverified_result: CDFloatArray = CDFloatArray( Array(267.78323,260.57275,257.5716,249.33249,242.7927 ).map(_.toFloat), Float.MaxValue )
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":1,"end":1,"system":"indices"},"lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.compress","input":"v1","plev":"975,875,775,650,550"}]]"""
     val result_node = executeTest(datainputs)
-    val results = getResults(result_node)
-    println( "Op Result:       " + results.mkString(",") )
+    val result_data = getResultData(result_node)
+    println( "Op Result:       " + result_data.mkDataString(", ") )
+    assert( result_data.maxScaledDiff( unverified_result )  < eps, s" Incorrect value computed for Subset")
   }}
 
   test("Maximum1") {
@@ -959,7 +961,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   }
 
   test("AggregateFiles") {
-    val collection = "MERRA_DAILY"
+    val collection = "merra_daily"
     val path = "/Users/tpmaxwel/Data/MERRA/DAILY"
     val datainputs = s"""[variable=[{"uri":"collection:/$collection","path":"$path"}]]"""
     val agg_result_node = executeTest(datainputs,false,"util.agg")
@@ -1007,7 +1009,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
 
   test("Sum") {
     val nco_verified_result = 4.886666e+07
-    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":0,"end":0,"system":"indices"},"time":{"start":0,"end":0,"system":"indices"}}],variable=[{"uri":"collection:/MERRA_DAILY","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.sum","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","lev":{"start":0,"end":0,"system":"indices"},"time":{"start":0,"end":0,"system":"indices"}}],variable=[{"uri":"collection:/merra_daily","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.sum","input":"v1","domain":"d0","axes":"xy"}]]"""
     val result_node = executeTest(datainputs)
     logger.info( "Test Result: " + printer.format(result_node) )
     val data_nodes: xml.NodeSeq = result_node \\ "Output" \\ "LiteralData"

@@ -394,18 +394,20 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   }
 
   def needsRegrid(rdd: RDD[(RecordKey,RDDRecord)], requestCx: RequestContext, kernelContext: KernelContext ): Boolean = {
-    val sampleRDDPart: RDDRecord = rdd.first._2
-    val targetGrid = requestCx.getTargetGridOpt (kernelContext.grid.uid).getOrElse (throw new Exception ("Undefined Target Grid for kernel " + kernelContext.operation.identifier) )
-    if( targetGrid.getGridSpec.startsWith("gspec") ) return true
-    sampleRDDPart.elements.foreach { case(uid,data) => if( data.gridSpec != targetGrid.getGridSpec ) kernelContext.crsOpt match {
-      case Some( crs ) =>
-        return true
-      case None =>
-        requestCx.getTargetGridOpt(uid) match {
-          case Some(tgrid) => if( !tgrid.shape.sameElements( targetGrid.shape ) ) return true
-          case None => throw new Exception (s"Undefined Grid in input ${uid} for kernel " + kernelContext.operation.identifier)
-        }
-    }}
+    try {
+      val sampleRDDPart: RDDRecord = rdd.first._2
+      val targetGrid = requestCx.getTargetGridOpt(kernelContext.grid.uid).getOrElse(throw new Exception("Undefined Target Grid for kernel " + kernelContext.operation.identifier))
+      if (targetGrid.getGridSpec.startsWith("gspec")) return true
+      sampleRDDPart.elements.foreach { case (uid, data) => if (data.gridSpec != targetGrid.getGridSpec) kernelContext.crsOpt match {
+        case Some(crs) =>
+          return true
+        case None =>
+          requestCx.getTargetGridOpt(uid) match {
+            case Some(tgrid) => if (!tgrid.shape.sameElements(targetGrid.shape)) return true
+            case None => throw new Exception(s"Undefined Grid in input ${uid} for kernel " + kernelContext.operation.identifier)
+          }
+      }}
+    } catch { case err: Exception => logger.error( s"Empty input in needsRegrid: ${rdd.id} ")}
     return false
   }
 
