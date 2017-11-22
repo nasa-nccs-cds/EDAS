@@ -313,7 +313,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def cleanUp() = {}
 
   def mapRDD(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
-    logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier )
+    logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier + ", input size = " + input.count )
     input.mapValues( map(context) )
   }
 
