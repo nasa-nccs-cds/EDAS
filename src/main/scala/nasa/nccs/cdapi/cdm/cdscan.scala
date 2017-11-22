@@ -506,15 +506,16 @@ object CDScan extends Loggable {
       NCMLWriter.updateNCMLFiles( collectionsFile, ncmlDir )
     } else {
       val collectionId = args(0).toLowerCase
+      val subCollectionId = collectionId + "-sub"
       val pathFile = new File(args(1))
-      val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(collectionId + ".ncml").toFile
+      val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(subCollectionId + ".ncml").toFile
       if ( ncmlFile.exists ) { throw new Exception("Collection already exists, defined by: " + ncmlFile.toString) }
       logger.info(s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
       ncmlFile.getParentFile.mkdirs
       val ncmlWriter = NCMLWriter(pathFile)
       val variableMap = new collection.mutable.HashMap[String,String]()
       val varNames: List[String] = ncmlWriter.writeNCML(ncmlFile)
-      varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
+      varNames.foreach( vname => variableMap += ( vname -> subCollectionId ) )
       writeCollectionDirectory( collectionId, variableMap.toMap )
     }
   }
