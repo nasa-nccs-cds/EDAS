@@ -260,7 +260,8 @@ object KernelStatus {
 }
 
 class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
-  private var _rdd = init_value
+  private val _contents = mutable.HashSet.empty[String]
+  private var _rdd = init_value; _rdd.cache()
   def map( kernel: Kernel, context: KernelContext ): Unit = {
     _rdd = _rdd.mapValues( rec => rec ++ kernel.postRDDOp( kernel.map(context)(rec), context ) )
   }
@@ -268,21 +269,23 @@ class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
     node.mapReduce(_rdd,context,batchIndex)
   }
   def value: RDD[(RecordKey,RDDRecord)] = _rdd
-  def update = { _rdd.cache; _rdd.count }
+  def cache =    _rdd.cache
+  def update =   _rdd.count
 
-  private def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
-    _rdd.mapValues( rec => rec ++ kernelContext.addRddElements( vSpecs )(rec) )
-    update
-  }
-
-  private def addOperationInput( serverContext: ServerContext, record: RDDRecord, batchIndex: Int ): Unit = {
-    initializeInputsRDD( serverContext, batchIndex )
-    print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
-    if( _optInputsRDD.isDefined ) {
-      _optInputsRDD = _optInputsRDD map ( _.mapValues(rddRec => rddRec ++ record ) )
-    } else {
-      _optInputsRDD = Some( createUnpartitionedRDD( serverContext, record ) )
+  def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
+    val newVSpecs = vSpecs.filter( vspec => !_contents.contains(vspec.uid) )
+    if( newVSpecs.nonEmpty ) {
+      _rdd = _rdd.mapValues(rec => kernelContext.addRddElements(newVSpecs)(rec))
+      _contents ++= newVSpecs.map(_.uid).toSet
+      cache
     }
+  }
+  def addOperationInput( record: RDDRecord ): Unit = {
+    _rdd = _rdd.mapValues( rddRec => rddRec ++ record )
+    _contents ++= record.elements.keySet
+  }
+  def section( section: Option[CDSection] ): Unit = {
+    _rdd = _rdd.mapValues(rddRec => rddRec.section(section))
   }
 
 }

@@ -68,7 +68,6 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
   private var _optInputsRDD: Option[RDDContainer] = None
   val node = workflowCx.rootNode
   val nodeId = node.getNodeId
-  private val _inputUids = mutable.HashSet.empty[String]
   def getRegridSpec: Option[RegridSpec] = optPartitioner.map( _.regridSpec )
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
 
@@ -98,8 +97,7 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
         val recordSpecs = rddPartSpecs.flatMap(_.getRDDRecordSpecs())
         val parallelized_rddspecs: RDD[(RecordKey,DirectRDDRecordSpec)] = serverContext.spark.sparkContext parallelize recordSpecs keyBy (_.timeRange) partitionBy rdd_partitioner
         val rdd = parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex))
-        val nParts: Long = { rdd.cache; rdd.count }
-        _optInputsRDD = Some(rdd)
+        _optInputsRDD = Some( new RDDContainer(rdd) )
       }
   }
 
@@ -117,41 +115,31 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
   //      directInput.getRDDVariableSpec(uid, opSection)
   //    }
 
-  private def addFileInputs( serverContext: ServerContext, kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
+  private def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
-    val newVSpecs = vSpecs.filter( vspec => !_inputUids.contains(vspec.uid) )
-    val optRdd: Option[RDD[(RecordKey,RDDRecord)]] = if( newVSpecs.nonEmpty ) { _optInputsRDD map ( _.mapValues( kernelContext.addRddElements( newVSpecs ) ) ) } else { _optInputsRDD }
-    _inputUids ++= vSpecs.map( _.uid ).toSet
-    optRdd.foreach( rdd => { rdd.cache; rdd.count } )
-    _optInputsRDD = optRdd
+    _optInputsRDD foreach( _.addFileInputs(kernelCx,vSpecs) )
   }
 
   private def addOperationInput( serverContext: ServerContext, record: RDDRecord, batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
     print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
-    if( _optInputsRDD.isDefined ) {
-      _optInputsRDD = _optInputsRDD map ( _.mapValues(rddRec => rddRec ++ record ) )
-    } else {
-      _optInputsRDD = Some( createUnpartitionedRDD( serverContext, record ) )
-    }
+    if( _optInputsRDD.isDefined ) {   _optInputsRDD foreach ( _.addOperationInput(record) )                                       }
+    else {                            _optInputsRDD = Some( new RDDContainer( createUnpartitionedRDD( serverContext, record ) ) ) }
   }
 
   def createUnpartitionedRDD( serverContext: ServerContext, record: RDDRecord ): RDD[(RecordKey,RDDRecord)] = {
     serverContext.spark.sparkContext parallelize Seq( ( RecordKey(),record ) )
   }
 
-  def getKernelInputs( serverContext: ServerContext, kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
-    addFileInputs( serverContext, kernelContext, vSpecs, batchIndex )
-    val result = _optInputsRDD.map( rdd => rdd.mapValues( rddRec => rddRec.section( section ) ) )
-    result
+  def addKernelInputs(serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
+    addFileInputs( serverContext, kernelCx, vSpecs, batchIndex )
+    _optInputsRDD foreach ( _.section( section ) )
   }
 
-  def getOperationInput( serverContext: ServerContext, record: RDDRecord, section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+  def addOperationInput(serverContext: ServerContext, record: RDDRecord, section: Option[CDSection], batchIndex: Int ): Unit  = {
     addOperationInput( serverContext, record, batchIndex )
-    _optInputsRDD.map( rdd => rdd.mapValues( rddRec => rddRec.section( section ) ) )
+    _optInputsRDD foreach ( _.section( section ) )
   }
-
-  def optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = _optInputsRDD
 
   //  partition.getPartitionRecordKey(tgrid)
   //
@@ -244,10 +232,10 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
 
 
 
-  def getTargetGridSpec( kernelContext: KernelContext ) : String = {
-    if( kernelContext.crsOpt.getOrElse("").indexOf('~') > 0 ) { "gspec:" + kernelContext.crsOpt.get }
+  def getTargetGridSpec( kernelCx: KernelContext ) : String = {
+    if( kernelCx.crsOpt.getOrElse("").indexOf('~') > 0 ) { "gspec:" + kernelCx.crsOpt.get }
     else {
-      val targetGrid: TargetGrid = getTargetGridOpt(kernelContext.grid.uid).getOrElse (throw new Exception ("Undefined Grid in domain partition for kernel " + kernelContext.operation.identifier) )
+      val targetGrid: TargetGrid = getTargetGridOpt(kernelCx.grid.uid).getOrElse (throw new Exception ("Undefined Grid in domain partition for kernel " + kernelCx.operation.identifier) )
       targetGrid.getGridFile
     }
   }
