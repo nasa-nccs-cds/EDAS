@@ -58,15 +58,6 @@ class max extends SingularRDDKernel(Map("mapreduceOp" -> "max")) {
 //  }
 
 
-
-class partition extends Kernel() {
-  val inputs = List( WPSDataInput("input variables", 1, 1 ) )
-  val outputs = List( WPSProcessOutput( "operation result" ) )
-  val title = "Partitioner"
-  val doesAxisElimination: Boolean = false
-  val description = "Configures various data partitioning and filtering operations"
-}
-
 class compress extends Kernel() {
   override val status = KernelStatus.public
   val inputs = List(WPSDataInput("input variable", 1, 1))
@@ -171,6 +162,7 @@ class eAve extends Kernel(Map.empty) {
     val missing = input_arrays.head.getMissing()
     val inputId = context.operation.inputs.head
     val input_data = inputs.element(inputId).get
+    logger.info(" -----> Executing Kernel %s, inputs = %s, input shapes = [ %s ]".format(name, context.operation.inputs.mkString(","), input_arrays.map( _.shape.mkString("(",",",")")).mkString(", ") ) )
 
     val ( resultArray, weightArray ) = if( addWeights(context) ) {
       val weights: FastMaskedArray = FastMaskedArray(KernelUtilities.getWeights(inputId, context))
@@ -181,7 +173,7 @@ class eAve extends Kernel(Map.empty) {
     val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value")  ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "axes" -> axes.toUpperCase )
     val elem = context.operation.rid -> HeapFltArray(resultArray.toCDFloatArray, input_data.origin, result_metadata, Some(weightArray.toCDFloatArray.getArrayData()))
 
-    logger.info("&MAP: Finished Kernel %s, inputs = %s, output = %s, time = %.4f s".format(name, context.operation.inputs.mkString(","), context.operation.rid, (System.nanoTime - t0)/1.0E9) )
+    logger.info("&MAP: Finished Kernel %s, output = %s, time = %.4f s".format(name, context.operation.rid, (System.nanoTime - t0)/1.0E9) )
     context.addTimestamp( "Map Op complete" )
     RDDRecord( TreeMap(elem), inputs.metadata, inputs.partition )
   }
@@ -269,6 +261,8 @@ class subset extends Kernel(Map.empty) {
   val title = "Space/Time Subset"
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
   val doesAxisElimination: Boolean = false
+
+  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord = { rdd }
 }
 
 class anomaly extends SingularRDDKernel(Map.empty) {

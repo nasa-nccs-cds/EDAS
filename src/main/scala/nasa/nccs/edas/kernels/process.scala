@@ -313,7 +313,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def cleanUp() = {}
 
   def mapRDD(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
-    logger.info( "Executing map OP for Kernel " + id + ", OP = " + context.operation.identifier )
+    logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier )
     input.mapValues( map(context) )
   }
 
@@ -363,7 +363,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def getOpName(context: KernelContext): String = "%s(%s)".format(name, context.operation.inputs.mkString(","))
   def map(partIndex: Int, inputs: List[Option[DataFragment]], context: KernelContext): Option[DataFragment] = inputs.head
-  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord = { rdd }
+  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord
   def aggregate(context: KernelContext )( rdd0: RDDRecord, rdd1: RDDRecord ): RDDRecord = { rdd0 }
 
   def keyMapper( partIndex: Int, agg_inputs: Iterator[(RecordKey,RDDRecord)] ): Iterator[(RecordKey,RDDRecord)] = {
