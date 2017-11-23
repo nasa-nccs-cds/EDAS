@@ -662,8 +662,10 @@ class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblAr
       }
     } else {
       getSpatialAxisData(axis) match {
-        case Some((axisIndex,data)) => axisIndex -> values.flatMap(x => data.findValue(x.toDouble))
-        case None => -1 -> Array.emptyIntArray
+        case Some((axisIndex,data)) =>
+          axisIndex -> values.flatMap(x => data.findValue(x.toDouble))
+        case None => -1 ->
+          Array.emptyIntArray
       }
     }
   }

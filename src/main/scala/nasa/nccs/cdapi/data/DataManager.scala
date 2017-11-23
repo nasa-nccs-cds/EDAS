@@ -748,7 +748,10 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
     val result = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp )
     HeapFltArray( result.toCDFloatArray, origin, gridSpec, mergeMetadata("merge",other), toCDWeightsArray.map( _.append( other.toCDWeightsArray.get ) ) )
   }
-  def findValue( value: Float, eps: Float = 0.0001f ): Option[Int] = { val seps = eps*value; data.indexWhere( x => Math.abs(x-value) < seps ) } match { case -1 => None;  case x => Some(x) }
+  def findValue( value: Float, match_required: Boolean=true, eps: Float = 0.0001f ): Option[Int] = { val seps = eps*value; data.indexWhere( x => Math.abs(x-value) < seps ) }  match {
+    case -1 => if(match_required) throw new Exception(s"Failed to find a match in array for value ${value}, array values = ${data.map(_.toString).mkString(",")}"); None
+    case x => Some(x)
+  }
   def toXml: xml.Elem = <array shape={shape.mkString(",")} missing={getMissing().toString}> { data.mkString(",")} </array> % metadata
 }
 
@@ -790,28 +793,42 @@ object HeapFltArray extends Loggable {
   }
 }
 
-class HeapDblArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Array.emptyIntArray, val _data_ : Array[Double]=Array.emptyDoubleArray, _missing: Option[Double]=None, metadata: Map[String,String]=Map.empty ) extends ArrayBase[Double](shape,origin,_missing,metadata)  {
+class HeapDblArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Array.emptyIntArray, val _data_ : Array[Double]=Array.emptyDoubleArray, _missing: Option[Double]=None, metadata: Map[String,String]=Map.empty ) extends ArrayBase[Double](shape,origin,_missing,metadata) {
   def data: Array[Double] = _data_
-  def getMissing( default: Double = Double.MaxValue ): Double = _missing.getOrElse(default)
-  def toCDFloatArray: CDFloatArray = CDFloatArray( shape, data.map(_.toFloat), getMissing().toFloat )
-  def toFastMaskedArray: FastMaskedArray = FastMaskedArray( shape, data.map(_.toFloat), getMissing().toFloat )
-  def toCDLongArray: CDLongArray = CDLongArray( shape, data.map(_.toLong) )
-  def toCDDoubleArray: CDDoubleArray = CDDoubleArray( shape, data, getMissing() )
 
-  def append( other: ArrayBase[Double] ): ArrayBase[Double]  = {
-//    logger.debug( "sAppending array: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
-    if( origin(0) < other.origin(0) ) {
-      assert( origin(0) + shape(0) == other.origin(0), "Appending non-contiguous arrays" )
+  def getMissing(default: Double = Double.MaxValue): Double = _missing.getOrElse(default)
+
+  def toCDFloatArray: CDFloatArray = CDFloatArray(shape, data.map(_.toFloat), getMissing().toFloat)
+
+  def toFastMaskedArray: FastMaskedArray = FastMaskedArray(shape, data.map(_.toFloat), getMissing().toFloat)
+
+  def toCDLongArray: CDLongArray = CDLongArray(shape, data.map(_.toLong))
+
+  def toCDDoubleArray: CDDoubleArray = CDDoubleArray(shape, data, getMissing())
+
+  def append(other: ArrayBase[Double]): ArrayBase[Double] = {
+    //    logger.debug( "sAppending array: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
+    if (origin(0) < other.origin(0)) {
+      assert(origin(0) + shape(0) == other.origin(0), "Appending non-contiguous arrays")
       HeapDblArray(toCDDoubleArray.append(other.toCDDoubleArray), origin, mergeMetadata("merge", other))
     } else {
-      assert( other.origin(0) + other.shape(0) == origin(0), "Appending non-contiguous arrays" )
+      assert(other.origin(0) + other.shape(0) == origin(0), "Appending non-contiguous arrays")
       HeapDblArray(other.toCDDoubleArray.append(toCDDoubleArray), other.origin, mergeMetadata("merge", other))
     }
   }
-  def combine( combineOp: CDArray.ReduceOp[Double], other: ArrayBase[Double] ): ArrayBase[Double] = HeapDblArray( CDDoubleArray.combine( combineOp, toCDDoubleArray, other.toCDDoubleArray ), origin, mergeMetadata("merge",other) )
-  def toXml: xml.Elem = <array shape={shape.mkString(",")} missing={getMissing().toString} > {_data_.mkString(",")} </array> % metadata
-  def findValue( value: Double, eps: Float = 0.0001f ): Option[Int] = { val seps = eps*value; _data_.indexWhere( x => Math.abs(x-value) < seps ) } match { case -1 => None;  case x => Some(x) }
+
+  def combine(combineOp: CDArray.ReduceOp[Double], other: ArrayBase[Double]): ArrayBase[Double] = HeapDblArray(CDDoubleArray.combine(combineOp, toCDDoubleArray, other.toCDDoubleArray), origin, mergeMetadata("merge", other))
+
+  def toXml: xml.Elem = <array shape={shape.mkString(",")} missing={getMissing().toString}>
+    {_data_.mkString(",")}
+  </array> % metadata
+
+  def findValue(value: Double, match_required: Boolean = true, eps: Float = 0.0001f): Option[Int] = { _data_.indexWhere(x => Math.abs(x - value) < eps * value) } match {
+    case -1 => if (match_required) throw new Exception(s"Failed to find a match in array for value ${value}, array values = ${_data_.map(_.toString).mkString(",")}"); None
+    case x => Some(x)
+  }
 }
+
 object HeapDblArray {
   def apply( cdarray: CDDoubleArray, origin: Array[Int], metadata: Map[String,String] ): HeapDblArray = new HeapDblArray( cdarray.getShape, origin, cdarray.getArrayData(), Some(cdarray.getInvalid), metadata )
   def apply( ucarray: ucar.ma2.Array, origin: Array[Int], metadata: Map[String,String], missing: Float ): HeapDblArray = HeapDblArray( CDDoubleArray.factory(ucarray,missing), origin, metadata )
@@ -836,7 +853,10 @@ class HeapLongArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=A
     }
   }
   def toXml: xml.Elem = <array shape={shape.mkString(",")} missing={getMissing().toString} > {_data_.mkString(",")} </array> % metadata
-  def findValue( value: Long ): Option[Int] = _data_.indexOf(value) match { case -1 => None;  case x => Some(x) }
+  def findValue( value: Long, match_required: Boolean = true ): Option[Int] = _data_.indexOf(value) match {
+    case -1 => if(match_required) throw new Exception(s"Failed to find a match in array for value ${value}, array values = ${data.map(_.toString).mkString(",")}"); None
+    case x => Some(x)
+  }
 }
 object HeapLongArray {
   def apply( cdarray: CDLongArray, origin: Array[Int], metadata: Map[String,String] ): HeapLongArray = new HeapLongArray( cdarray.getShape, origin, cdarray.getArrayData(), Some(cdarray.getInvalid), metadata )
