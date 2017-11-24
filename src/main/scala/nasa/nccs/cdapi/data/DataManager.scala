@@ -292,7 +292,7 @@ object FastMaskedArray {
           for (i23 <- 0 until slice_stride0) {
             val elem0 = i0 * slice_stride0 + i23
             val f0 = farray.array.getFloat(elem0)
-            val elem1 = i0 * stride0 + i1 * stride1 + elem0
+            val elem1 = i0 * stride0 + i1 * stride1 + i23
             out_array.setFloat(elem1, f0)
           }
         }
@@ -311,7 +311,7 @@ object FastMaskedArray {
             for (i3 <- 0 until n3) {
               val elem0 = i0 * slice_stride0 + i1 * slice_stride1 + i3
               val f0 = farray.array.getFloat(elem0)
-              val elem1 = i0 * stride0 + i1 * stride1 + i2 * stride2 + elem0
+              val elem1 = i0 * stride0 + i1 * stride1 + i2 * stride2 + i3
               out_array.setFloat(elem1, f0)
             }
           }

@@ -122,6 +122,7 @@ class DefaultTestSuite extends EDASTestSuite {
 
 //  https://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/ta.ncml.html
 //  https://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/JMA/JRA-55/mon/atmos/ta.ncml.html
+// ///
 
   test("ReanalysisEnsemble")   {
     print( s"Running test ReanalysisEnsemble" )
@@ -129,7 +130,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val MERRA2_input = s"""{"uri":"collection:/cip_merra2_sample","name":"ta:v1","domain":"d0"}"""
     val datainputs =
       s"""[   variable=[$JRA_input,$MERRA2_input],
-              domain=[ {"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1990-03-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":50,"system":"values"},"lon":{"start":30,"end":40,"system":"values"}} ],
+              domain=[ {"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1990-03-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":30,"system":"values"},"lon":{"start":30,"end":40,"system":"values"}} ],
               operation=[{"name":"CDSpark.compress","input":"v0","plev":"97500,87500,77500","result":"cv0"},{"name":"CDSpark.compress","input":"v1","plev":"975,875,775","result":"cv1"},{"name":"CDSpark.eAve","input":"cv0,cv1","crs":"~v0"}]]""".stripMargin.replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )

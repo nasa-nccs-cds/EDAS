@@ -191,7 +191,7 @@ class npArray(CDArray):
             var = gridfile[self.name]
             grid = self.getGrid()
             partition_axes = self.subsetAxes(self.dimensions, gridfile, self.origin, self.shape)
-            self.variable = cdms2.createVariable(self.array, typecode=None, copy=0, savespace=0, mask=None, fill_value=var.getMissing(),
+            self.variable = cdms2.createVariable( self.array, typecode=None, copy=0, savespace=0, mask=None, fill_value=var.getMissing(), missing_value=var.getMissing(),
                                             grid=grid, axes=partition_axes, attributes=self.metadata, id=self.collection + "-" + self.name)
             self.variable.createattribute("gridfile", self.gridFile)
             self.variable.createattribute("origin", mParse.ia2s(self.origin))
