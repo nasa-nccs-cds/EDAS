@@ -80,7 +80,8 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
   }
 
   def map( node: WorkflowNode, kernelCx: KernelContext, batchIndex: Int ) = _optInputsRDD match {
-    case Some( inputRdd:RDDContainer ) => inputRdd.map( node.kernel, kernelCx )
+    case Some( inputRdd:RDDContainer ) =>
+      inputRdd.map( node.kernel, kernelCx )
     case None =>
       throw new Exception( "Attempt to execute mapReduce on BatchRequest with no inputs.")
   }

@@ -58,13 +58,13 @@ class max extends SingularRDDKernel(Map("mapreduceOp" -> "max")) {
 //  }
 
 
-class compress extends Kernel() {
-  override val status = KernelStatus.public
+class filter extends Kernel() {
+  override val status = KernelStatus.restricted
   val inputs = List(WPSDataInput("input variable", 1, 1))
   val outputs = List(WPSProcessOutput("operation result"))
-  val title = "Compress"
+  val title = "Filter"
   val doesAxisElimination: Boolean = false
-  val description = "Compress data by cherry-picking slices, etc."
+  val description = "Filter data by cherry-picking slices, etc."
 
   override def map ( context: KernelContext ) ( inputs: RDDRecord ): RDDRecord = {
     val input_array_map: Map[String,HeapFltArray] = Map( context.operation.inputs.map( id => id -> inputs.findElements(id).head ):_*)

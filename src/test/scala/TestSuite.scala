@@ -131,7 +131,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[   variable=[$JRA_input,$MERRA2_input],
               domain=[ {"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1990-03-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":30,"system":"values"},"lon":{"start":30,"end":40,"system":"values"}} ],
-              operation=[{"name":"CDSpark.compress","input":"v0","plev":"97500,87500,77500","result":"cv0"},{"name":"CDSpark.compress","input":"v1","plev":"97500,87500,77500","result":"cv1"},{"name":"CDSpark.eAve","input":"cv0,cv1","crs":"~v0"}]]""".stripMargin.replaceAll("\\s", "")
+              operation=[{"name":"CDSpark.filter","input":"v0","plev":"97500,87500,77500","result":"cv0"},{"name":"CDSpark.filter","input":"v1","plev":"97500,87500,77500","result":"cv1"},{"name":"CDSpark.eAve","input":"cv0,cv1","crs":"~v0"}]]""".stripMargin.replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
     println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
@@ -633,7 +633,7 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("CherryPick") { if(use_local_data) {
     val unverified_result: CDFloatArray = CDFloatArray( Array(267.78323,260.57275,257.5716,249.33249,242.7927 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":1,"end":1,"system":"indices"},"lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.compress","input":"v1","plev":"975,875,775,650,550"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":1,"end":1,"system":"indices"},"lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.filter","input":"v1","plev":"975,875,775,650,550"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = getResultData(result_node)
     println( "Op Result:       " + result_data.mkDataString(", ") )

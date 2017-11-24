@@ -240,12 +240,6 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     }
   }
 
-  def streamMapReduceBatch( node: WorkflowNode, batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ) = {
-    processInputs(node, batchRequest, kernelContext, batchIndex)
-    batchRequest.map( node, kernelContext, batchIndex )
-    logger.info( s"Executed STREAM mapReduce Batch ${batchIndex.toString}" )
-  }
-
 //  def streamMapReduceBatchRecursive( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] =
 //    prepareInputs(node, opInputs, kernelContext, requestCx, batchIndex) map ( inputs => {
 //      logger.info( s"Executing mapReduce Batch ${batchIndex.toString}" )
@@ -276,17 +270,10 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def stream(node: WorkflowNode, batchRequest: BatchRequest, batchIndex: Int ): Unit = {
     val kernelContext = node.getKernelContext( batchRequest )
-    streamMapReduceBatch( node, batchRequest, kernelContext, batchIndex )
+    processInputs(node, batchRequest, kernelContext, batchIndex)
+    batchRequest.map( node, kernelContext, batchIndex )
+    logger.info( s"Executed STREAM mapReduce Batch ${batchIndex.toString}" )
   }
-
-//  def prepareInputs( node: WorkflowNode, subworkflowInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
-//    domainRDDPartition( subworkflowInputs, kernelContext, requestCx, node, batchIndex ) match {
-//      case Some(rdd) =>
-//        logger.info( s"Prepared inputs with ${rdd.partitions.length} parts for node ${node.getNodeId}"); Some(rdd)
-//      case None =>
-//        logger.info( s"No inputs for node ${node.getNodeId}"); None
-//    }
-//  }
 
   def linkNodes(requestCx: RequestContext): Unit = {
     logger.info( s"linkNodes; inputs = ${requestCx.inputs.keys.mkString(",")}")
