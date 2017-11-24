@@ -74,28 +74,29 @@ class RegridKernel(CDMSKernel):
         for input_id in task.inputs:
             vid = input_id.split('-')[0]
             _input = _inputs.get( vid );    """ :type : npArray """
-#            if plev:
-#               _input = _input.compress()
-            variable = _input.getVariable()
-            ingrid = _input.getGrid()
-            inlatBounds, inlonBounds = ingrid.getBounds()
-            self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) )
-            self.logger.info( " >> in LON Bounds shape: " + str(inlonBounds.shape) )
-            self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
-            outlatBounds, outlonBounds = toGrid.getBounds()
-            self.logger.info( " >> out LAT Bounds shape: " + str(outlatBounds.shape) )
-            self.logger.info( " >> out LON Bounds shape: " + str(outlonBounds.shape) )
-            if( not ingrid == toGrid ):
-                self.logger.info( " Regridding Variable {0} using grid {1} ".format( variable.id, str(toGrid) ) )
-                if self._debug:
-                    self.logger.info( " >> Input Data Sample: [ {0} ]".format( ', '.join(  [ str( variable.data.flat[i] ) for i in range(20,90) ] ) ) )
-                    self.logger.info( " >> Input Variable Shape: {0}, Grid Shape: {1} ".format( str(variable.shape), str([len(ingrid.getLatitude()),len(ingrid.getLongitude())] )))
+            if( _input is None ):
+                raise Exception(" Can't find variable id {0} ({1}) in inputs {2} ".format( vid, input_id, str( _inputs.keys() ) ))
+            else:
+                variable = _input.getVariable()
+                ingrid = _input.getGrid()
+                inlatBounds, inlonBounds = ingrid.getBounds()
+                self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) )
+                self.logger.info( " >> in LON Bounds shape: " + str(inlonBounds.shape) )
+                self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
+                outlatBounds, outlonBounds = toGrid.getBounds()
+                self.logger.info( " >> out LAT Bounds shape: " + str(outlatBounds.shape) )
+                self.logger.info( " >> out LON Bounds shape: " + str(outlonBounds.shape) )
+                if( not ingrid == toGrid ):
+                    self.logger.info( " Regridding Variable {0} using grid {1} ".format( variable.id, str(toGrid) ) )
+                    if self._debug:
+                        self.logger.info( " >> Input Data Sample: [ {0} ]".format( ', '.join(  [ str( variable.data.flat[i] ) for i in range(20,90) ] ) ) )
+                        self.logger.info( " >> Input Variable Shape: {0}, Grid Shape: {1} ".format( str(variable.shape), str([len(ingrid.getLatitude()),len(ingrid.getLongitude())] )))
 
-                result_var = variable.regrid( toGrid, regridTool="esmf", regridMethod=method )
-                self.logger.info( " >> Gridded Data Sample: [ {0} ]".format( ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
-                results.append( self.createResult( result_var, _input, task ) )
+                    result_var = variable.regrid( toGrid, regridTool="esmf", regridMethod=method )
+                    self.logger.info( " >> Gridded Data Sample: [ {0} ]".format( ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
+                    results.append( self.createResult( result_var, _input, task ) )
         t1 = time.time()
-        self.logger.info(" @RRR@ Completed regrid operation for input variables: {0} in time {1}".format( str(_inputs.keys), (t1 - t0)))
+        self.logger.info(" @RRR@ Completed regrid operation for input variables: {0} in time {1}".format( str( _inputs.keys() ), (t1 - t0)))
         return results
 
 class AverageKernel(CDMSKernel):

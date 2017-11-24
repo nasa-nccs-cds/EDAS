@@ -70,6 +70,8 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
   val nodeId = node.getNodeId
   def getRegridSpec: Option[RegridSpec] = optPartitioner.map( _.regridSpec )
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
+  def fetchContents: Set[String] = _optInputsRDD.fold( Set.empty[String] )( _.fetchContents )
+  def contents: Set[String] = _optInputsRDD.fold( Set.empty[String] )( _.contents )
 
   def mapReduce( kernelCx: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = _optInputsRDD match {
     case Some( inputRdd:RDDContainer ) => inputRdd.mapReduce( node.kernel, kernelCx, batchIndex )

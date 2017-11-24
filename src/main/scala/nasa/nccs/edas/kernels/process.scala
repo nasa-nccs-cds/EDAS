@@ -59,6 +59,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
 
   def addRddElements( vSpecs: List[DirectRDDVariableSpec] )( rddRec: RDDRecord ): RDDRecord = regridKernel.map( this )( vSpecs.foldLeft(rddRec)( _.extend(_) ) )
+//  def addRddElements( vSpecs: List[DirectRDDVariableSpec] )( rddRec: RDDRecord ): RDDRecord = vSpecs.foldLeft(rddRec)( _.extend(_) )
   lazy val grid: GridContext = getTargetGridContext
   def findGrid( gridRef: String ): Option[GridContext] = grids.find( item => ( item._1.equalsIgnoreCase(gridRef) || item._1.split('-')(0).equalsIgnoreCase(gridRef) ) ).flatMap( _._2 )
   def getConfiguration: Map[String,String] = configuration ++ operation.getConfiguration
@@ -264,21 +265,26 @@ class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
   private var _rdd = init_value; _rdd.cache()
   def map( kernel: Kernel, context: KernelContext ): Unit = {
     _rdd = _rdd.mapValues( rec => rec ++ kernel.postRDDOp( kernel.map(context)(rec), context ) )
+    _contents ++= fetchContents
   }
   def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
     node.mapReduce(_rdd,context,batchIndex)
   }
   def value: RDD[(RecordKey,RDDRecord)] = _rdd
+  def contents: Set[String] = _contents.toSet
   def cache =    _rdd.cache
   def update =   _rdd.count
+  def fetchContents: Set[String] = _rdd.map { case (key,rec) => rec.elements.keySet }.first
 
   def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
+    logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), fetchContents.mkString(", "), contents.mkString(", ") ) )
     val newVSpecs = vSpecs.filter( vspec => !_contents.contains(vspec.uid) )
     if( newVSpecs.nonEmpty ) {
       _rdd = _rdd.mapValues(rec => kernelContext.addRddElements(newVSpecs)(rec))
       _contents ++= newVSpecs.map(_.uid).toSet
       cache
     }
+    logger.info("\n\n RDDContainer ###-> END addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), fetchContents.mkString(", "), contents.mkString(", ") ) )
   }
   def addOperationInput( record: RDDRecord ): Unit = {
     _rdd = _rdd.mapValues( rddRec => rddRec ++ record )
@@ -1102,12 +1108,14 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
     val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
     val worker: PythonWorker = workerManager.getPythonWorker
     try {
+      logger.info("&MAP: Starting Kernel %s, inputs = [ %s ]".format(name, inputs.elems.mkString(", ") ) )
       val targetGrid: GridContext = context.grid
       val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
-      val input_arrays: List[HeapFltArray] = context.operation.inputs.map(id => inputs.findElements(id)).foldLeft(List[HeapFltArray]())(_ ++ _)
-      assert(input_arrays.nonEmpty, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
+      val ( input_array_map, passthrough_array_map ) = inputs.elements.partition { case ( key, array ) => context.operation.inputs.contains(key) }
+      val op_input_arrays: Seq[HeapFltArray] = input_array_map.values.toSeq
+      assert(op_input_arrays.nonEmpty, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
 
-      val (acceptable_arrays, regrid_arrays) = input_arrays.partition(_.gridFilePath.equals(regridSpec.gridFile))
+      val (acceptable_arrays, regrid_arrays) = op_input_arrays.partition(_.gridFilePath.equals(regridSpec.gridFile))
       if (regrid_arrays.isEmpty) { inputs } else {
         for (input_array <- acceptable_arrays) { worker.sendArrayMetadata( input_array.uid, input_array) }
         for (input_array <- regrid_arrays) {
@@ -1126,11 +1134,12 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
           val result = HeapFltArray( tvar, Some(regridSpec.gridFile), Some(inputs.partition.origin) )
           context.operation.rid + ":" + input_array.uid -> result
         }
-        val array_metadata = inputs.metadata ++ input_arrays.head.metadata ++ List("uid" -> context.operation.rid, "gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid  )
+        val reprocessed_input_map = TreeMap(resultItems: _*)
+        val array_metadata = inputs.metadata ++ op_input_arrays.head.metadata ++ List("uid" -> context.operation.rid, "gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid  )
         val array_metadata_crs = context.crsOpt.map( crs => array_metadata + ( "crs" -> crs ) ).getOrElse( array_metadata )
-        logger.info("&MAP: Finished Kernel %s, time = %.4f s, metadata = %s".format(name, (System.nanoTime - t0) / 1.0E9, array_metadata_crs.mkString(";")))
+        logger.info("&MAP: Finished Kernel %s, acceptable inputs = [ %s ], reprocessed inputs = [ %s ], passthrough inputs = [ %s ], time = %.4f s, metadata = %s".format(name, acceptable_array_map.keys.mkString(","), reprocessed_input_map.keys.mkString(","), passthrough_array_map.keys.mkString(","), (System.nanoTime - t0) / 1.0E9, array_metadata_crs.mkString(";") ) )
         context.addTimestamp( "Map Op complete" )
-        RDDRecord(TreeMap(resultItems: _*) ++ acceptable_array_map, array_metadata_crs, inputs.partition)
+        RDDRecord( reprocessed_input_map ++ acceptable_array_map ++ passthrough_array_map, array_metadata_crs, inputs.partition )
       }
     } finally {
       workerManager.releaseWorker( worker )
