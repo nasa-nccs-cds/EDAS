@@ -34,7 +34,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val nExp = 3
   val use_6hr_data = false
   val use_npana_data = false
-  val use_local_data = true
+  val use_local_data = false
   val test_cache = false
   val test_python = false
   val test_binning = false
@@ -124,7 +124,7 @@ class DefaultTestSuite extends EDASTestSuite {
 //  https://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/JMA/JRA-55/mon/atmos/ta.ncml.html
 // ///
 
-  test("ReanalysisEnsemble")   {
+  test("ReanalysisEnsemble") { if(test_regrid) {
     print( s"Running test ReanalysisEnsemble" )
     val JRA_input   =  s"""{"uri":"collection:/cip_jra_sample","name":"ta:v0","domain":"d0"}"""
     val MERRA2_input = s"""{"uri":"collection:/cip_merra2_sample","name":"ta:v1","domain":"d0"}"""
@@ -135,9 +135,9 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
     println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
-  }
+  }}
 
-  test("DiffWithRegrid")   {
+  test("DiffWithRegrid")  { if(test_regrid)  {
     print( s"Running test DiffWithRegrid" )
     val GISS_mon_variable   = s"""{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml","name":"tas:v0"}"""
     val MERRA2_mon_variable = s"""{"uri":"collection:/giss_r1i1p1","name":"tas:v1"}"""
@@ -149,7 +149,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
     println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
-  }
+  } }
 
   test("TimeConvertedDiff")  { if( use_6hr_data ) {
     print( s"Running test TimeConvertedDiff" )

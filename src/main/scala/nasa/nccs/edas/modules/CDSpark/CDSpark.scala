@@ -161,7 +161,7 @@ class eAve extends Kernel(Map.empty) {
     assert( input_fastArrays.size > 1, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format( context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",") ) )
     val missing = input_arrays.head.getMissing()
     val inputId = context.operation.inputs.head
-    val input_data = inputs.element(inputId).get
+    val input_data = input_arrays.head
     logger.info(" -----> Executing Kernel %s, inputs = %s, input shapes = [ %s ]".format(name, context.operation.inputs.mkString(","), input_arrays.map( _.shape.mkString("(",",",")")).mkString(", ") ) )
 
     val ( resultArray, weightArray ) = if( addWeights(context) ) {

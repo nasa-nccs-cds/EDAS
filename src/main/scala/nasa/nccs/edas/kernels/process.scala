@@ -262,38 +262,41 @@ object KernelStatus {
 
 class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
   private val _contents = mutable.HashSet.empty[String]
-  private var _rdd = init_value; _rdd.cache()
+  private var _vault = new RDDVault(init_value)
+
+  class RDDVault( init_value: RDD[(RecordKey,RDDRecord)] ) {
+    private var _rdd = init_value; _rdd.cache()
+    def update( new_rdd: RDD[(RecordKey,RDDRecord)] ): Unit = { _rdd.unpersist(false); _rdd = new_rdd; _rdd.cache }
+    def map( f: (RDD[(RecordKey,RDDRecord)]) => RDD[(RecordKey,RDDRecord)] ): Unit = update( f(_rdd) )
+    def updateValues( f: (RDDRecord) => RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ f(rec) ) )
+    def mapValues( f: (RDDRecord) => RDDRecord ): Unit = update( _rdd.mapValues( rec => f(rec) ) )
+    def +=( record: RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ record ) )
+    def value = _rdd
+    def fetchContents: Set[String] = _rdd.map { case (key,rec) => rec.elements.keySet }.first
+  }
   def map( kernel: Kernel, context: KernelContext ): Unit = {
-    _rdd = _rdd.mapValues( rec => rec ++ kernel.postRDDOp( kernel.map(context)(rec), context ) )
-    _contents ++= fetchContents
+    _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
+    _contents ++= _vault.fetchContents
   }
-  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
-    node.mapReduce(_rdd,context,batchIndex)
-  }
-  def value: RDD[(RecordKey,RDDRecord)] = _rdd
+  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = node.mapReduce( value, context, batchIndex )
+  def value: RDD[(RecordKey,RDDRecord)] = _vault.value
   def contents: Set[String] = _contents.toSet
-  def cache =    _rdd.cache
-  def update =   _rdd.count
-  def fetchContents: Set[String] = _rdd.map { case (key,rec) => rec.elements.keySet }.first
+  def section( section: Option[CDSection] ): Unit = _vault.mapValues( _.section(section) )
+  def fetchContents: Set[String] = _vault.fetchContents
 
   def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
-    logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), fetchContents.mkString(", "), contents.mkString(", ") ) )
+    logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
     val newVSpecs = vSpecs.filter( vspec => !_contents.contains(vspec.uid) )
     if( newVSpecs.nonEmpty ) {
-      _rdd = _rdd.mapValues(rec => kernelContext.addRddElements(newVSpecs)(rec))
+      _vault.mapValues( kernelContext.addRddElements(newVSpecs) )
       _contents ++= newVSpecs.map(_.uid).toSet
-      cache
     }
-    logger.info("\n\n RDDContainer ###-> END addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), fetchContents.mkString(", "), contents.mkString(", ") ) )
+    logger.info("\n\n RDDContainer ###-> END addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
   }
   def addOperationInput( record: RDDRecord ): Unit = {
-    _rdd = _rdd.mapValues( rddRec => rddRec ++ record )
+    _vault += record
     _contents ++= record.elements.keySet
   }
-  def section( section: Option[CDSection] ): Unit = {
-    _rdd = _rdd.mapValues(rddRec => rddRec.section(section))
-  }
-
 }
 
 abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Loggable with Serializable with WPSProcess {
