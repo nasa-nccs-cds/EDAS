@@ -328,26 +328,28 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     } else { OptCrs }
   }
 
-  def getNodeInput( uid: String, requestCx: RequestContext, workflowNode: WorkflowNode): OperationInput = requestCx.getInputSpec(uid) match {
-    case Some(inputSpec) =>
-      logger.info("getInputSpec: %s -> %s ".format(uid, inputSpec.longname))
-      if( workflowNode.kernel.extInputs ) { new ExternalDataInput( inputSpec, workflowNode ) }
-      else                                { executionMgr.serverContext.getOperationInput(inputSpec, requestCx.getConfiguration, workflowNode ) }
-    case None =>
-      nodes.find( _.getResultId.equals(uid) ) match {
-        case Some(inode) => new DependencyOperationInput( inode, workflowNode )
-        case None =>
-          val errorMsg = " ** Unidentified input in workflow node %s: %s, input ids = %s".format(workflowNode.getNodeId, uid, requestCx.inputs.keySet.mkString(", "))
-          logger.error(errorMsg)
-          throw new Exception(errorMsg)
-      }
+  def getNodeInput( uid: String, requestCx: RequestContext, workflowNode: WorkflowNode): OperationInput = {
+    val nodeInput = requestCx.getInputSpec(uid) match {
+      case Some(inputSpec) =>
+        logger.info("getInputSpec: %s -> %s ".format(uid, inputSpec.longname))
+        if( workflowNode.kernel.extInputs ) { new ExternalDataInput( inputSpec, workflowNode ) }
+        else                                { executionMgr.serverContext.getOperationInput(inputSpec, requestCx.getConfiguration, workflowNode ) }
+      case None =>
+        nodes.find( _.getResultId.equals(uid) ) match {
+          case Some(inode) => new DependencyOperationInput( inode, workflowNode )
+          case None =>
+            val errorMsg = " ** Unidentified input in workflow node %s: %s, input ids = %s".format(workflowNode.getNodeId, uid, requestCx.inputs.keySet.mkString(", "))
+            logger.error(errorMsg)
+            throw new Exception(errorMsg)
+        }
+    }
+    nodeInput.registerConsumer( workflowNode.operation.identifier )
   }
 
 
   def getNodeInputs(requestCx: RequestContext, workflowNode: WorkflowNode): Map[String, OperationInput] = {
     val items = for (uid <- workflowNode.operation.inputs) yield {
-      val inputId = workflowNode.operation.identifier + ":" + uid
-      uid -> _nodeInputs.getOrElseUpdate(inputId, getNodeInput( uid, requestCx, workflowNode))
+      uid -> _nodeInputs.getOrElseUpdate( uid, getNodeInput( uid, requestCx, workflowNode))
     }
     Map(items: _*)
   }

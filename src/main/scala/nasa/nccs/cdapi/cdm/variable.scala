@@ -12,9 +12,11 @@ import ucar.{ma2, nc2, unidata}
 import ucar.nc2.dataset.{CoordinateAxis1D, _}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import ucar.nc2.constants.AxisType
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeMap
+import scala.collection.mutable
 import scala.util.matching.Regex
 
 object BoundsRole extends Enumeration { val Start, End = Value }
@@ -88,8 +90,10 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
 }
 
 trait OperationInput {
+  private val _consumers = mutable.HashSet.empty[String]
   def getKeyString: String
   def matchesReference( objRef: Option[String] ): Boolean = false
+  def registerConsumer( consumerId: String ): OperationInput = { _consumers += consumerId; this }
 }
 class EmptyOperationInput() extends OperationInput { def getKeyString: String = ""; }
 

@@ -38,7 +38,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val test_cache = false
   val test_python = false
   val test_binning = false
-  val test_regrid = false
+  val test_regrid = true
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
 
