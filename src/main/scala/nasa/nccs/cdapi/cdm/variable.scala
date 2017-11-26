@@ -89,11 +89,24 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
   def getCoordinateAxesList = collection.grid.getCoordinateAxes
 }
 
+class InputConsumer( val operation: OperationContext ) {
+  private var _satiated = false;
+  val id: String = operation.identifier
+  def satiate(): Unit = _satiated = true;
+  def satiated: Boolean = _satiated
+}
+
 trait OperationInput {
-  private val _consumers = mutable.HashSet.empty[String]
+  private val _consumers = mutable.HashMap.empty[String,InputConsumer]
+  val transient = true
   def getKeyString: String
   def matchesReference( objRef: Option[String] ): Boolean = false
-  def registerConsumer( consumerId: String ): OperationInput = { _consumers += consumerId; this }
+  private def _registerConsumer( consumer: InputConsumer ): OperationInput = { _consumers += (consumer.id -> consumer); this }
+  def registerConsumer( operation: OperationContext  ): OperationInput = { _registerConsumer( new InputConsumer(operation) ); this }
+  def satiated: Boolean =  _consumers forall { case (uid,consumer) =>  consumer.satiated }
+  def disposable: Boolean = transient && satiated
+  private def unknown( operation: OperationContext ) = throw new Exception(s"Unrecognized operation ${operation.identifier} in opInput ${getKeyString}")
+  def consume( op: OperationContext ): Unit = _consumers.getOrElse( op.identifier, unknown(op) ).satiate()
 }
 class EmptyOperationInput() extends OperationInput { def getKeyString: String = ""; }
 
