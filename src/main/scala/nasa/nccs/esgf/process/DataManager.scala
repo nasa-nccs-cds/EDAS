@@ -72,20 +72,7 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
   def fetchContents: Set[String] = _optInputsRDD.fold( Set.empty[String] )( _.fetchContents )
   def contents: Set[String] = _optInputsRDD.fold( Set.empty[String] )( _.contents )
-
-  def mapReduce( kernelCx: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = _optInputsRDD match {
-    case Some( inputRdd:RDDContainer ) => inputRdd.mapReduce( node.kernel, kernelCx, batchIndex )
-    case None =>
-      throw new Exception( "Attempt to execute mapReduce on BatchRequest with no inputs.")
-  }
-
-  def map( node: WorkflowNode, kernelCx: KernelContext, batchIndex: Int ) = _optInputsRDD match {
-    case Some( inputRdd:RDDContainer ) =>
-      inputRdd.map( node.kernel, kernelCx )
-    case None =>
-      throw new Exception( "Attempt to execute mapReduce on BatchRequest with no inputs.")
-  }
-
+  def getInputs(node: WorkflowNode): List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
 
   private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
     case None => Unit
@@ -102,6 +89,27 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
         val rdd = parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex))
         _optInputsRDD = Some( new RDDContainer(rdd) )
       }
+  }
+
+  private def releaseInputs(node: WorkflowNode): Unit = {
+    val disposable_inputs: Iterable[String] = for( (uid,input) <- getInputs(node); if input.disposable ) yield { uid }
+    _optInputsRDD.foreach( _.release(disposable_inputs) )
+  }
+
+  def mapReduce( kernelCx: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = _optInputsRDD match {
+    case Some( inputRdd:RDDContainer ) =>
+      val result = inputRdd.mapReduce( node.kernel, kernelCx, batchIndex )
+      releaseInputs( node )
+      result
+    case None => throw new Exception( "Attempt to execute mapReduce on BatchRequest with no inputs.")
+  }
+
+  def map( node: WorkflowNode, kernelCx: KernelContext, batchIndex: Int ) = _optInputsRDD match {
+    case Some( inputRdd:RDDContainer ) =>
+      inputRdd.map( node.kernel, kernelCx )
+      releaseInputs( node )
+    case None =>
+      throw new Exception( "Attempt to execute mapReduce on BatchRequest with no inputs.")
   }
 
   def hasBatch ( batchIndex: Int ): Boolean = optPartitioner match {

@@ -867,6 +867,10 @@ class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[Stri
   def ++( other: RDDRecord ): RDDRecord = {
     new RDDRecord( elements ++ other.elements, metadata ++ other.metadata, partition )
   }
+  def release( keys: Iterable[String] ): RDDRecord  = {
+    val new_elements = elements.filterKeys( key => !keys.contains(key) )
+    new RDDRecord( new_elements, metadata, partition )
+  }
   def hasMultiGrids: Boolean = {
     if( elements.size == 0 ) return false
     val head_shape = elements.head._2.shape

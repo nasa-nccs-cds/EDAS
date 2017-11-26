@@ -273,6 +273,7 @@ class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
     def +=( record: RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ record ) )
     def value = _rdd
     def fetchContents: Set[String] = _rdd.map { case (key,rec) => rec.elements.keySet }.first
+    def release( keys: Iterable[String] ): Unit = mapValues( _.release(keys) )
   }
   def map( kernel: Kernel, context: KernelContext ): Unit = {
     _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
@@ -283,6 +284,7 @@ class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
   def contents: Set[String] = _contents.toSet
   def section( section: Option[CDSection] ): Unit = _vault.mapValues( _.section(section) )
   def fetchContents: Set[String] = _vault.fetchContents
+  def release( keys: Iterable[String] ): Unit = { _vault.release( keys ); _contents --= keys.toSet }
 
   def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
     logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
@@ -1115,7 +1117,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val targetGrid: GridContext = context.grid
       val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
       val ( input_array_map, passthrough_array_map ) = inputs.elements.partition { case ( key, array ) => context.operation.inputs.contains(key) }
-      val op_input_arrays: Seq[HeapFltArray] = input_array_map.values.toSeq
+      val op_input_arrays: List[HeapFltArray] = input_array_map.values.toList
       assert(op_input_arrays.nonEmpty, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
 
       val (acceptable_arrays, regrid_arrays) = op_input_arrays.partition(_.gridFilePath.equals(regridSpec.gridFile))
