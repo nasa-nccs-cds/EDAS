@@ -310,7 +310,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
     val datainputs = s"""[
              variable=[$GISS_H_variables],
-             domain=[       {"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"}}],
+             domain=[       {"name":"d0","lat":{"start":10,"end":20,"system":"values"},"lon":{"start":10,"end":20,"system":"values"}}],
              operation=[    {"name":"CDSpark.eAve","input":"${GISS_H_vids.mkString(",")}","domain":"d0"} ]
             ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
@@ -323,7 +323,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
     val datainputs = s"""[
              variable=[$GISS_H_variables],
-             domain=[       {"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"},"time":{"start":"1985-01-01T00:00:00Z","end":"1990-04-04T00:00:00Z"}}],
+             domain=[       {"name":"d0","lat":{"start":10,"end":20,"system":"values"},"lon":{"start":10,"end":20,"system":"values"},"time":{"start":"1985-01-01T00:00:00Z","end":"1990-04-04T00:00:00Z"}}],
              operation=[    {"name":"CDSpark.eAve","input":"${GISS_H_vids.mkString(",")}","domain":"d0"} ]
             ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
@@ -344,7 +344,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }
 
   test("ensemble_time_ave2") {
-    val unverified_result: CDFloatArray = CDFloatArray(  Array( 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167, 240.07167 ).map(_.toFloat), Float.MaxValue )
+    val unverified_result: CDFloatArray = CDFloatArray(  Array( 246.78374, 246.78374, 246.78374, 246.78374, 246.78374, 246.78374, 246.78374, 246.78374, 246.78374, 246.78374 ).map(_.toFloat), Float.MaxValue )
     val GISS_H_vids = ( 1 to nExp ) map { index => s"vH$index" }
     val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
     val datainputs = s"""[

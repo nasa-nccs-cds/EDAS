@@ -92,7 +92,8 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
 class InputConsumer( val operation: OperationContext ) {
   private var _satiated = false;
   val id: String = operation.identifier
-  def satiate(): Unit = _satiated = true;
+  def satiate(): Unit =
+    _satiated = true;
   def satiated: Boolean = _satiated
 }
 

@@ -415,13 +415,11 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
           val opSection: Option[CDSection] = getOpSectionIntersection( gridRefInput.getGrid, node ).map( CDSection(_) )
           logger.info("\n\n ----------------------- BEGIN addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]   -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(batchRequest), batchRequest.contents.mkString(", ") ) )
           batchRequest.addKernelInputs( executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex )
-          directInput.consume( kernelContext.operation )
           logger.info("\n\n ----------------------- END addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]  -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(batchRequest), batchRequest.contents.mkString(", ") ) )
         case ( kernelInput: DependencyOperationInput  ) => kernelInput.inputNode.getProduct match {
             case None =>
               logger.info("\n\n ----------------------- NODE %s => BEGIN Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, kernelInput.inputNode.getNodeId, batchIndex, kernelInput.inputNode.getResultId, batchRequest.contents.mkString(", ") ) )
               stream(kernelInput.inputNode, batchRequest, batchIndex)
-              kernelInput.consume( kernelContext.operation )
               logger.info("\n\n ----------------------- NODE %s => END   Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, kernelInput.inputNode.getNodeId, batchIndex, kernelInput.inputNode.getResultId, batchRequest.contents.mkString(", ") ) )
             case Some((key: RecordKey, result: RDDRecord)) =>
               val opSection: Option[CDSection] = kernelContext.getDomainSections.headOption

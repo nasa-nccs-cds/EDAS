@@ -91,7 +91,8 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
       }
   }
 
-  private def releaseInputs(node: WorkflowNode): Unit = {
+  private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Unit = {
+    for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )
     val disposable_inputs: Iterable[String] = for( (uid,input) <- getInputs(node); if input.disposable ) yield { uid }
     _optInputsRDD.foreach( _.release(disposable_inputs) )
   }
@@ -99,7 +100,7 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
   def mapReduce( kernelCx: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = _optInputsRDD match {
     case Some( inputRdd:RDDContainer ) =>
       val result = inputRdd.mapReduce( node.kernel, kernelCx, batchIndex )
-      releaseInputs( node )
+      releaseInputs( node, kernelCx )
       result
     case None => throw new Exception( "Attempt to execute mapReduce on BatchRequest with no inputs.")
   }
@@ -107,7 +108,7 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
   def map( node: WorkflowNode, kernelCx: KernelContext, batchIndex: Int ) = _optInputsRDD match {
     case Some( inputRdd:RDDContainer ) =>
       inputRdd.map( node.kernel, kernelCx )
-      releaseInputs( node )
+      releaseInputs( node, kernelCx )
     case None =>
       throw new Exception( "Attempt to execute mapReduce on BatchRequest with no inputs.")
   }
