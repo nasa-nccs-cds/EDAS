@@ -7,7 +7,7 @@ import nasa.nccs.caching.{CachePartitions, EDASPartitioner, FileToCacheStream, F
 import nasa.nccs.cdapi.data.{RDDRecord, _}
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.WorkflowNode.regridKernel
-import nasa.nccs.edas.engine.{WorkflowContext, WorkflowNode}
+import nasa.nccs.edas.engine.{ExecutionCallback, WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext, RDDContainer}
@@ -75,6 +75,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def contents: Set[String] = _optInputsRDD.fold( Set.empty[String] )( _.contents )
   def getInputs(node: WorkflowNode): List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
   def getReduceOp(context: KernelContext): (RDDKeyValPair,RDDKeyValPair)=>RDDKeyValPair = rootNode.kernel.getReduceOp(context)
+  def getTargetGrid: Option[TargetGrid] = workflowCx.getTargetGrid
 
   private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
     case None => Unit
@@ -224,7 +225,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   }
 }
 
-class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String] ) extends ScopeContext with Loggable {
+class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String], val executionCallback: Option[ExecutionCallback]=None ) extends ScopeContext with Loggable {
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = task.domainMap
@@ -234,7 +235,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   def getDataSources: Map[String, Option[DataFragmentSpec]] = inputs
   def getInputSpec( uid: String ): Option[DataFragmentSpec] = inputs.get( uid ).flatten
   def getInputSpec(): Option[DataFragmentSpec] = inputs.head._2
-  def getCollection( serverContext: ServerContext, uid: String = "" ): Option[Collection] = inputs.get( uid ) match {
+  def getCollection( uid: String = "" ): Option[Collection] = inputs.get( uid ) match {
     case Some(optInputSpec) => optInputSpec map { inputSpec => inputSpec.getCollection }
     case None =>inputs.head._2 map { inputSpec => inputSpec.getCollection }
   }

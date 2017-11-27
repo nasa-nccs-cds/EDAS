@@ -134,6 +134,91 @@ object CDS2ExecutionManager extends Loggable {
       case Some( htype ) => htype
       case None => appParameters( key, default_val )
     }
+
+  def saveResultToFile( executor: WorkflowExecutor, dataMap: Map[String,CDFloatArray], varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute] ): String = {
+    val resultId: String = executor.rootNode.getResultId
+    val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
+    val resultFile = Kernel.getResultFile(resultId, true)
+    val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
+    val path = resultFile.getAbsolutePath
+    try {
+      val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
+      val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result ${resultId}"))
+      writer.setLargeFile(true)
+      //      assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
+      val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
+      val shape = dataMap.values.head.getShape
+      val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
+      val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
+      val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
+        inputSpec.getRange(coordAxis.getFullName) match {
+          case Some(range) =>
+            val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
+            for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
+            val newRange = dimsMap.get(coordAxis.getFullName) match {
+              case None => range;
+              case Some(dim) => if (dim.getLength < range.length) new ma2.Range(dim.getLength) else range
+            }
+            val data = coordAxis.read(List(newRange))
+            Some(coordVar, data)
+          case None => None
+        }
+      }).flatten
+
+      logger.info("Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s]".format(
+        resultId, path, dataMap.keys.mkString(","), dims.map(_.toString).mkString(","), shape.mkString(","),
+        newCoordVars.map { case (cvar, data) => "%s: (%s)".format(cvar.getFullName, data.getShape.mkString(",")) }.mkString(",")))
+      writer.create()
+      for (newCoordVar <- newCoordVars) {
+        newCoordVar match {
+          case (coordVar, coordData) =>
+            logger.info("Writing cvar %s: shape = [%s], dataType = %s".format(coordVar.getFullName, coordData.getShape.mkString(","), coordVar.getDataType.toString))
+            writer.write(coordVar, coordData)
+        }
+      }
+      dataMap.foreach { case (varname, maskedTensor) =>
+        val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, dims.toList)
+        varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }
+        variable.addAttribute(new nc2.Attribute("missing_value", maskedTensor.getInvalid))
+        dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
+        writer.write(variable, maskedTensor)
+        //          for( dim <- dims ) {
+        //            val dimvar: nc2.Variable = writer.addVariable(null, dim.getFullName, ma2.DataType.FLOAT, List(dim) )
+        //            writer.write( dimvar, dimdata )
+        //          }
+        logger.info("Done writing output to file %s".format(path))
+      }
+    } catch {
+      case ex: IOException =>
+        logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
+        ex.printStackTrace(logger.writer)
+        ex.printStackTrace()
+        throw ex
+    }
+    writer.close()
+    path
+  }
+
+  def searchForAttrValue(metadata: Map[String, nc2.Attribute], keys: List[String], default_val: String): String = {
+    keys.length match {
+      case 0 => default_val
+      case x => metadata.get(keys.head) match {
+        case Some(valueAttr) => valueAttr.getStringValue()
+        case None => searchForAttrValue(metadata, keys.tail, default_val)
+      }
+    }
+  }
+
+  def searchForValue(metadata: Map[String,String], keys: List[String], default_val: String): String = {
+    keys.length match {
+      case 0 => default_val
+      case x => metadata.get(keys.head) match {
+        case Some(valueAttr) => valueAttr
+        case None => searchForValue(metadata, keys.tail, default_val)
+      }
+    }
+  }
+
 }
 
 class CDS2ExecutionManager extends WPSServer with Loggable {
@@ -204,7 +289,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 //    }
 //  }
 
-  def createRequestContext( jobId: String, request: TaskRequest, run_args: Map[String,String] ): RequestContext = {
+  def createRequestContext( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): RequestContext = {
     val t0 = System.nanoTime
     val profiler = ProfilingTool( serverContext.spark.sparkContext )
     val sourceContainers = request.variableMap.values.filter(_.isSource)
@@ -215,7 +300,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
     }
     val t2 = System.nanoTime
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
-    val rv = new RequestContext ( jobId, sourceMap, request, profiler, run_args )
+    val rv = new RequestContext ( jobId, sourceMap, request, profiler, run_args, executionCallback )
     val t3 = System.nanoTime
     profiler.timestamp( " LoadInputDataT: %.4f %.4f %.4f, MAXINT: %.2f G".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, Int.MaxValue/1.0E9 ), true )
     rv
@@ -234,85 +319,8 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
 
   def clearCache: Set[String] = serverContext.clearCache
 
-  def searchForAttrValue(metadata: Map[String, nc2.Attribute], keys: List[String], default_val: String): String = {
-    keys.length match {
-      case 0 => default_val
-      case x => metadata.get(keys.head) match {
-        case Some(valueAttr) => valueAttr.getStringValue()
-        case None => searchForAttrValue(metadata, keys.tail, default_val)
-      }
-    }
-  }
 
-  def searchForValue(metadata: Map[String,String], keys: List[String], default_val: String): String = {
-    keys.length match {
-      case 0 => default_val
-      case x => metadata.get(keys.head) match {
-        case Some(valueAttr) => valueAttr
-        case None => searchForValue(metadata, keys.tail, default_val)
-      }
-    }
-  }
 
-  def saveResultToFile( resultId: String, gridUid: String, maskedTensor: CDFloatArray, request: RequestContext, server: ServerContext, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute] ): Option[String] = {
-    val optInputSpec: Option[DataFragmentSpec] = request.getInputSpec()
-    val targetGrid = request.getTargetGridOpt( gridUid ).getOrElse( throw new Exception( "Undefined Target Grid when saving result " + resultId ))
-    request.getCollection(server) map { collection =>
-      val varname = searchForValue(varMetadata, List("varname", "fullname", "standard_name", "original_name", "long_name"), "Nd4jMaskedTensor")
-      val resultFile = Kernel.getResultFile( resultId, true )
-      val chunker: Nc4Chunking  = new Nc4ChunkingStrategyNone()
-      val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker )
-      writer.setLargeFile(true)
-      assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
-      val coordAxes: List[CoordinateAxis] = collection.grid.getCoordinateAxes
-      val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, maskedTensor.getShape(idim)))
-      val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
-      val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec => inputSpec.getRange(coordAxis.getFullName) match {
-        case Some(range) =>
-          val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
-          for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
-          val newRange = dimsMap.get(coordAxis.getFullName) match {
-            case None => range;
-            case Some(dim) => if (dim.getLength < range.length) new ma2.Range(dim.getLength) else range
-          }
-          val data = coordAxis.read( List(newRange) )
-          Some( coordVar, data )
-        case None => None
-      } }).flatten
-      logger.info("Writing result %s to file '%s', varname=%s, dims=(%s), shape=[%s], coords = [%s]".format(
-        resultId, resultFile.getAbsolutePath, varname, dims.map(_.toString).mkString(","), maskedTensor.getShape.mkString(","),
-        newCoordVars.map { case (cvar, data) => "%s: (%s)".format(cvar.getFullName, data.getShape.mkString(",")) }.mkString(",")))
-      val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, dims.toList)
-      varMetadata map {case (key, value) => variable.addAttribute( new Attribute(key, value)) }
-      variable.addAttribute(new nc2.Attribute("missing_value", maskedTensor.getInvalid))
-      dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
-      try {
-        writer.create()
-        for (newCoordVar <- newCoordVars) {
-          newCoordVar match {
-            case (coordVar, coordData) =>
-              logger.info("Writing cvar %s: shape = [%s], dataType = %s".format(coordVar.getFullName, coordData.getShape.mkString(","), coordVar.getDataType.toString ))
-              writer.write(coordVar, coordData)
-          }
-        }
-        writer.write(variable, maskedTensor)
-        //          for( dim <- dims ) {
-        //            val dimvar: nc2.Variable = writer.addVariable(null, dim.getFullName, ma2.DataType.FLOAT, List(dim) )
-        //            writer.write( dimvar, dimdata )
-        //          }
-        writer.close()
-        val path = resultFile.getAbsolutePath
-        logger.info("Done writing output to file %s".format(path))
-        path
-      } catch {
-        case ex: IOException =>
-          logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
-          ex.printStackTrace( logger.writer )
-          ex.printStackTrace()
-          return None
-      }
-    }
-  }
 
   def isCollectionPath( path: File ): Boolean = { path.isDirectory || path.getName.endsWith(".csv") }
 
@@ -361,7 +369,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
   def futureExecute( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): Future[WPSResponse] = Future {
     logger.info("ASYNC Execute { runargs: " + run_args.toString + ",  request: " + request.toString+ ",  jobId: " + jobId + " }")
     try {
-      val requestContext = createRequestContext(jobId, request, run_args)
+      val requestContext = createRequestContext( jobId, request, run_args, executionCallback )
       val results = executeWorkflows(requestContext)
       val response = results.toXml(ResponseSyntax.Generic)
       executionCallback.foreach(_.success(response))
@@ -411,12 +419,15 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
   def getResultVariable( resId: String ): Option[RDDTransientVariable] = collectionDataCache.getExistingResult( resId )
   def getResultVariables: Iterable[String] = collectionDataCache.getResultIdList
 
-  def getResultFilePath( resId: String ): Option[String] = getResultVariable( resId ) match {
+  def getResultFilePath( resId: String, executor: WorkflowExecutor ): Option[String] = getResultVariable( resId ) match {
       case Some( tvar: RDDTransientVariable ) =>
         val result = tvar.result.elements.values.head
         val resultFile = Kernel.getResultFile( resId )
-        if(resultFile.exists) Some(resultFile.getAbsolutePath)
-        else { saveResultToFile(resId, tvar.getGridId, result.toCDFloatArray, tvar.request, serverContext, result.metadata, List.empty[nc2.Attribute] ) }
+        if(resultFile.exists) Some( resultFile.getAbsolutePath )
+        else {
+          val resultMap = tvar.result.elements.mapValues( _.toCDFloatArray )
+          Some( saveResultToFile(executor, resultMap, result.metadata, List.empty[nc2.Attribute] ) )
+        }
       case None => None
     }
 
@@ -500,6 +511,7 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
         case "util" =>  new WPSMergedEventReport( task.operations.map( utilityExecution( _, requestCx )))
         case x =>
           logger.info( "---------->>> Execute Workflows: " + task.operations.mkString(",") )
+
           val responses = task.workflow.executeRequest( requestCx )
           new MergedWPSExecuteResponse( requestCx.jobId, responses )
       }

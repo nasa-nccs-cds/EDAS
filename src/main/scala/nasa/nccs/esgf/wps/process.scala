@@ -3,7 +3,7 @@ import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.loaders.EDAS_XML
 import nasa.nccs.edas.portal.EDASPortalClient
-import nasa.nccs.esgf.process.TaskRequest
+import nasa.nccs.esgf.process.{TaskRequest, WorkflowExecutor}
 import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.Loggable
 
@@ -27,7 +27,7 @@ trait GenericProcessManager {
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node;
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node;
   def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node
-  def getResultFilePath( service: String, resultId: String ): Option[String]
+  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String]
   def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def term();
@@ -65,9 +65,9 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.executeProcess( request, job.datainputs, job.runargs, executionCallback )
   }
 
-  def getResultFilePath( service: String, resultId: String ): Option[String] = {
+  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String] = {
     val serviceProvider = apiManager.getServiceProvider(service)
-    val path = serviceProvider.getResultFilePath(resultId)
+    val path = serviceProvider.getResultFilePath( resultId, executor )
     logger.info( "EDAS ProcessManager-> getResultFile: " + resultId + ", path = " + path.getOrElse("NULL") )
     path
   }
@@ -156,7 +156,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     }
   }
 
-  def getResultFilePath( service: String, resultId: String ): Option[String] = {
+  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String] = {
     Some( response_manager.getPublishFile( "publish", resultId + ".nc" ).toString )
   }
 
