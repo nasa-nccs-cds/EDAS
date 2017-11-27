@@ -179,13 +179,14 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     val root_node = executor.rootNode
     val kernelCx: KernelContext  = root_node.getKernelContext( executor )
     kernelCx.addTimestamp( s"Executing Kernel for node ${root_node.getNodeId}" )
+    val isIterative = executor.hasBatch(1)
     var batchIndex = 0
     var agg_result = RDDRecord.empty
     var agg_key = RecordKey.empty
     var resultFiles = mutable.ListBuffer.empty[String]
     do {
       val (key, batchResult) = executeBatch( executor, kernelCx, batchIndex )
-      if( kernelCx.doesTimeReduction ) {
+      if( kernelCx.doesTimeReduction || !isIterative ) {
         val reduceOp = executor.getReduceOp(kernelCx)
         reduceOp( (agg_key,agg_result), (key,batchResult) ) match { case (k,v) => { agg_key=k; agg_result=v } }
       } else {

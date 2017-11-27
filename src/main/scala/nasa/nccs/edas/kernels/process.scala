@@ -479,38 +479,42 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     val t0 = System.nanoTime
     val axes = context.getAxes
     val elements0: IndexedSeq[(String,HeapFltArray)] = rdd0.elements.toIndexedSeq
-    val keys = rdd0.elements.keys
-    if( keys.size != nOutputsPerInput ) {
-      throw new Exception( s"Wrong number of elements in reduction rdds for kernel ${context.operation.identifier}: ${keys.size} != ${nOutputsPerInput}, element keys = [${keys.mkString(",")}]" ) }
-    val new_elements: IndexedSeq[(String,HeapFltArray)] = elements0 flatMap { case ( key0, array0 ) => rdd1.elements.get(key0) match {
+    if( elements0.isEmpty ) { rdd1 } else if (rdd1.elements.isEmpty) { rdd0 } else {
+      val keys = rdd0.elements.keys
+      if (keys.size != nOutputsPerInput) {
+        throw new Exception(s"Wrong number of elements in reduction rdds for kernel ${context.operation.identifier}: ${keys.size} != ${nOutputsPerInput}, element keys = [${keys.mkString(",")}]")
+      }
+      val new_elements: IndexedSeq[(String, HeapFltArray)] = elements0 flatMap { case (key0, array0) => rdd1.elements.get(key0) match {
         case Some(array1) => reduceCombineOp match {
-            case Some(combineOp) =>
-              if (axes.includes(0)) Some( key0 -> array0.combine( combineOp, array1 ) )
-              else Some(key0 -> array0.append(array1))
-            case None => Some(key0 -> array0.append(array1))
-          }
+          case Some(combineOp) =>
+            if (axes.includes(0)) Some(key0 -> array0.combine(combineOp, array1))
+            else Some(key0 -> array0.append(array1))
+          case None => Some(key0 -> array0.append(array1))
+        }
         case None => None
       }
+      }
+      //    logger.debug("&COMBINE: %s, time = %.4f s".format( context.operation.name, (System.nanoTime - t0) / 1.0E9 ) )
+      context.addTimestamp("combineRDD complete")
+      RDDRecord(TreeMap(new_elements: _*), rdd0.mergeMetadata(context.operation.name, rdd1), rdd0.partition)
     }
-    //    logger.debug("&COMBINE: %s, time = %.4f s".format( context.operation.name, (System.nanoTime - t0) / 1.0E9 ) )
-    context.addTimestamp( "combineRDD complete" )
-    RDDRecord( TreeMap(new_elements:_*), rdd0.mergeMetadata(context.operation.name, rdd1), rdd0.partition )
   }
 
-  def combineElements( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] = {
-    options.get("reduceOp") match {
-      case Some( reduceOp ) =>
-        if( reduceOp.toLowerCase == "sumw" ) {
-          weightedSumReduction( key, elements0, elements1 )
-        } else if( reduceOp.toLowerCase == "avew" ) {
-          weightedAveReduction( key, elements0, elements1 )
-        } else {
-          throw new Exception( s"Unimplemented multi-input reduce op for kernel ${identifier}: " + reduceOp )
-        }
-      case None =>
-        logger.warn( s"No reduce op defined for kernel ${identifier}, appending elements" )
-        appendElements( key, elements0, elements1 )
-    }
+  def combineElements( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
+    if( elements0.isEmpty ) { elements1.toIndexedSeq } else if (elements1.isEmpty) { elements0.toIndexedSeq } else {
+      options.get("reduceOp") match {
+        case Some( reduceOp ) =>
+          if( reduceOp.toLowerCase == "sumw" ) {
+            weightedSumReduction( key, elements0, elements1 )
+          } else if( reduceOp.toLowerCase == "avew" ) {
+            weightedAveReduction( key, elements0, elements1 )
+          } else {
+            throw new Exception( s"Unimplemented multi-input reduce op for kernel ${identifier}: " + reduceOp )
+          }
+        case None =>
+          logger.warn( s"No reduce op defined for kernel ${identifier}, appending elements" )
+          appendElements( key, elements0, elements1 )
+      }
   }
 
   def missing_element( key: String ) = throw new Exception( s"Missing element in weightedSumReduction for Kernel ${identifier}, key: " + key )
@@ -521,110 +525,113 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     vbb.asFloatBuffer();
   }
 
-  def weightedSumReduction( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] = {
-    val key_lists = elements0.keys.partition( _.endsWith("_WEIGHTS_") )
-    val weights_key = key_lists._1.headOption.getOrElse( throw new Exception( s"Can't find weignts key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
-    val values_key  = key_lists._2.headOption.getOrElse( throw new Exception( s"Can't find values key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
-    val weights0 = elements0.getOrElse( weights_key, missing_element(key) )
-    val weights1 = elements1.getOrElse( weights_key, missing_element(key) )
-    val values0 = elements0.getOrElse( values_key, missing_element(key) )
-    val values1 = elements1.getOrElse( values_key, missing_element(key) )
-    val t0 = System.nanoTime()
-    val resultWeights = FloatBuffer.allocate( values0.data.length )
-    val resultValues = FloatBuffer.allocate(  weights0.data.length )
-    values0.missing match {
-      case Some( undef ) =>
-        for( index <- values0.data.indices; v0 = values0.data(index); v1 = values1.data(index) ) {
-          if( v0 == undef || v0.isNaN ) {
-            if( v1 == undef || v1.isNaN ) {
-              resultValues.put( index, undef )
+  def weightedSumReduction( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
+    if( elements0.isEmpty ) { elements1.toIndexedSeq } else if (elements1.isEmpty) { elements0.toIndexedSeq } else {
+      val key_lists = elements0.keys.partition( _.endsWith("_WEIGHTS_") )
+      val weights_key = key_lists._1.headOption.getOrElse( throw new Exception( s"Can't find weignts key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
+      val values_key  = key_lists._2.headOption.getOrElse( throw new Exception( s"Can't find values key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
+      val weights0 = elements0.getOrElse( weights_key, missing_element(key) )
+      val weights1 = elements1.getOrElse( weights_key, missing_element(key) )
+      val values0 = elements0.getOrElse( values_key, missing_element(key) )
+      val values1 = elements1.getOrElse( values_key, missing_element(key) )
+      val t0 = System.nanoTime()
+      val resultWeights = FloatBuffer.allocate( values0.data.length )
+      val resultValues = FloatBuffer.allocate(  weights0.data.length )
+      values0.missing match {
+        case Some( undef ) =>
+          for( index <- values0.data.indices; v0 = values0.data(index); v1 = values1.data(index) ) {
+            if( v0 == undef || v0.isNaN ) {
+              if( v1 == undef || v1.isNaN ) {
+                resultValues.put( index, undef )
+              } else {
+                resultValues.put( index, v1 )
+                resultWeights.put( index, weights1.data(index) )
+              }
+            } else if( v1 == undef || v1.isNaN ) {
+              resultValues.put( index, v0 )
+              resultWeights.put( index, weights0.data(index) )
             } else {
-              resultValues.put( index, v1 )
-              resultWeights.put( index, weights1.data(index) )
+              val w0 = weights0.data(index)
+              val w1 = weights1.data(index)
+              resultValues.put( index, v0 + v1 )
+              resultWeights.put( index,  w0 + w1 )
             }
-          } else if( v1 == undef || v1.isNaN ) {
-            resultValues.put( index, v0 )
-            resultWeights.put( index, weights0.data(index) )
-          } else {
-            val w0 = weights0.data(index)
-            val w1 = weights1.data(index)
-            resultValues.put( index, v0 + v1 )
-            resultWeights.put( index,  w0 + w1 )
           }
-        }
-      case None =>
-        for( index <- values0.data.indices ) {
-          resultValues.put( values0.data(index) + values1.data(index) )
-          resultWeights.put( weights0.data(index) + weights1.data(index) )
-        }
+        case None =>
+          for( index <- values0.data.indices ) {
+            resultValues.put( values0.data(index) + values1.data(index) )
+            resultWeights.put( weights0.data(index) + weights1.data(index) )
+          }
+      }
+      val valuesArray =  HeapFltArray( CDFloatArray( values0.shape,  resultValues.array,  values0.missing.getOrElse(Float.MaxValue) ),  values0.origin,  values0.metadata,  values0.weights  )
+      val weightsArray = HeapFltArray( CDFloatArray( weights0.shape, resultWeights.array, weights0.missing.getOrElse(Float.MaxValue) ), weights0.origin, weights0.metadata, weights0.weights )
+      logger.info("Completed weightedSumReduction '%s' in %.4f sec, shape = %s".format(identifier, ( System.nanoTime() - t0 ) / 1.0E9, values0.shape.mkString(",") ) )
+      IndexedSeq( values_key -> valuesArray, weights_key -> weightsArray )
     }
-    val valuesArray =  HeapFltArray( CDFloatArray( values0.shape,  resultValues.array,  values0.missing.getOrElse(Float.MaxValue) ),  values0.origin,  values0.metadata,  values0.weights  )
-    val weightsArray = HeapFltArray( CDFloatArray( weights0.shape, resultWeights.array, weights0.missing.getOrElse(Float.MaxValue) ), weights0.origin, weights0.metadata, weights0.weights )
-    logger.info("Completed weightedSumReduction '%s' in %.4f sec, shape = %s".format(identifier, ( System.nanoTime() - t0 ) / 1.0E9, values0.shape.mkString(",") ) )
-    IndexedSeq( values_key -> valuesArray, weights_key -> weightsArray )
-  }
 
-  def weightedAveReduction( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] = {
-    val key_lists = elements0.keys.partition( _.endsWith("_WEIGHTS_") )
-    val weights_key = key_lists._1.headOption.getOrElse( throw new Exception( s"Can't find weignts key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
-    val values_key  = key_lists._2.headOption.getOrElse( throw new Exception( s"Can't find values key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
-    val weights0 = elements0.getOrElse( weights_key, missing_element(key) )
-    val weights1 = elements1.getOrElse( weights_key, missing_element(key) )
-    val values0 = elements0.getOrElse( values_key, missing_element(key) )
-    val values1 = elements1.getOrElse( values_key, missing_element(key) )
-    val t0 = System.nanoTime()
-    val weightsSum = FloatBuffer.allocate( values0.data.length )
-    val weightedValues0 = FloatBuffer.allocate(  values0.data.length )
-    val weightedValues1 = FloatBuffer.allocate(  values0.data.length )
-    values0.missing match {
-      case Some( undef ) =>
-        for( index <- values0.data.indices; v0 = values0.data(index); v1 = values1.data(index) ) {
-          if( v0 == undef || v0.isNaN ) {
-            if( v1 == undef || v1.isNaN ) {
-              weightedValues0.put( index, undef )
+  def weightedAveReduction( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
+    if( elements0.isEmpty ) { elements1.toIndexedSeq } else if (elements1.isEmpty) { elements0.toIndexedSeq } else {
+      val key_lists = elements0.keys.partition( _.endsWith("_WEIGHTS_") )
+      val weights_key = key_lists._1.headOption.getOrElse( throw new Exception( s"Can't find weignts key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
+      val values_key  = key_lists._2.headOption.getOrElse( throw new Exception( s"Can't find values key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
+      val weights0 = elements0.getOrElse( weights_key, missing_element(key) )
+      val weights1 = elements1.getOrElse( weights_key, missing_element(key) )
+      val values0 = elements0.getOrElse( values_key, missing_element(key) )
+      val values1 = elements1.getOrElse( values_key, missing_element(key) )
+      val t0 = System.nanoTime()
+      val weightsSum = FloatBuffer.allocate( values0.data.length )
+      val weightedValues0 = FloatBuffer.allocate(  values0.data.length )
+      val weightedValues1 = FloatBuffer.allocate(  values0.data.length )
+      values0.missing match {
+        case Some( undef ) =>
+          for( index <- values0.data.indices; v0 = values0.data(index); v1 = values1.data(index) ) {
+            if( v0 == undef || v0.isNaN ) {
+              if( v1 == undef || v1.isNaN ) {
+                weightedValues0.put( index, undef )
+                weightedValues1.put( index, undef )
+              } else {
+                weightedValues0.put( index, undef )
+                weightedValues1.put( index, v1*weights1.data(index) )
+                weightsSum.put( index, weights1.data(index) )
+              }
+            } else if( v1 == undef || v1.isNaN ) {
+              weightedValues0.put( index, v0*weights0.data(index) )
               weightedValues1.put( index, undef )
+              weightsSum.put( index, weights0.data(index) )
             } else {
-              weightedValues0.put( index, undef )
-              weightedValues1.put( index, v1*weights1.data(index) )
-              weightsSum.put( index, weights1.data(index) )
+              weightedValues0.put( index, values0.data(index) * weights0.data(index) )
+              weightedValues1.put( index, values1.data(index) * weights1.data(index) )
+              weightsSum.put( index, weights0.data(index) + weights1.data(index) )
             }
-          } else if( v1 == undef || v1.isNaN ) {
-            weightedValues0.put( index, v0*weights0.data(index) )
-            weightedValues1.put( index, undef )
-            weightsSum.put( index, weights0.data(index) )
-          } else {
+          }
+          for( index <- values0.data.indices; wv0 = weightedValues0.get(index); wv1 = weightedValues1.get(index); ws = weightsSum.get(index) ) {
+            if( wv0 == undef ) {
+              if (wv1 == undef) { weightedValues0.put(index, undef) } else { weightedValues0.put(index, wv1/ws) }
+            } else if (wv1 == undef) { weightedValues0.put(index, wv0 / ws) }
+            else {
+              weightedValues0.put( index,  (wv0 + wv1) / ws )
+            }
+          }
+        case None =>
+          for( index <- values0.data.indices ) {
             weightedValues0.put( index, values0.data(index) * weights0.data(index) )
             weightedValues1.put( index, values1.data(index) * weights1.data(index) )
             weightsSum.put( index, weights0.data(index) + weights1.data(index) )
           }
-        }
-        for( index <- values0.data.indices; wv0 = weightedValues0.get(index); wv1 = weightedValues1.get(index); ws = weightsSum.get(index) ) {
-          if( wv0 == undef ) {
-            if (wv1 == undef) { weightedValues0.put(index, undef) } else { weightedValues0.put(index, wv1/ws) }
-          } else if (wv1 == undef) { weightedValues0.put(index, wv0 / ws) }
-          else {
-            weightedValues0.put( index,  (wv0 + wv1) / ws )
+          for( index <- values0.data.indices ) {
+            weightedValues0.put( index, (weightedValues0.get(index) + weightedValues1.get(index)) / weightsSum.get(index) )
           }
-        }
-      case None =>
-        for( index <- values0.data.indices ) {
-          weightedValues0.put( index, values0.data(index) * weights0.data(index) )
-          weightedValues1.put( index, values1.data(index) * weights1.data(index) )
-          weightsSum.put( index, weights0.data(index) + weights1.data(index) )
-        }
-        for( index <- values0.data.indices ) {
-          weightedValues0.put( index, (weightedValues0.get(index) + weightedValues1.get(index)) / weightsSum.get(index) )
-        }
+      }
+      val valuesArray =  HeapFltArray( CDFloatArray( values0.shape,  weightedValues0.array,  values0.missing.getOrElse(Float.MaxValue) ),  values0.origin,  values0.metadata,  values0.weights  )
+      val weightsArray = HeapFltArray( CDFloatArray( weights0.shape, weightsSum.array, weights0.missing.getOrElse(Float.MaxValue) ), weights0.origin, weights0.metadata, weights0.weights )
+      logger.info("Completed weightedAveReduction '%s' in %.4f sec, shape = %s".format(identifier, ( System.nanoTime() - t0 ) / 1.0E9, values0.shape.mkString(",") ) )
+      IndexedSeq( values_key -> valuesArray, weights_key -> weightsArray )
     }
-    val valuesArray =  HeapFltArray( CDFloatArray( values0.shape,  weightedValues0.array,  values0.missing.getOrElse(Float.MaxValue) ),  values0.origin,  values0.metadata,  values0.weights  )
-    val weightsArray = HeapFltArray( CDFloatArray( weights0.shape, weightsSum.array, weights0.missing.getOrElse(Float.MaxValue) ), weights0.origin, weights0.metadata, weights0.weights )
-    logger.info("Completed weightedAveReduction '%s' in %.4f sec, shape = %s".format(identifier, ( System.nanoTime() - t0 ) / 1.0E9, values0.shape.mkString(",") ) )
-    IndexedSeq( values_key -> valuesArray, weights_key -> weightsArray )
-  }
 
-  def appendElements( key: String,  elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] = {
-    elements0 flatMap { case (key,fltArray) => elements1.get(key) map ( fltArray1 => key -> fltArray.append(fltArray1) ) } toIndexedSeq
-  }
+  def appendElements( key: String,  elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
+    if( elements0.isEmpty ) { elements1.toIndexedSeq } else if (elements1.isEmpty) { elements0.toIndexedSeq } else {
+      elements0 flatMap { case (key,fltArray) => elements1.get(key) map ( fltArray1 => key -> fltArray.append(fltArray1) ) } toIndexedSeq
+    }
 
   def customReduceRDD(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair = {
     logger.warn( s"No reducer defined for parallel op '$name', executing simple merge." )
