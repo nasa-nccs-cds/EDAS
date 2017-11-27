@@ -3,8 +3,9 @@ package nasa.nccs.cdapi.cdm
 import nasa.nccs.caching._
 import nasa.nccs.cdapi.data._
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray, CDIndexMap}
-import nasa.nccs.edas.engine.WorkflowNode
+import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
+import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.esgf.process.DomainContainer.{filterMap, key_equals}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
 import nasa.nccs.esgf.utilities.wpsNameMatchers
@@ -108,11 +109,25 @@ trait OperationInput {
   def disposable: Boolean = transient && satiated
   private def unknown( operation: OperationContext ) = throw new Exception(s"Unrecognized operation ${operation.identifier} in opInput ${getKeyString}")
   def consume( op: OperationContext ): Unit = _consumers.getOrElse( op.identifier, unknown(op) ).satiate()
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int )
 }
-class EmptyOperationInput() extends OperationInput { def getKeyString: String = ""; }
+class EmptyOperationInput() extends OperationInput {
+  def getKeyString: String = "";
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {;}
+}
 
 class DependencyOperationInput( val inputNode: WorkflowNode, val opNode: WorkflowNode ) extends OperationInput with Loggable {
   def getKeyString: String =  inputNode.getNodeId + "->" + opNode.getNodeId
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = inputNode.getProduct match {
+    case None =>
+      logger.info("\n\n ----------------------- NODE %s => BEGIN Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ") ) )
+      workflow.stream(inputNode, executor, batchIndex)
+      logger.info("\n\n ----------------------- NODE %s => END   Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ") ) )
+    case Some((key: RecordKey, result: RDDRecord)) =>
+      val opSection: Option[CDSection] = kernelContext.getDomainSections.headOption
+      logger.info("\n\n ----------------------- NODE %s => Get Cached Result: %s, batch = %d, rID = %s, opSection= %s -------\n".format( node.getNodeId, inputNode.getNodeId, batchIndex, inputNode.getResultId, opSection.map(_.toString()).getOrElse("(EMPTY)") ) )
+      executor.addOperationInput(workflow.executionMgr.serverContext, result, opSection, batchIndex)
+  }
 }
 
 class OperationTransientInput( val variable: RDDTransientVariable ) extends OperationInput with Loggable {
@@ -120,6 +135,9 @@ class OperationTransientInput( val variable: RDDTransientVariable ) extends Oper
   def getKeyString: String =  variable.request.getInputSpec match {
     case Some( dataFrag )=> dataFrag.getKeyString
     case None => variable.operation.inputs.mkString(":")
+  }
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+
   }
 }
 
@@ -146,6 +164,10 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
   def data(partIndex: Int ): CDFloatArray = CDFloatArray.empty
 
   def delete: Unit = Unit
+
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+
+  }
 
   def domainSection( optSection: Option[ma2.Section] ): Option[ ( DataFragmentSpec, ma2.Section )] = {
     try {
@@ -196,10 +218,22 @@ class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,St
   override def data(partIndex: Int ): CDFloatArray = {
     CDFloatArray.empty
   }
+
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+    val gridRefInput: OperationDataInput =  executor.getGridRefInput.getOrElse( throw new Exception("No grid ref input found for domainRDDPartition") )
+    val varSpec = getRDDVariableSpec(uid)
+    val opSection: Option[CDSection] = workflow.getOpSectionIntersection( gridRefInput.getGrid, node ).map( CDSection(_) )
+    logger.info("\n\n ----------------------- BEGIN addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]   -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(executor), executor.contents.mkString(", ") ) )
+    executor.addKernelInputs( workflow.executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex )
+    logger.info("\n\n ----------------------- END addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]  -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(executor), executor.contents.mkString(", ") ) )
+  }
 }
 
 class ExternalDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {
   override def data(partIndex: Int ): CDFloatArray = CDFloatArray.empty
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+    throw new Exception(" ExternalDataInput is not currently supported as a Kernel input ")
+  }
 }
 
 class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[CDByteArray], fragSpec: DataFragmentSpec, mdata: Map[String,nc2.Attribute] = Map.empty ) extends OperationDataInput(fragSpec,mdata) with Loggable {
@@ -208,6 +242,10 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
   def delete = partitions.delete
 
   def data(partIndex: Int ): CDFloatArray = partitions.getPartData(partIndex, fragmentSpec.missing_value )
+
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+    throw new Exception(" PartitionedFragment is not currently supported as a Kernel input ")
+  }
 
   def partFragSpec( partIndex: Int ): DataFragmentSpec = {
     val part = partitions.getPart(partIndex)

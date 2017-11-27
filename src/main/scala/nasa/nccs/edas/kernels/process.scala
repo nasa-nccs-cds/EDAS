@@ -8,6 +8,7 @@ import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.data.{HeapFltArray, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.{ReduceNOpFlt, ReduceOpFlt, ReduceWNOpFlt}
 import nasa.nccs.cdapi.tensors.{CDArray, CDCoordMap, CDFloatArray, CDTimeCoordMap}
+import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.WorkflowNode.regridKernel
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.workers.TransVar
@@ -1258,6 +1259,7 @@ class TransientFragment( val dataFrag: DataFragment, val request: RequestContext
   def domainDataFragment( partIndex: Int,  optSection: Option[ma2.Section]  ): Option[DataFragment] = Some(dataFrag)
   def data(partIndex: Int ): CDFloatArray = dataFrag.data
   def delete() = {;}
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = { ; }
 }
 
 class SerializeTest {
