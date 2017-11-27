@@ -9,6 +9,7 @@ import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArra
 import nasa.nccs.edas.engine.WorkflowNode.regridKernel
 import nasa.nccs.edas.engine.{WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
+import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext, RDDContainer}
 import nasa.nccs.edas.portal.TestReadApplication.logger
 import nasa.nccs.edas.utilities.appParameters
@@ -58,21 +59,22 @@ class RegridSpec( val gridFile: String, val subgrid: String ) extends Serializab
   def test = 0;
 }
 
-//def mapReduceBatch( batchRequest: BatchRequest, kernelContext: KernelContext, batchIndex: Int ): Option[ ( RecordKey, RDDRecord ) ] = {
-//domainRDDPartition( batchRequest.node, batchRequest, kernelContext, batchIndex)
-//kernelContext.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ batchRequest.node.getNodeId}", true)
-//val result: (RecordKey, RDDRecord) =  batchRequest.node.mapReduce (rdd, kernelContext, batchIndex)
+//def mapReduceBatch( executor: executor, kernelContext: KernelContext, batchIndex: Int ): Option[ ( RecordKey, RDDRecord ) ] = {
+//domainRDDPartition( executor.node, executor, kernelContext, batchIndex)
+//kernelContext.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ executor.node.getNodeId}", true)
+//val result: (RecordKey, RDDRecord) =  executor.node.mapReduce (rdd, kernelContext, batchIndex)
 
-class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
+class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
   val optPartitioner: Option[EDASPartitioner] = generatePartitioning
   private var _optInputsRDD: Option[RDDContainer] = None
-  val node = workflowCx.rootNode
-  val nodeId = node.getNodeId
+  val rootNode = workflowCx.rootNode
+  val rootNodeId = rootNode.getNodeId
   def getRegridSpec: Option[RegridSpec] = optPartitioner.map( _.regridSpec )
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
   def fetchContents: Set[String] = _optInputsRDD.fold( Set.empty[String] )( _.fetchContents )
   def contents: Set[String] = _optInputsRDD.fold( Set.empty[String] )( _.contents )
   def getInputs(node: WorkflowNode): List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
+  def getReduceOp(context: KernelContext): (RDDKeyValPair,RDDKeyValPair)=>RDDKeyValPair = rootNode.kernel.getReduceOp(context)
 
   private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
     case None => Unit
@@ -97,20 +99,20 @@ class BatchRequest(val requestCx: RequestContext, val workflowCx: WorkflowContex
     _optInputsRDD.foreach( _.release(disposable_inputs) )
   }
 
-  def mapReduce( kernelCx: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = _optInputsRDD match {
+  def execute(kernelCx: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = _optInputsRDD match {
     case Some( inputRdd:RDDContainer ) =>
-      val result = inputRdd.mapReduce( node.kernel, kernelCx, batchIndex )
-      releaseInputs( node, kernelCx )
+      val result = inputRdd.mapReduce( rootNode.kernel, kernelCx, batchIndex )
+      releaseInputs( rootNode, kernelCx )
       result
-    case None => throw new Exception( "Attempt to execute mapReduce on BatchRequest with no inputs.")
+    case None => throw new Exception( "Attempt to execute mapReduce on executor with no inputs.")
   }
 
-  def map( node: WorkflowNode, kernelCx: KernelContext, batchIndex: Int ) = _optInputsRDD match {
+  def execInput(node: WorkflowNode, kernelCx: KernelContext, batchIndex: Int ) = _optInputsRDD match {
     case Some( inputRdd:RDDContainer ) =>
       inputRdd.map( node.kernel, kernelCx )
       releaseInputs( node, kernelCx )
     case None =>
-      throw new Exception( "Attempt to execute mapReduce on BatchRequest with no inputs.")
+      throw new Exception( "Attempt to execute mapReduce on executor with no inputs.")
   }
 
   def hasBatch ( batchIndex: Int ): Boolean = optPartitioner match {
