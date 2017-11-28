@@ -137,7 +137,7 @@ object EDASExecutionManager extends Loggable {
     }
 
   def saveResultToFile( executor: WorkflowExecutor, dataMap: Map[String,CDFloatArray], varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute] ): String = {
-    val resultId: String = executor.rootNode.getResultId
+    val resultId: String = executor.requestCx.jobId
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
     val resultFile = Kernel.getResultFile(resultId, true)
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
