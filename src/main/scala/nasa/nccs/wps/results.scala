@@ -236,7 +236,7 @@ case class WPSReference( id: String, href: String ) extends WPSResponseElement {
   }
 }
 
-abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: List[WPSProcess], val resultId: String, resultFiles: List[String] = None )  extends WPSProcessExecuteResponse( serviceInstance, processes ) {
+abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: List[WPSProcess], val resultId: String, resultFiles: List[String] = List.empty[String] )  extends WPSProcessExecuteResponse( serviceInstance, processes ) {
   val statusHref: String = wpsProxyAddress + s"/cwt/status?id=$resultId"
   val resultHref: String = wpsProxyAddress + s"/cwt/result?id=$resultId"
   val dapHrefOpt: Option[String] = if (dapProxyAddress.isEmpty) None else Some(dapProxyAddress + s"/publish/$resultId.nc")
