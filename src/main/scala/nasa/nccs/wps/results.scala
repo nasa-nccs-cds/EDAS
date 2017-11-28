@@ -181,10 +181,16 @@ abstract class WPSExecuteResponse( val serviceInstance: String ) extends WPSResp
   def getDataRef( response_syntax: ResponseSyntax.Value, id: String, resultId: String, filePaths: List[String] ): xml.Elem = getSyntax(response_syntax) match {
     case ResponseSyntax.WPS =>
       if( filePaths.isEmpty ) {   <wps:Data id={id} href={"result://"+resultId}> </wps:Data> }
-      else {                      <wps:Data id={id} href={"result://"+resultId} files={filePaths.mkString(",")}> </wps:Data>  }
+      else {
+        val fileId = filePaths.head.split('/').last.split('.').head
+        <wps:Data id={id} href={"result://"+fileId} files={filePaths.mkString(",")}> </wps:Data>
+      }
     case ResponseSyntax.Generic =>
       if( filePaths.isEmpty ) {   <data id={id} href={"result://"+resultId}> </data> }
-      else {                      <data id={id} href={"result://"+resultId} files={filePaths.mkString(",")}> </data>  }
+      else {
+        val fileId = filePaths.head.split('/').last.split('.').head
+        <data id={id} href={"result://"+fileId} files={filePaths.mkString(",")}> </data>
+      }
   }
 }
 
