@@ -258,6 +258,7 @@ public abstract class EDASPortal {
         String header = StringUtils.join(header_fields,"!");
         try {
             byte[] data = sendData ? Files.toByteArray( file ) : null;
+            logger.debug(" ##sendDataPacket: clientId=" + clientId + " jobId=" + jobId + " name=" + name + " path=" + filePath );
             responder.sendDataPacket( new DataPacket( clientId, jobId, header, data ) );
             logger.debug("Done sending file data packet: " + header);
         } catch ( IOException ex ) {

@@ -57,12 +57,12 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
       new PrintWriter( logFilePath.toFile )
     }
     printer.print("LOGFILE\n"); printer.flush();
-    openPermissions( logFilePath, "rwxr--r--" )
+    openLogFilePermissions( "rwxr--r--" )
     printer
   }
 
-  def openPermissions( path: Path, perms: String ) = {
-    val folder: Path = logFilePath.getParent
+  def openLogFilePermissions( perms: String ) = {
+    val folder: Path = Paths.get( "/tmp", System.getProperty("user.name"), "logs" )
     Files.setPosixFilePermissions(folder, PosixFilePermissions.fromString(perms))
     folder.toFile.listFiles.map( file => Files.setPosixFilePermissions( file.toPath, PosixFilePermissions.fromString(perms) ) );
   }
