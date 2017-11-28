@@ -33,6 +33,7 @@ public class ResponseManager extends Thread {
     String latest_result = "";
     SimpleDateFormat timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy");
     protected Logger logger = EDASLogManager.getCurrentLogger();
+    protected CleanupManager cleanupManager = new CleanupManager(2,0,0 );
 
     public ResponseManager( ZMQ.Context _zmqContext, String _socket_address, String _client_id, Map<String,String> configuration ) {
         socket_address = _socket_address;
@@ -48,6 +49,7 @@ public class ResponseManager extends Thread {
         cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
         publishDir =  EDASPortalClient.getOrDefault( configuration, "edas.publish.dir", cacheDir );
         logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
+        cleanupManager.addFileCleanupTask( publishDir, 24, true, ".*" );
     }
 
     public void registerCallback( String jobId, ExecutionCallback callback ) {

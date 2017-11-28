@@ -124,7 +124,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
 
 
 object Workflow {
-  def apply( request: TaskRequest, executionMgr: CDS2ExecutionManager ): Workflow = {
+  def apply( request: TaskRequest, executionMgr: EDASExecutionManager ): Workflow = {
     new Workflow( request, executionMgr )
   }
 }
@@ -166,7 +166,7 @@ case class KernelExecutionResult( key: RecordKey, record: RDDRecord, files: List
   def kvp: (RecordKey,RDDRecord) = ( key, record )
 }
 
-class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager ) extends Loggable {
+class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager ) extends Loggable {
   val nodes: Seq[WorkflowNode] = request.operations.map(opCx => WorkflowNode( opCx, createKernel( opCx.name.toLowerCase ) ) )
   val roots = findRootNodes()
   private val _nodeInputs: mutable.HashMap[String, OperationInput] = mutable.HashMap.empty[String, OperationInput]
@@ -195,7 +195,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
         aggResult = reduceOp( aggResult, batchResult )
       } else {
         val resultMap = batchResult._2.elements.mapValues( _.toCDFloatArray )
-        resultFiles += CDS2ExecutionManager.saveResultToFile(executor, resultMap, batchResult._2.metadata, List.empty[nc2.Attribute] )
+        resultFiles += EDASExecutionManager.saveResultToFile(executor, resultMap, batchResult._2.metadata, List.empty[nc2.Attribute] )
         executor.releaseBatch
       }
     } while ( { batchIndex+=1; executor.hasBatch(batchIndex) } )

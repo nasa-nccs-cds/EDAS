@@ -19,7 +19,7 @@ import java.lang.management.ManagementFactory
 
 import com.sun.management.OperatingSystemMXBean
 import nasa.nccs.cdapi.tensors.CDCoordMap
-import nasa.nccs.edas.engine.CDS2ExecutionManager.logger
+import nasa.nccs.edas.engine.EDASExecutionManager.logger
 import ucar.nc2.dataset.CoordinateAxis1DTime
 
 import scala.collection.JavaConversions._

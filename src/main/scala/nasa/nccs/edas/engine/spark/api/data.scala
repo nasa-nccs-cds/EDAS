@@ -1,13 +1,13 @@
 package nasa.nccs.edas.engine.spark.api
 
 import nasa.nccs.cdapi.data.{RDDRecord, RDDataManager}
-import nasa.nccs.edas.engine.CDS2ExecutionManager
+import nasa.nccs.edas.engine.EDASExecutionManager
 import nasa.nccs.edas.loaders.Collections
 import org.apache.spark.rdd.RDD
 import ucar.nc2
 import ucar.nc2.constants.AxisType
 
-abstract class EDASparkDataManager( val executionMgr: CDS2ExecutionManager ) extends RDDataManager {
+abstract class EDASparkDataManager( val executionMgr: EDASExecutionManager ) extends RDDataManager {
 
   def getDatasets(): Set[String] = Collections.idSet
 

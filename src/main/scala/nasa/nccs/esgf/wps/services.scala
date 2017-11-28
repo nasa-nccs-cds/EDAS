@@ -43,10 +43,10 @@ trait ServiceProvider extends Loggable {
 }
 
 object edasServiceProvider extends ServiceProvider {
-  import nasa.nccs.edas.engine.CDS2ExecutionManager
+  import nasa.nccs.edas.engine.EDASExecutionManager
   import nasa.nccs.esgf.process.TaskRequest
 
-  val cds2ExecutionManager = try { new CDS2ExecutionManager() } catch {
+  val cds2ExecutionManager = try { new EDASExecutionManager() } catch {
     case err: Throwable =>
       logger.error( "  *** ERROR initializing CDS2ExecutionManager: " + err.toString );
       err.printStackTrace();
@@ -54,7 +54,7 @@ object edasServiceProvider extends ServiceProvider {
       throw err
     }
 
-  def shutdown() = { CDS2ExecutionManager.shutdown(); }
+  def shutdown() = { EDASExecutionManager.shutdown(); }
 
   def datainputs2Str( datainputs: Map[String, Seq[Map[String, Any]]] ): String = {
     datainputs.map { case ( key:String, value:Seq[Map[String, Any]] ) =>

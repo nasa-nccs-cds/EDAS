@@ -142,13 +142,13 @@ object Kernel extends Loggable {
   def isEmpty( kvp: RDDKeyValPair ) = kvp._2.elements.isEmpty
 
   def getResultFile( resultId: String, deleteExisting: Boolean = false ): File = {
-    val resultsDir = getResultDir()
+    val resultsDir = getResultDir
     val resultFile = new File( resultsDir.toString + s"/$resultId.nc" )
     if( deleteExisting && resultFile.exists ) resultFile.delete
     resultFile
   }
 
-  def getResultDir(): File = {
+  def getResultDir: File = {
     val rawResultsDirPath = appParameters( "wps.shared.data.dir", appParameters("edas.results.dir", "~/.wps/results") )
     val resultsDirPath = rawResultsDirPath.replace( "~",  System.getProperty("user.home") ).replaceAll("[()]","-").replace("=","~")
     val resultsDir = new File(resultsDirPath); resultsDir.mkdirs()
@@ -1198,7 +1198,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
         case None =>
           worker.sendUtility( List( "input", input_id ).mkString(";") )
       }
-      val metadata = indexAxisConf( context.getConfiguration, context.grid.axisIndexMap ) ++ Map( "resultDir" -> Kernel.getResultDir().toString )
+      val metadata = indexAxisConf( context.getConfiguration, context.grid.axisIndexMap ) ++ Map( "resultDir" -> Kernel.getResultDir.toString )
       worker.sendRequest(context.operation.identifier, context.operation.inputs.toArray, metadata )
       val resultItems = for( iInput <-  0 until (operation_input_arrays.length * nOutputsPerInput)  ) yield {
         val tvar: TransVar = worker.getResult

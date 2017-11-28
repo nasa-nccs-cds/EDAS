@@ -15,13 +15,14 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.{Await, Future, Promise}
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDFloatArray}
 import nasa.nccs.caching._
-import nasa.nccs.edas.engine.CDS2ExecutionManager.logger
+import nasa.nccs.edas.engine.EDASExecutionManager.logger
 import ucar.{ma2, nc2}
 import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.engine.spark.CDSparkContext
+import nasa.nccs.edas.portal.CleanupManager
 import nasa.nccs.wps.{WPSExecuteStatusStarted, WPSResponse, _}
 import ucar.nc2.Attribute
 import ucar.nc2.dataset.CoordinateAxis
@@ -43,10 +44,10 @@ trait ExecutionCallback extends Loggable {
   def failure( msg: String )
 }
 
-object CDS2ExecutionManager extends Loggable {
+object EDASExecutionManager extends Loggable {
   val handler_type_key = "execution.handler.type"
 
-  def apply(): CDS2ExecutionManager = { new CDS2ExecutionManager }
+  def apply(): EDASExecutionManager = { new EDASExecutionManager }
 
   def shutdown() = {
     print( "Shutting down CDS2ExecutionManager")
@@ -221,12 +222,15 @@ object CDS2ExecutionManager extends Loggable {
 
 }
 
-class CDS2ExecutionManager extends WPSServer with Loggable {
-  import CDS2ExecutionManager._
+class EDASExecutionManager extends WPSServer with Loggable {
+  import EDASExecutionManager._
   shutdown_python_workers()
+
+
 
   val serverContext = new ServerContext( collectionDataCache, CDSparkContext() )
   val kernelManager = new KernelMgr()
+  val cleanupManager = new CleanupManager( 2, 0, 0 ).addFileCleanupTask( Kernel.getResultDir.getPath, 24, false, ".*" )
 
 //  def getOperationInputs( context: EDASExecutionContext ): Map[String,OperationInput] = {
 //    val items = for (uid <- context.operation.inputs) yield {
