@@ -3,11 +3,8 @@ package nasa.nccs.edas.portal;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -28,9 +25,19 @@ public class CleanupManager {
     ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1);
     List<Executable> executables = new ArrayList<Executable>();
     volatile boolean isStopIssued;
+    private static final long PERIOD = 24*60*60;
+    private Date midnight = getMidnight();
+    long initialDelay = (midnight.getTime()-System.currentTimeMillis())/1000;
 
-    public CleanupManager( int targetHour, int targetMin, int targetSec ) {
-        startExecutionAt( targetHour, targetMin, targetSec );
+    public CleanupManager() {
+        startExecution();
+    }
+    Date getMidnight() {
+        Calendar c = Calendar.getInstance();
+        c.set( Calendar.HOUR_OF_DAY,23);
+        c.set( Calendar.MINUTE,59);
+        c.set( Calendar.SECOND,59);
+        return c.getTime();
     }
 
     public void addExecutable( Executable ex ) { executables.add(ex); }
@@ -53,26 +60,12 @@ public class CleanupManager {
         } catch (InterruptedException ex) { ; }
     }
 
-    private void startExecutionAt(int targetHour, int targetMin, int targetSec) {
+    private void startExecution() {
         Runnable taskWrapper = new Runnable(){
             @Override
-            public void run()  {
-                runTasks();
-                startExecutionAt(targetHour, targetMin, targetSec);
-            }
+            public void run()  { runTasks(); }
         };
-        long delay = computeNextDelay(targetHour, targetMin, targetSec);
-        executorService.schedule(taskWrapper, delay, TimeUnit.SECONDS);
-    }
-
-    private long computeNextDelay(int targetHour, int targetMin, int targetSec)  {
-        LocalDateTime localNow = LocalDateTime.now();
-        ZoneId currentZone = ZoneId.systemDefault();
-        ZonedDateTime zonedNow = ZonedDateTime.of(localNow, currentZone);
-        ZonedDateTime zonedNextTarget = zonedNow.withHour(targetHour).withMinute(targetMin).withSecond(targetSec);
-        if(zonedNow.compareTo(zonedNextTarget) > 0) zonedNextTarget = zonedNextTarget.plusDays(1);
-        Duration duration = Duration.between(zonedNow, zonedNextTarget);
-        return duration.getSeconds();
+        executorService.scheduleAtFixedRate(taskWrapper, initialDelay, PERIOD, TimeUnit.SECONDS);
     }
 
     public class FilePermissionsTask implements Executable {

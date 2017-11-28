@@ -230,7 +230,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
 
   val serverContext = new ServerContext( collectionDataCache, CDSparkContext() )
   val kernelManager = new KernelMgr()
-  val cleanupManager = new CleanupManager( 2, 0, 0 ).addFileCleanupTask( Kernel.getResultDir.getPath, 24, false, ".*" )
+  val cleanupManager = new CleanupManager().addFileCleanupTask( Kernel.getResultDir.getPath, 24, false, ".*" )
 
 //  def getOperationInputs( context: EDASExecutionContext ): Map[String,OperationInput] = {
 //    val items = for (uid <- context.operation.inputs) yield {

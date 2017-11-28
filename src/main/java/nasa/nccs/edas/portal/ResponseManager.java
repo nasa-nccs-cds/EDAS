@@ -33,7 +33,7 @@ public class ResponseManager extends Thread {
     String latest_result = "";
     SimpleDateFormat timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy");
     protected Logger logger = EDASLogManager.getCurrentLogger();
-    protected CleanupManager cleanupManager = new CleanupManager(2,0,0 );
+    protected CleanupManager cleanupManager = new CleanupManager();
 
     public ResponseManager( ZMQ.Context _zmqContext, String _socket_address, String _client_id, Map<String,String> configuration ) {
         socket_address = _socket_address;
