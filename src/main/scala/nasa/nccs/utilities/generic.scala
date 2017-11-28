@@ -11,7 +11,6 @@ import ucar.nc2.time.CalendarDate
 import java.nio.file.{Files, Path}
 import java.text.SimpleDateFormat
 import java.util.Calendar
-
 import nasa.nccs.esgf.process.UID
 
 import scala.collection.JavaConversions._
@@ -46,15 +45,26 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   def timestamp = Calendar.getInstance().getTime
   def timeStr = s"(${timeFormatter.format(timestamp)})"
 
-  val writer = if(Files.exists(logFilePath)) {
-    new PrintWriter(logFilePath.toString)
-  } else {
-    if( !logFilePath.getParent().toFile.exists() ) {
-      val perms: java.util.Set[PosixFilePermission] = PosixFilePermissions.fromString("rwxrwxrwx")
-      val fileAttr = PosixFilePermissions.asFileAttribute(perms)
-      Files.createDirectories(logFilePath.getParent, fileAttr)
+  val writer = {
+    val printer = if(Files.exists(logFilePath)) {
+      new PrintWriter(logFilePath.toString)
+    } else {
+      if( !logFilePath.getParent().toFile.exists() ) {
+        val perms: java.util.Set[PosixFilePermission] = PosixFilePermissions.fromString("rwxrwxrwx")
+        val fileAttr = PosixFilePermissions.asFileAttribute(perms)
+        Files.createDirectories(logFilePath.getParent, fileAttr)
+      }
+      new PrintWriter( logFilePath.toFile )
     }
-    new PrintWriter( logFilePath.toFile )
+    printer.print("LOGFILE\n"); printer.flush();
+    openPermissions( logFilePath, "rwxr--r--" )
+    printer
+  }
+
+  def openPermissions( path: Path, perms: String ) = {
+    val folder: Path = logFilePath.getParent
+    Files.setPosixFilePermissions(folder, PosixFilePermissions.fromString(perms))
+    folder.toFile.listFiles.map( file => Files.setPosixFilePermissions( file.toPath, PosixFilePermissions.fromString(perms) ) );
   }
 
   def log( level: String, msg: String, newline: Boolean  ) = try {

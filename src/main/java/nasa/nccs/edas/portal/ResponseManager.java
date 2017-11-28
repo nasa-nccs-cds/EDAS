@@ -52,6 +52,19 @@ public class ResponseManager extends Thread {
         cleanupManager.addFileCleanupTask( publishDir, 24, true, ".*" );
     }
 
+    public void setFilePermissions( Path directory, String perms ) {
+        try {
+            Files.setPosixFilePermissions( directory, PosixFilePermissions.fromString(perms));
+            File[] listOfFiles = directory.toFile().listFiles();
+            for (int i = 0; i < listOfFiles.length; i++) {
+                File file = listOfFiles[i];
+                Files.setPosixFilePermissions( file.toPath(), PosixFilePermissions.fromString(perms) );
+            }
+        } catch ( Exception ex ) {
+            logger.error("Error setting perms in dir " + directory + ", error = " + ex.getMessage());
+        }
+    }
+
     public void registerCallback( String jobId, ExecutionCallback callback ) {
         callbacks.put( jobId, callback );
     }
@@ -145,6 +158,7 @@ public class ResponseManager extends Thread {
         Path outFilePath = getPublishFile( role, fileName );
         DataOutputStream os = new DataOutputStream(new FileOutputStream(outFilePath.toFile()));
         os.write(data, offset, data.length-offset );
+        setFilePermissions( outFilePath.getParent(), "rwxrwxrwx");
         return outFilePath;
     }
 

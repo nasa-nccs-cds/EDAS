@@ -1,6 +1,8 @@
 package nasa.nccs.edas.portal;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -73,6 +75,33 @@ public class CleanupManager {
         return duration.getSeconds();
     }
 
+    public class FilePermissionsTask implements Executable {
+        String directory;
+        String fileFilter = ".*";
+        String perms = "rwxrwxrwx";
+
+        public FilePermissionsTask( String directory$, String perms$,  String fileFilter$ ) {
+            directory = directory$;
+            fileFilter = fileFilter$;
+            perms = perms$;
+        }
+
+        public void execute( ) {
+            try {
+                File folder = new File(directory);
+                Files.setPosixFilePermissions(folder.toPath(), PosixFilePermissions.fromString(perms));
+                File[] listOfFiles = folder.listFiles();
+                for (int i = 0; i < listOfFiles.length; i++) {
+                    File file = listOfFiles[i];
+                    if (file.getName().matches(fileFilter)) {
+                        Files.setPosixFilePermissions( file.toPath(), PosixFilePermissions.fromString(perms) );
+                    }
+                }
+            } catch ( Exception ex ) {
+                logger.error("Error setting perms in dir " + directory + ", error = " + ex.getMessage());
+            }
+        }
+    }
 
     public class FileCleanupTask implements Executable {
         String directory;
@@ -80,22 +109,22 @@ public class CleanupManager {
         String fileFilter = ".*";
         boolean removeDirectories = false;
 
-        FileCleanupTask( String directory$, int lifetime$, boolean removeDirectories$, String fileFilter$ ) {
+        public FileCleanupTask( String directory$, int lifetime$, boolean removeDirectories$, String fileFilter$ ) {
             directory = directory$;
-            lifetime = lifetime;
+            lifetime = lifetime$;
             fileFilter = fileFilter$;
             removeDirectories = removeDirectories$;
         }
-        FileCleanupTask( String directory$, int lifetime$, boolean removeDirectories$ ) {
+        public FileCleanupTask( String directory$, int lifetime$, boolean removeDirectories$ ) {
             directory = directory$;
             lifetime = lifetime$;
             removeDirectories = removeDirectories$;
         }
-        FileCleanupTask( String directory$, int lifetime$ ) {
+        public FileCleanupTask( String directory$, int lifetime$ ) {
             directory = directory$;
             lifetime = lifetime$;
         }
-        FileCleanupTask( String directory$ ) {
+        public FileCleanupTask( String directory$ ) {
             directory = directory$;
         }
         public void execute( ) {
