@@ -139,6 +139,7 @@ class AxisIndices( private val axisIds: Set[Int] = Set.empty ) {
 object Kernel extends Loggable {
   val customKernels = List[Kernel]( new CDMSRegridKernel() )
   type RDDKeyValPair = ( RecordKey, RDDRecord )
+  def isEmpty( kvp: RDDKeyValPair ) = kvp._2.elements.isEmpty
 
   def getResultFile( resultId: String, deleteExisting: Boolean = false ): File = {
     val resultsDir = getResultDir()
@@ -633,7 +634,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       elements0 flatMap { case (key,fltArray) => elements1.get(key) map ( fltArray1 => key -> fltArray.append(fltArray1) ) } toIndexedSeq
     }
 
-  def customReduceRDD(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair = {
+  def customReduceRDD(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair = if(Kernel.isEmpty(a0)) {a1} else if(Kernel.isEmpty(a1)) {a0} else {
     logger.warn( s"No reducer defined for parallel op '$name', executing simple merge." )
     mergeRDD(context)( a0, a1 )
   }
@@ -744,7 +745,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     rv
   }
 
-  def reduceRDDOp(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair = (a0._1 + a1._1) -> combineRDD(context)( a0._2, a1._2 )
+  def reduceRDDOp(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair =
+    if(Kernel.isEmpty(a0)) {a1} else if(Kernel.isEmpty(a1)) {a0} else { (a0._1 + a1._1) -> combineRDD(context)( a0._2, a1._2 ) }
 
   def getDataSample(result: CDFloatArray, sample_size: Int = 20): Array[Float] = {
     val result_array = result.floatStorage.array

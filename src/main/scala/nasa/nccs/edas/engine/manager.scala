@@ -140,11 +140,11 @@ object CDS2ExecutionManager extends Loggable {
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
     val resultFile = Kernel.getResultFile(resultId, true)
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
+    writer.setLargeFile(true)
     val path = resultFile.getAbsolutePath
     try {
       val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
       val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result ${resultId}"))
-      writer.setLargeFile(true)
       //      assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
       val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
       val shape = dataMap.values.head.getShape
@@ -164,11 +164,19 @@ object CDS2ExecutionManager extends Loggable {
           case None => None
         }
       }).flatten
-
+      val variables = dataMap.map { case (varname, maskedTensor) =>
+        val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, dims.toList)
+        varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }
+        variable.addAttribute(new nc2.Attribute("missing_value", maskedTensor.getInvalid))
+        dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
+        ( variable, maskedTensor )
+      }
       logger.info("Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s]".format(
         resultId, path, dataMap.keys.mkString(","), dims.map(_.toString).mkString(","), shape.mkString(","),
         newCoordVars.map { case (cvar, data) => "%s: (%s)".format(cvar.getFullName, data.getShape.mkString(",")) }.mkString(",")))
+
       writer.create()
+
       for (newCoordVar <- newCoordVars) {
         newCoordVar match {
           case (coordVar, coordData) =>
@@ -176,18 +184,8 @@ object CDS2ExecutionManager extends Loggable {
             writer.write(coordVar, coordData)
         }
       }
-      dataMap.foreach { case (varname, maskedTensor) =>
-        val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, dims.toList)
-        varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }
-        variable.addAttribute(new nc2.Attribute("missing_value", maskedTensor.getInvalid))
-        dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
-        writer.write(variable, maskedTensor)
-        //          for( dim <- dims ) {
-        //            val dimvar: nc2.Variable = writer.addVariable(null, dim.getFullName, ma2.DataType.FLOAT, List(dim) )
-        //            writer.write( dimvar, dimdata )
-        //          }
-        logger.info("Done writing output to file %s".format(path))
-      }
+      variables.foreach { case (variable, maskedTensor) => writer.write(variable, maskedTensor) }
+      logger.info("Done writing output to file %s".format(path))
     } catch {
       case ex: IOException =>
         logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));

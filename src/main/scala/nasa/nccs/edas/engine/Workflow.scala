@@ -181,17 +181,16 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     kernelCx.addTimestamp( s"Executing Kernel for node ${root_node.getNodeId}" )
     val isIterative = executor.hasBatch(1)
     var batchIndex = 0
-    var agg_result = RDDRecord.empty
-    var agg_key = RecordKey.empty
+    var aggResult = ( RecordKey.empty, RDDRecord.empty )
     var resultFiles = mutable.ListBuffer.empty[String]
     do {
-      val (key, batchResult) = executeBatch( executor, kernelCx, batchIndex )
+      val batchResult = executeBatch( executor, kernelCx, batchIndex )
       if( kernelCx.doesTimeReduction || !isIterative ) {
         val reduceOp = executor.getReduceOp(kernelCx)
-        reduceOp( (agg_key,agg_result), (key,batchResult) ) match { case (k,v) => { agg_key=k; agg_result=v } }
+        aggResult = reduceOp( aggResult, batchResult )
       } else {
-        val resultMap = batchResult.elements.mapValues( _.toCDFloatArray )
-        resultFiles += CDS2ExecutionManager.saveResultToFile(executor, resultMap, batchResult.metadata, List.empty[nc2.Attribute] )
+        val resultMap = batchResult._2.elements.mapValues( _.toCDFloatArray )
+        resultFiles += CDS2ExecutionManager.saveResultToFile(executor, resultMap, batchResult._2.metadata, List.empty[nc2.Attribute] )
       }
     } while ( { batchIndex+=1; executor.hasBatch(batchIndex) } )
 
@@ -199,7 +198,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     if( Try( executor.requestCx.config("unitTest","false").toBoolean ).getOrElse(false)  ) { root_node.kernel.cleanUp(); }
     val t2 = System.nanoTime()
     logger.info(s"********** Completed Execution of Kernel[%s(%s)]: %s , total time = %.3f sec, cleanUp time = %.3f sec   ********** \n".format(root_node.kernel.name,root_node.kernel.id, root_node.operation.identifier, (t2 - t0) / 1.0E9, (t2 - t1) / 1.0E9))
-    ( agg_key, agg_result )
+    aggResult
   }
 
   private def common_inputs( node0: WorkflowNode, node_input_map: Map[ String, Set[String] ] )( node1: WorkflowNode ): Boolean = {
@@ -408,7 +407,9 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
 
   def processInputs(node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
     kernelContext.addTimestamp( "Generating RDD for inputs: " + executor.workflowCx.inputs.keys.mkString(", "), true )
-    executor.getInputs(node).foreach { case (uid, opinput) => opinput.processInput( uid, this, node, executor, kernelContext, batchIndex) }
+    executor.getInputs(node).foreach { case (uid, opinput) =>
+      opinput.processInput( uid, this, node, executor, kernelContext, batchIndex)
+    }
     logger.info("\n\n ----------------------- Completed RDD input map[%d], thread: %s -------\n".format(batchIndex, Thread.currentThread().getId ))
   }
 

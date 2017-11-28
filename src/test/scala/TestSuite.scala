@@ -39,6 +39,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val test_python = false
   val test_binning = false
   val test_regrid = true
+  val reanalysis_ensemble = false
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
 
@@ -124,7 +125,7 @@ class DefaultTestSuite extends EDASTestSuite {
 //  https://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/JMA/JRA-55/mon/atmos/ta.ncml.html
 // ///
 
-  test("ReanalysisEnsemble") { if(test_regrid) {
+  test("ReanalysisEnsemble") { if(test_regrid && reanalysis_ensemble) {
     print( s"Running test ReanalysisEnsemble" )
     val JRA_input   =  s"""{"uri":"collection:/cip_jra_sample","name":"ta:v0","domain":"d0"}"""
     val MERRA2_input = s"""{"uri":"collection:/cip_merra2_sample","name":"ta:v1","domain":"d0"}"""
