@@ -196,6 +196,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
       } else {
         val resultMap = batchResult._2.elements.mapValues( _.toCDFloatArray )
         resultFiles += CDS2ExecutionManager.saveResultToFile(executor, resultMap, batchResult._2.metadata, List.empty[nc2.Attribute] )
+        executor.releaseBatch
       }
     } while ( { batchIndex+=1; executor.hasBatch(batchIndex) } )
 

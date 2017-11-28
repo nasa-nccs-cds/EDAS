@@ -265,6 +265,7 @@ object KernelStatus {
 class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
   private val _contents = mutable.HashSet.empty[String]
   private var _vault = new RDDVault(init_value)
+  def releaseBatch = { _vault.clear; _contents.clear() }
 
   class RDDVault( init_value: RDD[(RecordKey,RDDRecord)] ) {
     private var _rdd = init_value; _rdd.cache()
@@ -276,6 +277,7 @@ class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
     def value = _rdd
     def fetchContents: Set[String] = _rdd.map { case (key,rec) => rec.elements.keySet }.first
     def release( keys: Iterable[String] ): Unit = mapValues( _.release(keys) )
+    def clear: Unit = mapValues( _.clear )
   }
   def map( kernel: Kernel, context: KernelContext ): Unit = {
     _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
