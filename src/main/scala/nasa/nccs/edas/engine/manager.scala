@@ -164,7 +164,9 @@ object CDS2ExecutionManager extends Loggable {
           case None => None
         }
       }).flatten
-      val variables = dataMap.map { case (varname, maskedTensor) =>
+      val variables = dataMap.map { case ( tname, maskedTensor) =>
+        val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
+        val varname = baseName + "-" + tname
         val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, dims.toList)
         varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }
         variable.addAttribute(new nc2.Attribute("missing_value", maskedTensor.getInvalid))
