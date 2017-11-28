@@ -57,7 +57,7 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
       new PrintWriter( logFilePath.toFile )
     }
     printer.print("LOGFILE\n"); printer.flush();
-    openLogFilePermissions( "rwxr--r--" )
+    openLogFilePermissions( "rwxrwxrwx" )
     printer
   }
 
