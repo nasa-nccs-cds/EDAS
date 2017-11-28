@@ -157,14 +157,15 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, jobId: String, response: xml.Node  ): Unit =  {
     val refs: xml.NodeSeq = response \\ "data"
-    for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"file") ) {
+    for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"files") ) {
       if (hrefOpt.isDefined && fileOpt.isDefined) {
         val sharedDataDir = appParameters( "wps.shared.data.dir" )
 //        val href = hrefOpt.get
 //        val rid = href.split("[/]").last
-        val filepath = fileOpt.get
-        logger.info("\n\n     ****>> Found file node for jobId: " + jobId + ", clientId: " + clientId + ", sending File: " + filepath + " ****** \n\n")
-        sendFile( clientId, jobId, "publish", filepath, sharedDataDir.isEmpty )
+        fileOpt.get.split(",").foreach( filepath => {
+          logger.info("\n\n     ****>> Found file node for jobId: " + jobId + ", clientId: " + clientId + ", sending File: " + filepath + " ****** \n\n")
+          sendFile( clientId, jobId, "publish", filepath, sharedDataDir.isEmpty )
+        })
       } else {
         sendErrorReport( response_format, clientId, jobId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )
       }
