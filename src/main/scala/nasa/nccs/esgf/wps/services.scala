@@ -23,7 +23,7 @@ trait ServiceProvider extends Loggable {
     case err: ExecutionException => err.getCause; case x => e
   }
 
-  def getResultFilePath( resultId: String, executor: WorkflowExecutor ): Option[String]
+//  def getResultFilePath( resultId: String, executor: WorkflowExecutor ): Option[String]
   def getResultVariable( resultId: String ): Option[RDDTransientVariable]
   def getResultVariables: Iterable[String]
   def getResult( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
@@ -102,7 +102,7 @@ object edasServiceProvider extends ServiceProvider {
 
     } catch { case e: Exception => fatal(e).toXml(syntax) }
   }
-  override def getResultFilePath( resultId: String, executor: WorkflowExecutor ): Option[String] = cds2ExecutionManager.getResultFilePath( resultId, executor )
+//  override def getResultFilePath( resultId: String, executor: WorkflowExecutor ): Option[String] = cds2ExecutionManager.getResultFilePath( resultId, executor )
   override def getResult( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = cds2ExecutionManager.getResult( resultId, response_syntax )
   override def getResultVariable( resultId: String ): Option[RDDTransientVariable] = cds2ExecutionManager.getResultVariable( resultId )
   override def getResultVariables: Iterable[String] = cds2ExecutionManager.getResultVariables

@@ -45,9 +45,9 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
 
   def isSubworkflowBoundayNode: Boolean = isRoot || doesTimeElimination
 
-  def cacheProduct( key: RecordKey, result: RDDRecord  ): Unit = {
+  def cacheProduct( executionResult: KernelExecutionResult  ): Unit = if(executionResult.holdsData) {
     logger.info( s"WorkflowNode CACHE PRODUCT: ${operation.rid}" )
-    WorkflowNode.addProduct( operation.rid, (key,result))
+    WorkflowNode.addProduct( operation.rid, executionResult.kvp )
   }
   def getProduct: Option[(RecordKey,RDDRecord)] = {
     val rv = WorkflowNode.getProduct( operation.rid )
@@ -161,6 +161,11 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
   }
 }
 
+case class KernelExecutionResult( key: RecordKey, record: RDDRecord, files: List[String] ) {
+  val holdsData: Boolean = record.elements.nonEmpty
+  def kvp: (RecordKey,RDDRecord) = ( key, record )
+}
+
 class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager ) extends Loggable {
   val nodes: Seq[WorkflowNode] = request.operations.map(opCx => WorkflowNode( opCx, createKernel( opCx.name.toLowerCase ) ) )
   val roots = findRootNodes()
@@ -169,12 +174,12 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
   def createKernel(id: String): Kernel = executionMgr.getKernel(id)
 
   def generateProduct( executor: WorkflowExecutor ): Option[WPSProcessExecuteResponse] = {
-    val ( key: RecordKey, result: RDDRecord ) = executeKernel( executor )
-    if( executor.workflowCx.rootNode.isRoot ) { createResponse( result, executor ) }
-    else { executor.workflowCx.rootNode.cacheProduct( key, result ); None }
+    val kernelExecutionResult = executeKernel( executor )
+    if( executor.workflowCx.rootNode.isRoot ) { createResponse( kernelExecutionResult, executor ) }
+    else { executor.workflowCx.rootNode.cacheProduct( kernelExecutionResult ); None }
   }
 
-  def executeKernel(executor: WorkflowExecutor ):  ( RecordKey, RDDRecord ) = {
+  def executeKernel(executor: WorkflowExecutor ):  KernelExecutionResult = {
     val t0 = System.nanoTime()
     val root_node = executor.rootNode
     val kernelCx: KernelContext  = root_node.getKernelContext( executor )
@@ -198,7 +203,7 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     if( Try( executor.requestCx.config("unitTest","false").toBoolean ).getOrElse(false)  ) { root_node.kernel.cleanUp(); }
     val t2 = System.nanoTime()
     logger.info(s"********** Completed Execution of Kernel[%s(%s)]: %s , total time = %.3f sec, cleanUp time = %.3f sec   ********** \n".format(root_node.kernel.name,root_node.kernel.id, root_node.operation.identifier, (t2 - t0) / 1.0E9, (t2 - t1) / 1.0E9))
-    aggResult
+    KernelExecutionResult( aggResult._1, aggResult._2, resultFiles.toList )
   }
 
   private def common_inputs( node0: WorkflowNode, node_input_map: Map[ String, Set[String] ] )( node1: WorkflowNode ): Boolean = {
@@ -359,24 +364,26 @@ class Workflow( val request: TaskRequest, val executionMgr: CDS2ExecutionManager
     Map(items: _*)
   }
 
-  def createResponse( result: RDDRecord, executor: WorkflowExecutor  ): Option[WPSProcessExecuteResponse] = {
-    val resultId = cacheResult( result, executor )
+  def createResponse( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): Option[WPSProcessExecuteResponse] = {
+    val resultId = cacheResult( executionResult, executor )
     logger.info( s"Create result ${resultId}: req-context metadata: ${executor.requestCx.task.metadata.mkString("; ")}" )
     val node = executor.rootNode
     executor.requestCx.getConf("response", "xml") match {
         case "object" =>
-          Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, None) )
+          Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, List.empty[String] ) )
         case "xml" =>
-          Some( new RDDExecutionResult("WPS", List(node.kernel), node.operation.identifier, result, resultId) )// TODO: serviceInstance
+          Some( new RDDExecutionResult("WPS", List(node.kernel), node.operation.identifier, executionResult.record, resultId) )// TODO: serviceInstance
         case "file" =>
-          val resultFileOpt: Option[String] = executionMgr.getResultFilePath(resultId,executor)
-          Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFileOpt) )
+          val resultFiles: List[String] = executionMgr.getResultFilePath( executionResult, executor )
+          Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFiles) )
       }
   }
 
-  def cacheResult(result: RDDRecord, executor: WorkflowExecutor  ): String = {
-    collectionDataCache.putResult( executor.requestCx.jobId, new RDDTransientVariable( result, executor.rootNode.operation, executor.requestCx ) )
-    logger.info( " ^^^^## Cached result, rid = " + executor.requestCx.jobId + ", head elem metadata = " + result.elements.head._2.metadata )
+  def cacheResult( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): String = {
+    if( executionResult.holdsData ) {
+      collectionDataCache.putResult(executor.requestCx.jobId, new RDDTransientVariable( executionResult.record, executor.rootNode.operation, executor.requestCx))
+      logger.info(" ^^^^## Cached result, rid = " + executor.requestCx.jobId + ", head elem metadata = " + executionResult.record.elements.head._2.metadata)
+    }
     executor.requestCx.jobId
   }
 

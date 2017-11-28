@@ -178,15 +178,13 @@ abstract class WPSExecuteResponse( val serviceInstance: String ) extends WPSResp
       <data id={id} uom={units} shape={array.getShape.mkString(",")}>  {array.mkBoundedDataString(",", maxSize)}  </data>
   }
 
-  def getDataRef( response_syntax: ResponseSyntax.Value, id: String, resultId: String, optFileRef: Option[String] ): xml.Elem = getSyntax(response_syntax) match {
-    case ResponseSyntax.WPS => optFileRef match {
-      case Some( fileRef ) => <wps:Data id={id} href={"result://"+resultId} file={fileRef}> </wps:Data>
-      case None =>            <wps:Data id={id} href={"result://"+resultId}> </wps:Data>
-    }
-    case ResponseSyntax.Generic => optFileRef match {
-      case Some( fileRef ) => <data id={id} href={"result://"+resultId} file={fileRef}> </data>
-      case None =>            <data id={id} href={"result://"+resultId}> </data>
-    }
+  def getDataRef( response_syntax: ResponseSyntax.Value, id: String, resultId: String, filePaths: List[String] ): xml.Elem = getSyntax(response_syntax) match {
+    case ResponseSyntax.WPS =>
+      if( filePaths.isEmpty ) {   <wps:Data id={id} href={"result://"+resultId}> </wps:Data> }
+      else {                      <wps:Data id={id} href={"result://"+resultId} files={filePaths.mkString(",")}> </wps:Data>  }
+    case ResponseSyntax.Generic =>
+      if( filePaths.isEmpty ) {   <data id={id} href={"result://"+resultId}> </data> }
+      else {                      <data id={id} href={"result://"+resultId} files={filePaths.mkString(",")}> </data>  }
   }
 }
 
@@ -238,7 +236,7 @@ case class WPSReference( id: String, href: String ) extends WPSResponseElement {
   }
 }
 
-abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: List[WPSProcess], val resultId: String, resultFileOpt: Option[String] = None )  extends WPSProcessExecuteResponse( serviceInstance, processes ) {
+abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: List[WPSProcess], val resultId: String, resultFiles: List[String] = List.empty )  extends WPSProcessExecuteResponse( serviceInstance, processes ) {
   val statusHref: String = wpsProxyAddress + s"/cwt/status?id=$resultId"
   val resultHref: String = wpsProxyAddress + s"/cwt/result?id=$resultId"
   val dapHrefOpt: Option[String] = if (dapProxyAddress.isEmpty) None else Some(dapProxyAddress + s"/publish/$resultId.nc")
@@ -278,10 +276,10 @@ class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], i
   }
 }
 
-class RefExecutionResult(serviceInstance: String, process: WPSProcess, id: String, resultId: String, resultFileOpt: Option[String] ) extends WPSReferenceExecuteResponse( serviceInstance, List(process), resultId, resultFileOpt )  with Loggable {
+class RefExecutionResult(serviceInstance: String, process: WPSProcess, id: String, resultId: String, resultFiles: List[String] ) extends WPSReferenceExecuteResponse( serviceInstance, List(process), resultId, resultFiles )  with Loggable {
   override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
     val syntax = getSyntax(response_syntax)
-    Seq( getDataRef( syntax, id, resultId, resultFileOpt ) )
+    Seq( getDataRef( syntax, id, resultId, resultFiles ) )
   }
 }
 

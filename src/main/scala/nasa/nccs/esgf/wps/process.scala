@@ -27,7 +27,7 @@ trait GenericProcessManager {
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node;
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node;
   def executeProcess( job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node
-  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String]
+//  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String]
   def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def term();
@@ -65,12 +65,12 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.executeProcess( request, job.datainputs, job.runargs, executionCallback )
   }
 
-  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String] = {
-    val serviceProvider = apiManager.getServiceProvider(service)
-    val path = serviceProvider.getResultFilePath( resultId, executor )
-    logger.info( "EDAS ProcessManager-> getResultFile: " + resultId + ", path = " + path.getOrElse("NULL") )
-    path
-  }
+//  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String] = {
+//    val serviceProvider = apiManager.getServiceProvider(service)
+//    val path = serviceProvider.getResultFilePath( resultId, executor )
+//    logger.info( "EDAS ProcessManager-> getResultFile: " + resultId + ", path = " + path.getOrElse("NULL") )
+//    path
+//  }
 
   def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node = {
     logger.info( "EDAS ProcessManager-> getResult: " + resultId)

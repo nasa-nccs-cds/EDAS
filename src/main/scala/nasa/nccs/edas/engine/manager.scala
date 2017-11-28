@@ -417,17 +417,22 @@ class CDS2ExecutionManager extends WPSServer with Loggable {
   def getResultVariable( resId: String ): Option[RDDTransientVariable] = collectionDataCache.getExistingResult( resId )
   def getResultVariables: Iterable[String] = collectionDataCache.getResultIdList
 
-  def getResultFilePath( resId: String, executor: WorkflowExecutor ): Option[String] = getResultVariable( resId ) match {
-      case Some( tvar: RDDTransientVariable ) =>
-        val result = tvar.result.elements.values.head
-        val resultFile = Kernel.getResultFile( resId )
-        if(resultFile.exists) Some( resultFile.getAbsolutePath )
-        else {
-          val resultMap = tvar.result.elements.mapValues( _.toCDFloatArray )
-          Some( saveResultToFile(executor, resultMap, result.metadata, List.empty[nc2.Attribute] ) )
-        }
-      case None => None
-    }
+  def getResultFilePath( executionResult: KernelExecutionResult, executor: WorkflowExecutor ): List[String] = {
+    if( executionResult.holdsData ) {
+      val resId = executor.requestCx.jobId
+      getResultVariable(resId) match {
+        case Some(tvar: RDDTransientVariable) =>
+          val result = tvar.result.elements.values.head
+          val resultFile = Kernel.getResultFile(resId)
+          if (resultFile.exists) List(resultFile.getAbsolutePath)
+          else {
+            val resultMap = tvar.result.elements.mapValues(_.toCDFloatArray)
+            List(saveResultToFile(executor, resultMap, result.metadata, List.empty[nc2.Attribute]))
+          }
+        case None => List.empty[String]
+      }
+    } else { executionResult.files }
+  }
 
   def getResult( resId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
     logger.info( "Locating result: " + resId )
