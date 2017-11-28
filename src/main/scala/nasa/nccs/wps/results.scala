@@ -239,8 +239,9 @@ case class WPSReference( id: String, href: String ) extends WPSResponseElement {
 abstract class WPSReferenceExecuteResponse( serviceInstance: String, processes: List[WPSProcess], val resultId: String, resultFiles: List[String] = List.empty[String] )  extends WPSProcessExecuteResponse( serviceInstance, processes ) {
   val statusHref: String = wpsProxyAddress + s"/cwt/status?id=$resultId"
   val resultHref: String = wpsProxyAddress + s"/cwt/result?id=$resultId"
-  val dapHrefOpt: Option[String] = if (dapProxyAddress.isEmpty) None else Some(dapProxyAddress + s"/publish/$resultId.nc")
-  val fileHrefOpt: Option[String] = if (fileProxyAddress.isEmpty) None else Some(fileProxyAddress + s"/publish/$resultId.nc")
+  val resultFile = if(resultFiles.isEmpty) { resultId + ".nc" } else { resultFiles.head.split('/').last }
+  val dapHrefOpt: Option[String] = if (dapProxyAddress.isEmpty) None else Some(dapProxyAddress + s"/publish/$resultFile")
+  val fileHrefOpt: Option[String] = if (fileProxyAddress.isEmpty) None else Some(fileProxyAddress + s"/publish/$resultFile")
 
   def getOutputTag(response_syntax: ResponseSyntax.Value): String = getSyntax(response_syntax)  match {
     case ResponseSyntax.WPS => "Output"
