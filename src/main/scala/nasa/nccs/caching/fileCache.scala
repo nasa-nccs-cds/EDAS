@@ -303,7 +303,7 @@ object EDASPartitioner {
   val secPerMonth: Float = secPerMonth / 12
   val recordSize: Float = math.min( cdsutils.parseMemsize( appParameters( "record.size", defaultRecordSize ) ), maxRecordSize ).toFloat
   val partitionSize: Float = math.max( cdsutils.parseMemsize( appParameters( "partition.size", defaultPartSize) ), recordSize )
-  val maxProductSize: Float = appParameters( "product.size.max", "5e9f" ).toInt
+  val maxProductSize: Float = appParameters( "product.size.max", "5e9f" ).toFloat
   val nCoresPerPart = 1
 }
 
