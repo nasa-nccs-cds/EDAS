@@ -672,6 +672,7 @@ abstract class ArrayBase[T <: AnyVal]( val shape: Array[Int]=Array.emptyIntArray
   def getSampleData( size: Int, start: Int): Array[Float] = toCDFloatArray.getSampleData( size, start )
   def getSampleDataStr( size: Int, start: Int): String = toCDFloatArray.getSampleData( size, start ).mkString( "[ ",", "," ]")
   def uid: String = metadata.getOrElse("uid", metadata.getOrElse("collection","") + ":" + metadata.getOrElse("name",""))
+  def size: Int = data.length
   override def toString = "<array shape=(%s)> %s </array>".format( shape.mkString(","), metadata.mkString(",") )
 
 }
@@ -686,6 +687,7 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def hasData: Boolean = (data.length > 0)
   def toVector: DenseVector = new DenseVector( data.map(_.toDouble ) )
   val gridFilePath: String = NetcdfDatasetMgr.cleanPath(gridSpec)
+  override def size: Int = shape.product
 
   def section( new_section: ma2.Section ): HeapFltArray = {
     val current_section = new ma2.Section(origin,shape)
@@ -795,6 +797,7 @@ object HeapFltArray extends Loggable {
 
 class HeapDblArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Array.emptyIntArray, val _data_ : Array[Double]=Array.emptyDoubleArray, _missing: Option[Double]=None, metadata: Map[String,String]=Map.empty ) extends ArrayBase[Double](shape,origin,_missing,metadata) {
   def data: Array[Double] = _data_
+  override def size: Int = shape.product
 
   def getMissing(default: Double = Double.MaxValue): Double = _missing.getOrElse(default)
 
@@ -841,6 +844,7 @@ class HeapLongArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=A
   def toFastMaskedArray: FastMaskedArray = FastMaskedArray( shape, data.map(_.toFloat), Float.MaxValue )
   def toCDLongArray: CDLongArray = CDLongArray( shape, data )
   def toCDDoubleArray: CDDoubleArray = CDDoubleArray( shape, data.map(_.toDouble), Double.MaxValue )
+  override def size: Int = shape.product
 
   def append( other: ArrayBase[Long] ): ArrayBase[Long]  = {
 //    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
@@ -871,7 +875,9 @@ class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[Stri
     val new_elements = elements.filterKeys( key => !keys.contains(key) )
     new RDDRecord( new_elements, metadata, partition )
   }
-  def clear(): RDDRecord  = new RDDRecord( SortedMap.empty[String,HeapFltArray], metadata, partition )
+  def clear: RDDRecord  = new RDDRecord( SortedMap.empty[String,HeapFltArray], metadata, partition )
+
+  def size: Int = elements.values.foldLeft(0)( (size,elem) => size + elem.size )
 
   def hasMultiGrids: Boolean = {
     if( elements.size == 0 ) return false

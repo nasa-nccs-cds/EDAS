@@ -303,6 +303,7 @@ object EDASPartitioner {
   val secPerMonth: Float = secPerMonth / 12
   val recordSize: Float = math.min( cdsutils.parseMemsize( appParameters( "record.size", defaultRecordSize ) ), maxRecordSize ).toFloat
   val partitionSize: Float = math.max( cdsutils.parseMemsize( appParameters( "partition.size", defaultPartSize) ), recordSize )
+  val maxProductSize: Float = appParameters( "product.size.max", "5e9f" ).toInt
   val nCoresPerPart = 1
 }
 
@@ -390,6 +391,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
   val sectionRange: ma2.Range = _section.getRange(0)
   lazy val spec = computeRecordSizes()
   lazy val partitions = new Partitions( _section, getPartitions )
+  def nPartitions = partitions.parts.size
 
   def timeAxis: CoordinateAxis1DTime = {
     val fullAxis = timeAxisOpt getOrElse( throw new Exception( "Missing time axis in Partitioner") )

@@ -190,13 +190,17 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     var resultFiles = mutable.ListBuffer.empty[String]
     do {
       val batchResult = executeBatch( executor, kernelCx, batchIndex )
-      if( kernelCx.doesTimeReduction || !isIterative ) {
+      if( kernelCx.doesTimeReduction || !isIterative || (batchResult._2.size * executor.nPartitions < EDASPartitioner.maxProductSize) ) {
         val reduceOp = executor.getReduceOp(kernelCx)
         aggResult = reduceOp( aggResult, batchResult )
       } else {
-        val resultMap = batchResult._2.elements.mapValues( _.toCDFloatArray )
-        resultFiles += EDASExecutionManager.saveResultToFile(executor, resultMap, batchResult._2.metadata, List.empty[nc2.Attribute] )
-        executor.releaseBatch
+        if( executor.requestCx.task.getUserAuth > 0 ) {
+          val resultMap = batchResult._2.elements.mapValues(_.toCDFloatArray)
+          resultFiles += EDASExecutionManager.saveResultToFile(executor, resultMap, batchResult._2.metadata, List.empty[nc2.Attribute])
+          executor.releaseBatch
+        } else {
+          throw new Exception( "Must be authorized to execute a request this big- please contact the service administrator for instructions.")
+        }
       }
     } while ( { batchIndex+=1; executor.hasBatch(batchIndex) } )
 

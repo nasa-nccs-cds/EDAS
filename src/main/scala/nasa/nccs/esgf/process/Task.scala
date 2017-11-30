@@ -44,18 +44,22 @@ case class ErrorReport(severity: String, message: String) {
   }
 }
 
+case class User( id: String="guest", authorization_level: Int = 0 ) { }
+
 class TaskRequest(val id: UID,
                   val name: String,
                   val variableMap: Map[String, DataContainer],
                   val domainMap: Map[String, DomainContainer],
                   val operations: Seq[OperationContext] = List(),
-                  val metadata: Map[String, String] = Map("id" -> "#META"))
+                  val metadata: Map[String, String] = Map("id" -> "#META"),
+                  val user: User = User())
     extends Loggable {
   val errorReports = new ListBuffer[ErrorReport]()
   val targetGridMap = scala.collection.mutable.HashMap.empty[String, TargetGrid]
   validate()
   logger.info(s"TaskRequest: name= $name, workflows= " + operations.mkString(",") + ", variableMap= " + variableMap.toString + ", domainMap= " + domainMap.toString)
   val workflow = Workflow(this, edasServiceProvider.cds2ExecutionManager);
+  val getUserAuth: Int = user.authorization_level
 
   def addErrorReport(severity: String, message: String) = {
     val error_rep = ErrorReport(severity, message)
