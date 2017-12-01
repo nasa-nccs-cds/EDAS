@@ -49,7 +49,7 @@ public class ResponseManager extends Thread {
         cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
         publishDir =  EDASPortalClient.getOrDefault( configuration, "edas.publish.dir", cacheDir );
         logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
-        cleanupManager.addFileCleanupTask( publishDir, 24, true, ".*" );
+        cleanupManager.addFileCleanupTask( publishDir, 48, true, ".*" );
     }
 
     public void setFilePermissions( Path directory, String perms ) {

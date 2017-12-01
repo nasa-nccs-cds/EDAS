@@ -98,7 +98,7 @@ public class CleanupManager {
 
     public class FileCleanupTask implements Executable {
         String directory;
-        int lifetime = 24;
+        int lifetime = 48;
         String fileFilter = ".*";
         boolean removeDirectories = false;
 
@@ -125,12 +125,14 @@ public class CleanupManager {
             File[] listOfFiles = folder.listFiles();
             for (int i = 0; i < listOfFiles.length; i++) {
                 File file = listOfFiles[i];
-                if( file.getName().matches(fileFilter) ) { cleanup( file ); }
+                if( file.getName().matches(fileFilter) ) {
+                    cleanup( file );
+                }
             }
         }
         public void cleanup(File file) {
             long diff = new Date().getTime() - file.lastModified();
-            if (diff > lifetime * 24 * 60 * 60 * 1000) {
+            if (diff > lifetime * 60 * 60 * 1000) {
                 if (file.isFile() ) {
                     logger.info( "Cleaning up file " + file.getName() );
                     file.delete();
