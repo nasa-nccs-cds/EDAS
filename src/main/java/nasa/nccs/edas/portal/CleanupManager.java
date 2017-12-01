@@ -99,6 +99,7 @@ public class CleanupManager {
     public class FileCleanupTask implements Executable {
         String directory;
         int lifetime = 48;
+        float msec_per_hour = 60 * 60 * 1000f;
         String fileFilter = ".*";
         boolean removeDirectories = false;
 
@@ -123,6 +124,7 @@ public class CleanupManager {
         public void execute( ) {
             File folder = new File( directory );
             File[] listOfFiles = folder.listFiles();
+            logger.info( " %C% ------------------------ Cleaning up directory ------------------------" + directory );
             for (int i = 0; i < listOfFiles.length; i++) {
                 File file = listOfFiles[i];
                 if( file.getName().matches(fileFilter) ) {
@@ -131,23 +133,23 @@ public class CleanupManager {
             }
         }
         public void cleanup(File file) {
-            logger.info( " %C% ------------------------ Cleaning up directory ------------------------" + directory );
             long diff = new Date().getTime() - file.lastModified();
-            if (diff > lifetime * 60 * 60 * 1000) {
+            float age_hours = diff / msec_per_hour;
+            if (age_hours > lifetime) {
                 if (file.isFile() ) {
-                    logger.info( " %C% ------ ------ ------> Cleaning up file " + file.getName() );
+                    logger.info( " %C% ------ ------ ------> Deleting file " + file.getName() );
                     file.delete();
                 }
                 else if ( file.isDirectory() && removeDirectories ) {
                     try {
-                        logger.info( " %C% ------ ------ ------> Cleaning up directory " + file.getName() );
+                        logger.info( " %C% ------ ------ ------> Deleting directory " + file.getName() );
                         FileUtils.deleteDirectory(file);
                     } catch ( Exception ex ) {
                         logger.error( "Error Cleaning up directory " + file.getName() + ", error = " + ex.getMessage() );
                     }
                 }
             } else {
-                logger.info( " %C% Retaining young file or dir: " + file.getName() );
+                logger.info( " %C% Retaining young file or dir: " + file.getName() + ", age = " +  age_hours );
             }
         }
     }

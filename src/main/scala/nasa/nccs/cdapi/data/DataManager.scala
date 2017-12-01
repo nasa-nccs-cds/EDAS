@@ -672,7 +672,7 @@ abstract class ArrayBase[T <: AnyVal]( val shape: Array[Int]=Array.emptyIntArray
   def getSampleData( size: Int, start: Int): Array[Float] = toCDFloatArray.getSampleData( size, start )
   def getSampleDataStr( size: Int, start: Int): String = toCDFloatArray.getSampleData( size, start ).mkString( "[ ",", "," ]")
   def uid: String = metadata.getOrElse("uid", metadata.getOrElse("collection","") + ":" + metadata.getOrElse("name",""))
-  def size: Int = data.length
+  def size: Long = data.length
   override def toString = "<array shape=(%s)> %s </array>".format( shape.mkString(","), metadata.mkString(",") )
 
 }
@@ -687,7 +687,7 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def hasData: Boolean = (data.length > 0)
   def toVector: DenseVector = new DenseVector( data.map(_.toDouble ) )
   val gridFilePath: String = NetcdfDatasetMgr.cleanPath(gridSpec)
-  override def size: Int = shape.product
+  override def size: Long = shape.foldLeft(0L)(_ * _)
 
   def section( new_section: ma2.Section ): HeapFltArray = {
     val current_section = new ma2.Section(origin,shape)
@@ -877,7 +877,7 @@ class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[Stri
   }
   def clear: RDDRecord  = new RDDRecord( SortedMap.empty[String,HeapFltArray], metadata, partition )
 
-  def size: Int = elements.values.foldLeft(0)( (size,elem) => size + elem.size )
+  def size: Long = elements.values.foldLeft(0L)( (size,elem) => size + elem.size )
 
   def hasMultiGrids: Boolean = {
     if( elements.size == 0 ) return false
