@@ -145,7 +145,7 @@ abstract class OperationDataInput( val fragmentSpec: DataFragmentSpec, val metad
   def toBoundsString = fragmentSpec.toBoundsString
   def getKey: DataFragmentKey = fragmentSpec.getKey
   def getKeyString: String = fragmentSpec.getKeyString
-  def size: Int = fragmentSpec.roi.computeSize.toInt
+  def size: Long = fragmentSpec.roi.computeSize
   def contains( requestedSection: ma2.Section ): Boolean = fragmentSpec.roi.contains( requestedSection )
   def getVariableMetadata(serverContext: ServerContext): Map[String,nc2.Attribute] = { fragmentSpec.getVariableMetadata(serverContext) ++ metadata }
   def getDatasetMetadata(serverContext: ServerContext): List[nc2.Attribute] = { fragmentSpec.getDatasetMetadata(serverContext) }

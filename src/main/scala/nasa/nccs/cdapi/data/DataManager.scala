@@ -797,7 +797,7 @@ object HeapFltArray extends Loggable {
 
 class HeapDblArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Array.emptyIntArray, val _data_ : Array[Double]=Array.emptyDoubleArray, _missing: Option[Double]=None, metadata: Map[String,String]=Map.empty ) extends ArrayBase[Double](shape,origin,_missing,metadata) {
   def data: Array[Double] = _data_
-  override def size: Int = shape.product
+  override def size: Long = shape.foldLeft(0L)(_ * _)
 
   def getMissing(default: Double = Double.MaxValue): Double = _missing.getOrElse(default)
 
@@ -844,7 +844,7 @@ class HeapLongArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=A
   def toFastMaskedArray: FastMaskedArray = FastMaskedArray( shape, data.map(_.toFloat), Float.MaxValue )
   def toCDLongArray: CDLongArray = CDLongArray( shape, data )
   def toCDDoubleArray: CDDoubleArray = CDDoubleArray( shape, data.map(_.toDouble), Double.MaxValue )
-  override def size: Int = shape.product
+  override def size: Long = shape.foldLeft(0L)(_ * _)
 
   def append( other: ArrayBase[Long] ): ArrayBase[Long]  = {
 //    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))

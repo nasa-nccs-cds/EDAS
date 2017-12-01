@@ -52,7 +52,7 @@ class CacheChunk(val offset: Int,
                  val elemSize: Int,
                  val shape: Array[Int],
                  val buffer: ByteBuffer) {
-  def size: Int = shape.product
+  def size: Long = shape.foldLeft(0L)(_ * _)
   def data: Array[Byte] = buffer.array
   def byteSize = shape.product * elemSize
   def byteOffset = offset * elemSize

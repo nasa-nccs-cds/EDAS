@@ -99,7 +99,7 @@ trait Cache[K,V] { cache ⇒
     * cache entries, since expired entries are only evicted upon next access
     * (or by being thrown out by a capacity constraint).
     */
-  def size: Int
+  def size: Long
 }
 
 class ValueMagnet[V](val future: Future[V])
