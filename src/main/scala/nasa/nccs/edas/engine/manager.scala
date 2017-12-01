@@ -385,6 +385,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
     } catch {
       case err: Exception =>
         executionCallback.foreach( _.failure(err.getMessage) )
+        runtime.printMemoryUsage
         new WPSExceptionReport(err)
     } finally {
       collectionDataCache.removeJob(jobId)

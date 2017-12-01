@@ -131,20 +131,23 @@ public class CleanupManager {
             }
         }
         public void cleanup(File file) {
+            logger.info( " %C% ------------------------ Cleaning up directory ------------------------" + directory );
             long diff = new Date().getTime() - file.lastModified();
             if (diff > lifetime * 60 * 60 * 1000) {
                 if (file.isFile() ) {
-                    logger.info( "Cleaning up file " + file.getName() );
+                    logger.info( " %C% ------ ------ ------> Cleaning up file " + file.getName() );
                     file.delete();
                 }
                 else if ( file.isDirectory() && removeDirectories ) {
                     try {
-                        logger.info( "Cleaning up directory " + file.getName() );
+                        logger.info( " %C% ------ ------ ------> Cleaning up directory " + file.getName() );
                         FileUtils.deleteDirectory(file);
                     } catch ( Exception ex ) {
                         logger.error( "Error Cleaning up directory " + file.getName() + ", error = " + ex.getMessage() );
                     }
                 }
+            } else {
+                logger.info( " %C% Retaining young file or dir: " + file.getName() );
             }
         }
     }
