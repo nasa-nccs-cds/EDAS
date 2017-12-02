@@ -371,8 +371,8 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
   }
 
   def compareShapes( other_shape: Array[Int] ): ( Int, Array[Int] ) = {
-    val p0 = array.getShape.product
-    val p1 = other_shape.product
+    val p0 = array.getShape.foldLeft(1L)(_ * _)
+    val p1 = other_shape.foldLeft(1L)(_ * _)
     if( p0 == p1 ) ( 0, Array.emptyIntArray )
     else if( p0 > p1 )  {
       val axes = getReductionAxes( array.getShape, other_shape )
@@ -687,7 +687,7 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def hasData: Boolean = (data.length > 0)
   def toVector: DenseVector = new DenseVector( data.map(_.toDouble ) )
   val gridFilePath: String = NetcdfDatasetMgr.cleanPath(gridSpec)
-  override def size: Long = shape.foldLeft(0L)(_ * _)
+  override def size: Long = shape.foldLeft(1L)(_ * _)
 
   def section( new_section: ma2.Section ): HeapFltArray = {
     val current_section = new ma2.Section(origin,shape)
@@ -797,7 +797,7 @@ object HeapFltArray extends Loggable {
 
 class HeapDblArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Array.emptyIntArray, val _data_ : Array[Double]=Array.emptyDoubleArray, _missing: Option[Double]=None, metadata: Map[String,String]=Map.empty ) extends ArrayBase[Double](shape,origin,_missing,metadata) {
   def data: Array[Double] = _data_
-  override def size: Long = shape.foldLeft(0L)(_ * _)
+  override def size: Long = shape.foldLeft(1L)(_ * _)
 
   def getMissing(default: Double = Double.MaxValue): Double = _missing.getOrElse(default)
 
@@ -844,7 +844,7 @@ class HeapLongArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=A
   def toFastMaskedArray: FastMaskedArray = FastMaskedArray( shape, data.map(_.toFloat), Float.MaxValue )
   def toCDLongArray: CDLongArray = CDLongArray( shape, data )
   def toCDDoubleArray: CDDoubleArray = CDDoubleArray( shape, data.map(_.toDouble), Double.MaxValue )
-  override def size: Long = shape.foldLeft(0L)(_ * _)
+  override def size: Long = shape.foldLeft(1L)(_ * _)
 
   def append( other: ArrayBase[Long] ): ArrayBase[Long]  = {
 //    logger.debug( "Appending arrays: {o:(%s), s:(%s)} + {o:(%s), s:(%s)} ".format( origin.mkString(","), shape.mkString(","), other.origin.mkString(","), other.shape.mkString(",")))
@@ -1052,7 +1052,7 @@ class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing:
   def toHeapArray( partition: Partition ): HeapFltArray = {
     val timeAxis: CoordinateAxis1DTime = NetcdfDatasetMgr.getTimeAxis(dataPath)
     val recordSection: ma2.Section = partition.recordSection( section.toSection, partition.index, timeAxis, partition.start_time, partition.end_time )
-    val part_size = recordSection.getShape.product
+    val part_size = recordSection.getShape.foldLeft(1L)(_ * _)
     if( part_size > 0 ) {
       val fltData: CDFloatArray = CDFloatArray.factory(readVariableData(recordSection), missing)
       logger.debug("READ Variable section: %s, part[%d]: dim=%d, origin=(%s), shape=[%s], data shape=[%s], data size=%d, part size=%d, data buffer size=%d, recordSectionShape=%s, recordSectionOrigin=%s\n\n **********--> data sample = %s\n".format(

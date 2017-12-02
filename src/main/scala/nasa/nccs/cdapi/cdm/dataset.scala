@@ -709,7 +709,7 @@ class profilingTest extends Loggable {
   def computeMax3(data: ma2.Array): Float = {
     val fltArray = CDFloatArray.factory(data,Float.NaN)
     var max = Float.MinValue
-    for ( index <-( 0 until fltArray.getSize ) ) {
+    for ( index <-( 0 until fltArray.getSize.toInt ) ) {
       val dval = fltArray.getStorageValue( index )
       if (!dval.isNaN) { max = Math.max(max, dval) }
     }
@@ -719,7 +719,7 @@ class profilingTest extends Loggable {
   def computeMax2( data: CDFloatArray ): Float = {
     var max = Float.MinValue
     val datasize = data.getSize
-    for( index <- 0 until datasize; dval = data.getFlatValue(index); if !dval.isNaN ) { max = Math.max(max, dval) }
+    for( index <- 0 until datasize.toInt; dval = data.getFlatValue(index); if !dval.isNaN ) { max = Math.max(max, dval) }
     if (max == Float.MinValue) Float.NaN else max
   }
 
@@ -903,7 +903,7 @@ class ncReadTest extends Loggable {
       case TestType.Buffer =>
         val t0 = System.nanoTime()
 //        logger.info(s"Reading  $outputFile...")
-        val size = shape.foldLeft(1)(_ * _)
+        val size = shape.foldLeft(1L)(_ * _)
         val bSize = size * 4
         val file: File = new File(outputFile);
         val fSize = file.length.toInt

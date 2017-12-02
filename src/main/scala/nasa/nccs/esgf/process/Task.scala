@@ -652,7 +652,7 @@ class DataFragmentSpec(val uid: String = "",
   def getKey: DataFragmentKey = {
     new DataFragmentKey(varname, collection.id, roi.getOrigin, roi.getShape )
   }
-  def getSize: Int = roi.getShape.product
+  def getSize: Long = roi.getShape.foldLeft(1L)(_ * _)
 
   def getKeyString: String = getKey.toString
 

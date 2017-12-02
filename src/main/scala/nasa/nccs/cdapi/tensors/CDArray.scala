@@ -92,8 +92,8 @@ abstract class CDArray[ T <: AnyVal ]( private val cdIndexMap: CDIndexMap, priva
   def setStorageValue( index: StorageIndex, value: T ): Unit
   def setValue( indices: Array[Int], value: T ): Unit = { setStorageValue( cdIndexMap.getStorageIndex(indices), value )   }
   def setFlatValue( index: FlatIndex, value: T  ): Unit = setStorageValue( getIterator.flatToStorage(index), value )
-  def getSize: Int =  cdIndexMap.getSize
-  def getSizeBytes: Int =  cdIndexMap.getSize * getElementSize
+  def getSize: Long =  cdIndexMap.getSize
+  def getSizeBytes: Long =  cdIndexMap.getSize * getElementSize
   def getRangeIterator(ranges: List[ma2.Range] ): CDIterator = section(ranges).getIterator
   def getStorage: Buffer = { storage }
   def copySectionData( maxCopySize: Int = Int.MaxValue ): Buffer
@@ -152,7 +152,7 @@ abstract class CDArray[ T <: AnyVal ]( private val cdIndexMap: CDIndexMap, priva
       var value: T = initVal
       val t0 = System.nanoTime()
       var isInvalid = true
-      for ( index <-( 0 until getSize ) ) {
+      for ( index <-( 0 until getSize.toInt ) ) {
         val dval = getStorageValue( index )
         if( valid(dval) ) {
           value = reductionOp(value, dval)
@@ -215,7 +215,7 @@ abstract class CDArray[ T <: AnyVal ]( private val cdIndexMap: CDIndexMap, priva
 //  def permute(dims: Array[Int]): CDArray[T] = createView(cdIndexMap.permute(dims))
 
   def reshape(shape: Array[Int]): CDArray[T] = {
-    if( shape.product != getSize ) throw new IllegalArgumentException("reshape arrays must have same total size")
+    if( shape.foldLeft(1L)(_ * _) != getSize ) throw new IllegalArgumentException("reshape arrays must have same total size")
     CDArray( new CDIndexMap(shape), getSectionData(), getInvalid )
   }
 
@@ -346,8 +346,8 @@ object CDFloatArray extends Loggable with Serializable {
   def combine( reductionNOp: ReduceWNOpFlt, inputs: Iterable[CDFloatArray] ): ( CDFloatArray, CDFloatArray) = {
     val iter = MultiArrayIterator(inputs)
     val dataSize = inputs.head.getIndex.getSize
-    val valueBuffer = FloatBuffer.allocate( dataSize )
-    val countBuffer = FloatBuffer.allocate( dataSize )
+    val valueBuffer = FloatBuffer.allocate( dataSize.toInt )
+    val countBuffer = FloatBuffer.allocate( dataSize.toInt )
     val result = for (flatIndex <- iter; values = iter.values ) yield {
       val (value, count) = reductionNOp( values, iter.invalid )
       valueBuffer.put( flatIndex, if( count == 0 ) iter.invalid else value )
@@ -436,8 +436,8 @@ class CDFloatArray( cdIndexMap: CDIndexMap, val floatStorage: FloatBuffer, prote
     val newshape = index.getStorageShape
     CDArray( index, FloatBuffer.wrap(Array.fill[Float]( newshape.product )(fillval)), invalid  )
   }
-  def zeros: CDFloatArray = new CDFloatArray( getShape, FloatBuffer.wrap( Array.fill[Float]( getSize )(0) ), invalid )
-  def invalids: CDFloatArray = new CDFloatArray( getShape, FloatBuffer.wrap( Array.fill[Float]( getSize )(invalid) ), invalid )
+  def zeros: CDFloatArray = new CDFloatArray( getShape, FloatBuffer.wrap( Array.fill[Float]( getSize.toInt )(0) ), invalid )
+  def invalids: CDFloatArray = new CDFloatArray( getShape, FloatBuffer.wrap( Array.fill[Float]( getSize.toInt )(invalid) ), invalid )
   def getInvalid = invalid
   def toHeap = new CDFloatArray( cdIndexMap, if(isMapped) copySectionData() else getData, getInvalid )
 
@@ -869,8 +869,8 @@ class CDDoubleArray( cdIndexMap: CDIndexMap, val doubleStorage: DoubleBuffer, pr
     DoubleBuffer.wrap(array_data_iter.toArray)
   }
 
-  def zeros: CDDoubleArray = new CDDoubleArray( getShape, DoubleBuffer.wrap(Array.fill[Double]( getSize )(0)), invalid )
-  def invalids: CDDoubleArray = new CDDoubleArray( getShape, DoubleBuffer.wrap(Array.fill[Double]( getSize )(invalid)), invalid )
+  def zeros: CDDoubleArray = new CDDoubleArray( getShape, DoubleBuffer.wrap(Array.fill[Double]( getSize.toInt )(0)), invalid )
+  def invalids: CDDoubleArray = new CDDoubleArray( getShape, DoubleBuffer.wrap(Array.fill[Double]( getSize.toInt )(invalid)), invalid )
 
   override def getSectionData(maxCopySize: Int = Int.MaxValue): DoubleBuffer = super.getSectionData(maxCopySize).asInstanceOf[DoubleBuffer]
   def getStorageData: DoubleBuffer = doubleStorage

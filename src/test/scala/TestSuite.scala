@@ -820,7 +820,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   def computeCycle( tsdata: CDFloatArray, cycle_period: Int ): CDFloatArray = {
     val values: CDFloatArray = CDFloatArray( Array(cycle_period), Array.fill[Float](cycle_period)(0f), Float.NaN )
     val counts: CDFloatArray = CDFloatArray( Array(cycle_period), Array.fill[Float](cycle_period)(0f), Float.NaN )
-    for (index <- (0 until tsdata.getSize); val0 = tsdata.getFlatValue(index); if tsdata.valid(val0) ) {
+    for (index <- (0 until tsdata.getSize.toInt); val0 = tsdata.getFlatValue(index); if tsdata.valid(val0) ) {
       values.augment( Array(index % cycle_period), val0 )
       counts.augment( Array(index % cycle_period),  1f )
     }
@@ -828,10 +828,10 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   }
 
   def computeSeriesAverage( tsdata: CDFloatArray, ave_period: Int, offset: Int = 0, mod: Int = Int.MaxValue ): CDFloatArray = {
-    val npts = tsdata.getSize / ave_period + 1
+    val npts = (tsdata.getSize / ave_period + 1).toInt
     val values: CDFloatArray = CDFloatArray( Array(npts), Array.fill[Float](npts)(0f), Float.NaN )
     val counts: CDFloatArray = CDFloatArray( Array(npts), Array.fill[Float](npts)(0f), Float.NaN )
-    for (index <- (0 until tsdata.getSize); val0 = tsdata.getFlatValue(index); if tsdata.valid(val0) ) {
+    for (index <- (0 until tsdata.getSize.toInt); val0 = tsdata.getFlatValue(index); if tsdata.valid(val0) ) {
       val op_offset = (ave_period-offset) % ave_period
       val bin_index = ( ( index + op_offset ) / ave_period ) % mod
       values.augment( Array(bin_index), val0 )

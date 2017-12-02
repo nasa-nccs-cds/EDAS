@@ -95,7 +95,7 @@ class CDIndexMap( protected val shape: Array[Int], _stride: Array[Int]=Array.emp
   def getShape: Array[Int] = ( for( idim <- (0 until rank) ) yield _coordMaps.get(idim).map( _.mapArray.length ).getOrElse(shape( idim )) ).toArray
   def getStride: Array[Int] = stride.clone
   def getShape(index: Int): Int = shape(index)
-  def getSize: Int = if( rank == 0 ) { 0 } else { shape.filter( _ > 0 ).product }
+  def getSize: Long = if( rank == 0 ) { 0 } else { shape.filter( _ > 0 ).foldLeft(1L)(_ * _) }
   def getOffset: Int = _offset
 
   def getStorageShape: Array[Int] = {
