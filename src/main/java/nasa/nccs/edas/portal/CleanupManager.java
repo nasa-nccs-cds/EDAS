@@ -42,8 +42,8 @@ public class CleanupManager {
 
     public void addExecutable( Executable ex ) { executables.add(ex); }
 
-    public CleanupManager addFileCleanupTask( String directory, int lifetimeHrs, boolean removeDirectories, String fileFilter )  {
-        FileCleanupTask task = new FileCleanupTask( directory, lifetimeHrs, removeDirectories, fileFilter );
+    public CleanupManager addFileCleanupTask( String directory, float lifetimeDays, boolean removeDirectories, String fileFilter )  {
+        FileCleanupTask task = new FileCleanupTask( directory, lifetimeDays, removeDirectories, fileFilter );
         addExecutable( task );
         task.execute();
         return this;
@@ -98,25 +98,16 @@ public class CleanupManager {
 
     public class FileCleanupTask implements Executable {
         String directory;
-        int lifetime = 48;
-        float msec_per_hour = 60 * 60 * 1000f;
+        float lifetimeDays = 2.0f;
+        float msec_per_day = 24f * 60f * 60f * 1000f;
         String fileFilter = ".*";
         boolean removeDirectories = false;
 
-        public FileCleanupTask( String directory$, int lifetime$, boolean removeDirectories$, String fileFilter$ ) {
+        public FileCleanupTask( String directory$, float lifetimeDays$, boolean removeDirectories$, String fileFilter$ ) {
             directory = directory$;
-            lifetime = lifetime$;
+            lifetimeDays = lifetimeDays$;
             fileFilter = fileFilter$;
             removeDirectories = removeDirectories$;
-        }
-        public FileCleanupTask( String directory$, int lifetime$, boolean removeDirectories$ ) {
-            directory = directory$;
-            lifetime = lifetime$;
-            removeDirectories = removeDirectories$;
-        }
-        public FileCleanupTask( String directory$, int lifetime$ ) {
-            directory = directory$;
-            lifetime = lifetime$;
         }
         public FileCleanupTask( String directory$ ) {
             directory = directory$;
@@ -134,8 +125,8 @@ public class CleanupManager {
         }
         public void cleanup(File file) {
             long diff = new Date().getTime() - file.lastModified();
-            float age_hours = diff / msec_per_hour;
-            if (age_hours > lifetime) {
+            float age_days = diff / msec_per_day;
+            if (age_days > lifetimeDays) {
                 if (file.isFile() ) {
                     logger.info( " %C% ------ ------ ------> Deleting file " + file.getName() );
                     file.delete();
@@ -149,7 +140,7 @@ public class CleanupManager {
                     }
                 }
             } else {
-                logger.info( " %C% Retaining young file or dir: " + file.getName() + ", age = " +  age_hours );
+                logger.info( " %C% Retaining young file or dir: " + file.getName() + ", age = " +  age_days + " days");
             }
         }
     }
