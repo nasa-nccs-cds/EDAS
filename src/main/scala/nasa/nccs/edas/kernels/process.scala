@@ -3,6 +3,7 @@ package nasa.nccs.edas.kernels
 import java.io._
 import java.nio.{ByteBuffer, ByteOrder, FloatBuffer}
 
+import nasa.nccs.caching.EDASPartitioner
 import nasa.nccs.cdapi.cdm._
 import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.data.{HeapFltArray, _}
@@ -338,6 +339,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     runtime.printMemoryUsage
     val t0 = System.nanoTime()
     val nparts = mapresult.getNumPartitions
+    evaluateProductSize( mapresult, context )
     if( !parallelizable || (nparts==1) ) { mapresult.collect()(0) }
     else {
       val result = mapresult treeReduce getReduceOp(context)
@@ -345,6 +347,11 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       context.addTimestamp( "FINISHED reduce Operation" )
       result
     }
+  }
+
+  def evaluateProductSize(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): Unit =  if ( !context.doesTimeReduction ) {
+    val result_size_G: Float = input.values.map( _.size ).reduce ( _ * _ )/1.0e9f
+    if( result_size_G > EDASPartitioner.maxProductSizeG ) { throw new Exception(s"The product of this request is too large: $result_size_G G") }
   }
 
   def finalize( mapReduceResult: (RecordKey,RDDRecord), context: KernelContext ): (RecordKey,RDDRecord) = {
