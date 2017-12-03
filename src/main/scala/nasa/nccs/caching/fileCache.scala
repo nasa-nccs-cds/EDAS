@@ -487,7 +487,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
             val end_date: Long = ( start_date + partSize * ts_ms ).toLong
             RegularPartition(partIndex, 0, relStartIndex, partSize, start_date, end_date, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
           })
-          logger.info(  s"\n---------------------------------------------\n ~~~~ Generating regular batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
+          logger.info(  s"\n---------------------------------------------\n %E% Generating regular batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
         }
         case cpSpecs: CustomPartitionSpecs => {
