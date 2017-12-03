@@ -195,6 +195,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       if( kernelCx.doesTimeReduction || !isIterative  ) {
         val reduceOp = executor.getReduceOp(kernelCx)
         aggResult = reduceOp( aggResult, batchResult )
+        logger.info( s" %E% Actual result size: ${aggResult._2.size/1.0e9} G" )
       } else {
         if( executor.requestCx.task.getUserAuth > 0 ) {
           val resultMap = batchResult._2.elements.mapValues(_.toCDFloatArray)
