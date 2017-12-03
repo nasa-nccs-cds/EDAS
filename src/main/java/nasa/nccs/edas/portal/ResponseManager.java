@@ -6,13 +6,9 @@ import nasa.nccs.utilities.EDASLogManager;
 import nasa.nccs.utilities.Logger;
 import org.zeromq.ZMQ;
 import org.apache.commons.lang.exception.ExceptionUtils;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+
+import java.io.*;
+import java.nio.file.*;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -45,11 +41,22 @@ public class ResponseManager extends Thread {
         file_paths = new HashMap<String,String>();
         setName("EDAS ResponseManager");
         setDaemon(true);
+        FileSystem fileSystems = FileSystems.getDefault();
         String EDAS_CACHE_DIR = System.getenv( "EDAS_CACHE_DIR" );
         cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
         publishDir =  EDASPortalClient.getOrDefault( configuration, "edas.publish.dir", cacheDir );
         logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
-        cleanupManager.addFileCleanupTask( publishDir + "/publish", 2.0f, true, ".*" );
+        File[] subdirs = getDirs(publishDir);
+        for(int i = 0; i< subdirs.length; i++){ cleanupManager.addFileCleanupTask( subdirs[i].getAbsolutePath(), 2.0f, true, ".*" ); }
+        Path log_path = fileSystems.getPath( "/tmp", System.getProperty("user.name"), "logs" );
+        cleanupManager.addFileCleanupTask( log_path.toString(), 2.0f, true, ".*" );
+    }
+
+    public File[] getDirs( String baseDir ) {
+        return new File(baseDir).listFiles( new FileFilter() {
+            @Override
+            public boolean accept(File file) { return file.isDirectory(); }
+        });
     }
 
     public void setFilePermissions( Path directory, String perms ) {
