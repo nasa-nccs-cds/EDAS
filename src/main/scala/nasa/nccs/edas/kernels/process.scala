@@ -350,8 +350,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def evaluateProductSize(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): Unit =  if ( !context.doesTimeReduction ) {
-    val result_size_G: Float = input.values.map( _.size ).reduce ( _ * _ )/1.0e9f
-    if( result_size_G > EDASPartitioner.maxProductSizeG ) { throw new Exception(s"The product of this request is too large: $result_size_G G") }
+    val result_size: Long = input.values.map( _.size ).reduce ( _ * _ )
+    if( result_size > EDASPartitioner.maxProductSize ) { throw new Exception(s"The product of this request is too large: ${result_size/1e9} G, max product size:  ${EDASPartitioner.maxProductSize/1e9} G") }
   }
 
   def finalize( mapReduceResult: (RecordKey,RDDRecord), context: KernelContext ): (RecordKey,RDDRecord) = {

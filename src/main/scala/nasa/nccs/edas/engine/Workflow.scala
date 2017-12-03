@@ -191,7 +191,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     do {
       val batchResult = executeBatch( executor, kernelCx, batchIndex )
       val projectedResultSize = batchResult._2.size * executor.nPartitions
-      logger.info( s" Evaluating reduction scheme (Batch-${batchIndex}): Max Product size = ${EDASPartitioner.maxProductSizeG}, Batch result size: ${batchResult._2.size}, nPartitions = ${executor.nPartitions}, Projected Result size = ${projectedResultSize}, isIterative = ${isIterative.toString}, doesTimeReduction = ${kernelCx.doesTimeReduction}")
+      logger.info( s" Evaluating reduction scheme (Batch-${batchIndex}): Max Product size = ${EDASPartitioner.maxProductSize/1.0e9} G, Batch result size: ${batchResult._2.size}, nPartitions = ${executor.nPartitions}, Projected Result size = ${projectedResultSize}, isIterative = ${isIterative.toString}, doesTimeReduction = ${kernelCx.doesTimeReduction}")
       if( kernelCx.doesTimeReduction || !isIterative  ) {
         val reduceOp = executor.getReduceOp(kernelCx)
         aggResult = reduceOp( aggResult, batchResult )
