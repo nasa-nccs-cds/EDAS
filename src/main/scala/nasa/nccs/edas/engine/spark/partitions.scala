@@ -65,7 +65,7 @@ object RecordKey {
 }
 
 class RecordKey(start: Long, end: Long, val elemStart: Int, val numElems: Int ) extends LongRange( start, end ) with Ordered[RecordKey] with Serializable with Loggable {
-  private val serialVersionUID = 6529683098277757691L
+//  private val serialVersionUID = 6529683098277757691L
   import LongRange._
   override def equals(other: Any): Boolean = other match {
     case tp: RecordKey => ( tp.start == start) && ( tp.end == end) && ( tp.numElems == numElems) && ( tp.elemStart == elemStart )
