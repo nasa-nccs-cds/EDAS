@@ -9,7 +9,7 @@ import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.data.{HeapFltArray, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.{ReduceNOpFlt, ReduceOpFlt, ReduceWNOpFlt}
 import nasa.nccs.cdapi.tensors.{CDArray, CDCoordMap, CDFloatArray, CDTimeCoordMap}
-import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
+import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.WorkflowNode.regridKernel
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.workers.TransVar
@@ -329,6 +329,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def cleanUp() = {}
 
   def mapRDD(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
+    EDASExecutionManager.checkIfAlive
     logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier + ", input size = " + input.count )
     input.mapValues( map(context) )
   }
@@ -339,6 +340,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     runtime.printMemoryUsage
     val t0 = System.nanoTime()
     val nparts = mapresult.getNumPartitions
+    EDASExecutionManager.checkIfAlive
     evaluateProductSize( mapresult, context )
     if( !parallelizable || (nparts==1) ) { mapresult.collect()(0) }
     else {

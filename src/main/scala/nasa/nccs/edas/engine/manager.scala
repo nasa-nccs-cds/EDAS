@@ -46,8 +46,11 @@ trait ExecutionCallback extends Loggable {
 
 object EDASExecutionManager extends Loggable {
   val handler_type_key = "execution.handler.type"
+  private var _killed = false
 
   def apply(): EDASExecutionManager = { new EDASExecutionManager }
+  def checkIfAlive: Unit = { if(_killed) {  _killed = false; throw new Exception("Job Killed") }; }
+  def killJob = _killed = true;
 
   def shutdown() = {
     print( "Shutting down CDS2ExecutionManager")
