@@ -599,7 +599,6 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
 
   def getPartition(partIndex: Int): Partition = spec.getParition( partIndex )
   def getPartitions: Array[Partition] = ( 0 until spec.getNPartitions ).map( getPartition ).toArray
-‘“
   def getMemorySize(nSlices: Int = -1): Long = {
     var full_shape = baseShape.clone()
     if (nSlices > 0) { full_shape(0) = nSlices }
