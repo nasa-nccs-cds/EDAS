@@ -304,7 +304,7 @@ object EDASPartitioner {
   val recordSize: Float = math.min( cdsutils.parseMemsize( appParameters( "record.size", defaultRecordSize ) ), maxRecordSize ).toFloat
   val partitionSize: Float = math.max( cdsutils.parseMemsize( appParameters( "partition.size", defaultPartSize) ), recordSize )
   val maxProductSize: Float = cdsutils.parseMemsize( appParameters( "max.product.size", "1g" ) ).toFloat
-  val maxInputSize: Float = cdsutils.parseMemsize( appParameters( "max.product.size", "1g" ) ).toFloat
+  val maxInputSize: Float = cdsutils.parseMemsize( appParameters( "max.input.size", "1g" ) ).toFloat
   val nCoresPerPart = 1
 }
 
@@ -488,7 +488,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
             val end_date: Long = ( start_date + partSize * ts_ms ).toLong
             RegularPartition(partIndex, 0, relStartIndex, partSize, start_date, end_date, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
           })
-          logger.info(  s"\n---------------------------------------------\n %E% Generating regular batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
+          logger.info(  s"\n---------------------------------------------\n %E% Generating regular batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, maxInputSize: ${EDASPartitioner.maxInputSize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
         }
         case cpSpecs: CustomPartitionSpecs => {
@@ -599,7 +599,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
 
   def getPartition(partIndex: Int): Partition = spec.getParition( partIndex )
   def getPartitions: Array[Partition] = ( 0 until spec.getNPartitions ).map( getPartition ).toArray
-
+‘“
   def getMemorySize(nSlices: Int = -1): Long = {
     var full_shape = baseShape.clone()
     if (nSlices > 0) { full_shape(0) = nSlices }
