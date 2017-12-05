@@ -14,7 +14,7 @@ import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
 import nasa.nccs.cdapi.cdm.{PartitionedFragment, _}
 import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray}
-import nasa.nccs.edas.engine.WorkflowNode
+import nasa.nccs.edas.engine.{EDASExecutionManager, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.TransientFragment
 import nasa.nccs.edas.loaders.Masks
@@ -303,7 +303,8 @@ object EDASPartitioner {
   val secPerMonth: Float = secPerMonth / 12
   val recordSize: Float = math.min( cdsutils.parseMemsize( appParameters( "record.size", defaultRecordSize ) ), maxRecordSize ).toFloat
   val partitionSize: Float = math.max( cdsutils.parseMemsize( appParameters( "partition.size", defaultPartSize) ), recordSize )
-  val maxProductSize: Float = cdsutils.parseMemsize( appParameters( "max.product.size", "5g" ) ).toFloat
+  val maxProductSize: Float = cdsutils.parseMemsize( appParameters( "max.product.size", "1g" ) ).toFloat
+  val maxInputSize: Float = cdsutils.parseMemsize( appParameters( "max.product.size", "1g" ) ).toFloat
   val nCoresPerPart = 1
 }
 
@@ -602,7 +603,11 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
   def getMemorySize(nSlices: Int = -1): Long = {
     var full_shape = baseShape.clone()
     if (nSlices > 0) { full_shape(0) = nSlices }
-    full_shape.foldLeft(4L)(_ * _)  * numElements
+    val memorySize = full_shape.foldLeft(4L)(_ * _)  * numElements
+    if( memorySize > EDASPartitioner.maxInputSize ) {
+      throw new Exception( s"Must be authorized to execute a request this large (request input size = ${memorySize}, max unauthorized input size = ${EDASPartitioner.maxInputSize})")
+    }
+    memorySize
   }
 
 //  def computePartitions = {
