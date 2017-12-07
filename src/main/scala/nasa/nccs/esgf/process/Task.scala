@@ -243,7 +243,7 @@ object TaskRequest extends Loggable {
   }
 }
 
-class ContainerBase extends Loggable {
+trait ContainerOps {
   def item_key(map_item: (String, Any)): String = map_item._1
 
   def normalize(sval: String): String = stripQuotes(sval).toLowerCase
@@ -279,11 +279,6 @@ class ContainerBase extends Loggable {
       case None => None
     }
   }
-
-  def toXml = <container>  { toString } </container>
-
-//  {"<![CDATA[ " + toString + " ]]>"}
-
   def getGenericNumber(opt_val: Option[Any]): GenericNumber = {
     opt_val match {
       case Some(p) => GenericNumber(p)
@@ -296,6 +291,10 @@ class ContainerBase extends Loggable {
       case None => ""
     }
   }
+}
+
+class ContainerBase extends Loggable with ContainerOps {
+  def toXml = <container>  { toString } </container>
 }
 
 class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) {

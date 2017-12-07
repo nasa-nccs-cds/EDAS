@@ -897,7 +897,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       }
       override def failure( msg: String ): Unit = { logger.error( s"ERROR CALLBACK ($rId): " + msg ) }
     }
-    val response: xml.Elem = webProcessManager.executeProcess( Job( rId, process_name, datainputs, runargs ) )
+    val response: xml.Elem = webProcessManager.executeProcess( Job( rId, process_name, datainputs, runargs, 1f ) )
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) {
       throw new Exception( child_node.toString )
     }

@@ -2,23 +2,22 @@ import sbt._
 
 object Versions {
   val ucar = "4.6.8"
-  val spark = "1.6.3"
+  val spark = "2.2.0"
 }
 
 object Library {
   val logback        = "ch.qos.logback"     %  "logback-core"   % "1.1.3"
   val mockitoAll     = "org.mockito"       %  "mockito-all"     % "1.10.19"
   val scalaTest      = "org.scalatest"     %% "scalatest"       % "2.2.4"
-  val sparkMLLib     = "org.apache.spark"  %% "spark-mllib"     % Versions.spark
-  val sparkSQL       = "org.apache.spark"  %% "spark-sql"       % Versions.spark
-  val sparkCore      = "org.apache.spark"  %% "spark-core"      % Versions.spark
-  val sparkStreaming = "org.apache.spark"  %% "spark-streaming" % Versions.spark
   val commonsIO      = "commons-io"         % "commons-io"      % "2.5"
   val zeromq         = "org.zeromq"         % "jeromq"          % "0.4.2"
   val cdm            = "edu.ucar"           % "cdm"             % Versions.ucar
   val clcommon       = "edu.ucar"           % "clcommon"        % Versions.ucar
   val netcdf4        = "edu.ucar"           % "netcdf4"         % Versions.ucar
   val opendap        = "edu.ucar"           % "opendap"         % Versions.ucar
+  val sparkCore      = "org.apache.spark"   %% "spark-core"     % Versions.spark
+  val sparkSql       = "org.apache.spark"   %% "spark-sql"      % Versions.spark
+  val sparkML        = "org.apache.spark"   %% "spark-mllib"    % Versions.spark
   val nd4s           = "org.nd4j"           % "nd4s_2.11"       % "0.4-rc3.8"
   val nd4j           =  "org.nd4j"          % "nd4j-x86"        % "0.4-rc3.8"
   val httpservices   = "edu.ucar"           %  "httpservices"   % Versions.ucar
@@ -48,11 +47,11 @@ object Dependencies {
 
   val xml = Seq( scalaxml, scalaparser )
 
-  val spark = Seq( sparkCore, sparkStreaming, sparkMLLib )
-
   val cache = Seq( concurrentlinkedhashmap )
 
   val ndarray = Seq( nd4s, nd4j )
+
+  val spark = Seq( sparkSql, sparkML )
 
   val geo  = Seq( geotools )
 

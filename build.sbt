@@ -5,13 +5,12 @@ import java.nio.file.StandardCopyOption
 
 import sbt.{SettingKey, _}
 
-
 val kernelPackages = settingKey[ Seq[String] ]("A list of user-defined Kernel packages")
 val EDAS_VERSION = sys.env.get("EDAS_VERSION").getOrElse("{UNDEFINED}")
 
 name := "EDAS"
 version := EDAS_VERSION + "-SNAPSHOT"
-scalaVersion := "2.10.5"
+scalaVersion := "2.11.8"
 organization := "nasa.nccs"
 
 lazy val root = project in file(".")
@@ -27,22 +26,23 @@ resolvers += "spray repo" at "http://repo.spray.io"
 resolvers += "Artima Maven Repository" at "http://repo.artima.com/releases"
 resolvers += "Geotoolkit" at "http://maven.geotoolkit.org/"
 resolvers += "Maven Central" at "http://central.maven.org/maven2/"
+resolvers += "apache-snapshots" at "http://repository.apache.org/snapshots/"
 
 enablePlugins(JavaAppPackaging)
 
 mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
-libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
+libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies.spark ++ Dependencies.scala ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
 
-libraryDependencies ++= {
-  sys.env.get("YARN_CONF_DIR") match {
-    case Some(yarn_config) => Seq.empty
-    case None => Dependencies.spark ++ Dependencies.scala                     // ++ Dependencies.xml     : For 2.11 or later!
-  }
-}
+//libraryDependencies ++= {
+//  sys.env.get("YARN_CONF_DIR") match {
+//    case Some(yarn_config) => Seq.empty
+//    case None => Dependencies.spark ++ Dependencies.scala                     // ++ Dependencies.xml     : For 2.11 or later!
+//  }
+//}
 
-dependencyOverrides ++= Set( "com.fasterxml.jackson.core" % "jackson-databind" % "2.4.4" )
+// dependencyOverrides ++= Set( "com.fasterxml.jackson.core" % "jackson-databind" % "2.4.4" )
 
 sbtcp := {
   val files: Seq[String] = (fullClasspath in Compile).value.files.map(x => x.getAbsolutePath)
