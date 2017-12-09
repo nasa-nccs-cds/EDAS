@@ -39,16 +39,14 @@ _Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and 
 
     5. Build the application (for a clean build one can execute "sbt clean" before "sbt package"):
 
+        >> source <prefix>/EDAS/bin/setup_runtime.sh
+        >> install_netcdf_jar.sh
         >> cd EDAS
         >> sbt package
 
     6. Run unit tests:
 
         >> sbt test
-
-    7. Source the setup file to configure the runtime environment:
-
-        >> source <prefix>/EDAS/bin/setup_runtime.sh
 
     8. Startup the EDAS server:
      

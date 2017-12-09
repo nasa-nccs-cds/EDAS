@@ -33,7 +33,7 @@ enablePlugins(JavaAppPackaging)
 mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
-libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies.spark ++ Dependencies.scala ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
+libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies.spark ++ Dependencies.scala ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
 
 //libraryDependencies ++= {
 //  sys.env.get("YARN_CONF_DIR") match {
@@ -88,9 +88,9 @@ edas_logs_dir := getEDASlogsDir
 conda_lib_dir := getCondaLibDir
 
 unmanagedJars in Compile ++= {
-  sys.env.get("EDAS_UNMANAGED_JARS") match {
+  sys.env.get( "EDAS_UNMANAGED_JARS" ) match {
     case Some(jars_dir) =>
-      val customJars: PathFinder =  file(jars_dir) ** (("*.jar" -- "*netcdf*") -- "*concurrentlinkedhashmap*")
+      val customJars: PathFinder =  file(jars_dir) ** ("*.jar" -- "*concurrentlinkedhashmap*")
       val classpath_file = edas_cache_dir.value / "classpath.txt"
       val pw = new PrintWriter( classpath_file )
       val jars_list = customJars.getPaths.mkString("\n")
