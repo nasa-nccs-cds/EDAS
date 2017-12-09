@@ -29,6 +29,7 @@ class SparkDatasetMgr( val dataPath: String ) {
 }
 
 class CDAve( val undef: Float = Float.NaN ) extends UserDefinedAggregateFunction {
+
   def inputSchema: StructType = StructType(StructField("inputColumn", ArrayType(FloatType,true)) :: Nil)
   def bufferSchema: StructType = { StructType(StructField("sum", FloatType) :: StructField("count", IntegerType ) :: Nil) }
   def dataType: DataType = FloatType

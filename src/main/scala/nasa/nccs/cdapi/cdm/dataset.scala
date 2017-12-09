@@ -7,12 +7,13 @@ import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, _}
 import java.net.URI
 import java.nio._
-import java.util.{Formatter, Locale}
+import java.util.{Date, Formatter, Locale}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
-import nasa.nccs.cdapi.data.HeapFltArray
+import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
 import nasa.nccs.cdapi.tensors.{CDDoubleArray, CDFloatArray, CDLongArray}
+import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.loaders.{Collections, EDAS_XML, XmlResource}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
 import nasa.nccs.utilities.{Loggable, cdsutils}
@@ -973,8 +974,16 @@ class ncReadTest extends Loggable {
 }
 
 case class VariableMetadata( nameAndDimensions: String, units: String, missing: Float, metadata: String, shape: Array[Int] )
-case class VariableRecord( timestamp: String, data: Array[Float] ) {
+case class VariableRecord( timestamp: String, missing: Float, data: Array[Float] ) {
   def length: Int = data.length
+}
+object VariableRecord {
+  def apply( key: RecordKey, rec: RDDRecord, varId: String ): VariableRecord = {
+    val data: HeapFltArray = rec.element(varId).getOrElse( missingVar( rec, varId ))
+    new VariableRecord( new Date(key.start).toString, data.missing.getOrElse(Float.NaN), data.data )
+  }
+  def missingVar( rec: RDDRecord, varId: String ) = throw new Exception( s"Cant find variable ${varId} in RDDRecord, ids: ${rec.elems.mkString(",")}")
+
 }
 
 object NetcdfDatasetMgr extends Loggable with ContainerOps {
@@ -1071,7 +1080,7 @@ object NetcdfDatasetMgr extends Loggable with ContainerOps {
           val dataArray = HeapFltArray(fltData, section.getOrigin, attributes.mapValues( _.toString ), None)
           logger.info( "[T%d] Reading variable %s from path %s, section shape: (%s), section origin: (%s), variable shape: (%s), size = %.2f M, read time = %.4f sec, sample data = [ %s ]".format(
             Thread.currentThread().getId(), varShortName, dataPath, section.getShape.mkString(","), section.getOrigin.mkString(","), variable.getShape.mkString(","), (section.computeSize*4.0)/MB, (System.nanoTime() - t0) / 1.0E9, sample_data.mkString(", ") ))
-          new VariableRecord( date.toString,  dataArray.data )
+          new VariableRecord( date.toString, dataArray.missing.getOrElse(Float.NaN), dataArray.data )
         } catch {
           case err: Exception =>
             logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));

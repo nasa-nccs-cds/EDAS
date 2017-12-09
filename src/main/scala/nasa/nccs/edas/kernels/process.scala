@@ -284,7 +284,7 @@ class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
     _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
     _contents ++= _vault.fetchContents
   }
-  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = node.mapReduce( value, context, batchIndex )
+  def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = node.execute( workflow, value, context, batchIndex )
   def value: RDD[(RecordKey,RDDRecord)] = _vault.value
   def contents: Set[String] = _contents.toSet
   def section( section: Option[CDSection] ): Unit = _vault.mapValues( _.section(section) )
@@ -332,6 +332,10 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     EDASExecutionManager.checkIfAlive
     logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier + ", input size = " + input.count )
     input.mapValues( map(context) )
+  }
+
+  def execute( workflow: Workflow, input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+    mapReduce(input, context, batchIndex )
   }
 
   def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {

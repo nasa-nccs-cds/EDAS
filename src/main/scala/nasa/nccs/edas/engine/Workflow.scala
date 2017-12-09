@@ -170,6 +170,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   val nodes: Seq[WorkflowNode] = request.operations.map(opCx => WorkflowNode( opCx, createKernel( opCx.name.toLowerCase ) ) )
   val roots = findRootNodes()
   private val _nodeInputs: mutable.HashMap[String, OperationInput] = mutable.HashMap.empty[String, OperationInput]
+  def sparkSession = executionMgr.serverContext.spark.session
 
   def createKernel(id: String): Kernel = executionMgr.getKernel(id)
 
@@ -257,7 +258,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  ( RecordKey, RDDRecord )  = {
     processInputs( executor.rootNode, executor, kernelCx, batchIndex)
     kernelCx.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ executor.rootNode.getNodeId}", true)
-    val  (key: RecordKey, rec: RDDRecord) =  executor.execute( kernelCx, batchIndex )
+    val  (key: RecordKey, rec: RDDRecord) =  executor.execute( this, kernelCx, batchIndex )
     logger.info("\n\n ----------------------- END mapReduce: NODE %s, operation: %s, batch id: %d, contents = [ %s ]  -------\n".format( executor.rootNode.getNodeId, kernelCx.operation.identifier, batchIndex, executor.contents.mkString(", ") ) )
     key -> executor.rootNode.kernel.postRDDOp( executor.rootNode.kernel.orderElements( rec.configure("gid", kernelCx.grid.uid), kernelCx ), kernelCx  )
   }

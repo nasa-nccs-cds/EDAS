@@ -1,21 +1,30 @@
 package nasa.nccs.edas.modules.CDSpark
 
-import nasa.nccs.cdapi.data.TimeCycleSorter._
+import nasa.nccs.cdapi.cdm.VariableRecord.missingVar
 import nasa.nccs.cdapi.data.{RDDRecord, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
-import ucar.ma2
+
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}
+import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels._
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
-import org.apache.spark.rdd.RDD
-import ucar.ma2.DataType
-import org.apache.spark.mllib.linalg.{DenseVector, Vector}
+import org.apache.spark.mllib.linalg.Vector
 import org.apache.spark.mllib.linalg.Matrix
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
 import org.apache.spark.mllib.linalg.SingularValueDecomposition
 
-import scala.collection.immutable.TreeMap
+import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
+import nasa.nccs.cdapi.cdm.VariableRecord
+import org.apache.spark
+import spark.rdd.RDD
+import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Encoder, Encoders, Row, SparkSession}
+import org.apache.spark.sql.expressions.Aggregator
+
+import scala.collection.immutable.{SortedMap, TreeMap}
 import scala.reflect.runtime.{universe => u}
 
 //package object CDSpark {
@@ -252,6 +261,56 @@ class ave extends SingularRDDKernel(Map.empty) {
   }
   override def combineRDD(context: KernelContext)(a0: RDDRecord, a1: RDDRecord ): RDDRecord =  weightedValueSumRDDCombiner(context)(a0, a1)
   override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
+}
+
+class CDAve( val undef: Float = Float.NaN ) extends UserDefinedAggregateFunction {
+  import org.apache.spark.sql.types.{ DataType, FloatType, IntegerType }
+  def inputSchema: StructType = StructType(StructField("inputColumn", ArrayType(FloatType,true)) :: Nil)
+  def bufferSchema: StructType = { StructType(StructField("sum", FloatType) :: StructField("count", IntegerType ) :: Nil) }
+  def dataType: DataType = FloatType
+  def deterministic: Boolean = true
+  def initialize(buffer: MutableAggregationBuffer): Unit = { buffer(0) = 0f; buffer(1) = 0 }
+
+  def update(buffer: MutableAggregationBuffer, input: Row): Unit =  {
+    val inputSeq = input.getSeq[Float](0)
+    for( index <- inputSeq.indices; inputVal = inputSeq(index); if inputVal != undef ) {
+      buffer(0) = buffer.getFloat(0) + inputVal
+      buffer(1) = buffer.getInt(1) + 1
+    }
+  }
+  def merge(buffer1: MutableAggregationBuffer, buffer2: Row): Unit = {
+    buffer1(0) = buffer1.getFloat(0) + buffer2.getFloat(0)
+    buffer1(1) = buffer1.getInt(1) + buffer2.getInt(1)
+  }
+  def evaluate(buffer: Row): Float = buffer.getFloat(0) / buffer.getInt(1)
+}
+
+class aveSSQL extends Kernel(Map.empty) {
+  override val status = KernelStatus.restricted
+  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
+  val outputs = List( WPSProcessOutput( "operation result" ) )
+  val title = "Space/Time Mean"
+  val doesAxisElimination: Boolean = true
+  val description = "REDUCTION OPERATION: Computes (weighted) means of element values from input variable data over specified axes and roi"
+
+  override def execute( workflow: Workflow, input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+    val varId: String = context.operation.inputs.head
+    val ( key0, rec0 ) = input.first()
+    val fltArray: HeapFltArray = rec0.element(varId).getOrElse( missingVar( rec0, varId ))
+    val missing: Float = fltArray.missing.getOrElse(Float.NaN)
+    workflow.sparkSession.udf.register("cdave", new CDAve(missing) )
+    val rdd: RDD[VariableRecord] = input.map { case (key,rec) => VariableRecord(key,rec,varId) }
+    val df = workflow.sparkSession.createDataFrame(rdd)
+    df.createOrReplaceTempView("records")
+    val df_ave = workflow.sparkSession.sql("SELECT cdave(data) as average FROM records")
+    val result: Array[Float] = df_ave.collect().map( _.getFloat(0) )
+    val outOrigin: Array[Int] = rec0.getOrigin
+    val outShape: Array[Int] = outOrigin.indices.map( i => if(i==0) result.length else 1 ).toArray
+    ( key0, new RDDRecord( TreeMap[String,HeapFltArray]( varId -> new HeapFltArray(outShape,outOrigin,result,Some(missing),fltArray.gridSpec) ), rec0.metadata, rec0.partition ) )
+  }
+  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord = { rdd }
+//  override def combineRDD(context: KernelContext)(a0: RDDRecord, a1: RDDRecord ): RDDRecord =  weightedValueSumRDDCombiner(context)(a0, a1)
+//  override def postRDDOp(pre_result: RDDRecord, context: KernelContext ):  RDDRecord = weightedValueSumRDDPostOp( pre_result, context )
 }
 
 class subset extends Kernel(Map.empty) {
