@@ -10,7 +10,7 @@ val EDAS_VERSION = sys.env.get("EDAS_VERSION").getOrElse("{UNDEFINED}")
 
 name := "EDAS"
 version := EDAS_VERSION + "-SNAPSHOT"
-scalaVersion := "2.11.8"
+scalaVersion := "2.10.7"
 organization := "nasa.nccs"
 
 lazy val root = project in file(".")
@@ -42,7 +42,9 @@ libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies
 //  }
 //}
 
-// dependencyOverrides ++= Set( "com.fasterxml.jackson.core" % "jackson-databind" % "2.4.4" )
+dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % "2.6.5"
+dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-databind" % "2.6.5"
+dependencyOverrides += "com.fasterxml.jackson.module" % "jackson-module-scala_2.10" % "2.6.5"
 
 sbtcp := {
   val files: Seq[String] = (fullClasspath in Compile).value.files.map(x => x.getAbsolutePath)
@@ -87,19 +89,21 @@ edas_sbin_dir := getEDASbinDir
 edas_logs_dir := getEDASlogsDir
 conda_lib_dir := getCondaLibDir
 
+lazy val installNetcdfTask = taskKey[Unit]("Install Netcdf jar")
+
+installNetcdfTask := {
+  (baseDirectory.value / "bin" / "install_netcdf_jar.sh").toString !
+}
+
 unmanagedJars in Compile ++= {
-  sys.env.get( "EDAS_UNMANAGED_JARS" ) match {
-    case Some(jars_dir) =>
-      val customJars: PathFinder =  file(jars_dir) ** ("*.jar" -- "*concurrentlinkedhashmap*")
-      val classpath_file = edas_cache_dir.value / "classpath.txt"
-      val pw = new PrintWriter( classpath_file )
-      val jars_list = customJars.getPaths.mkString("\n")
-      println("Custom jars: " + jars_list + ", dir: " + jars_dir )
-      pw.write( jars_list )
-      customJars.classpath
-    case None =>
-      PathFinder.empty.classpath
-  }
+  val jars_dir: String = sys.env.getOrElse( "EDAS_UNMANAGED_JARS", (baseDirectory.value / "lib").toString )
+    val customJars: PathFinder =  file(jars_dir) ** ("*.jar" -- "*concurrentlinkedhashmap*")
+    val classpath_file = edas_cache_dir.value / "classpath.txt"
+    val pw = new PrintWriter( classpath_file )
+    val jars_list = customJars.getPaths.mkString("\n")
+    println("Custom jars: " + jars_list + ", dir: " + jars_dir )
+    pw.write( jars_list )
+    customJars.classpath
 }
 
 //unmanagedJars in Compile ++= {

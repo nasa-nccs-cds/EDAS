@@ -19,6 +19,7 @@ import nasa.nccs.esgf.process.{RegridSpec, _}
 import nasa.nccs.utilities.{Loggable, ProfilingTool}
 import nasa.nccs.wps.{WPSProcess, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import ucar.nc2.Attribute
 import ucar.{ma2, nc2}
 
@@ -270,6 +271,51 @@ class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
 
   class RDDVault( init_value: RDD[(RecordKey,RDDRecord)] ) {
     private var _rdd = init_value; _rdd.cache()
+    def update( new_rdd: RDD[(RecordKey,RDDRecord)] ): Unit = { _rdd.unpersist(false); _rdd = new_rdd; _rdd.cache }
+    def map( f: (RDD[(RecordKey,RDDRecord)]) => RDD[(RecordKey,RDDRecord)] ): Unit = update( f(_rdd) )
+    def updateValues( f: (RDDRecord) => RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ f(rec) ) )
+    def mapValues( f: (RDDRecord) => RDDRecord ): Unit = update( _rdd.mapValues( rec => f(rec) ) )
+    def +=( record: RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ record ) )
+    def value = _rdd
+    def fetchContents: Set[String] = _rdd.map { case (key,rec) => rec.elements.keySet }.first
+    def release( keys: Iterable[String] ): Unit = mapValues( _.release(keys) )
+    def clear: Unit = mapValues( _.clear )
+  }
+  def map( kernel: Kernel, context: KernelContext ): Unit = {
+    _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
+    _contents ++= _vault.fetchContents
+  }
+  def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = node.execute( workflow, value, context, batchIndex )
+  def value: RDD[(RecordKey,RDDRecord)] = _vault.value
+  def contents: Set[String] = _contents.toSet
+  def section( section: Option[CDSection] ): Unit = _vault.mapValues( _.section(section) )
+  def fetchContents: Set[String] = _vault.fetchContents
+  def release( keys: Iterable[String] ): Unit = { _vault.release( keys ); _contents --= keys.toSet }
+
+  def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
+    logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
+    val newVSpecs = vSpecs.filter( vspec => !_contents.contains(vspec.uid) )
+    if( newVSpecs.nonEmpty ) {
+      _vault.mapValues( kernelContext.addRddElements(newVSpecs) )
+      _contents ++= newVSpecs.map(_.uid).toSet
+    }
+    logger.info("\n\n RDDContainer ###-> END addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
+  }
+  def addOperationInput( record: RDDRecord ): Unit = {
+    _vault += record
+    _contents ++= record.elements.keySet
+  }
+}
+
+class DatasetContainer( val session: SparkSession, init_value: RDD[VariableRecord], val metadata: VariableMetadata ) extends Loggable {
+  private val _contents = mutable.HashSet.empty[String]
+  private var _vault = new DatasetVault(init_value)
+  def releaseBatch = { _vault.clear; _contents.clear() }
+
+  class DatasetVault( init_value: RDD[VariableRecord] ) {
+    private val _df : DataFrame = session.createDataFrame(init_value)
+    _df.createOrReplaceTempView("records")
+    private val _ds : Dataset[VariableRecord] = _df.as( encoder )
     def update( new_rdd: RDD[(RecordKey,RDDRecord)] ): Unit = { _rdd.unpersist(false); _rdd = new_rdd; _rdd.cache }
     def map( f: (RDD[(RecordKey,RDDRecord)]) => RDD[(RecordKey,RDDRecord)] ): Unit = update( f(_rdd) )
     def updateValues( f: (RDDRecord) => RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ f(rec) ) )

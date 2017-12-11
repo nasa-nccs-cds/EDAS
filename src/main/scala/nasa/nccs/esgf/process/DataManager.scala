@@ -64,7 +64,7 @@ class RegridSpec( val gridFile: String, val subgrid: String ) extends Serializab
 //kernelContext.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ executor.node.getNodeId}", true)
 //val result: (RecordKey, RDDRecord) =  executor.node.mapReduce (rdd, kernelContext, batchIndex)
 
-class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
+class WorkflowExecutor( val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
   val optPartitioner: Option[EDASPartitioner] = generatePartitioning
   private var _optInputsRDD: Option[RDDContainer] = None
   val rootNode = workflowCx.rootNode

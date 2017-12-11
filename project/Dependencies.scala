@@ -33,7 +33,6 @@ object Library {
   val scalatest      = "org.scalatest" %% "scalatest" % "3.0.0" % "test"
   val concurrentlinkedhashmap = "com.googlecode.concurrentlinkedhashmap" % "concurrentlinkedhashmap-lru" % "1.4.2"
   val reflections    = "org.reflections" % "reflections"       % "0.9.10"
-
   val scalaxml       = "org.scala-lang.modules" %% "scala-xml"  % "1.0.3"
   val scalaparser    = "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.3"
 }

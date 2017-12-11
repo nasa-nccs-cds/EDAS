@@ -22,6 +22,7 @@ import ucar.nc2.time.CalendarDate
 import collection.mutable.{HashMap, ListBuffer}
 import collection.JavaConversions._
 import collection.JavaConversions._
+import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -54,10 +55,18 @@ object NCMLWriter extends Loggable {
       val paths: Array[File] = cspecs.tail.filter(!_.isEmpty).map(fpath => new File(fpath))
       agg_type match {
         case multi if multi.startsWith("m") =>
-          for( path <- paths; if path.isDirectory; subdir <- path.listFiles; if subdir.isDirectory ) {
-            val subCollectionId = collectionId + "_" + subdir.getName
-            val varNames = generateNCML( subCollectionId, Array(subdir) )
-            varNames.foreach( vname => variableMap += ( vname -> subCollectionId ) )
+          for( path <- paths; if path.isDirectory ) {
+            for (subdir <- path.listFiles; if subdir.isDirectory) {
+              val subCollectionId = collectionId + "_" + subdir.getName
+              val varNames = generateNCML(subCollectionId, Array(subdir))
+              varNames.foreach(vname => variableMap += (vname -> subCollectionId))
+            }
+            val dataFiles = path.listFiles.filter(_.isFile)
+            getFileGroups(dataFiles) foreach { case ( group_name, files ) =>
+              val subCollectionId = collectionId + "_" + group_name
+              val varNames = generateNCML( subCollectionId, files )
+              varNames.foreach(vname => variableMap += (vname -> subCollectionId))
+            }
           }
         case singl if singl.startsWith("s") =>
           val varNames = generateNCML( collectionId, paths )
@@ -66,6 +75,18 @@ object NCMLWriter extends Loggable {
       }
       writeCollectionDirectory( collectionId, variableMap.toMap )
     }
+  }
+
+  def getFileGroups(dataFiles: Seq[File]): Map[String,Array[File]] = {
+    val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[File]]
+    dataFiles.foreach( df => groupMap.getOrElseUpdate( getVariablesKey( df ), mutable.ListBuffer.empty[File] ) += df )
+    groupMap.mapValues(_.toArray).toMap
+  }
+
+  def getVariablesKey( file: File ): String = {
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( file.toString )
+    val variables: List[nc2.Variable] = ncDataset.getVariables.filterNot(_.isCoordinateVariable).toList
+    variables.map( _.getShortName ).mkString("-")
   }
 
   def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
