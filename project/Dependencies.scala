@@ -3,6 +3,7 @@ import sbt._
 object Versions {
   val ucar = "4.6.8"
   val spark = "1.6.3"
+  val jackson = "2.6.7"
 }
 
 object Library {
@@ -37,6 +38,11 @@ object Library {
 
   val scalaxml       = "org.scala-lang.modules" %% "scala-xml"  % "1.0.3"
   val scalaparser    = "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.3"
+
+  val jacksonCore = "com.fasterxml.jackson.core" % "jackson-core" % Versions.jackson
+  val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jackson
+  val jacksonModule = "com.fasterxml.jackson.module" % "jackson-module-scala_2.10" % Versions.jackson
+
 }
 
 object Dependencies {
@@ -47,6 +53,8 @@ object Dependencies {
   val test = Seq( scalatest, logback )
 
   val xml = Seq( scalaxml, scalaparser )
+
+  val jackson = Seq( jacksonCore, jacksonDatabind, jacksonModule )
 
   val spark = Seq( sparkCore, sparkStreaming, sparkMLLib )
 

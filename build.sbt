@@ -33,7 +33,7 @@ enablePlugins(JavaAppPackaging)
 mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
-libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
+libraryDependencies ++= ( Dependencies.cache ++ Dependencies.jackson ++ Dependencies.geo ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
 
 libraryDependencies ++= {
   sys.env.get("YARN_CONF_DIR") match {
@@ -42,9 +42,9 @@ libraryDependencies ++= {
   }
 }
 
-dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % "2.6.5"
-dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-databind" % "2.6.5"
-dependencyOverrides += "com.fasterxml.jackson.module" % "jackson-module-scala_2.10" % "2.6.5"
+dependencyOverrides += Library.jacksonCore
+dependencyOverrides += Library.jacksonDatabind
+dependencyOverrides += Library.jacksonModule
 
 sbtcp := {
   val files: Seq[String] = (fullClasspath in Compile).value.files.map(x => x.getAbsolutePath)
