@@ -2,8 +2,8 @@
 SCALA_VERSION=2.11
 EDAS_JAR=${EDAS_HOME_DIR}/target/scala-${SCALA_VERSION}/edas_${SCALA_VERSION}-${EDAS_VERSION}-SNAPSHOT.jar
 SPARK_PRINT_LAUNCH_COMMAND=true 
-# IVY_JARS=$(find ~/.ivy2 -name "*.jar" )
 APP_DEP_JARS=$(find ~/.ivy2 -name "*.jar" )
+#APP_DEP_JARS=$(find ~/.ivy2 -name "*.jar" )
 APP_DEP_CP=$(echo ${EDAS_HOME_DIR}/lib | sed -r 's/[ \n\r]+/:/g')
 echo "Application classpath:  $APP_DEP_CP "
 echo "EDAS jar:  $EDAS_JAR "
