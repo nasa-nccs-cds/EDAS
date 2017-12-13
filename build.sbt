@@ -10,7 +10,7 @@ val EDAS_VERSION = sys.env.get("EDAS_VERSION").getOrElse("{UNDEFINED}")
 
 name := "EDAS"
 version := EDAS_VERSION + "-SNAPSHOT"
-scalaVersion := "2.10.7"
+scalaVersion := "2.11.7"
 organization := "nasa.nccs"
 
 lazy val root = project in file(".")
@@ -33,7 +33,7 @@ enablePlugins(JavaAppPackaging)
 mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
-libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies.spark ++ Dependencies.scala ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
+libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies.jackson ++ Dependencies.spark ++ Dependencies.scala ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
 
 //libraryDependencies ++= {
 //  sys.env.get("YARN_CONF_DIR") match {
@@ -42,9 +42,11 @@ libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies
 //  }
 //}
 
-dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % "2.6.5"
-dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-databind" % "2.6.5"
-dependencyOverrides += "com.fasterxml.jackson.module" % "jackson-module-scala_2.10" % "2.6.5"
+dependencyOverrides += Library.jacksonCore
+dependencyOverrides += Library.jacksonDatabind
+dependencyOverrides += Library.jacksonModule
+dependencyOverrides += Library.jacksonAnnotations
+dependencyOverrides += Library.jacksonDatatype
 
 sbtcp := {
   val files: Seq[String] = (fullClasspath in Compile).value.files.map(x => x.getAbsolutePath)
