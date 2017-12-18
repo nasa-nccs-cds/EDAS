@@ -435,6 +435,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
       val desiredPartSize = if (2 > nFiles) { partitionSize } else {
         math.min( math.min( partitionSize, sectionMemorySize / BatchSpec.nNodes.toFloat), nFiles ).toInt
       }
+      logger.info(  s"\n--> %E% getPartitionSpecs: timeAxisCoverageFraction=${timeAxisCoverageFraction}, nFiles=${nFiles}, nNodes=${BatchSpec.nNodes}, sectionMemorySize=${sectionMemorySize}, desiredPartSize=${desiredPartSize}, section.len=${sectionRange.length()}, timeAxis.len=${timeAxis.getShape(0)}")
       val currentPartitionSize: Float = math.max(desiredPartSize, sliceMemorySize)
       val currentRecordSize: Float = if (constraints.oneRecPerSlice) { sliceMemorySize } else {
         if (constraints.nSlicesPerRecord == 0) {
