@@ -374,11 +374,11 @@ case class PartitionConstraints( partsConfig: Map[String,String] ) {
   val period = partsConfig.getOrElse("period","")
   val nSlicesPerRecord: Int = partsConfig.getOrElse("numSlicesPerRecord","0").toInt
   val oneRecPerSlice: Boolean = partsConfig.getOrElse("oneRecPerSlice","false").toBoolean
-  val numParts: Int = if( _numParts > 0 ) { _numParts } else {
-    val _numfilesPerPart: Double = math.ceil( _numDataFiles / BatchSpec.nParts.toFloat )
-    if ( _numfilesPerPart == 0.0 ) 0 else math.ceil( _numDataFiles / _numfilesPerPart ).toInt
-  }
-  override val toString = { s"{ numDataFiles: ${_numDataFiles.toString}, numParts: ${_numParts.toString}, period: ${period}, nSlicesPerRecord: ${nSlicesPerRecord.toString}, oneRecPerSlice: ${oneRecPerSlice.toString} , numParts: ${numParts.toString} }"}
+//  val numParts: Int = if( _numParts > 0 ) { _numParts } else {
+//    val _numfilesPerPart: Double = math.ceil( _numDataFiles / BatchSpec.nParts.toFloat )
+//    if ( _numfilesPerPart == 0.0 ) 0 else math.ceil( _numDataFiles / _numfilesPerPart ).toInt
+//  }
+  override val toString = { s"{ numDataFiles: ${_numDataFiles.toString}, numParts: ${_numParts.toString}, period: ${period}, nSlicesPerRecord: ${nSlicesPerRecord.toString}, oneRecPerSlice: ${oneRecPerSlice.toString} }"}
 }
 
 class EDASPartitioner( val uid: String, private val _section: ma2.Section, val partsConfig: Map[String,String], timeAxisOpt: Option[CoordinateAxis1DTime], val numDataFiles: Int, val numElements: Int, val regridSpec: RegridSpec, dataType: ma2.DataType = ma2.DataType.FLOAT, val cacheType: String = "fragment") extends Loggable {
@@ -430,9 +430,10 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
 
   def getPartitionSpecs( constraints: PartitionConstraints ): PartitionSpecs = {
     if( constraints.period.isEmpty ) {
-      val desiredPartSize = if (constraints.numParts == 0) { partitionSize } else {
-        math.min(partitionSize, sectionMemorySize / constraints.numParts.toFloat)
-      }
+      val desiredPartSize = partitionSize
+//      val desiredPartSize = if (constraints.numParts == 0) { partitionSize } else {
+//        math.min(partitionSize, sectionMemorySize / constraints.numParts.toFloat)
+//      }
       val currentPartitionSize: Float = math.max(desiredPartSize, sliceMemorySize)
       val currentRecordSize: Float = if (constraints.oneRecPerSlice) { sliceMemorySize } else {
         if (constraints.nSlicesPerRecord == 0) {
