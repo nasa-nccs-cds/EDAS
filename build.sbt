@@ -94,7 +94,8 @@ conda_lib_dir := getCondaLibDir
 lazy val installNetcdfTask = taskKey[Unit]("Install Netcdf jar")
 
 installNetcdfTask := {
-  (baseDirectory.value / "bin" / "install_netcdf_jar.sh").toString !
+  val netcdfJarFile = ( baseDirectory.value / "lib" ).list().find( _.startsWith("netcdf") )
+  if( netcdfJarFile.isEmpty ) { (baseDirectory.value / "bin" / "install_netcdf_jar.sh").toString ! }
 }
 
 unmanagedJars in Compile ++= {
@@ -167,7 +168,7 @@ upscr := {
   }
 }
 
-compile  <<= (compile in Compile).dependsOn(upscr)
+compile  <<= (compile in Compile).dependsOn(upscr,installNetcdfTask)
 
 def getCondaLibDir: Option[File] = sys.env.get("CONDA_PREFIX") match {
   case Some(ldir) => Some(file(ldir) / "lib")
