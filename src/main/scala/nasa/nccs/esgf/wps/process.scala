@@ -20,7 +20,9 @@ case class Job( requestId: String, identifier: String, datainputs: String, priva
   def sign(f: Float): Int = if( f > 0f ) { 1 } else if( f < 0f ) { -1 } else { 0 }
   def priority: Float = { _priority }
   def compareTo( job: Job ): Int = sign( priority - job.priority )
-  def runargs = _runargs + ( "jobId"->requestId  )
+  def runargs: Map[String,String] = _runargs + ( "jobId"->requestId  )
+  private val _startNTime = System.nanoTime()
+  def elapsed = ((System.nanoTime()-_startNTime)/1.0e9).toInt
 }
 
 trait GenericProcessManager {

@@ -459,9 +459,14 @@ class EDASExecutionManager extends WPSServer with Loggable {
   }
 
   def getResultStatus( resId: String, response_syntax: ResponseSyntax.Value ): xml.Node = {
-    logger.info( "Locating result: " + resId )
     val message = collectionDataCache.getExistingResult( resId ) match {
-      case None => new WPSExecuteStatusStarted( "WPS", "", resId ).toXml( response_syntax )
+      case None =>
+        collectionDataCache.findJob(resId) match {
+          case Some( jobRec: JobRecord ) => new WPSExecuteStatusStarted("WPS", "", resId, jobRec.elapsed ).toXml(response_syntax)
+          case None =>
+            logger.warn( s" %J% >> Can't find job for resId: ${resId}" )
+            new WPSExecuteStatusStarted("WPS", "", resId, 0 ).toXml(response_syntax)
+        }
       case Some( tvar: RDDTransientVariable ) => new WPSExecuteStatusCompleted( "WPS", "", resId ).toXml( response_syntax )
     }
     message

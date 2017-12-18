@@ -1117,10 +1117,7 @@ class DomainAxis(val axistype: DomainAxis.Type.Value,
   def getCoordAxisName: String = DomainAxis.coordAxisName(axistype)
   override def toString = s"DomainAxis { name = $name, start = $start, end = $end, system = $system, bounds = $bounds }"
   def toBoundsString = s"$name:[$start,$end,$system]"
-  def toDataInput: (String, Map[String, String]) =
-    (getCoordAxisName -> Map("start" -> start.toString,
-                             "end" -> end.toString,
-                             "system" -> system))
+  def toDataInput: (String, Map[String, String]) = getCoordAxisName -> Map("start" -> start.toString, "end" -> end.toString, "system" -> system)
 
   override def toXml = {
     <axis name={name} start={start.toString} end={end.toString} system={system} bounds={bounds} />

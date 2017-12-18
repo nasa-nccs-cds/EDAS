@@ -18,7 +18,7 @@ import nasa.nccs.edas.loaders.{Collections, EDAS_XML, XmlResource}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import ucar.nc2.constants.AxisType
-import ucar.nc2.dataset._
+import ucar.nc2.dataset.{CoordinateAxis, _}
 import ucar.ma2
 import ucar.nc2.constants.CDM
 
@@ -94,11 +94,17 @@ object CDGrid extends Loggable {
       }
     }
     val coordAxes: List[CoordinateAxis] = gridDS.getCoordinateAxes.toList
+    val resolution: Map[String, Float] = Map( coordAxes.map(getResolution): _*)
     val dimensions = gridDS.getDimensions.toList
     val conv = gridDS.getConventionUsed
     val title = gridDS.getTitle
-    new CDGrid(name, gridFilePath, coordAxes, coordSystems, dimensions, dset_attributes)
+    new CDGrid(name, gridFilePath, coordAxes, coordSystems, dimensions, resolution, dset_attributes)
   }
+    def getResolution( cAxis: CoordinateAxis): (String,Float) = {
+      val name = cAxis.getAxisType.toString
+      val size = if ( name.equalsIgnoreCase("t") ) { cAxis.getShape(0) * 1.0e9 } else { cAxis.getShape(0) }
+      name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / size.toFloat
+    }
 
   def isInt( s: String ): Boolean = try { s.toInt; true } catch { case err: Exception => false }
 
@@ -230,7 +236,7 @@ object CDGrid extends Loggable {
   }
 }
 
-class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[CoordinateAxis], val coordSystems: List[CoordinateSystem], val dimensions: List[Dimension], val attributes: List[nc2.Attribute] ) extends Loggable {
+class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[CoordinateAxis], val coordSystems: List[CoordinateSystem], val dimensions: List[Dimension], val resolution: Map[String,Float], val attributes: List[nc2.Attribute] ) extends Loggable {
   val precache = false
 
   def gridFileExists(): Boolean = try {
@@ -382,7 +388,7 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
 
 
   def toXml: xml.Elem =  {
-    <collection id={id} title={title}>
+    <collection id={id} title={title} resolution={grid.resolution.map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")}>
       { SortedMap( getVarNodes: _* ).values }
     </collection>
   }
