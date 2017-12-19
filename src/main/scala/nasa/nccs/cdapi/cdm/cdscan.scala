@@ -75,7 +75,7 @@ object NCMLWriter extends Loggable {
       writeCollectionDirectory( collectionId, variableMap.toMap )
     }
   }
-  
+
   def getFileGroups(dataFiles: Seq[File]): Map[String,Array[File]] = {
     val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[File]]
     dataFiles.foreach( df => groupMap.getOrElseUpdate( getVariablesKey( df ), mutable.ListBuffer.empty[File] ) += df )
