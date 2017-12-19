@@ -19,6 +19,7 @@ val sbtcp = taskKey[Unit]("sbt-classpath")
 val upscr = taskKey[Unit]("update-edas-scripts")
 
 resolvers += "Unidata maven repository" at "http://artifacts.unidata.ucar.edu/content/repositories/unidata-releases"
+resolvers += "Unidata All" at "https://artifacts.unidata.ucar.edu/repository/unidata-all"
 resolvers += "Java.net repository" at "http://download.java.net/maven/2"
 resolvers += "Open Source Geospatial Foundation Repository" at "http://download.osgeo.org/webdav/geotools"
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
@@ -33,7 +34,7 @@ enablePlugins(JavaAppPackaging)
 mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
-libraryDependencies ++= ( Dependencies.cache  ++ Dependencies.geo ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test ) // ++ Dependencies.jackson
+libraryDependencies ++= ( Dependencies.cache  ++ Dependencies.geo ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test ) // ++ Dependencies.jackson
 
 libraryDependencies ++= {
   sys.env.get("YARN_CONF_DIR") match {
@@ -92,13 +93,13 @@ edas_sbin_dir := getEDASbinDir
 edas_logs_dir := getEDASlogsDir
 conda_lib_dir := getCondaLibDir
 
-lazy val installNetcdfTask = taskKey[Unit]("Install Netcdf jar")
-
-installNetcdfTask := {
-  if( """netcdfAll.*""".r.findFirstIn( (baseDirectory.value / "lib").list.mkString(";") ).isEmpty ) {
-    (baseDirectory.value / "bin" / "install_netcdf_jar.sh").toString !
-  }
-}
+//lazy val installNetcdfTask = taskKey[Unit]("Install Netcdf jar")
+//
+//installNetcdfTask := {
+//  if( """netcdfAll.*""".r.findFirstIn( (baseDirectory.value / "lib").list.mkString(";") ).isEmpty ) {
+//    (baseDirectory.value / "bin" / "install_netcdf_jar.sh").toString !
+//  }
+//}
 
 
 unmanagedJars in Compile ++= {
@@ -171,7 +172,7 @@ upscr := {
   }
 }
 
-compile  <<= (compile in Compile).dependsOn( upscr, installNetcdfTask )
+compile  <<= (compile in Compile).dependsOn( upscr )  // , installNetcdfTask )
 
 def getCondaLibDir: Option[File] = sys.env.get("CONDA_PREFIX") match {
   case Some(ldir) => Some(file(ldir) / "lib")
