@@ -366,8 +366,6 @@ class binAve extends Kernel(Map.empty) {
   }
 }
 
-
-
 class bin extends Kernel(Map.empty) {
   object BinKeyUtils {
     implicit object BinKeyOrdering extends Ordering[String] {

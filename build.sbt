@@ -1,4 +1,4 @@
-import java.io.PrintWriter
+import java.io.{FilenameFilter, PrintWriter}
 import java.nio.file.Files.copy
 import java.nio.file.Paths.get
 import java.nio.file.StandardCopyOption
@@ -33,7 +33,7 @@ enablePlugins(JavaAppPackaging)
 mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
-libraryDependencies ++= ( Dependencies.cache ++ Dependencies.geo ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
+libraryDependencies ++= ( Dependencies.cache ++ Dependencies.jackson ++ Dependencies.geo ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test )
 
 libraryDependencies ++= {
   sys.env.get("YARN_CONF_DIR") match {
@@ -42,11 +42,14 @@ libraryDependencies ++= {
   }
 }
 
-dependencyOverrides ++= Set( "com.fasterxml.jackson.core" % "jackson-databind" % "2.4.4" )
+dependencyOverrides += Library.jacksonCore
+dependencyOverrides += Library.jacksonDatabind
+dependencyOverrides += Library.jacksonModule
 
 sbtcp := {
   val files: Seq[String] = (fullClasspath in Compile).value.files.map(x => x.getAbsolutePath)
-  val sbtClasspath : String = files.mkString(":")
+  val libFiles: Seq[String] = ( baseDirectory.value / "lib" ).list()
+  val sbtClasspath : String = ( files ++ libFiles ).mkString(":")
   println("Set SBT classpath to 'sbt-classpath' environment variable")
   System.setProperty("sbt-classpath", sbtClasspath)
 }
@@ -87,19 +90,24 @@ edas_sbin_dir := getEDASbinDir
 edas_logs_dir := getEDASlogsDir
 conda_lib_dir := getCondaLibDir
 
-unmanagedJars in Compile ++= {
-  sys.env.get("EDAS_UNMANAGED_JARS") match {
-    case Some(jars_dir) =>
-      val customJars: PathFinder =  file(jars_dir) ** (("*.jar" -- "*netcdf*") -- "*concurrentlinkedhashmap*")
-      val classpath_file = edas_cache_dir.value / "classpath.txt"
-      val pw = new PrintWriter( classpath_file )
-      val jars_list = customJars.getPaths.mkString("\n")
-      println("Custom jars: " + jars_list + ", dir: " + jars_dir )
-      pw.write( jars_list )
-      customJars.classpath
-    case None =>
-      PathFinder.empty.classpath
+lazy val installNetcdfTask = taskKey[Unit]("Install Netcdf jar")
+
+installNetcdfTask := {
+  if( """netcdfAll.*""".r.findFirstIn( (baseDirectory.value / "lib").list.mkString(";") ).isEmpty ) {
+    (baseDirectory.value / "bin" / "install_netcdf_jar.sh").toString !
   }
+}
+
+
+unmanagedJars in Compile ++= {
+  val jars_dir: String = sys.env.getOrElse( "EDAS_UNMANAGED_JARS", (baseDirectory.value / "lib").toString )
+    val customJars: PathFinder =  file(jars_dir) ** ("*.jar" -- "*concurrentlinkedhashmap*")
+    val classpath_file = edas_cache_dir.value / "classpath.txt"
+    val pw = new PrintWriter( classpath_file )
+    val jars_list = customJars.getPaths.mkString("\n")
+    println("Custom jars: " + jars_list + ", dir: " + jars_dir )
+    pw.write( jars_list )
+    customJars.classpath
 }
 
 //unmanagedJars in Compile ++= {
@@ -161,7 +169,7 @@ upscr := {
   }
 }
 
-compile  <<= (compile in Compile).dependsOn(upscr)
+compile  <<= (compile in Compile).dependsOn( upscr, installNetcdfTask )
 
 def getCondaLibDir: Option[File] = sys.env.get("CONDA_PREFIX") match {
   case Some(ldir) => Some(file(ldir) / "lib")
