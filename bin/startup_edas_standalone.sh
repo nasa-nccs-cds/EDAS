@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-export SCALA_VERSION=2.10
+export SCALA_VERSION=2.11
 EDAS_JAR=${EDAS_HOME_DIR}/target/scala-${SCALA_VERSION}/edas_${SCALA_VERSION}-${EDAS_VERSION}-SNAPSHOT.jar
 SPARK_PRINT_LAUNCH_COMMAND=true 
 APP_DEP_JARS=$(find ~/.ivy2 -name "*.jar" )
