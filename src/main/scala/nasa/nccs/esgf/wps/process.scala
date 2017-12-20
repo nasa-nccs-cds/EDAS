@@ -15,12 +15,14 @@ import scala.xml.XML
 
 class NotAcceptableException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
 
-case class Job( requestId: String, identifier: String, datainputs: String, private val _runargs: Map[String,String], _priority: Float = 0.1f ) extends Comparable[Job] {
-  def this( requestId: String, identifier: String, __priority: Float = 1f ) { this(requestId, identifier, "", Map( "jobId"->requestId ), __priority ); }
+case class Job( requestId: String, identifier: String, datainputs: String, private val _runargs: Map[String,String], _priority: Float ) extends Comparable[Job] {
+  def this( requestId: String, identifier: String, __priority: Float ) { this(requestId, identifier, "", Map( "jobId"->requestId ), __priority ); }
   def sign(f: Float): Int = if( f > 0f ) { 1 } else if( f < 0f ) { -1 } else { 0 }
   def priority: Float = { _priority }
   def compareTo( job: Job ): Int = sign( priority - job.priority )
-  def runargs = _runargs + ( "jobId"->requestId  )
+  def runargs: Map[String,String] = _runargs + ( "jobId"->requestId  )
+  private val _startNTime = System.nanoTime()
+  def elapsed = ((System.nanoTime()-_startNTime)/1.0e9).toInt
 }
 
 trait GenericProcessManager {

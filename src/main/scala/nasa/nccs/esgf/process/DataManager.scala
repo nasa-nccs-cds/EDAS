@@ -7,7 +7,7 @@ import nasa.nccs.caching.{CachePartitions, EDASPartitioner, FileToCacheStream, F
 import nasa.nccs.cdapi.data.{RDDRecord, _}
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.WorkflowNode.regridKernel
-import nasa.nccs.edas.engine.{ExecutionCallback, WorkflowContext, WorkflowNode}
+import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext, RDDContainer}
@@ -102,9 +102,9 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     _optInputsRDD.foreach( _.release(disposable_inputs) )
   }
 
-  def execute(kernelCx: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = _optInputsRDD match {
+  def execute(workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = _optInputsRDD match {
     case Some( inputRdd:RDDContainer ) =>
-      val result = inputRdd.mapReduce( rootNode.kernel, kernelCx, batchIndex )
+      val result = inputRdd.execute( workflow, rootNode.kernel, kernelCx, batchIndex )
       releaseInputs( rootNode, kernelCx )
       result
     case None => throw new Exception( "Attempt to execute mapReduce on executor with no inputs.")

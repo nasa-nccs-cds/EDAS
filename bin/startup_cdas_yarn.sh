@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-EDAS_JAR=${EDAS_HOME_DIR}/target/scala-2.10/edas_2.10-${EDAS_VERSION}-SNAPSHOT.jar
+SCALA_VERSION=2.11
+EDAS_JAR=${EDAS_HOME_DIR}/target/scala-${SCALA_VERSION}/edas_${SCALA_VERSION}-${EDAS_VERSION}-SNAPSHOT.jar
 SPARK_PRINT_LAUNCH_COMMAND=true 
 APP_DEP_JARS=$(find ~/.ivy2 -name "*.jar" )
 APP_DEP_CP=$(echo $APP_DEP_JARS | sed -r 's/[ \n\r]+/:/g')

@@ -243,7 +243,7 @@ object TaskRequest extends Loggable {
   }
 }
 
-class ContainerBase extends Loggable {
+trait ContainerOps {
   def item_key(map_item: (String, Any)): String = map_item._1
 
   def normalize(sval: String): String = stripQuotes(sval).toLowerCase
@@ -280,10 +280,6 @@ class ContainerBase extends Loggable {
     }
   }
 
-  def toXml = <container>  { toString } </container>
-
-//  {"<![CDATA[ " + toString + " ]]>"}
-
   def getGenericNumber(opt_val: Option[Any]): GenericNumber = {
     opt_val match {
       case Some(p) => GenericNumber(p)
@@ -297,6 +293,11 @@ class ContainerBase extends Loggable {
     }
   }
 }
+
+class ContainerBase extends Loggable with ContainerOps {
+  def toXml = <container>  { toString } </container>
+}
+
 
 class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) {
   override def toString =
@@ -1118,10 +1119,7 @@ class DomainAxis(val axistype: DomainAxis.Type.Value,
   def getCoordAxisName: String = DomainAxis.coordAxisName(axistype)
   override def toString = s"DomainAxis { name = $name, start = $start, end = $end, system = $system, bounds = $bounds }"
   def toBoundsString = s"$name:[$start,$end,$system]"
-  def toDataInput: (String, Map[String, String]) =
-    (getCoordAxisName -> Map("start" -> start.toString,
-                             "end" -> end.toString,
-                             "system" -> system))
+  def toDataInput: (String, Map[String, String]) = getCoordAxisName -> Map("start" -> start.toString, "end" -> end.toString, "system" -> system)
 
   override def toXml = {
     <axis name={name} start={start.toString} end={end.toString} system={system} bounds={bounds} />

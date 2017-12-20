@@ -900,7 +900,9 @@ trait FragSpecKeySet extends nasa.nccs.utilities.Loggable {
 
 class JobRecord(val id: String) {
   override def toString: String = s"ExecutionRecord[id=$id]"
-  def toXml: xml.Elem = <job id={id} />
+  val creationTime: Long = System.nanoTime()
+  def toXml: xml.Elem = <job id={id} elapsed={elapsed.toString} />
+  def elapsed: Int = ((System.nanoTime() - creationTime)/1.0e9).toInt
 }
 
 class RDDTransientVariable(val result: RDDRecord,
@@ -970,10 +972,9 @@ class CollectionDataCacheMgr extends nasa.nccs.esgf.process.DataLoader with Frag
   private val maskCache: Cache[MaskKey, CDByteArray] = new FutureCache("Store", "mask" )
 
   def clearFragmentCache() = fragmentCache.clear
-  def addJob(jrec: JobRecord): String = {
-    execJobCache.put(jrec.id, jrec); jrec.id
-  }
+  def addJob(jrec: JobRecord): String = { execJobCache.put(jrec.id, jrec); jrec.id }
   def removeJob(jid: String) = execJobCache.remove(jid)
+  def findJob(jid: String): Option[JobRecord] = Option(execJobCache.get(jid))
 
   def getFragmentList: Array[String] = fragmentCache.getEntries.map {
       case (key, frag) => "%s, bounds:%s".format(key, frag.toBoundsString)

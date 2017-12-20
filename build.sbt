@@ -7,19 +7,18 @@ import sbt.{SettingKey, _}
 
 
 val kernelPackages = settingKey[ Seq[String] ]("A list of user-defined Kernel packages")
-val EDAS_VERSION = sys.env.get("EDAS_VERSION").getOrElse("{UNDEFINED}")
+val EDAS_VERSION = sys.env.getOrElse("EDAS_VERSION","{UNDEFINED}")
 
 name := "EDAS"
 version := EDAS_VERSION + "-SNAPSHOT"
-scalaVersion := "2.10.5"
+scalaVersion := "2.11.8"
 organization := "nasa.nccs"
 
 lazy val root = project in file(".")
 val sbtcp = taskKey[Unit]("sbt-classpath")
 val upscr = taskKey[Unit]("update-edas-scripts")
 
-resolvers += "Unidata maven repository" at "http://artifacts.unidata.ucar.edu/content/repositories/unidata-releases"
-resolvers += "Unidata All" at "https://artifacts.unidata.ucar.edu/repository/unidata-all"
+resolvers += "Unidata maven repository" at "https://artifacts.unidata.ucar.edu/repository/unidata-all"
 resolvers += "Java.net repository" at "http://download.java.net/maven/2"
 resolvers += "Open Source Geospatial Foundation Repository" at "http://download.osgeo.org/webdav/geotools"
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
@@ -43,11 +42,11 @@ libraryDependencies ++= {
   }
 }
 
-dependencyOverrides ++= Set( "com.fasterxml.jackson.core" % "jackson-databind" % "2.4.4" )
+// dependencyOverrides ++= Set( "com.fasterxml.jackson.core" % "jackson-databind" % "2.4.4" )
 
-// dependencyOverrides += Library.jacksonCore
-// dependencyOverrides += Library.jacksonDatabind
-// dependencyOverrides += Library.jacksonModule
+dependencyOverrides += Library.jacksonCore
+dependencyOverrides += Library.jacksonDatabind
+dependencyOverrides += Library.jacksonModule
 
 sbtcp := {
   val files: Seq[String] = (fullClasspath in Compile).value.files.map(x => x.getAbsolutePath)
@@ -104,7 +103,7 @@ conda_lib_dir := getCondaLibDir
 
 unmanagedJars in Compile ++= {
   val jars_dir: String = sys.env.getOrElse( "EDAS_UNMANAGED_JARS", (baseDirectory.value / "lib").toString )
-    val customJars: PathFinder =  file(jars_dir) ** ("*.jar" -- "*concurrentlinkedhashmap*")
+    val customJars: PathFinder =  file(jars_dir) ** (("*.jar" -- "*concurrentlinkedhashmap*") -- "*netcdf*")
     val classpath_file = edas_cache_dir.value / "classpath.txt"
     val pw = new PrintWriter( classpath_file )
     val jars_list = customJars.getPaths.mkString("\n")
@@ -172,7 +171,7 @@ upscr := {
   }
 }
 
-compile  <<= (compile in Compile).dependsOn( upscr )  // , installNetcdfTask )
+compile  <<= (compile in Compile).dependsOn( upscr )
 
 def getCondaLibDir: Option[File] = sys.env.get("CONDA_PREFIX") match {
   case Some(ldir) => Some(file(ldir) / "lib")

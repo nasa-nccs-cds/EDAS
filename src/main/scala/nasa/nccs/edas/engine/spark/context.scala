@@ -16,7 +16,7 @@ import nasa.nccs.edas.utilities
 import org.apache.spark.{Partitioner, SparkConf, SparkContext, SparkEnv}
 import ucar.ma2
 import java.lang.management.ManagementFactory
-
+import org.apache.spark.sql.SparkSession
 import com.sun.management.OperatingSystemMXBean
 import nasa.nccs.cdapi.tensors.CDCoordMap
 import nasa.nccs.edas.engine.EDASExecutionManager.logger
@@ -40,12 +40,13 @@ object CDSparkContext extends Loggable {
 //    val cl = ClassLoader.getSystemClassLoader
 //    logger.info( "Loaded jars: \n\t" + cl.asInstanceOf[java.net.URLClassLoader].getURLs.mkString("\n\t") )
 //    logger.info( "EDAS env: \n\t" +  ( System.getenv.map { case (k,v) => k + ": " + v } ).mkString("\n\t") )
-    val sparkContext = new SparkContext( getSparkConf( appName, logConf, enableMetrics) )
-    val rv = new CDSparkContext( sparkContext )
+    val conf: SparkConf = CDSparkContext.getSparkConf( appName, logConf, enableMetrics)
+    val spark = SparkSession.builder().appName(appName).config(conf).getOrCreate()
+    val rv = new CDSparkContext( spark )
     val spark_log_level = Level.toLevel( "ERROR" )
     val rootLogger = Logger.getRootLogger()
     rootLogger.setLevel(spark_log_level)
-    sparkContext.setLogLevel( "ERROR" )
+    spark.sparkContext.setLogLevel( "ERROR" )
     Logger.getLogger("org").setLevel(spark_log_level)
     Logger.getLogger("akka").setLevel(spark_log_level)
     Logger.getLogger("dag-scheduler-event-loop").setLevel(spark_log_level)
@@ -69,9 +70,6 @@ object CDSparkContext extends Loggable {
     val thread: Thread = Thread.currentThread()
     s"E${SparkEnv.get.executorId}:${node_name}:${thread.getName}:${thread.getId}"
   }
-
-  def apply( conf: SparkConf ) : CDSparkContext = new CDSparkContext( new SparkContext(conf) )
-  def apply( context: SparkContext ) : CDSparkContext = new CDSparkContext( context )
 
   def merge(rdd0: RDD[(RecordKey,RDDRecord)], rdd1: RDD[(RecordKey,RDDRecord)] ): RDD[(RecordKey,RDDRecord)] = {
     val t0 = System.nanoTime()
@@ -167,8 +165,9 @@ object CDSparkContext extends Loggable {
 
 }
 
-class CDSparkContext( @transient val sparkContext: SparkContext ) extends Loggable {
+class CDSparkContext(  val session: SparkSession ) extends Loggable {
   implicit val strRep: LongRange.StrRep = CalendarDate.of(_).toString
+  lazy val sparkContext = session.sparkContext
 
   def setLocalProperty(key: String, value: String): Unit = {
     sparkContext.setLocalProperty(key, value)

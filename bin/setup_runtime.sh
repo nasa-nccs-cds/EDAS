@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 export EDAS_CACHE_DIR=${EDAS_CACHE_DIR:-${HOME}/.edas/cache}
-export EDAS_VERSION=1.0
+export EDAS_VERSION=1.2
 export EDAS_MAX_MEM=${EDAS_MAX_MEM:-32000M}
 export EDAS_BIN_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export EDAS_HOME_DIR=${EDAS_BIN_DIR}/..
