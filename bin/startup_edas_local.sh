@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-SCALA_VERSION=2.11
+SCALA_VERSION=2.10
 EDAS_JAR=${EDAS_HOME_DIR}/target/scala-${SCALA_VERSION}/edas_${SCALA_VERSION}-${EDAS_VERSION}-SNAPSHOT.jar
 CONDA_LIB=${CONDA_PREFIX}/lib
 APP_DEP_JARS=$(find ~/.ivy2 -name "*.jar" )

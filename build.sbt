@@ -11,7 +11,7 @@ val EDAS_VERSION = sys.env.getOrElse("EDAS_VERSION","{UNDEFINED}")
 
 name := "EDAS"
 version := EDAS_VERSION + "-SNAPSHOT"
-scalaVersion := "2.11.8"
+scalaVersion := "2.10.6"
 organization := "nasa.nccs"
 
 lazy val root = project in file(".")
