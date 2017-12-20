@@ -95,18 +95,18 @@ object CDGrid extends Loggable {
       }
     }
     val coordAxes: List[CoordinateAxis] = gridDS.getCoordinateAxes.toList
-    val resolution: Map[String, Float] = Map( coordAxes.map(getResolution): _*)
+    val resolution: Map[String, Float] = Map( coordAxes.flatMap(getResolution): _*)
     val dimensions = gridDS.getDimensions.toList
     val conv = gridDS.getConventionUsed
     val title = gridDS.getTitle
     new CDGrid(name, gridFilePath, coordAxes, coordSystems, dimensions, resolution, dset_attributes)
   }
 
-  def getResolution( cAxis: CoordinateAxis): (String,Float) = {
+  def getResolution( cAxis: CoordinateAxis): Option[(String,Float)] = try {
      val name = cAxis.getAxisType.toString
      val size = if ( name.equalsIgnoreCase("t") ) { cAxis.getShape(0) * 1.0e9 } else { cAxis.getShape(0) }
-     name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / size.toFloat
-  }
+     Some( name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / size.toFloat )
+  } catch { case ex: Throwable => None }
 
   def isInt( s: String ): Boolean = try { s.toInt; true } catch { case err: Exception => false }
 
