@@ -138,9 +138,11 @@ object CDGrid extends Loggable {
     ncDataset.getAggregation.getDatasets.size()
   } catch { case ex: Exception => 1 }
 
+  def sanityCheck ( filePath: String ): String = if( filePath.endsWith(".ncml.ncml") ) { filePath.split('.').dropRight(1).mkString(".") } else { filePath }
+
   def createGridFile(gridFilePath: String, datfilePath: String) = {
-    val collectionFile = if( datfilePath.endsWith(".csv") ) { Source.fromFile(datfilePath).getLines().next().split(",").last.trim } else { datfilePath }
-    logger.info( s"Creating #grid# file $gridFilePath from collectionFile: $collectionFile" )
+    val collectionFile = sanityCheck( if( datfilePath.endsWith(".csv") ) { Source.fromFile(datfilePath).getLines().next().split(",").last.trim } else { datfilePath } )
+    logger.info( s"Creating #grid# file $gridFilePath from collectionFile: $collectionFile from collections metafile: $datfilePath" )
     testNc4()
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(collectionFile)
     val gridWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf4, gridFilePath, null)
