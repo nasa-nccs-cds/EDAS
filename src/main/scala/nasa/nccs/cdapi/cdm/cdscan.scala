@@ -515,28 +515,46 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
 }
 
 object CDScan extends Loggable {
+  val usage = """
+    Usage: mkcoll [-m] <collectionID> <datPath>
+        -m: Process each subdirectory of <datPath> as a separate collection
+  """
+
   def main(args: Array[String]) {
-    if( args.length < 1 ) { println( "Usage: 'dsagg <collectionID> <datPath>' or 'dsagg <collectionsFile>'"); return }
+    if( args.length < 1 ) { println( usage ); return }
+    var optionMap = mutable.HashMap.empty[String, String]
+    var inputs = mutable.ListBuffer.empty[String]
     EDASLogManager.isMaster
-    if( args.length == 1 ) {
-      val collectionsFile = new File(args(0))
-      if( !collectionsFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsFile.toString) }
-      val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
-      ncmlDir.mkdirs
-      NCMLWriter.updateNCMLFiles( collectionsFile, ncmlDir )
-    } else {
-      val collectionId = args(0).toLowerCase
-      val subCollectionId = collectionId + "-sub"
-      val pathFile = new File(args(1))
-      val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(subCollectionId + ".ncml").toFile
-      if ( ncmlFile.exists ) { throw new Exception("Collection already exists, defined by: " + ncmlFile.toString) }
-      logger.info(s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
-      ncmlFile.getParentFile.mkdirs
-      val ncmlWriter = NCMLWriter(pathFile)
-      val variableMap = new collection.mutable.HashMap[String,String]()
-      val varNames: List[String] = ncmlWriter.writeNCML(ncmlFile)
-      varNames.foreach( vname => variableMap += ( vname -> subCollectionId ) )
-      writeCollectionDirectory( collectionId, variableMap.toMap )
-    }
+    for( arg <- args ) if(arg(0) == '-') arg match {
+        case "-m" => optionMap += (( "multi", "true" ))
+        case x => throw new Exception( "Unrecognized option: " + x )
+      } else { inputs += arg }
+    if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
+
+    val collectionId = inputs(0).toLowerCase
+    val subCollectionId = collectionId + "-sub"
+    val pathFile = new File(inputs(1))
+    val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(subCollectionId + ".ncml").toFile
+    if ( ncmlFile.exists ) { throw new Exception("Collection already exists, defined by: " + ncmlFile.toString) }
+    logger.info(s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
+    ncmlFile.getParentFile.mkdirs
+    val ncmlWriter = NCMLWriter(pathFile)
+    val variableMap = new collection.mutable.HashMap[String,String]()
+    val varNames: List[String] = ncmlWriter.writeNCML(ncmlFile)
+    varNames.foreach( vname => variableMap += ( vname -> subCollectionId ) )
+    writeCollectionDirectory( collectionId, variableMap.toMap )
   }
 }
+
+object CDMultiScan extends Loggable {
+  def main(args: Array[String]) {
+    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsFile>'"); return }
+    EDASLogManager.isMaster
+    val collectionsFile = new File(args(0))
+    if( !collectionsFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsFile.toString) }
+    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
+    ncmlDir.mkdirs
+    NCMLWriter.updateNCMLFiles( collectionsFile, ncmlDir )
+  }
+}
+

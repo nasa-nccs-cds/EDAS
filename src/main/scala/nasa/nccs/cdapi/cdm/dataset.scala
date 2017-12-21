@@ -139,9 +139,10 @@ object CDGrid extends Loggable {
   } catch { case ex: Exception => 1 }
 
   def createGridFile(gridFilePath: String, datfilePath: String) = {
-    logger.info( s"Creating #grid# file $gridFilePath from datfilePath: $datfilePath" )
+    val collectionFile = if( datfilePath.endsWith(".csv") ) { Source.fromFile(datfilePath).getLines().next().split(",").last.trim } else { datfilePath }
+    logger.info( s"Creating #grid# file $gridFilePath from collectionFile: $collectionFile" )
     testNc4()
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(datfilePath)
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(collectionFile)
     val gridWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf4, gridFilePath, null)
     val dimMap = Map(ncDataset.getDimensions.map(d => NCMLWriter.getName(d) -> gridWriter.addDimension(null, NCMLWriter.getName(d), d.getLength)): _*)
     val groupMap = mutable.HashMap.empty[String,nc2.Group]
