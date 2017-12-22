@@ -166,10 +166,8 @@ upscr := {
   copy( edasDefaultSparkCleanupScript.value.toPath, edasSparkCleanupScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
   println("Copying default edas spark-cluster startup script: " + edasDefaultStandaloneRunScript.value.toString  + " to " + edasStandaloneRunScript.value.toString )
   copy( edasDefaultStandaloneRunScript.value.toPath, edasStandaloneRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
-  if( !edasSetupScript.value.exists() ) {
-    println("Copying default setup script: " + edasDefaultSetupScript.value.toString )
-    copy( edasDefaultSetupScript.value.toPath, edasSetupScript.value.toPath )
-  }
+  println("Copying default setup script: " + edasDefaultSetupScript.value.toString )
+  copy( edasDefaultSetupScript.value.toPath, edasSetupScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
 }
 
 compile  <<= (compile in Compile).dependsOn( upscr )
