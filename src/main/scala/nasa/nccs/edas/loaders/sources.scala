@@ -287,6 +287,7 @@ object Collections extends XmlResource with Loggable {
       addSubCollections( collectionFilePath, createGrids )
       new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )
     } else {
+      logger.info( s" ---> Loading collection $id, createGrids: ${createGrids.toString}" )
       val collection = createCollection(id,collectionFilePath)
       if( createGrids ) { logger.info( s"Creating grid file ${collection.grid.name}:  ${collection.grid.gridFilePath} ")}
       collection
