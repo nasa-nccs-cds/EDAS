@@ -269,9 +269,9 @@ object Collections extends XmlResource with Loggable {
 //    persistLocalCollections()
     collection
   }
-  def createGridFiles( collectionFile: File ): Unit = {
-    val ncmlFiles = for (line <- Source.fromFile(collectionFile).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
-    for( ncmlFile <- ncmlFiles; id = fileToId(ncmlFile); collection = createCollection( id, ncmlFile.getAbsolutePath ) ) { logger.info( s"Creating grid file ${collection.grid.name}")}
+  def addSubCollections( collectionFilePath: String, createGrids: Boolean  ): Unit = {
+    val ncmlFiles: Iterator[File] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
+    ncmlFiles.foreach( file => addCollection( fileToId( file), file.getAbsolutePath, createGrids ) )
   }
 
   def createCollection( collId: String, ncmlFilePath: String ): Collection = {
@@ -284,9 +284,13 @@ object Collections extends XmlResource with Loggable {
   def addCollection(  id: String, collectionFilePath: String, createGrids: Boolean = false ): Option[Collection] = try {
     val newCollection = if( collectionFilePath.endsWith(".csv") ) {
       val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
+      addSubCollections( collectionFilePath, createGrids )
       new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )
-    } else { createCollection(id,collectionFilePath) }
-    if( createGrids ) { logger.info( s"Creating grid file ${newCollection.grid.name}:  ${newCollection.grid.gridFilePath} ")}
+    } else {
+      val collection = createCollection(id,collectionFilePath)
+      if( createGrids ) { logger.info( s"Creating grid file ${collection.grid.name}:  ${collection.grid.gridFilePath} ")}
+      collection
+    }
     datasets.put( id, newCollection  )
 //    persistLocalCollections()
     Some(newCollection)
