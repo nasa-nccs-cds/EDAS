@@ -4,6 +4,7 @@ import java.net.URL
 import java.nio.channels.Channels
 import java.nio.file.{Files, Path, Paths}
 import javax.xml.parsers.{ParserConfigurationException, SAXParserFactory}
+import java.util.concurrent.{ExecutorService, Executors}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import collection.JavaConverters._
@@ -12,6 +13,7 @@ import collection.mutable
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.caching.{CachePartition, FragmentPersistence, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{Collection, DiskCacheFileMgr, NCMLWriter, NetcdfDatasetMgr}
+import nasa.nccs.edas.loaders.Collections.{datasets, logger}
 import nasa.nccs.utilities.Loggable
 import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
@@ -109,43 +111,89 @@ object Masks extends XmlResource {
   def getMaskIds: Set[String] = masks.keySet
 }
 
-object Collections extends XmlResource {
+class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 1 ) extends Runnable {
+  val collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
+  val fastPool: ExecutorService = Executors.newFixedThreadPool(fastPoolSize)
+  val slowPool: ExecutorService = Executors.newFixedThreadPool(slowPoolSize)
+  val ncmlExtensions = List( ".csv" )
+  private var _active = true;
+
+  def run() {
+    try {
+      while (_active) {
+        val collectionFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
+        for ( collectionFile <- collectionFiles;  fileName = collectionFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase ) {
+          if( (collId != "local_collections") && !Collections.hasCollection(collId) ) if( Collections.hasGridFiles(collectionFile) ) {
+            fastPool.execute(new CollectionLoader(collId,collectionFile))
+          } else {
+            slowPool.execute(new CollectionLoader(collId,collectionFile,true))
+          }
+        }
+        Thread.sleep( 500 )
+      }
+    } finally {
+      term()
+    }
+  }
+
+  def term(): Unit = {
+    _active = false;
+    fastPool.shutdown()
+    slowPool.shutdown()
+  }
+}
+
+class CollectionLoader( val collId: String, val collectionFile: File, val createGrids: Boolean = false ) extends Runnable  with Loggable  {
+  def run() {
+    logger.info( s" ---> Loading collection $collId, createGrids: ${createGrids.toString}" )
+    Collections.addCollection(collId, collectionFile.toString, createGrids )
+  }
+}
+
+object Collections extends XmlResource with Loggable {
   val maxCapacity: Int=500
   val initialCapacity: Int=10
   val datasets: ConcurrentLinkedHashMap[String,Collection] =  loadCollectionXmlData( ) // Map( "local" -> getCacheFilePath("local_collections.xml") ) )
+  private val _collectionLoadService = new CollectionLoadService()
+  _collectionLoadService.run()
 
-  def initCollectionList = if( datasets.isEmpty ) { refreshCollectionList }
+//  def initCollectionList = if( datasets.isEmpty ) { refreshCollectionList }
+
+  def hasGridFiles( collectionFile: File ): Boolean = {
+    val gridFiles = for( line <- Source.fromFile( collectionFile ).getLines; elems = line.split(",").map(_.trim) ) yield ( elems.last.split('.').dropRight(1) + "nc" ).mkString(".")
+    gridFiles.forall( gFile => Files.exists( Paths.get( gFile)  ) )
+  }
 
   def getCollectionFromPath( path: String ): Option[Collection] = datasets.values.find( _.dataPath == path )
   def getCollectionPaths: Iterable[String] = datasets.values.map( _.dataPath )
 
-  def refreshCollectionList = {
-    var collPath: Path = null
-    try {
-      collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
-      val ncmlExtensions = List( ".ncml", ".csv" )
-      val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
-//      val collFuts = Future.sequence( for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
-//                            if (collId != "local_collections") && !datasets.containsKey(collId) ) yield Future { Collections.addCollection(collId, ncmlFile.toString) } )
-//      Await.result( collFuts, Duration.Inf )
+  def term(): Unit = _collectionLoadService.term()
 
-      for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
-             if (collId != "local_collections") && !datasets.containsKey(collId) ) { Collections.addCollection(collId, ncmlFile.toString) }
-
-      logger.info( " ---> Updating Collections from files: \n\t" + ncmlFiles.map(_.toString).sorted.mkString("\n\t") + "\n----> Collections = \n\t" + Collections.getCollectionKeys.sorted.mkString("\n\t"))
-
-    } catch { case ex: Exception => logger.error( " Error refreshing Collection List from '%s': %s".format( collPath , ex.getMessage ) ) }
-  }
+//  def refreshCollectionList = {
+//    var collPath: Path = null
+//    try {
+//      collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
+//      val ncmlExtensions = List( ".ncml", ".csv" )
+//      val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
+////      val collFuts = Future.sequence( for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
+////                            if (collId != "local_collections") && !datasets.containsKey(collId) ) yield Future { Collections.addCollection(collId, ncmlFile.toString) } )
+////      Await.result( collFuts, Duration.Inf )
+//
+//      for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
+//             if (collId != "local_collections") && !datasets.containsKey(collId) ) { Collections.addCollection(collId, ncmlFile.toString) }
+//
+//      logger.info( " ---> Updating Collections from files: \n\t" + ncmlFiles.map(_.toString).sorted.mkString("\n\t") + "\n----> Collections = \n\t" + Collections.getCollectionKeys.sorted.mkString("\n\t"))
+//
+//    } catch { case ex: Exception => logger.error( " Error refreshing Collection List from '%s': %s".format( collPath , ex.getMessage ) ) }
+//  }
 
   def toXml: xml.Elem = {
-    refreshCollectionList
     <collections>
       {for ( (id: String, collection: Collection) <- datasets; if collection.isMeta ) yield collection.toXml}
     </collections>
   }
 
   def toXml( scope: String ): xml.Elem = {
-    refreshCollectionList
     <collections>
       { for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase(scope) ) yield collection.toXml }
     </collections>
@@ -162,7 +210,6 @@ object Collections extends XmlResource {
     dataset.getGlobalAttributes.toList.find( attr => possible_names.contains( attr.getShortName ) ) match { case Some(attr) => attr.getStringValue; case None => "" }
 
   def updateVars = {
-    refreshCollectionList
     for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase("local") ) {
       logger.info( "Opening NetCDF dataset(4) at: " + collection.dataPath )
       val dataset: NetcdfDataset = NetcdfDatasetMgr.openFile( collection.dataPath )
@@ -180,7 +227,6 @@ object Collections extends XmlResource {
   def getCacheFilePath( fileName: String ): String = DiskCacheFileMgr.getDiskCacheFilePath( "collections", fileName)
 
   def getVariableListXml(vids: Array[String]): xml.Elem = {
-    refreshCollectionList
     <collections>
       { for (vid: String <- vids; vidToks = vid.split('!'); varName=vidToks(0); cid=vidToks(1) ) yield Collections.findCollection(cid) match {
       case Some(collection) => <variables cid={collection.id}> { collection.getVariable(varName).toXml } </variables>
@@ -198,6 +244,7 @@ object Collections extends XmlResource {
     uri.toLowerCase.split(":").last.stripPrefix("/").stripPrefix("/").replaceAll("[-/]","_").replaceAll("[^a-zA-Z0-9_.]", "X") + ".ncml"
   }
   def idToFile( id: String, ext: String = ".ncml" ): String = id.replaceAll("[-/]","_").replaceAll("[^a-zA-Z0-9_.]", "X") + ext
+  def fileToId( file: File ): String = { file.getName.split('.').dropRight(1).mkString(".") }
 
   def removeCollections( collectionIds: Array[String] ): Array[String] = {
     val removedCids = collectionIds.flatMap( collectionId  => {
@@ -205,7 +252,7 @@ object Collections extends XmlResource {
         case Some(collection) =>
           logger.info("Removing collection: " + collection.id )
           datasets.remove( collection.id )
-          collection.deleteAggregation
+          collection.deleteAggregation()
           Some(collection.id)
         case None => logger.error("Attempt to delete collection that does not exist: " + collectionId ); None
       }
@@ -217,22 +264,29 @@ object Collections extends XmlResource {
   def addCollection( id: String, dataPath: String, fileFilter: String, title: String, vars: List[String] ): Collection = {
     val cvars = if(vars.isEmpty) getVariableList( dataPath ) else vars
     val collection = Collection( id, dataPath, fileFilter, "local", title, cvars )
-    collection.generateAggregation
+    collection.generateAggregation()
     datasets.put( id, collection  )
 //    persistLocalCollections()
     collection
   }
+  def createGridFiles( collectionFile: File ): Unit = {
+    val ncmlFiles = for (line <- Source.fromFile(collectionFile).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
+    for( ncmlFile <- ncmlFiles; id = fileToId(ncmlFile); collection = createCollection( id, ncmlFile.getAbsolutePath ) ) { logger.info( s"Creating grid file ${collection.grid.name}")}
+  }
 
-  def addCollection(  id: String, collectionFilePath: String ): Option[Collection] = try {
+  def createCollection( collId: String, ncmlFilePath: String ): Collection = {
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncmlFilePath)
+    val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
+    val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
+    new Collection("file", collId, ncmlFilePath, "", "", title, vars)
+  }
+
+  def addCollection(  id: String, collectionFilePath: String, createGrids: Boolean = false ): Option[Collection] = try {
     val newCollection = if( collectionFilePath.endsWith(".csv") ) {
       val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
       new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )
-    } else {
-      val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(collectionFilePath)
-      val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
-      val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
-      new Collection("file", id, collectionFilePath, "", "", title, vars)
-    }
+    } else { createCollection(id,collectionFilePath) }
+    if( createGrids ) { logger.info( s"Creating grid file ${newCollection.grid.name}:  ${newCollection.grid.gridFilePath} ")}
     datasets.put( id, newCollection  )
 //    persistLocalCollections()
     Some(newCollection)
@@ -326,6 +380,8 @@ object Collections extends XmlResource {
   def getCollection( n: xml.Node, scope: String ): Collection = {
     Collection( attr(n,"id"), attr(n,"path"), attr(n,"fileFilter"), scope, attr(n,"title"), n.text.split(";").toList )
   }
+
+  def hasCollection( collectionId: String ): Boolean = datasets.containsKey( collectionId.toLowerCase )
 
   def findCollection( collectionId: String ): Option[Collection] =
     Option( datasets.get( collectionId.toLowerCase ) )

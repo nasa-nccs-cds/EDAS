@@ -548,13 +548,13 @@ object CDScan extends Loggable {
 
 object CDMultiScan extends Loggable {
   def main(args: Array[String]) {
-    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsFile>'"); return }
+    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
     EDASLogManager.isMaster
-    val collectionsFile = new File(args(0))
-    if( !collectionsFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsFile.toString) }
+    val collectionsMetaFile = new File(args(0))    // If first col == 'mult' then each subdir is treated as a separate collection.
+    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
     val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
     ncmlDir.mkdirs
-    NCMLWriter.updateNCMLFiles( collectionsFile, ncmlDir )
+    NCMLWriter.updateNCMLFiles( collectionsMetaFile, ncmlDir )
   }
 }
 

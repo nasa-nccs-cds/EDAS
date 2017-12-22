@@ -7,11 +7,16 @@ import org.joda.time.DateTime;
 import org.zeromq.ZMQ;
 import nasa.nccs.utilities.EDASLogManager;
 import ucar.nc2.time.CalendarDate;
-
+import nasa.nccs.edas.loaders.Collections;
 import java.io.*;
 import java.text.SimpleDateFormat;
-import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Map;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
@@ -341,6 +346,7 @@ public abstract class EDASPortal {
     public void term(String msg) {
         logger.info( "!!EDAS Shutdown: " + msg );
         active = false;
+        try { Collections.term(); }  catch ( Exception ex ) { ; }
         PythonWorkerPortal.getInstance().quit();
         logger.info( "QUIT PythonWorkerPortal");
         try { request_socket.close(); }  catch ( Exception ex ) { ; }
