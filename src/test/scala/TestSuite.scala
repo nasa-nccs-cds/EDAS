@@ -43,6 +43,11 @@ class DefaultTestSuite extends EDASTestSuite {
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
 
+  test("getCollections") {
+    val response = getCapabilities("coll")
+    print( response.toString )
+  }
+
   test("RemoveCollections") {
     Collections.removeCollections(mod_collections.map(_._2).toArray)
     for( (model, collection) <- mod_collections ) Collections.findCollection( collection ) match {
@@ -174,11 +179,6 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("getCapabilities") {
     val response = getCapabilities("op")
-    print( response.toString )
-  }
-
-  test("getCollections") {
-    val response = getCapabilities("coll")
     print( response.toString )
   }
 

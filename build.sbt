@@ -1,5 +1,6 @@
-import java.io.{FilenameFilter, PrintWriter}
+import java.io.{FileWriter, FilenameFilter, PrintWriter}
 import java.nio.file.Files.copy
+import java.nio.file.Files.deleteIfExists
 import java.nio.file.Paths.get
 import java.nio.file.StandardCopyOption
 
@@ -167,7 +168,12 @@ upscr := {
   println("Copying default edas spark-cluster startup script: " + edasDefaultStandaloneRunScript.value.toString  + " to " + edasStandaloneRunScript.value.toString )
   copy( edasDefaultStandaloneRunScript.value.toPath, edasStandaloneRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
   println("Copying default setup script: " + edasDefaultSetupScript.value.toString )
-  copy( edasDefaultSetupScript.value.toPath, edasSetupScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
+  deleteIfExists( edasSetupScript.value.toPath )
+  val lines = scala.io.Source.fromFile( edasDefaultSetupScript.value ).getLines
+  val out_lines = Seq( "#!/usr/bin/env bash", "export EDAS_HOME_DIR=" + baseDirectory.value ) ++ lines
+  val fw = new PrintWriter( edasSetupScript.value.toPath.toFile )
+  try { fw.write( out_lines.mkString("\n")) }
+  finally fw.close()
 }
 
 compile  <<= (compile in Compile).dependsOn( upscr )
