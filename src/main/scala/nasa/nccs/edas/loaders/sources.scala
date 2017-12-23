@@ -138,8 +138,8 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
 
   def term(): Unit = {
     _active = false;
-    fastPool.shutdown()
-    slowPool.shutdown()
+    fastPool.shutdownNow()
+    slowPool.shutdownNow()
   }
 }
 
