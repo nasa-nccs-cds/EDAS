@@ -75,6 +75,8 @@ lazy val edasPythonRunScript = settingKey[File]("The edas python worker startup 
 lazy val edasDefaultPythonRunScript = settingKey[File]("The default edas python worker startup script")
 lazy val edasStandaloneRunScript = settingKey[File]("The edas spark-cluster startup script")
 lazy val edasDefaultStandaloneRunScript = settingKey[File]("The default edas spark-cluster startup script")
+lazy val edasLocalRunScript = settingKey[File]("The edas spark-local startup script")
+lazy val edasDefaultLocalRunScript = settingKey[File]("The default edas spark-local startup script")
 lazy val edasPythonShutdownScript = settingKey[File]("The edas python worker shutdown script")
 lazy val edasDefaultPythonShutdownScript = settingKey[File]("The default edas python worker shutdown script")
 lazy val edasSparkCleanupScript = settingKey[File]("The edas spark worker cleanup script")
@@ -135,7 +137,9 @@ edasDefaultPropertiesFile := baseDirectory.value / "project" / "edas.properties"
 edasPythonRunScript := edas_sbin_dir.value / "startup_python_worker.sh"
 edasDefaultPythonRunScript := baseDirectory.value / "bin" / "startup_python_worker.sh"
 edasStandaloneRunScript := edas_sbin_dir.value / "startup_edas_standalone.sh"
-edasDefaultStandaloneRunScript := baseDirectory.value / "bin" / "startup_edas_standalone.sh"
+edasDefaultStandaloneRunScript := baseDirectory.value / "bin" / "startup_edas_local.sh"
+edasLocalRunScript := edas_sbin_dir.value / "startup_edas_local.sh"
+edasDefaultLocalRunScript := baseDirectory.value / "bin" / "startup_edas_standalone.sh"
 edasPythonShutdownScript := edas_sbin_dir.value / "shutdown_python_worker.sh"
 edasDefaultPythonShutdownScript := baseDirectory.value / "bin" / "shutdown_python_worker.sh"
 edasSparkCleanupScript := edas_sbin_dir.value / "cleanup_spark_workers.sh"
@@ -167,6 +171,8 @@ upscr := {
   copy( edasDefaultSparkCleanupScript.value.toPath, edasSparkCleanupScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
   println("Copying default edas spark-cluster startup script: " + edasDefaultStandaloneRunScript.value.toString  + " to " + edasStandaloneRunScript.value.toString )
   copy( edasDefaultStandaloneRunScript.value.toPath, edasStandaloneRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
+  println("Copying default edas spark-local startup script: " + edasDefaultLocalRunScript.value.toString  + " to " + edasLocalRunScript.value.toString )
+  copy( edasDefaultLocalRunScript.value.toPath, edasLocalRunScript.value.toPath, StandardCopyOption.REPLACE_EXISTING )
   println("Copying default setup script: " + edasDefaultSetupScript.value.toString )
   deleteIfExists( edasSetupScript.value.toPath )
   val lines = scala.io.Source.fromFile( edasDefaultSetupScript.value ).getLines

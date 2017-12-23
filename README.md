@@ -48,12 +48,12 @@ _Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and 
 
     7. Source the setup file to configure the runtime environment:
 
-        >> source <prefix>/EDAS/bin/setup_runtime.sh
+        >> source ~/.edas/sbin/setup_runtime.sh
 
     8. Startup the EDAS server:
      
-        >> cd EDAS
-        >> ./bin/startup_edas_local.sh
+        Cluster mode:   >> ~/.edas/sbin/startup_edas_standalone.sh
+        Local mode:     >> ~/.edas/sbin/startup_edas_local.sh
 
     9. Access demos:
 
