@@ -4,7 +4,7 @@ import java.nio.file.{Path, Paths}
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.edas.loaders.Collections
+import nasa.nccs.edas.loaders.{CollectionLoadServices, Collections}
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.esgf.process.TaskRequest
 import nasa.nccs.esgf.process.UID.ndigits
@@ -44,6 +44,8 @@ class DefaultTestSuite extends EDASTestSuite {
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
 
   test("getCollections") {
+    CollectionLoadServices.startService()
+    Thread.sleep(20000)
     val response = getCapabilities("coll")
     print( response.toString )
   }

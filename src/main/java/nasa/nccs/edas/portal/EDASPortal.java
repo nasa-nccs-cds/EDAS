@@ -1,5 +1,6 @@
 package nasa.nccs.edas.portal;
 import com.google.common.io.Files;
+import nasa.nccs.edas.loaders.CollectionLoadServices;
 import nasa.nccs.edas.workers.python.PythonWorkerPortal;
 import nasa.nccs.utilities.Logger;
 import org.apache.commons.lang.StringUtils;
@@ -346,7 +347,7 @@ public abstract class EDASPortal {
     public void term(String msg) {
         logger.info( "!!EDAS Shutdown: " + msg );
         active = false;
-        try { Collections.term(); }  catch ( Exception ex ) { ; }
+        try { CollectionLoadServices.term(); }  catch ( Exception ex ) { ; }
         PythonWorkerPortal.getInstance().quit();
         logger.info( "QUIT PythonWorkerPortal");
         try { request_socket.close(); }  catch ( Exception ex ) { ; }

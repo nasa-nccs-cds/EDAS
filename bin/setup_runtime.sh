@@ -11,7 +11,7 @@ export UVCDAT_ANONYMOUS_LOG=no
 export EDAS_JAVA_ARGS="-J-Xmx$EDAS_MAX_MEM -J-Xms512M -J-Xss1M -J-XX:+CMSClassUnloadingEnabled -J-XX:+UseConcMarkSweepGC"
 export WPS_CMD="$CDWPS_HOME_DIR/target/universal/cdwps-1.1-SNAPSHOT/bin/cdwps $EDAS_JAVA_ARGS"
 export CDSHELL_CMD="$CDSHELL_HOME_DIR/target/universal/stage/bin/edasclientconsole $EDAS_JAVA_ARGS"
-export PATH=${EDAS_STAGE_DIR}/bin:${EDAS_BIN_DIR}:${PATH}
+export PATH=${HOME}/.edas/sbin:${EDAS_STAGE_DIR}/bin:${EDAS_BIN_DIR}:${PATH}
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
 
 alias edas='cd $EDAS_HOME_DIR'

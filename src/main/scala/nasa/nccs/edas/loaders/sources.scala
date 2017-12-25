@@ -10,15 +10,13 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import collection.JavaConverters._
 import scala.collection.JavaConversions._
 import collection.mutable
-import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
-import nasa.nccs.caching.{CachePartition, FragmentPersistence, collectionDataCache}
+import nasa.nccs.caching.FragmentPersistence
 import nasa.nccs.cdapi.cdm.{Collection, DiskCacheFileMgr, NCMLWriter, NetcdfDatasetMgr}
-import nasa.nccs.edas.loaders.Collections.{datasets, logger}
 import nasa.nccs.utilities.Loggable
 import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
 import ucar.{ma2, nc2}
-
+import scala.collection.concurrent.TrieMap
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.io.Source
@@ -111,6 +109,24 @@ object Masks extends XmlResource {
   def getMaskIds: Set[String] = masks.keySet
 }
 
+object CollectionLoadServices {
+  val fastPoolSize: Int = 4
+  val slowPoolSize: Int = 1
+  val loaderServicePool = Executors.newFixedThreadPool(1)
+  var loadService: Option[CollectionLoadService] = None
+
+  def startService(): Unit = if( loadService.isEmpty && !loaderServicePool.isShutdown ) {
+    loadService = Some( new CollectionLoadService(fastPoolSize, slowPoolSize) );
+    loaderServicePool.submit(loadService.get)
+  }
+
+  def term() = {
+    loadService.foreach( _.term )
+    loadService = None
+    loaderServicePool.shutdown()
+  }
+}
+
 class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 1 ) extends Runnable {
   val collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
   val fastPool: ExecutorService = Executors.newFixedThreadPool(fastPoolSize)
@@ -153,9 +169,8 @@ class CollectionLoader( val collId: String, val collectionFile: File, val create
 object Collections extends XmlResource with Loggable {
   val maxCapacity: Int=500
   val initialCapacity: Int=10
-  val datasets: ConcurrentLinkedHashMap[String,Collection] =  loadCollectionXmlData( ) // Map( "local" -> getCacheFilePath("local_collections.xml") ) )
-  private val _collectionLoadService = new CollectionLoadService()
-  _collectionLoadService.run()
+  private val _datasets: TrieMap[String,Collection] =  loadCollectionXmlData( )
+  CollectionLoadServices.startService()
 
 //  def initCollectionList = if( datasets.isEmpty ) { refreshCollectionList }
 
@@ -164,10 +179,9 @@ object Collections extends XmlResource with Loggable {
     gridFiles.forall( gFile => Files.exists( Paths.get( gFile)  ) )
   }
 
-  def getCollectionFromPath( path: String ): Option[Collection] = datasets.values.find( _.dataPath == path )
-  def getCollectionPaths: Iterable[String] = datasets.values.map( _.dataPath )
+  def getCollectionFromPath( path: String ): Option[Collection] = _datasets.values.find( _.dataPath == path )
+  def getCollectionPaths: Iterable[String] = _datasets.values.map( _.dataPath )
 
-  def term(): Unit = _collectionLoadService.term()
 
 //  def refreshCollectionList = {
 //    var collPath: Path = null
@@ -189,13 +203,13 @@ object Collections extends XmlResource with Loggable {
 
   def toXml: xml.Elem = {
     <collections>
-      {for ( (id: String, collection: Collection) <- datasets; if collection.isMeta ) yield collection.toXml}
+      {for ( (id: String, collection: Collection) <- _datasets; if collection.isMeta ) yield collection.toXml}
     </collections>
   }
 
   def toXml( scope: String ): xml.Elem = {
     <collections>
-      { for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase(scope) ) yield collection.toXml }
+      { for( ( id: String, collection:Collection ) <- _datasets; if collection.scope.equalsIgnoreCase(scope) ) yield collection.toXml }
     </collections>
   }
 
@@ -210,14 +224,14 @@ object Collections extends XmlResource with Loggable {
     dataset.getGlobalAttributes.toList.find( attr => possible_names.contains( attr.getShortName ) ) match { case Some(attr) => attr.getStringValue; case None => "" }
 
   def updateVars = {
-    for( ( id: String, collection:Collection ) <- datasets; if collection.scope.equalsIgnoreCase("local") ) {
+    for( ( id: String, collection:Collection ) <- _datasets; if collection.scope.equalsIgnoreCase("local") ) {
       logger.info( "Opening NetCDF dataset(4) at: " + collection.dataPath )
       val dataset: NetcdfDataset = NetcdfDatasetMgr.openFile( collection.dataPath )
       val vars = dataset.getVariables.filter(!_.isCoordinateVariable).map(v => getVariableString(v) ).toList
       val title = findAttribute( dataset, List( "Title", "LongName" ) )
       val newCollection = new Collection( collection.ctype, id, collection.dataPath, collection.fileFilter, "local", title, vars)
       println( "\nUpdating collection %s, vars = %s".format( id, vars.mkString(";") ))
-      datasets.put( collection.id, newCollection  )
+      _datasets.put( collection.id, newCollection  )
       dataset.close()
     }
 //    persistLocalCollections()
@@ -237,8 +251,8 @@ object Collections extends XmlResource with Loggable {
 
   def getPersistedVariableListXml: xml.Elem = FragmentPersistence.getFragmentListXml
 
-  def idSet: Set[String] = datasets.keySet.toSet
-  def values: Iterator[Collection] = datasets.valuesIterator
+  def idSet: Set[String] = _datasets.keySet.toSet
+  def values: Iterator[Collection] = _datasets.valuesIterator
 
   def uriToFile( uri: String ): String = {
     uri.toLowerCase.split(":").last.stripPrefix("/").stripPrefix("/").replaceAll("[-/]","_").replaceAll("[^a-zA-Z0-9_.]", "X") + ".ncml"
@@ -251,7 +265,7 @@ object Collections extends XmlResource with Loggable {
       findCollection(collectionId) match {
         case Some(collection) =>
           logger.info("Removing collection: " + collection.id )
-          datasets.remove( collection.id )
+          _datasets.remove( collection.id )
           collection.deleteAggregation()
           Some(collection.id)
         case None => logger.error("Attempt to delete collection that does not exist: " + collectionId ); None
@@ -265,7 +279,7 @@ object Collections extends XmlResource with Loggable {
     val cvars = if(vars.isEmpty) getVariableList( dataPath ) else vars
     val collection = Collection( id, dataPath, fileFilter, "local", title, cvars )
     collection.generateAggregation()
-    datasets.put( id, collection  )
+    _datasets.put( id, collection  )
 //    persistLocalCollections()
     collection
   }
@@ -292,7 +306,7 @@ object Collections extends XmlResource with Loggable {
       if( createGrids ) { logger.info( s"Creating grid file ${collection.grid.name}:  ${collection.grid.gridFilePath} ")}
       collection
     }
-    datasets.put( id, newCollection  )
+    _datasets.put( id, newCollection  )
 //    persistLocalCollections()
     Some(newCollection)
   } catch {
@@ -305,13 +319,13 @@ object Collections extends XmlResource with Loggable {
   def addCollection(  id: String, dataPath: String, title: String, vars: List[String] ): Collection = {
     val collection = Collection( id, dataPath, "", "local", title, vars )
 //    collection.generateAggregation
-    datasets.put( id, collection  )
+    _datasets.put( id, collection  )
 //    persistLocalCollections()
     collection
   }
 
   def updateCollection( collection: Collection ): Collection = {
-    datasets.put( collection.id, collection  )
+    _datasets.put( collection.id, collection  )
     logger.info( " *----> Persist New Collection: " + collection.id )
 //    persistLocalCollections()
     collection
@@ -346,12 +360,12 @@ object Collections extends XmlResource with Loggable {
 //  }
 
   def isChild( subDir: String,  parentDir: String ): Boolean = Paths.get( subDir ).toAbsolutePath.startsWith( Paths.get( parentDir ).toAbsolutePath )
-  def findCollectionByPath( subDir: String ): Option[Collection] = datasets.values.toList.find { case collection => if( collection.dataPath.isEmpty) { false } else { isChild( subDir, collection.dataPath ) } }
+  def findCollectionByPath( subDir: String ): Option[Collection] = _datasets.values.toList.find { case collection => if( collection.dataPath.isEmpty) { false } else { isChild( subDir, collection.dataPath ) } }
 
-  def loadCollectionXmlData( filePaths: Map[String,String] = Map.empty[String,String] ): ConcurrentLinkedHashMap[String,Collection] = {
+  def loadCollectionXmlData( filePaths: Map[String,String] = Map.empty[String,String] ): TrieMap[String,Collection] = {
     val maxCapacity: Int=100000
     val initialCapacity: Int=250
-    val datasets = new ConcurrentLinkedHashMap.Builder[String, Collection].initialCapacity(initialCapacity).maximumWeightedCapacity(maxCapacity).build()
+    val datasets = TrieMap.empty[String, Collection]
     for ( ( scope, filePath ) <- filePaths.iterator ) if( Files.exists( Paths.get(filePath) ) ) {
         try {
           logger.info( "Loading collections from file: " + filePath )
@@ -386,13 +400,12 @@ object Collections extends XmlResource with Loggable {
     Collection( attr(n,"id"), attr(n,"path"), attr(n,"fileFilter"), scope, attr(n,"title"), n.text.split(";").toList )
   }
 
-  def hasCollection( collectionId: String ): Boolean = datasets.containsKey( collectionId.toLowerCase )
+  def hasCollection( collectionId: String ): Boolean = _datasets.containsKey( collectionId.toLowerCase )
 
-  def findCollection( collectionId: String ): Option[Collection] =
-    Option( datasets.get( collectionId.toLowerCase ) )
+  def findCollection( collectionId: String ): Option[Collection] = _datasets.get( collectionId.toLowerCase )
 
   def getCollectionXml( collectionId: String ): xml.Elem = {
-    Option( datasets.get( collectionId.toLowerCase ) ) match {
+    _datasets.get( collectionId.toLowerCase ) match {
       case Some( collection: Collection ) => collection.toXml
       case None => <error> { "Invalid collection id:" + collectionId } </error>
     }
@@ -418,7 +431,7 @@ object Collections extends XmlResource with Loggable {
 //    }
 //  }
 
-  def getCollectionKeys: Array[String] = datasets.keys.toArray
+  def getCollectionKeys: Array[String] = _datasets.keys.toArray
 }
 
 

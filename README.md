@@ -52,8 +52,8 @@ _Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and 
 
     8. Startup the EDAS server:
      
-        Cluster mode:   >> ~/.edas/sbin/startup_edas_standalone.sh
-        Local mode:     >> ~/.edas/sbin/startup_edas_local.sh
+        Cluster mode:   >> startup_edas_standalone.sh
+        Local mode:     >> startup_edas_local.sh
 
     9. Access demos:
 

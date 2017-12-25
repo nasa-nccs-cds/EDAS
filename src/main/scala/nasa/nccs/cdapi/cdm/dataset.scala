@@ -390,9 +390,18 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) )
   }
 
+  def getResolution: String = try {
+    grid.resolution.map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")
+  } catch {
+    case ex: Exception =>
+      print( s"Exception in Collection.getResolution: ${ex.getMessage}" )
+      ex.printStackTrace()
+      ""
+  }
 
-  def toXml: xml.Elem =  {
-    <collection id={id} title={title} resolution={grid.resolution.map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")}>
+
+  def toXml: xml.Elem = {
+    <collection id={id} title={title} resolution={getResolution}>
       { SortedMap( getVarNodes: _* ).values }
     </collection>
   }

@@ -23,6 +23,7 @@ object Library {
   val nd4s           = "org.nd4j"           % "nd4s_2.11"       % "0.4-rc3.8"
   val nd4j           =  "org.nd4j"          % "nd4j-x86"        % "0.4-rc3.8"
   val httpservices   = "edu.ucar"           %  "httpservices"   % Versions.ucar
+  val httpclient     = "org.apache.httpcomponents" % "httpclient" % "4.5.2"
   val udunits        = "edu.ucar"           %  "udunits"        % Versions.ucar
   val joda           = "joda-time"          % "joda-time"       % "2.8.1"
   val natty          = "com.joestelmach"    % "natty"           % "0.12"
@@ -48,7 +49,7 @@ object Library {
 object Dependencies {
   import Library._
 
-  val scala = Seq( joda, scalactic, commonsIO )
+  val scala = Seq( joda, scalactic, commonsIO, httpclient )
 
   val test = Seq( scalatest, logback )
 
