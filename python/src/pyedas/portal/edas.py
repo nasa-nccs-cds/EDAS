@@ -65,15 +65,17 @@ class ResponseManager(Thread):
         return self.cached_arrays.setdefault(id,[])
 
     def run(self):
-        self.log("Run RM thread")
-        response_socket = self.context.socket( zmq.SUB )
-        response_port = ConnectionMode.connectSocket( response_socket, self.host, self.port )
-        response_socket.subscribe(self.clientID);
-        self.log("Connected response socket on port: {0}".format( response_port ) )
-        while( self.active ):
-            self.processNextResponse( response_socket )
-        try: response_socket.close()
+        try:
+            self.log("Run RM thread")
+            response_socket = self.context.socket( zmq.SUB )
+            response_port = ConnectionMode.connectSocket( response_socket, self.host, self.port )
+            response_socket.subscribe(self.clientID);
+            self.log("Connected response socket on port: {0}".format( response_port ) )
+            while( self.active ):
+                self.processNextResponse( response_socket )
+
         except Exception: pass
+        finally: response_socket.close()
 
     def getMessageField(self, header, index ):
         toks = header.split('|')
