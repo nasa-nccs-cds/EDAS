@@ -1,7 +1,7 @@
 package nasa.nccs.esgf.wps
 import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.edas.engine.ExecutionCallback
-import nasa.nccs.edas.loaders.EDAS_XML
+import nasa.nccs.edas.loaders.{CollectionLoadServices, EDAS_XML}
 import nasa.nccs.edas.portal.EDASPortalClient
 import nasa.nccs.esgf.process.{TaskRequest, WorkflowExecutor}
 import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
@@ -37,8 +37,9 @@ trait GenericProcessManager {
 
 class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericProcessManager with Loggable {
   private var _apiManagerOpt: Option[APIManager] = None
-  def alloc = if( _apiManagerOpt.isEmpty ) { _apiManagerOpt = Some( new APIManager( serverConfiguration ) ) }
+  CollectionLoadServices.startService()
 
+  def alloc = if( _apiManagerOpt.isEmpty ) { _apiManagerOpt = Some( new APIManager( serverConfiguration ) ) }
   def apiManager: APIManager = { alloc; _apiManagerOpt.get }
 
   def unacceptable(msg: String): Unit = {

@@ -170,7 +170,6 @@ object Collections extends XmlResource with Loggable {
   val maxCapacity: Int=500
   val initialCapacity: Int=10
   private val _datasets: TrieMap[String,Collection] =  loadCollectionXmlData( )
-  CollectionLoadServices.startService()
 
 //  def initCollectionList = if( datasets.isEmpty ) { refreshCollectionList }
 
@@ -290,9 +289,11 @@ object Collections extends XmlResource with Loggable {
 
   def createCollection( collId: String, ncmlFilePath: String ): Collection = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncmlFilePath)
-    val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
-    val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
-    new Collection("file", collId, ncmlFilePath, "", "", title, vars)
+    try {
+      val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
+      val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
+      new Collection("file", collId, ncmlFilePath, "", "", title, vars)
+    } finally { ncDataset.close() }
   }
 
   def addCollection(  id: String, collectionFilePath: String, createGrids: Boolean = false ): Option[Collection] = try {
