@@ -201,8 +201,8 @@ object CDGrid extends Loggable {
       ncDataset.close()
     }
     gridWriter.create()
-    for ((collectionFile, newVars ) <- varOrigins.iterator; ncDataset= NetcdfDataset.openDataset(collectionFile); ( newVar, isCoordVar ) <- newVars; if isCoordVar; cvar = ncDataset.findVariable(newVar.getFullName) ) {
-      cvar match {
+    for ((collectionFile, newVars ) <- varOrigins.iterator; ncDataset= NetcdfDataset.openDataset(collectionFile) ) {
+      for ( ( newVar, isCoordVar ) <- newVars; if isCoordVar; cvar = ncDataset.findVariable(newVar.getFullName) ) cvar match {
         case coordAxis: CoordinateAxis =>
           val boundsVarOpt: Option[String] = Option(coordAxis.getBoundaryRef) match {
             case Some(bref) => Some(bref)
