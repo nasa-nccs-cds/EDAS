@@ -139,7 +139,7 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
       while (_active) {
         val collectionFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
         for ( collectionFile <- collectionFiles;  fileName = collectionFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase ) {
-          if( (collId != "local_collections") && !Collections.hasCollection(collId) ) if( Collections.hasGridFiles(collectionFile) ) {
+          if( (collId != "local_collections") && !Collections.hasCollection(collId) ) if( Collections.hasGridFile(collectionFile) ) {
             fastPool.execute(new CollectionLoader(collId,collectionFile))
           } else {
             slowPool.execute(new CollectionLoader(collId,collectionFile,true))
@@ -162,7 +162,7 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
 class CollectionLoader( val collId: String, val collectionFile: File, val createGrids: Boolean = false ) extends Runnable  with Loggable  {
   def run() {
     logger.info( s" ---> Loading collection $collId, createGrids: ${createGrids.toString}" )
-    Collections.addCollection(collId, collectionFile.toString, createGrids )
+    Collections.addCollection( collId, collectionFile.toString, createGrids )
   }
 }
 
@@ -176,6 +176,10 @@ object Collections extends XmlResource with Loggable {
   def hasGridFiles( collectionFile: File ): Boolean = {
     val gridFiles = for( line <- Source.fromFile( collectionFile ).getLines; elems = line.split(",").map(_.trim) ) yield ( elems.last.split('.').dropRight(1) + "nc" ).mkString(".")
     gridFiles.forall( gFile => Files.exists( Paths.get( gFile)  ) )
+  }
+  def hasGridFile( collectionFile: File ): Boolean = {
+    val gridFile = ( collectionFile.toString.split('.').dropRight(1) + "nc" ).mkString(".")
+    Files.exists( Paths.get( gridFile )  )
   }
 
   def getCollectionFromPath( path: String ): Option[Collection] = _datasets.values.find( _.dataPath == path )
@@ -282,9 +286,9 @@ object Collections extends XmlResource with Loggable {
 //    persistLocalCollections()
     collection
   }
-  def addSubCollections( collectionFilePath: String, createGrids: Boolean  ): Unit = {
+  def addSubCollections( collectionFilePath: String  ): Unit = {
     val ncmlFiles: Iterator[File] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
-    ncmlFiles.foreach( file => addCollection( fileToId( file), file.getAbsolutePath, createGrids ) )
+    ncmlFiles.foreach( file => addCollection( fileToId( file), file.getAbsolutePath, false,  ) )
   }
 
   def createCollection( collId: String, ncmlFilePath: String ): Collection = {
@@ -299,7 +303,7 @@ object Collections extends XmlResource with Loggable {
   def addCollection(  id: String, collectionFilePath: String, createGrids: Boolean = false ): Option[Collection] = try {
     val newCollection = if( collectionFilePath.endsWith(".csv") ) {
       val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
-      addSubCollections( collectionFilePath, createGrids )
+      addSubCollections( collectionFilePath )
       new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )
     } else {
       logger.info( s" ---> Loading collection $id, createGrids: ${createGrids.toString}" )
