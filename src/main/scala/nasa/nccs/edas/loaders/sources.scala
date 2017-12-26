@@ -163,7 +163,7 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
 class CollectionLoader( val collId: String, val collectionFile: File ) extends Runnable  with Loggable  {
   def run() {
     logger.info( s" ---> Loading collection $collId" )
-    Collections.addCollection( collId, collectionFile.toString )
+    Collections.addMetaCollection( collId, collectionFile.toString )
   }
 }
 
@@ -287,35 +287,41 @@ object Collections extends XmlResource with Loggable {
 ////    persistLocalCollections()
 //    collection
 //  }
-  
+
   def addSubCollections( collectionFilePath: String, grid: CDGrid  ): Unit = {
     val ncmlFiles: Iterator[File] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
-    ncmlFiles.foreach( file => addCollection( fileToId( file), file.getAbsolutePath, Some(grid) ) )
+    ncmlFiles.foreach( file => addSubCollection( fileToId( file), file.getAbsolutePath, grid ) )
   }
 
-  def createCollection( collId: String, ncmlFilePath: String ): Collection = {
+  def createCollection( collId: String, ncmlFilePath: String, grid: CDGrid ): Collection = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncmlFilePath)
     try {
       val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
       val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
-      new Collection("file", collId, ncmlFilePath, "", "", title, vars)
+      new Collection("file", collId, ncmlFilePath, "", "", title, vars, Some(grid) )
     } finally { ncDataset.close() }
   }
 
-  def addCollection(  id: String, collectionFilePath: String, optGrid: Option[CDGrid] = None ): Option[Collection] = try {
-    val newCollection = if( collectionFilePath.endsWith(".csv") ) {
-      val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
-      val collection = new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList, optGrid )
-      addSubCollections( collectionFilePath, collection.grid )
-      collection
-    } else {
-      logger.info( s" ---> Loading sub collection $id" )
-      val collection = createCollection(id,collectionFilePath)
-      collection
-    }
-    _datasets.put( id, newCollection  )
-//    persistLocalCollections()
-    Some(newCollection)
+  def addMetaCollection(  id: String, collectionFilePath: String ): Option[Collection] = try {
+    assert( collectionFilePath.endsWith(".csv"), "Error, invalid path for meta collection: " + collectionFilePath )
+    val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
+    val collection = new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )
+    addSubCollections( collectionFilePath, collection.grid )
+    _datasets.put( id, collection  )
+    //    persistLocalCollections()
+    Some(collection)
+  } catch {
+    case err: Exception =>
+      logger.error( s"Error reading collection ${id} from ncml ${collectionFilePath}: ${err.toString}" )
+      None
+  }
+
+  def addSubCollection(  id: String, collectionFilePath: String, grid: CDGrid ): Option[Collection] = try {
+    logger.info( s" ---> Loading sub collection $id" )
+    val collection = createCollection( id, collectionFilePath, grid )
+    _datasets.put( id, collection  )
+    //    persistLocalCollections()
+    Some(collection)
   } catch {
     case err: Exception =>
       logger.error( s"Error reading collection ${id} from ncml ${collectionFilePath}: ${err.toString}" )
@@ -323,7 +329,8 @@ object Collections extends XmlResource with Loggable {
   }
 
 
-//  def addCollection(  id: String, dataPath: String, title: String, vars: List[String] ): Collection = {
+
+  //  def addCollection(  id: String, dataPath: String, title: String, vars: List[String] ): Collection = {
 //    val collection = Collection( id, dataPath, "", "local", title, vars )
 ////    collection.generateAggregation
 //    _datasets.put( id, collection  )
