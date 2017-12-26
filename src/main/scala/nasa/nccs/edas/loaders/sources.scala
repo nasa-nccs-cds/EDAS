@@ -11,11 +11,12 @@ import collection.JavaConverters._
 import scala.collection.JavaConversions._
 import collection.mutable
 import nasa.nccs.caching.FragmentPersistence
-import nasa.nccs.cdapi.cdm.{Collection, DiskCacheFileMgr, NCMLWriter, NetcdfDatasetMgr}
+import nasa.nccs.cdapi.cdm._
 import nasa.nccs.utilities.Loggable
 import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
 import ucar.{ma2, nc2}
+
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
@@ -142,7 +143,7 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
           if( (collId != "local_collections") && !Collections.hasCollection(collId) ) if( Collections.hasGridFile(collectionFile) ) {
             fastPool.execute(new CollectionLoader(collId,collectionFile))
           } else {
-            slowPool.execute(new CollectionLoader(collId,collectionFile,true))
+            slowPool.execute(new CollectionLoader(collId,collectionFile))
           }
         }
         Thread.sleep( 500 )
@@ -159,10 +160,10 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
   }
 }
 
-class CollectionLoader( val collId: String, val collectionFile: File, val createGrids: Boolean = false ) extends Runnable  with Loggable  {
+class CollectionLoader( val collId: String, val collectionFile: File ) extends Runnable  with Loggable  {
   def run() {
-    logger.info( s" ---> Loading collection $collId, createGrids: ${createGrids.toString}" )
-    Collections.addCollection( collId, collectionFile.toString, createGrids )
+    logger.info( s" ---> Loading collection $collId" )
+    Collections.addCollection( collId, collectionFile.toString )
   }
 }
 
@@ -278,17 +279,18 @@ object Collections extends XmlResource with Loggable {
     removedCids
   }
 
-  def addCollection( id: String, dataPath: String, fileFilter: String, title: String, vars: List[String] ): Collection = {
-    val cvars = if(vars.isEmpty) getVariableList( dataPath ) else vars
-    val collection = Collection( id, dataPath, fileFilter, "local", title, cvars )
-    collection.generateAggregation()
-    _datasets.put( id, collection  )
-//    persistLocalCollections()
-    collection
-  }
-  def addSubCollections( collectionFilePath: String  ): Unit = {
+//  def aggregateCollection( id: String, dataPath: String, fileFilter: String, title: String, vars: List[String] ): Collection = {
+//    val cvars = if(vars.isEmpty) getVariableList( dataPath ) else vars
+//    val collection = Collection( id, dataPath, fileFilter, "local", title, cvars )
+//    collection.generateAggregation()
+//    _datasets.put( id, collection  )
+////    persistLocalCollections()
+//    collection
+//  }
+  
+  def addSubCollections( collectionFilePath: String, grid: CDGrid  ): Unit = {
     val ncmlFiles: Iterator[File] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
-    ncmlFiles.foreach( file => addCollection( fileToId( file), file.getAbsolutePath, false,  ) )
+    ncmlFiles.foreach( file => addCollection( fileToId( file), file.getAbsolutePath, Some(grid) ) )
   }
 
   def createCollection( collId: String, ncmlFilePath: String ): Collection = {
@@ -300,15 +302,15 @@ object Collections extends XmlResource with Loggable {
     } finally { ncDataset.close() }
   }
 
-  def addCollection(  id: String, collectionFilePath: String, createGrids: Boolean = false ): Option[Collection] = try {
+  def addCollection(  id: String, collectionFilePath: String, optGrid: Option[CDGrid] = None ): Option[Collection] = try {
     val newCollection = if( collectionFilePath.endsWith(".csv") ) {
       val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
-      addSubCollections( collectionFilePath )
-      new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )
+      val collection = new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList, optGrid )
+      addSubCollections( collectionFilePath, collection.grid )
+      collection
     } else {
-      logger.info( s" ---> Loading collection $id, createGrids: ${createGrids.toString}" )
+      logger.info( s" ---> Loading sub collection $id" )
       val collection = createCollection(id,collectionFilePath)
-      if( createGrids ) { logger.info( s"Creating grid file ${collection.grid.name}:  ${collection.grid.gridFilePath} ")}
       collection
     }
     _datasets.put( id, newCollection  )
@@ -321,13 +323,13 @@ object Collections extends XmlResource with Loggable {
   }
 
 
-  def addCollection(  id: String, dataPath: String, title: String, vars: List[String] ): Collection = {
-    val collection = Collection( id, dataPath, "", "local", title, vars )
-//    collection.generateAggregation
-    _datasets.put( id, collection  )
-//    persistLocalCollections()
-    collection
-  }
+//  def addCollection(  id: String, dataPath: String, title: String, vars: List[String] ): Collection = {
+//    val collection = Collection( id, dataPath, "", "local", title, vars )
+////    collection.generateAggregation
+//    _datasets.put( id, collection  )
+////    persistLocalCollections()
+//    collection
+//  }
 
   def updateCollection( collection: Collection ): Collection = {
     _datasets.put( collection.id, collection  )

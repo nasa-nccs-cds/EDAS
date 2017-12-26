@@ -931,18 +931,7 @@ object DataContainer extends ContainerBase {
         //       if (!path.isEmpty) { assert(absPath(path).equals(absPath(collection.dataPath)), "Collection %s already exists and its path (%s) does not correspond to the specified path (%s)".format(collection.id, collection.dataPath, path)) }
         (Some(collection), fragIdOpt)
       case None =>
-        if (colId.equals("")) {
-          (None, None)
-        } else if (path.isEmpty && !collection.isEmpty) {
-          (Some(Collections.addCollection(colId, path, title, varsList)), fragIdOpt)
-        } else {
-          if (path.isEmpty) {
-            logger.warn( s"Unrecognized collection: '$colId', current collections: " + Collections.idSet.mkString(", "))
-            ( None, fragIdOpt )
-          } else {
-            ( Some(Collections.addCollection(colId, path, fileFilter, title, varsList)), fragIdOpt )
-          }
-        }
+        throw new Exception( s" The collection ${colId} is not yet available." )
     }
   }
 
