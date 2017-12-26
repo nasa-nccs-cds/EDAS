@@ -150,7 +150,7 @@ object CDGrid extends Loggable {
     testNc4()
     val gridWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf4, gridFilePath, null)
 
-    val varOrigins = mutable.HashMap.empty[String,Seq[(nc2.Variable,Boolean)]]
+    val cvarOrigins = mutable.HashMap.empty[String,Seq[nc2.Variable]]
     val newVarsMap = mutable.HashMap.empty[String,nc2.Variable]
     val dimList = mutable.ListBuffer.empty[String]
     val coordList = mutable.ListBuffer.empty[String]
@@ -176,8 +176,9 @@ object CDGrid extends Loggable {
         val newGroup = getNewGroup(groupMap, oldGroup, gridWriter)
         val newVar: nc2.Variable = gridWriter.addVariable(newGroup, varName, dataType, getDimensionNames( cvar.getDimensionsString.split(' '), localDims ).mkString(" "))
         //      val newVar = gridWriter.addVariable( newGroup, NCMLWriter.getName(cvar), dataType, cvar.getDimensionsString  )
-        val isCoordVar: Boolean = cvar.isCoordinateVariable && (cvar.getRank == 1)
-        varOrigins += (collectionFile -> (varOrigins.getOrElse(collectionFile, Seq.empty[(nc2.Variable,Boolean)]) ++ Seq((newVar,isCoordVar))))
+        if( cvar.isCoordinateVariable && (cvar.getRank == 1) ) {
+          cvarOrigins += (collectionFile -> (cvarOrigins.getOrElse(collectionFile, Seq.empty[nc2.Variable]) ++ Seq(newVar)))
+        }
         newVarsMap += ( varName -> newVar )
         varName -> (cvar -> newVar)
       }
@@ -201,8 +202,8 @@ object CDGrid extends Loggable {
       ncDataset.close()
     }
     gridWriter.create()
-    for ((collectionFile, newVars ) <- varOrigins.iterator; ncDataset= NetcdfDataset.openDataset(collectionFile) ) {
-      for ( ( newVar, isCoordVar ) <- newVars; if isCoordVar; cvar = ncDataset.findVariable(newVar.getFullName) ) cvar match {
+    for ((collectionFile, newVars ) <- cvarOrigins.iterator; ncDataset= NetcdfDataset.openDataset(collectionFile) ) {
+      for ( newVar <- newVars; cvar = ncDataset.findVariable(newVar.getFullName) ) cvar match {
         case coordAxis: CoordinateAxis =>
           val boundsVarOpt: Option[String] = Option(coordAxis.getBoundaryRef) match {
             case Some(bref) => Some(bref)
