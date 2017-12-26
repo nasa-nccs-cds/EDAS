@@ -165,7 +165,7 @@ object CDGrid extends Loggable {
         dimList += dname
       }
 
-      val varTups = for (cvar <- ncDataset.getVariables; if !varOrigins.contains( NCMLWriter.getName(cvar) ) ) yield {
+      val varTups = for (cvar <- ncDataset.getVariables; varName = NCMLWriter.getName(cvar); if !newVarsMap.contains( varName ) ) yield {
         val dataType = cvar match {
           case coordAxis: CoordinateAxis =>
             if (coordAxis.getAxisType == AxisType.Time) ma2.DataType.LONG
@@ -174,7 +174,6 @@ object CDGrid extends Loggable {
         }
         val oldGroup = cvar.getGroup
         val newGroup = getNewGroup(groupMap, oldGroup, gridWriter)
-        val varName = NCMLWriter.getName(cvar)
         val newVar: nc2.Variable = gridWriter.addVariable(newGroup, varName, dataType, getDimensionNames( cvar.getDimensionsString.split(' '), localDims ).mkString(" "))
         //      val newVar = gridWriter.addVariable( newGroup, NCMLWriter.getName(cvar), dataType, cvar.getDimensionsString  )
         val isCoordVar: Boolean = cvar.isCoordinateVariable && (cvar.getRank == 1)
