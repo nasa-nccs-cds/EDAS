@@ -28,6 +28,7 @@ import scala.concurrent.{Await, Future}
 import scala.io.Source
 
 object NCMLWriter extends Loggable {
+  val ncExtensions = Seq( "nc", "nc4")
 
   def apply(path: File): NCMLWriter = { new NCMLWriter(Array(path).iterator) }
   def getName(node: nc2.CDMNode): String = node.getFullName
@@ -41,6 +42,15 @@ object NCMLWriter extends Loggable {
     for( f <- backupDir.listFiles ) { f.delete() }
     for( f <- dir.listFiles ) { f.renameTo( new File( backupDir, f.getName ) ) }
   }
+
+  def generateNCMLFiles( collectionsFile: File ): Unit = {
+    logger.info(s"Generate NCML file from specs in " + collectionsFile.getAbsolutePath )
+    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
+      val mdata = tline.split(",").map(_.trim)
+      extractSubCollections( mdata(0), Paths.get( mdata(1) ) )
+    }
+  }
+
 
   def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
     backup( ncmlDir, new File( ncmlDir, "backup") )
@@ -61,7 +71,7 @@ object NCMLWriter extends Loggable {
               varNames.foreach(vname => variableMap += (vname -> subCollectionId))
             }
             val dataFiles = path.listFiles.filter(_.isFile)
-            getFileGroups(dataFiles) foreach { case ( group_name, files ) =>
+            getFileGroups(dataFiles) foreach { case ( group_name, files  ) =>
               val subCollectionId = collectionId + "_" + group_name
               val varNames = generateNCML( subCollectionId, files )
               varNames.foreach(vname => variableMap += (vname -> subCollectionId))
@@ -76,14 +86,108 @@ object NCMLWriter extends Loggable {
     }
   }
 
+  def isNcDataFile( file: File ): Boolean = {
+    file.isFile &&  ncExtensions.contains( file.getName.split('.').last )
+  }
+
+  def recursiveListNcFiles( rootPath: Path, optSearchSubDir: Option[Path] = None ): Array[Path] = {
+    val children = optSearchSubDir.fold( rootPath )( rootPath.resolve ).toFile.listFiles
+    val files = children.filter( isNcDataFile ).map(_.toPath.relativize( rootPath ) )
+    files ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( dir.toPath.relativize( rootPath ) ) ) )
+  }
+
+  def extractSubCollections( collectionId: String, dataLocation: Path ): Unit = {
+    logger.info(s"Extract collection $collectionId from " + dataLocation.toString)
+    val ncSubPaths = recursiveListNcFiles(dataLocation)
+    var subColIndex = 0
+    val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
+      val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { s"sub-${subColIndex+=1}" } else subCol_name }
+      val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
+      varNames.map(vname => vname -> subCollectionId)
+    }
+    val duplicates = varMap.groupBy { _._1 } filter { case (_,lst) => lst.size > 1 }
+    if( duplicates.nonEmpty ) { logger.error( s"Duplicate variables will be hidden in collection $collectionId: ${duplicates.map( dup => s"\n${dup._1}: ${dup._2.mkString("\n\t")}" ).mkString("\n")} ") }
+    writeCollectionDirectory( collectionId, Map( varMap:_* ) )
+  }
+
+
+//    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
+//      val mdata = tline.split(",").map(_.trim)
+//      val agg_type: String = mdata.head
+//      val cspecs = mdata.tail
+//      val collectionId = cspecs.head
+//      val variableMap = new collection.mutable.HashMap[String,String]()
+//      val paths: Array[File] = cspecs.tail.filter(!_.isEmpty).map(fpath => new File(fpath))
+//      agg_type match {
+//        case multi if multi.startsWith("m") =>
+//          for( path <- paths; if path.isDirectory ) {
+//            for (subdir <- path.listFiles; if subdir.isDirectory) {
+//              val subCollectionId = collectionId + "_" + subdir.getName
+//              val varNames = generateNCML(subCollectionId, Array(subdir))
+//              varNames.foreach(vname => variableMap += (vname -> subCollectionId))
+//            }
+//            val dataFiles = path.listFiles.filter(_.isFile)
+//            getFileGroups(dataFiles) foreach { case ( group_name, files ) =>
+//              val subCollectionId = collectionId + "_" + group_name
+//              val varNames = generateNCML( subCollectionId, files )
+//              varNames.foreach(vname => variableMap += (vname -> subCollectionId))
+//            }
+//          }
+//        case singl if singl.startsWith("s") =>
+//          val varNames = generateNCML( collectionId, paths )
+//          varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
+//        case _ => throw new Exception( "Unrecognized aggregation type: " + agg_type )
+//      }
+//      writeCollectionDirectory( collectionId, variableMap.toMap )
+//    }
+//  }
+
   def getFileGroups(dataFiles: Seq[File]): Map[String,Array[File]] = {
     val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[File]]
     dataFiles.foreach( df => groupMap.getOrElseUpdate( getVariablesKey( df ), mutable.ListBuffer.empty[File] ) += df )
     groupMap.mapValues(_.toArray).toMap
   }
 
+  def getPathGroups(rootPath: Path, relFilePaths: Seq[Path]): Seq[(String,(String,Array[Path]))] = {
+    val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[Path]]
+    relFilePaths.foreach( df => groupMap.getOrElseUpdate( getPathKey( rootPath, df ), mutable.ListBuffer.empty[Path] ) += df )
+    groupMap.mapValues( df => ( getSubCollectionName(df), df.toArray) ).toSeq
+  }
+
+  def trimCommonPrefixNameElements( paths: Iterable[Path] ): Iterable[Path] = {
+    val nameSeq: Iterable[Seq[String]] = paths.map( _.iterator().map(_.toString).toSeq )
+    val testNames: Iterable[String] = nameSeq.map( _.head )
+    if( testNames.forall( _.equals( testNames.head ) ) ) {
+      trimCommonPrefixNameElements( nameSeq.map( ns => Paths.get( ns.drop(1).mkString("/") ) ) )
+    } else { paths }
+  }
+
+  def extractCommonPrefix( pathElements: Iterable[Seq[String]], commonPrefixElems: Seq[String] = Seq.empty ): Seq[String] = {
+    val testNames: Iterable[String] = pathElements.map( _.head )
+    if( testNames.forall( _.equals( testNames.head ) ) ) {
+      extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( testNames.head ) )
+    } else { commonPrefixElems }
+  }
+
+  def trimCommonSuffixNameElements( paths: Iterable[Path] ): Iterable[Path] = {
+    val nameSeq: Iterable[Seq[String]] = paths.map( _.iterator().map(_.toString).toSeq )
+    val testNames: Iterable[String] = nameSeq.map( _.last )
+    if( testNames.forall( _.equals( testNames.last ) ) ) {
+      trimCommonSuffixNameElements( nameSeq.map( ns => Paths.get( ns.dropRight(1).mkString("/") ) ) )
+    } else { paths }
+  }
+
+  def trimCommonNameElements( paths: Iterable[Path] ): Iterable[Path] = trimCommonSuffixNameElements( trimCommonPrefixNameElements(paths) )
+  def getSubCollectionName( paths: Iterable[Path] ): String = extractCommonPrefix( paths.map( _.iterator().map( _.toString).toSeq ) ).mkString(".")
+
   def getVariablesKey( file: File ): String = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( file.toString )
+    val variables: List[nc2.Variable] = ncDataset.getVariables.filterNot(_.isCoordinateVariable).toList
+    variables.map( _.getShortName ).mkString("-")
+  }
+
+  def getPathKey( rootPath: Path, relFilePath: Path ): String = {
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( rootPath.resolve(relFilePath).toString )
     val variables: List[nc2.Variable] = ncDataset.getVariables.filterNot(_.isCoordinateVariable).toList
     variables.map( _.getShortName ).mkString("-")
   }
@@ -514,7 +618,35 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
   }
 }
 
+//
+
 object CDScan extends Loggable {
+  val usage = """
+    Usage: mkcoll <collectionID> <datPath>
+  """
+
+  def main(args: Array[String]) {
+    if( args.length < 2 ) { println( usage ); return }
+    val collectionId = args(0).toLowerCase
+    val pathFile = new File(args(1))
+    NCMLWriter.extractSubCollections( collectionId, pathFile.toPath )
+  }
+}
+
+object CDMultiScan extends Loggable {
+  def main(args: Array[String]) {
+    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
+    EDASLogManager.isMaster
+    val collectionsMetaFile = new File(args(0))    // If first col == 'mult' then each subdir is treated as a separate collection.
+    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
+    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
+    ncmlDir.mkdirs
+    NCMLWriter.generateNCMLFiles( collectionsMetaFile )
+  }
+}
+
+
+object LegacyCDScan extends Loggable {
   val usage = """
     Usage: mkcoll [-m] <collectionID> <datPath>
         -m: Process each subdirectory of <datPath> as a separate collection
@@ -526,9 +658,9 @@ object CDScan extends Loggable {
     var inputs = mutable.ListBuffer.empty[String]
     EDASLogManager.isMaster
     for( arg <- args ) if(arg(0) == '-') arg match {
-        case "-m" => optionMap += (( "multi", "true" ))
-        case x => throw new Exception( "Unrecognized option: " + x )
-      } else { inputs += arg }
+      case "-m" => optionMap += (( "multi", "true" ))
+      case x => throw new Exception( "Unrecognized option: " + x )
+    } else { inputs += arg }
     if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
 
     val collectionId = inputs(0).toLowerCase
@@ -546,7 +678,7 @@ object CDScan extends Loggable {
   }
 }
 
-object CDMultiScan extends Loggable {
+object CDMultiScanLegacy extends Loggable {
   def main(args: Array[String]) {
     if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
     EDASLogManager.isMaster

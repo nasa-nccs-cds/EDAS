@@ -137,13 +137,19 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
 
   def run() {
     try {
+      val loadingCollections = mutable.HashMap.empty[String,String]
       while (_active) {
         val collectionFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
-        for ( collectionFile <- collectionFiles;  fileName = collectionFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase ) {
-          if( (collId != "local_collections") && !Collections.hasCollection(collId) ) if( Collections.hasGridFile(collectionFile) ) {
-            fastPool.execute(new CollectionLoader(collId,collectionFile))
-          } else {
-            slowPool.execute(new CollectionLoader(collId,collectionFile))
+        for ( collectionFile <- collectionFiles;  fileName = collectionFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase; if collId != "local_collections" ) {
+          if( Collections.hasCollection(collId) ) {
+            loadingCollections.remove(collId)
+          } else if( !loadingCollections.contains(collId) ) {
+            loadingCollections += ( collId -> collId )
+            if( Collections.hasGridFile(collectionFile) ) {
+              fastPool.execute(new CollectionLoader(collId,collectionFile))
+            } else {
+              slowPool.execute(new CollectionLoader(collId,collectionFile))
+            }
           }
         }
         Thread.sleep( 500 )
