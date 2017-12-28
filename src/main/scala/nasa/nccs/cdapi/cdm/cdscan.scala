@@ -106,7 +106,7 @@ object NCMLWriter extends Loggable {
     var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
       val subColName = if( subCol_name.trim.isEmpty ) {
-        if( group_key.length <= 18 ) { group_key } else { subColIndex = subColIndex + 1; s"SUB-${subColIndex.toString}" }
+        if( group_key.length <= 128 ) { group_key } else { subColIndex = subColIndex + 1; s"SUB-${subColIndex.toString}" }
       } else subCol_name
       val subCollectionId = collectionId + "-" + subColName
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
