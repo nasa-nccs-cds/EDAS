@@ -91,10 +91,10 @@ object NCMLWriter extends Loggable {
   }
 
   def recursiveListNcFiles( rootPath: Path, optSearchSubDir: Option[Path] = None ): Array[Path] = {
-    print( s"\nrecursiveListNcFiles-> root: ${rootPath.toString}, rel: ${optSearchSubDir.fold("")(_.toString)}" )
     val children = optSearchSubDir.fold( rootPath )( rootPath.resolve ).toFile.listFiles
-    val files = Option( children.filter( isNcDataFile ).map(_.toPath.relativize( rootPath ) ) )
-    files.getOrElse( Array.empty[Path] ) ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( rootPath.relativize(dir.toPath) ) ) )
+    print( s"\nrecursiveListNcFiles-> root: ${rootPath.toString}, rel: ${optSearchSubDir.fold("")(_.toString)}, children: [ ${children.map(_.toString).mkString(", ")} ]" )
+    val files = children.filter( isNcDataFile ).map( _.toPath.relativize( rootPath ) )
+    files ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( rootPath.relativize(dir.toPath) ) ) )
   }
 
   def extractSubCollections( collectionId: String, dataLocation: Path ): Unit = {
