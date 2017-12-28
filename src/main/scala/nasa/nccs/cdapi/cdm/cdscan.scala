@@ -91,12 +91,14 @@ object NCMLWriter extends Loggable {
   }
 
   def recursiveListNcFiles( rootPath: Path, optSearchSubDir: Option[Path] = None ): Array[Path] = {
+    print( s"\nrecursiveListNcFiles-> root: ${rootPath.toString}, rel: ${optSearchSubDir.fold("")(_.toString)}" )
     val children = optSearchSubDir.fold( rootPath )( rootPath.resolve ).toFile.listFiles
-    val files = children.filter( isNcDataFile ).map(_.toPath.relativize( rootPath ) )
-    files ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( dir.toPath.relativize( rootPath ) ) ) )
+    val files = Option( children.filter( isNcDataFile ).map(_.toPath.relativize( rootPath ) ) )
+    files.getOrElse( Array.empty[Path] ) ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( rootPath.relativize(dir.toPath) ) ) )
   }
 
   def extractSubCollections( collectionId: String, dataLocation: Path ): Unit = {
+    assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
     logger.info(s"Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
     var subColIndex = 0
@@ -679,6 +681,15 @@ object CDMultiScanLegacy extends Loggable {
     val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
     ncmlDir.mkdirs
     NCMLWriter.updateNCMLFiles( collectionsMetaFile, ncmlDir )
+  }
+}
+
+object CDScanTest {
+  def main(args: Array[String]) {
+    val collectionId = "MERRA2"
+    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/MERRA2"
+    val pathFile = new File(dataPath)
+    NCMLWriter.extractSubCollections(collectionId, pathFile.toPath )
   }
 }
 
