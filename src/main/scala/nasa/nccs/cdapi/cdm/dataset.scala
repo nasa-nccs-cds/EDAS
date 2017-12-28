@@ -1176,13 +1176,13 @@ object NetcdfDatasetMgr extends Loggable with ContainerOps  {
 
   private def acquireCollection( dpath: String, varName: String ): NetcdfDataset = {
     val collectionPath: String = getCollectionPath( dpath, varName )
-    logger.info(s" *%* Opening Dataset from path: $collectionPath   ")
+    logger.info(s" *%* --> Opening Dataset from path: $collectionPath   ")
     NetcdfDataset.openDataset(collectionPath)
   }
 
   private def acquireDataset( dpath: String ): NetcdfDataset = {
     val result = NetcdfDataset.openDataset(dpath)
-    logger.info(s"   *%* Opened Dataset from path: $dpath   ")
+    logger.info(s"   *%* --> Opened Dataset from path: $dpath   ")
     result
   }
 
