@@ -154,30 +154,22 @@ object NCMLWriter extends Loggable {
     groupMap.mapValues( df => ( getSubCollectionName(df), df.toArray) ).toSeq
   }
 
-  def trimCommonPrefixNameElements( paths: Iterable[Path] ): Iterable[Path] = {
-    val nameSeq: Iterable[Seq[String]] = paths.map( _.iterator().map(_.toString).toSeq )
-    val testNames: Iterable[String] = nameSeq.map( _.head )
-    if( testNames.forall( _.equals( testNames.head ) ) ) {
-      trimCommonPrefixNameElements( nameSeq.map( ns => Paths.get( ns.drop(1).mkString("/") ) ) )
+  def trimCommonNameElements( paths: Iterable[ Seq[String] ], prefix: Boolean ): Iterable[ Seq[String] ] = {
+    val pathElements: Iterable[Seq[String]] = paths.map( _.iterator().map(_.toString).toSeq )
+    if(  pathElements.groupBy { if(prefix) _.head else _.last }.size == 1 ) {
+      trimCommonNameElements( pathElements.map { if(prefix) _.drop(1) else _.dropRight(1) }, prefix )
     } else { paths }
   }
 
   def extractCommonPrefix( pathElements: Iterable[Seq[String]], commonPrefixElems: Seq[String] = Seq.empty ): Seq[String] = {
-    val testNames: Iterable[String] = pathElements.map( _.head )
-    if( testNames.forall( _.equals( testNames.head ) ) ) {
-      extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( testNames.head ) )
+    if( pathElements.groupBy( _.head ).size == 1 ) {
+      extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
     } else { commonPrefixElems }
   }
 
-  def trimCommonSuffixNameElements( paths: Iterable[Path] ): Iterable[Path] = {
-    val nameSeq: Iterable[Seq[String]] = paths.map( _.iterator().map(_.toString).toSeq )
-    val testNames: Iterable[String] = nameSeq.map( _.last )
-    if( testNames.forall( _.equals( testNames.last ) ) ) {
-      trimCommonSuffixNameElements( nameSeq.map( ns => Paths.get( ns.dropRight(1).mkString("/") ) ) )
-    } else { paths }
-  }
+  def trimCommonNameElements( paths: Iterable[Path] ): Iterable[Path] =
+    trimCommonNameElements( trimCommonNameElements( paths.map( _.iterator().map(_.toString).toSeq ) ,false ), true ).map( seq => Paths.get( seq.mkString("/") ) )
 
-  def trimCommonNameElements( paths: Iterable[Path] ): Iterable[Path] = trimCommonSuffixNameElements( trimCommonPrefixNameElements(paths) )
   def getSubCollectionName( paths: Iterable[Path] ): String = extractCommonPrefix( paths.map( _.iterator().map( _.toString).toSeq ) ).mkString(".")
 
   def getVariablesKey( file: File ): String = {
