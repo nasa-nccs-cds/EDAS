@@ -13,11 +13,13 @@ import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.{appParameters, runtime}
 import nasa.nccs.utilities.{EDASLogManager, Loggable, cdsutils}
+import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2.{FileWriter => _, _}
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{NetcdfDataset, _}
 import ucar.nc2.time.CalendarDate
+
 import scala.collection.mutable
 import collection.mutable.{HashMap, ListBuffer}
 import collection.JavaConversions._
@@ -101,9 +103,10 @@ object NCMLWriter extends Loggable {
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
     logger.info(s"Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
-    var subColIndex = 0
+    var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
-      val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { s"sub-${subColIndex+=1}" } else subCol_name }
+      subColIndex = subColIndex + 1
+      val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { s"SUB-${subColIndex.toString}" } else subCol_name }
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
       varNames.map(vname => vname -> subCollectionId)
     }
@@ -164,7 +167,7 @@ object NCMLWriter extends Loggable {
   }
 
   def extractCommonPrefix( pathElements: Iterable[Seq[String]], commonPrefixElems: Seq[String] = Seq.empty ): Seq[String] = {
-    if( pathElements.groupBy( _.head ).size == 1 ) {
+    if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
       extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
     } else { commonPrefixElems }
   }
@@ -686,8 +689,8 @@ object CDMultiScanLegacy extends Loggable {
 
 object CDScanTest {
   def main(args: Array[String]) {
-    val collectionId = "MERRA2-Daily"
-    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/DAILY"
+    val collectionId = "MERRA2-daily-test1"
+    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/DAILY/2005/JAN"
     val pathFile = new File(dataPath)
     NCMLWriter.extractSubCollections(collectionId, pathFile.toPath )
   }
