@@ -93,7 +93,7 @@ object NCMLWriter extends Loggable {
   def recursiveListNcFiles( rootPath: Path, optSearchSubDir: Option[Path] = None ): Array[Path] = {
     val children = optSearchSubDir.fold( rootPath )( rootPath.resolve ).toFile.listFiles
     print( s"\nrecursiveListNcFiles-> root: ${rootPath.toString}, rel: ${optSearchSubDir.fold("")(_.toString)}, children: [ ${children.map(_.toString).mkString(", ")} ]" )
-    val files = children.filter( isNcDataFile ).map( _.toPath.relativize( rootPath ) )
+    val files = children.filter( isNcDataFile ).map( child => rootPath.relativize( child.toPath  ) )
     files ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( rootPath.relativize(dir.toPath) ) ) )
   }
 
@@ -686,8 +686,8 @@ object CDMultiScanLegacy extends Loggable {
 
 object CDScanTest {
   def main(args: Array[String]) {
-    val collectionId = "MERRA2"
-    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/MERRA2"
+    val collectionId = "MERRA2-Daily"
+    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/DAILY"
     val pathFile = new File(dataPath)
     NCMLWriter.extractSubCollections(collectionId, pathFile.toPath )
   }
