@@ -101,7 +101,7 @@ object NCMLWriter extends Loggable {
 
   def extractSubCollections( collectionId: String, dataLocation: Path ): Unit = {
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
-    logger.info(s"Extract collection $collectionId from " + dataLocation.toString)
+    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
     var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
@@ -198,9 +198,10 @@ object NCMLWriter extends Loggable {
     val all_vars = ncDataset.getVariables groupBy { _.isCoordinateVariable }
     val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ).toList
     val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ).toList
-    val bounds_vars: List[String] = variables flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue }
+    val bounds_vars: List[String] = coord_variables flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue }
     val vkey = variables map { _.getShortName } filterNot { bounds_vars.contains } mkString "-"
-    logger.info( s" %K% getVariablesKey: bounds_vars = [ ${bounds_vars.mkString(", ")} ], vkey = ${vkey}")
+    logger.info( s" %K% getVariablesKey: bounds_vars = [ ${bounds_vars.mkString(", ")} ], vars = [ ${variables.map(_.getShortName).mkString(", ")} ], coords = [ ${coord_variables.map(_.getShortName).mkString(", ")} ], vkey = ${vkey}")
+//    logger.info( s" %K% Coord Attributes: [ ${bounds_vars.mkString(", ")} ], vars = [ ${variables.map(_.getShortName).mkString(", ")} ], coords = [ ${coord_variables.map(_.getShortName).mkString(", ")} ], vkey = ${vkey}")
     vkey
   }
 
