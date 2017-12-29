@@ -110,16 +110,17 @@ object NCMLWriter extends Loggable {
       varNames.map(vname => vname -> subCollectionId)
     }
     val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 } .values.map( scopeRepeatedVarNames ).toSeq.flatten
-    writeCollectionDirectory( collectionId, Map( varMap:_* ) )
+    writeCollectionDirectory( collectionId, Map( contextualizedVarMap:_* ) )
   }
 
   def scopeRepeatedVarNames( singleVarMaps: Seq[(String,String)] ): Seq[(String,String)] = {
     if (singleVarMaps.size == 1) { singleVarMaps }
     else {
-      val collIds = singleVarMaps.map(_._2)
-      val commonStr = collIds.fold(collIds.head)(_ intersect _)
-      val result = singleVarMaps.map { case (varId, collId) => ((collId intersect commonStr) + "/" + varId, collId) }
-      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}] ($commonStr) \n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
+      val collIds: Seq[Array[String]] = singleVarMaps.map( _._2.split('-') )
+      val scopeElems: IndexedSeq[Seq[String]] = collIds.head.indices.map( index => collIds.map( a => a(index))).filter( _.groupBy( x => x ).size > 1 )
+      val scopes = scopeElems.head.indices.map( index => scopeElems.map( a => a(index) ) ).map (_.mkString("."))
+      val result = singleVarMaps.zipWithIndex map { case (elem, i) => ( scopes(i) + "/" + elem._1, elem._2 ) }
+      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}]\n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
       result
     }
   }
