@@ -106,7 +106,7 @@ object NCMLWriter extends Loggable {
     var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
       val subColName = if( subCol_name.trim.isEmpty ) {
-        if( group_key.length < 20 ) { group_key } else { subColIndex = subColIndex + 1; s"SUB-${subColIndex.toString}" }
+        if( group_key.length < 40 ) { group_key } else { subColIndex = subColIndex + 1; s"SUB-${subColIndex.toString}" }
       } else subCol_name
       val subCollectionId = collectionId + "-" + subColName
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
@@ -606,10 +606,11 @@ object FileMetadata extends Loggable {
     new FileMetadata(dataset)
   }
   def getVariableLists(ncDataset: NetcdfDataset): ( List[nc2.Variable], List[nc2.Variable] ) = {
-    val all_vars = ncDataset.getVariables groupBy { _.isCoordinateVariable }
-    val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ).toList
-    val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ).toList
-    val bounds_vars: List[String] = coord_variables flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue }
+    val all_vars = ncDataset.getVariables
+    val all_vars_grouped = all_vars groupBy { _.isCoordinateVariable }
+    val variables: List[nc2.Variable] = all_vars_grouped.getOrElse( false, List.empty ).toList
+    val coord_variables: List[nc2.Variable] = all_vars_grouped.getOrElse( true, List.empty ).toList
+    val bounds_vars: List[String] = ( all_vars flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue } ).toList
     val data_variables = variables filterNot { v => bounds_vars.contains(v.getShortName) }
     ( data_variables, coord_variables )
   }
