@@ -118,8 +118,8 @@ object NCMLWriter extends Loggable {
     else {
       val collIds = singleVarMaps.map(_._2)
       val commonStr = collIds.fold(collIds.head)(_ intersect _)
-      val result = singleVarMaps.map { case (varId, collId) => ((collId intersect commonStr) + "." + varId, collId) }
-      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}] \n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
+      val result = singleVarMaps.map { case (varId, collId) => ((collId intersect commonStr) + "/" + varId, collId) }
+      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}] ($commonStr) \n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
       result
     }
   }
