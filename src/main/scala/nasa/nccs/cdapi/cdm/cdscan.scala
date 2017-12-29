@@ -109,21 +109,18 @@ object NCMLWriter extends Loggable {
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
       varNames.map(vname => vname -> subCollectionId)
     }
-    val groupedVarMap = varMap.groupBy { _._1 }
-    logger.info(s" %C% groupedVarMap: " + groupedVarMap.mkString( "; ") )
-    val contextualizedVarMap: Seq[(String,String)] = groupedVarMap.values.map( scopeRepeatedVarNames ).toSeq.flatten
+    val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 } .values.map( scopeRepeatedVarNames ).toSeq.flatten
     writeCollectionDirectory( collectionId, Map( varMap:_* ) )
   }
 
   def scopeRepeatedVarNames( singleVarMaps: Seq[(String,String)] ): Seq[(String,String)] = {
-    logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}]: " +  singleVarMaps.map(_.toString()).mkString(", "))
-    if (singleVarMaps.size == 1) {
-      singleVarMaps
-    }
+    if (singleVarMaps.size == 1) { singleVarMaps }
     else {
       val collIds = singleVarMaps.map(_._2)
       val commonStr = collIds.fold(collIds.head)(_ intersect _)
-      singleVarMaps.map { case (varId, collId) => ((collId intersect commonStr) + "." + varId, collId) }
+      val result = singleVarMaps.map { case (varId, collId) => ((collId intersect commonStr) + "." + varId, collId) }
+      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}] \n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
+      result
     }
   }
 
