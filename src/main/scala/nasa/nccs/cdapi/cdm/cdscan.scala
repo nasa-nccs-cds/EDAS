@@ -8,7 +8,7 @@ import java.util.Formatter
 
 import nasa.nccs.cdapi.cdm.CDScan.logger
 import nasa.nccs.cdapi.cdm.FileMetadata.logger
-import nasa.nccs.cdapi.cdm.NCMLWriter.{generateNCML, writeCollectionDirectory}
+import nasa.nccs.cdapi.cdm.NCMLWriter.{generateNCML, logger, writeCollectionDirectory}
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.loaders.Collections
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -106,7 +106,7 @@ object NCMLWriter extends Loggable {
     var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
       val subColName = if( subCol_name.trim.isEmpty ) {
-        if( group_key.length <= 128 ) { group_key } else { subColIndex = subColIndex + 1; s"SUB-${subColIndex.toString}" }
+        if( group_key.length < 20 ) { group_key } else { subColIndex = subColIndex + 1; s"SUB-${subColIndex.toString}" }
       } else subCol_name
       val subCollectionId = collectionId + "-" + subColName
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
@@ -195,14 +195,8 @@ object NCMLWriter extends Loggable {
 
   def getPathKey( rootPath: Path, relFilePath: Path ): String = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( rootPath.resolve(relFilePath).toString )
-    val all_vars = ncDataset.getVariables groupBy { _.isCoordinateVariable }
-    val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ).toList
-    val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ).toList
-    val bounds_vars: List[String] = coord_variables flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue }
-    val vkey = variables map { _.getShortName } filterNot { bounds_vars.contains } mkString "-"
-    logger.info( s" %K% getVariablesKey: bounds_vars = [ ${bounds_vars.mkString(", ")} ], vars = [ ${variables.map(_.getShortName).mkString(", ")} ], coords = [ ${coord_variables.map(_.getShortName).mkString(", ")} ], vkey = ${vkey}")
-//    logger.info( s" %K% Coord Attributes: [ ${bounds_vars.mkString(", ")} ], vars = [ ${variables.map(_.getShortName).mkString(", ")} ], coords = [ ${coord_variables.map(_.getShortName).mkString(", ")} ], vkey = ${vkey}")
-    vkey
+    val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
+    variables map { _.getShortName }  mkString "-"
   }
 
   def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
@@ -611,13 +605,21 @@ object FileMetadata extends Loggable {
     val dataset  = NetcdfDatasetMgr.openFile(file.toString)
     new FileMetadata(dataset)
   }
+  def getVariableLists(ncDataset: NetcdfDataset): ( List[nc2.Variable], List[nc2.Variable] ) = {
+    val all_vars = ncDataset.getVariables groupBy { _.isCoordinateVariable }
+    val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ).toList
+    val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ).toList
+    val bounds_vars: List[String] = coord_variables flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue }
+    val data_variables = variables filterNot { v => bounds_vars.contains(v.getShortName) }
+    ( data_variables, coord_variables )
+  }
 }
 
 class FileMetadata(val ncDataset: NetcdfDataset) {
+  import FileMetadata._
   val coordinateAxes: List[CoordinateAxis] = ncDataset.getCoordinateAxes.toList
   val dimensions: List[nc2.Dimension] = ncDataset.getDimensions.toList
-  val variables: List[nc2.Variable] = ncDataset.getVariables.filterNot(_.isCoordinateVariable).toList
-  val coordVars: List[nc2.Variable] = ncDataset.getVariables.filter(_.isCoordinateVariable).toList
+  val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable] ) = getVariableLists(ncDataset)
   val attributes: List[nc2.Attribute] = ncDataset.getGlobalAttributes.toList
   val dimNames: List[String] = dimensions.map(NCMLWriter.getName(_))
 
@@ -629,6 +631,8 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
     case coordVar: CoordinateAxis1D => coordVar.getAxisType;
     case _ => AxisType.RunTime
   }
+
+
 }
 
 //
