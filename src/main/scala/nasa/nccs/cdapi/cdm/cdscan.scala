@@ -185,9 +185,10 @@ object NCMLWriter extends Loggable {
   def getVariablesKey( file: File ): String = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( file.toString )
     val all_vars = ncDataset.getVariables groupBy { _.isCoordinateVariable }
-    val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ) toList
-    val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ) toList
+    val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ).toList
+    val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ).toList
     val bounds_vars: List[String] = variables flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue }
+    logger.info( s" getVariablesKey: bounds_vars=[ ${bounds_vars.mkString(", ")} ]")
     variables map { _.getShortName } filterNot { bounds_vars.contains } mkString "-"
   }
 
