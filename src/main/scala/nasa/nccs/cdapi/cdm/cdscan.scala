@@ -105,17 +105,23 @@ object NCMLWriter extends Loggable {
     val ncSubPaths = recursiveListNcFiles(dataLocation)
     var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
-      val subColName = if( subCol_name.trim.isEmpty ) {
-        if( group_key.length < 40 ) { group_key } else { subColIndex = subColIndex + 1; s"SUB-${subColIndex.toString}" }
-      } else subCol_name
-      val subCollectionId = collectionId + "-" + subColName
+      val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
       varNames.map(vname => vname -> subCollectionId)
     }
-    val duplicates = varMap.groupBy { _._1 } filter { case (_,lst) => lst.size > 1 }
-    if( duplicates.nonEmpty ) { logger.error( s"Duplicate variables will be hidden in collection $collectionId: ${duplicates.map( dup => s"\n${dup._1}: ${dup._2.mkString("\n\t")}" ).mkString("\n")} ") }
+    val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 }.mapValues( scopeRepeatedVarNames ).values.toSeq.flatten
     writeCollectionDirectory( collectionId, Map( varMap:_* ) )
   }
+
+  def scopeRepeatedVarNames( singleVarMaps: Seq[(String,String)] ): Seq[(String,String)] =
+    if( singleVarMaps.size == 1 ) { singleVarMaps }
+    else {
+      val collIds = singleVarMaps.map( _._2 )
+      val commonStr = collIds.fold(collIds.head)( _ intersect _ )
+      singleVarMaps.map { case (varId,collId) => ( (collId intersect commonStr) + "." + varId, collId ) }
+    }
+
+
 
 
 //    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
