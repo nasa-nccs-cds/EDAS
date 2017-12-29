@@ -184,8 +184,11 @@ object NCMLWriter extends Loggable {
 
   def getVariablesKey( file: File ): String = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( file.toString )
-    val variables: List[nc2.Variable] = ncDataset.getVariables.filterNot(_.isCoordinateVariable).toList
-    variables.map( _.getShortName ).mkString("-")
+    val all_vars = ncDataset.getVariables groupBy { _.isCoordinateVariable }
+    val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ) toList
+    val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ) toList
+    val bounds_vars: List[String] = variables flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue }
+    variables map { _.getShortName } filterNot { bounds_vars.contains } mkString "-"
   }
 
   def getPathKey( rootPath: Path, relFilePath: Path ): String = {
