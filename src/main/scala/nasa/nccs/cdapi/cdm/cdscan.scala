@@ -111,7 +111,7 @@ object NCMLWriter extends Loggable {
     }
     val groupedVarMap = varMap.groupBy { _._1 }
     logger.info(s" %C% groupedVarMap: " + groupedVarMap.mkString( "; ") )
-    val contextualizedVarMap: Seq[(String,String)] = groupedVarMap.mapValues( scopeRepeatedVarNames ).values.toSeq.flatten
+    val contextualizedVarMap: Seq[(String,String)] = groupedVarMap.values.map( scopeRepeatedVarNames ).toSeq.flatten
     writeCollectionDirectory( collectionId, Map( varMap:_* ) )
   }
 
