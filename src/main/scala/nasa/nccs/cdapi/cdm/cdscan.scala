@@ -54,39 +54,39 @@ object NCMLWriter extends Loggable {
   }
 
 
-  def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
-    backup( ncmlDir, new File( ncmlDir, "backup") )
-    logger.info(s"Update NCML file from specs in " + collectionsFile.getAbsolutePath )
-    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
-      val mdata = tline.split(",").map(_.trim)
-      val agg_type: String = mdata.head
-      val cspecs = mdata.tail
-      val collectionId = cspecs.head
-      val variableMap = new collection.mutable.HashMap[String,String]()
-      val paths: Array[File] = cspecs.tail.filter(!_.isEmpty).map(fpath => new File(fpath))
-      agg_type match {
-        case multi if multi.startsWith("m") =>
-          for( path <- paths; if path.isDirectory ) {
-            for (subdir <- path.listFiles; if subdir.isDirectory) {
-              val subCollectionId = collectionId + "_" + subdir.getName
-              val varNames = generateNCML(subCollectionId, Array(subdir))
-              varNames.foreach(vname => variableMap += (vname -> subCollectionId))
-            }
-            val dataFiles = path.listFiles.filter(_.isFile)
-            getFileGroups(dataFiles) foreach { case ( group_name, files  ) =>
-              val subCollectionId = collectionId + "_" + group_name
-              val varNames = generateNCML( subCollectionId, files )
-              varNames.foreach(vname => variableMap += (vname -> subCollectionId))
-            }
-          }
-        case singl if singl.startsWith("s") =>
-          val varNames = generateNCML( collectionId, paths )
-          varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
-        case _ => throw new Exception( "Unrecognized aggregation type: " + agg_type )
-      }
-      writeCollectionDirectory( collectionId, variableMap.toMap )
-    }
-  }
+//  def updateNCMLFiles( collectionsFile: File, ncmlDir: File ): Unit = {
+//    backup( ncmlDir, new File( ncmlDir, "backup") )
+//    logger.info(s"Update NCML file from specs in " + collectionsFile.getAbsolutePath )
+//    for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
+//      val mdata = tline.split(",").map(_.trim)
+//      val agg_type: String = mdata.head
+//      val cspecs = mdata.tail
+//      val collectionId = cspecs.head
+//      val variableMap = new collection.mutable.HashMap[String,String]()
+//      val paths: Array[File] = cspecs.tail.filter(!_.isEmpty).map(fpath => new File(fpath))
+//      agg_type match {
+//        case multi if multi.startsWith("m") =>
+//          for( path <- paths; if path.isDirectory ) {
+//            for (subdir <- path.listFiles; if subdir.isDirectory) {
+//              val subCollectionId = collectionId + "_" + subdir.getName
+//              val varNames = generateNCML(subCollectionId, Array(subdir))
+//              varNames.foreach(vname => variableMap += (vname -> subCollectionId))
+//            }
+//            val dataFiles = path.listFiles.filter(_.isFile)
+//            getFileGroups(dataFiles) foreach { case ( group_name, files  ) =>
+//              val subCollectionId = collectionId + "_" + group_name
+//              val varNames = generateNCML( subCollectionId, files )
+//              varNames.foreach(vname => variableMap += (vname -> subCollectionId))
+//            }
+//          }
+//        case singl if singl.startsWith("s") =>
+//          val varNames = generateNCML( collectionId, paths )
+//          varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
+//        case _ => throw new Exception( "Unrecognized aggregation type: " + agg_type )
+//      }
+//      writeCollectionDirectory( collectionId, variableMap.toMap )
+//    }
+//  }
 
   def isNcDataFile( file: File ): Boolean = {
     file.isFile &&  ncExtensions.contains( file.getName.split('.').last )
@@ -149,11 +149,11 @@ object NCMLWriter extends Loggable {
 //    }
 //  }
 
-  def getFileGroups(dataFiles: Seq[File]): Map[String,Array[File]] = {
-    val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[File]]
-    dataFiles.foreach( df => groupMap.getOrElseUpdate( getVariablesKey( df ), mutable.ListBuffer.empty[File] ) += df )
-    groupMap.mapValues(_.toArray).toMap
-  }
+//  def getFileGroups(dataFiles: Seq[File]): Map[String,Array[File]] = {
+//    val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[File]]
+//    dataFiles.foreach( df => groupMap.getOrElseUpdate( getVariablesKey( df ), mutable.ListBuffer.empty[File] ) += df )
+//    groupMap.mapValues(_.toArray).toMap
+//  }
 
   def getPathGroups(rootPath: Path, relFilePaths: Seq[Path]): Seq[(String,(String,Array[Path]))] = {
     val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[Path]]
@@ -182,8 +182,19 @@ object NCMLWriter extends Loggable {
 
   def getSubCollectionName( paths: Iterable[Path] ): String = extractCommonPrefix( paths.map( _.iterator().map( _.toString).toSeq ) ).mkString(".")
 
-  def getVariablesKey( file: File ): String = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( file.toString )
+//  def getVariablesKey( file: File ): String = {
+//    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( file.toString )
+//    val all_vars = ncDataset.getVariables groupBy { _.isCoordinateVariable }
+//    val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ).toList
+//    val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ).toList
+//    val bounds_vars: List[String] = variables flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue }
+//    val vkey = variables map { _.getShortName } filterNot { bounds_vars.contains } mkString "-"
+//    logger.info( s" %K% getVariablesKey: bounds_vars = [ ${bounds_vars.mkString(", ")} ], vkey = ${vkey}")
+//    vkey
+//  }
+
+  def getPathKey( rootPath: Path, relFilePath: Path ): String = {
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( rootPath.resolve(relFilePath).toString )
     val all_vars = ncDataset.getVariables groupBy { _.isCoordinateVariable }
     val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ).toList
     val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ).toList
@@ -191,12 +202,6 @@ object NCMLWriter extends Loggable {
     val vkey = variables map { _.getShortName } filterNot { bounds_vars.contains } mkString "-"
     logger.info( s" %K% getVariablesKey: bounds_vars = [ ${bounds_vars.mkString(", ")} ], vkey = ${vkey}")
     vkey
-  }
-
-  def getPathKey( rootPath: Path, relFilePath: Path ): String = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( rootPath.resolve(relFilePath).toString )
-    val variables: List[nc2.Variable] = ncDataset.getVariables.filterNot(_.isCoordinateVariable).toList
-    variables.map( _.getShortName ).mkString("-")
   }
 
   def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
@@ -653,49 +658,49 @@ object CDMultiScan extends Loggable {
 }
 
 
-object LegacyCDScan extends Loggable {
-  val usage = """
-    Usage: mkcoll [-m] <collectionID> <datPath>
-        -m: Process each subdirectory of <datPath> as a separate collection
-  """
+//object LegacyCDScan extends Loggable {
+//  val usage = """
+//    Usage: mkcoll [-m] <collectionID> <datPath>
+//        -m: Process each subdirectory of <datPath> as a separate collection
+//  """
+//
+//  def main(args: Array[String]) {
+//    if( args.length < 1 ) { println( usage ); return }
+//    var optionMap = mutable.HashMap.empty[String, String]
+//    var inputs = mutable.ListBuffer.empty[String]
+//    EDASLogManager.isMaster
+//    for( arg <- args ) if(arg(0) == '-') arg match {
+//      case "-m" => optionMap += (( "multi", "true" ))
+//      case x => throw new Exception( "Unrecognized option: " + x )
+//    } else { inputs += arg }
+//    if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
+//
+//    val collectionId = inputs(0).toLowerCase
+//    val subCollectionId = collectionId + "-sub"
+//    val pathFile = new File(inputs(1))
+//    val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(subCollectionId + ".ncml").toFile
+//    if ( ncmlFile.exists ) { throw new Exception("Collection already exists, defined by: " + ncmlFile.toString) }
+//    logger.info(s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
+//    ncmlFile.getParentFile.mkdirs
+//    val ncmlWriter = NCMLWriter(pathFile)
+//    val variableMap = new collection.mutable.HashMap[String,String]()
+//    val varNames: List[String] = ncmlWriter.writeNCML(ncmlFile)
+//    varNames.foreach( vname => variableMap += ( vname -> subCollectionId ) )
+//    writeCollectionDirectory( collectionId, variableMap.toMap )
+//  }
+//}
 
-  def main(args: Array[String]) {
-    if( args.length < 1 ) { println( usage ); return }
-    var optionMap = mutable.HashMap.empty[String, String]
-    var inputs = mutable.ListBuffer.empty[String]
-    EDASLogManager.isMaster
-    for( arg <- args ) if(arg(0) == '-') arg match {
-      case "-m" => optionMap += (( "multi", "true" ))
-      case x => throw new Exception( "Unrecognized option: " + x )
-    } else { inputs += arg }
-    if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
-
-    val collectionId = inputs(0).toLowerCase
-    val subCollectionId = collectionId + "-sub"
-    val pathFile = new File(inputs(1))
-    val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(subCollectionId + ".ncml").toFile
-    if ( ncmlFile.exists ) { throw new Exception("Collection already exists, defined by: " + ncmlFile.toString) }
-    logger.info(s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
-    ncmlFile.getParentFile.mkdirs
-    val ncmlWriter = NCMLWriter(pathFile)
-    val variableMap = new collection.mutable.HashMap[String,String]()
-    val varNames: List[String] = ncmlWriter.writeNCML(ncmlFile)
-    varNames.foreach( vname => variableMap += ( vname -> subCollectionId ) )
-    writeCollectionDirectory( collectionId, variableMap.toMap )
-  }
-}
-
-object CDMultiScanLegacy extends Loggable {
-  def main(args: Array[String]) {
-    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
-    EDASLogManager.isMaster
-    val collectionsMetaFile = new File(args(0))    // If first col == 'mult' then each subdir is treated as a separate collection.
-    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
-    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
-    ncmlDir.mkdirs
-    NCMLWriter.updateNCMLFiles( collectionsMetaFile, ncmlDir )
-  }
-}
+//object CDMultiScanLegacy extends Loggable {
+//  def main(args: Array[String]) {
+//    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
+//    EDASLogManager.isMaster
+//    val collectionsMetaFile = new File(args(0))    // If first col == 'mult' then each subdir is treated as a separate collection.
+//    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
+//    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
+//    ncmlDir.mkdirs
+//    NCMLWriter.updateNCMLFiles( collectionsMetaFile, ncmlDir )
+//  }
+//}
 
 object CDScanTest {
   def main(args: Array[String]) {
