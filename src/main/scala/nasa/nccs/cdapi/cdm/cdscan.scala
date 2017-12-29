@@ -116,6 +116,7 @@ object NCMLWriter extends Loggable {
   def scopeRepeatedVarNames( singleVarMaps: Seq[(String,String)] ): Seq[(String,String)] =
     if( singleVarMaps.size == 1 ) { singleVarMaps }
     else {
+      logger.info(s" %C% scopeRepeatedVarNames: " + singleVarMaps.map( _.toString() ).mkString( ", ") )
       val collIds = singleVarMaps.map( _._2 )
       val commonStr = collIds.fold(collIds.head)( _ intersect _ )
       singleVarMaps.map { case (varId,collId) => ( (collId intersect commonStr) + "." + varId, collId ) }
