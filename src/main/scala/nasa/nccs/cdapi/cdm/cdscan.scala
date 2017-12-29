@@ -188,8 +188,9 @@ object NCMLWriter extends Loggable {
     val variables: List[nc2.Variable] = all_vars.getOrElse( false, List.empty ).toList
     val coord_variables: List[nc2.Variable] = all_vars.getOrElse( true, List.empty ).toList
     val bounds_vars: List[String] = variables flatMap { v => Option( v.findAttributeIgnoreCase("bounds") ) }  map { _.getStringValue }
-    logger.info( s" getVariablesKey: bounds_vars=[ ${bounds_vars.mkString(", ")} ]")
-    variables map { _.getShortName } filterNot { bounds_vars.contains } mkString "-"
+    val vkey = variables map { _.getShortName } filterNot { bounds_vars.contains } mkString "-"
+    logger.info( s" %K% getVariablesKey: bounds_vars = [ ${bounds_vars.mkString(", ")} ], vkey = ${vkey}")
+    vkey
   }
 
   def getPathKey( rootPath: Path, relFilePath: Path ): String = {
