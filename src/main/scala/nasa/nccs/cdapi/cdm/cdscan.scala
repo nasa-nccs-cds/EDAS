@@ -187,14 +187,14 @@ object NCMLWriter extends Loggable {
     logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
     if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
       extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
-    } else if( commonPrefixElems.isEmpty ) { extractCommonString( pathElements ) } else { commonPrefixElems }
+    } else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
   }
 
-  def extractCommonString( pathElements: Iterable[Seq[String]] ): Seq[String] = pathElements.map( elem => commonPrefix(elem) ).toSeq
+  def extractCommonString( pathElements: Iterable[Seq[String]] ): String = commonPrefix( pathElements.map( _.mkString("~") ).toSeq )
 
   def commonPrefix( elems: Seq[String] ): String = {
     val result = elems.foldLeft("")((_,_) => (elems.min.view,elems.max.view).zipped.takeWhile(v => v._1 == v._2).unzip._1.mkString)
-    logger.info(s" %ECP% commonPrefix: ${elems.mkString(",")}; result = ${result}" )
+    logger.info(s" %ECP% commonPrefix: ${elems.mkString(", ")}; result = ${result}" )
     result
   }
 
