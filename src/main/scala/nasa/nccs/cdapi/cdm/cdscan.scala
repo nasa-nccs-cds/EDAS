@@ -117,11 +117,11 @@ object NCMLWriter extends Loggable {
   def scopeRepeatedVarNames( singleVarMaps: Seq[(String,String)] ): Seq[(String,String)] = {
     if (singleVarMaps.size == 1) { singleVarMaps }
     else {
-      val collIds: Seq[Array[String]] = singleVarMaps.map( _._2.split('/') )
+      val collIds: Seq[Array[String]] = singleVarMaps.map( _._2.split('.') )
       logger.info(s" %C% scopeRepeatedVarNames CollIds: " + collIds.map(_.toString()).mkString("; ") )
       val scopeElems: IndexedSeq[Seq[String]] = collIds.head.indices.map( index => collIds.map( a => a(index))).filter( _.groupBy( x => x ).size > 1 )
       val scopes = scopeElems.head.indices.map( index => scopeElems.map( a => a(index) ) ).map (_.mkString("."))
-      val result = singleVarMaps.zipWithIndex map { case (elem, i) => ( scopes(i) + "/" + elem._1, elem._2 ) }
+      val result = singleVarMaps.zipWithIndex map { case (elem, i) => ( scopes(i) + "." + elem._1, elem._2 ) }
       logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}]\n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
       result
     }
@@ -208,7 +208,7 @@ object NCMLWriter extends Loggable {
   def getPathKey( rootPath: Path, relFilePath: Path ): String = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( rootPath.resolve(relFilePath).toString )
     val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
-    variables map { _.getShortName }  mkString "/"
+    variables map { _.getShortName }  mkString "."
   }
 
   def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
