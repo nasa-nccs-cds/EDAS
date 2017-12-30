@@ -118,7 +118,7 @@ object NCMLWriter extends Loggable {
     if (singleVarMaps.size == 1) { singleVarMaps }
     else {
       val collIds: Seq[Array[String]] = singleVarMaps.map( _._2.split('.') )
-      logger.info(s" %C% scopeRepeatedVarNames CollIds: " + collIds.map(_.toString()).mkString("; ") )
+      logger.info(s" %C% scopeRepeatedVarNames CollIds: " + collIds.map(_.mkString("(",", ",")")).mkString("; ") )
       val scopeElems: IndexedSeq[Seq[String]] = collIds.head.indices.map( index => collIds.map( a => a(index))).filter( _.groupBy( x => x ).size > 1 )
       val scopes = scopeElems.head.indices.map( index => scopeElems.map( a => a(index) ) ).map (_.mkString("."))
       val result = singleVarMaps.zipWithIndex map { case (elem, i) => ( scopes(i) + "." + elem._1, elem._2 ) }
