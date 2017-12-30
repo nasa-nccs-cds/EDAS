@@ -215,9 +215,13 @@ object NCMLWriter extends Loggable {
 //  }
 
   def getPathKey( rootPath: Path, relFilePath: Path ): String = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( rootPath.resolve(relFilePath).toString )
-    val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
-    variables map { _.getShortName }  mkString "."
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(rootPath.resolve(relFilePath).toString)
+    try {
+      val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
+      variables map { _.getShortName } mkString "."
+    } finally {
+      ncDataset.close
+    }
   }
 
   def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
@@ -464,23 +468,20 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
 
   def getNCMLVerbose: ( List[String], xml.Node ) = {
     val fileMetadata = FileMetadata(files.head)
-    logger.info( s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n" )
-    val timeRegularSpecs = None //  getTimeSpecs( fileMetadata )
-    println( "Processing %d files with %d workers".format(nFiles, nReadProcessors))
-    val result = <netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
-      <explicit/>
-      <attribute name="title" type="string" value="NetCDF aggregated dataset"/>
+    try {
+      logger.info(s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n")
+      val timeRegularSpecs = None //  getTimeSpecs( fileMetadata )
+      logger.info("Processing %d files with %d workers".format(nFiles, nReadProcessors))
+      val result = <netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
+        <explicit/>
+        <attribute name="title" type="string" value="NetCDF aggregated dataset"/>{for (attribute <- fileMetadata.attributes) yield getAttribute(attribute)}{(for (coordAxis <- fileMetadata.coordinateAxes) yield getDimension(coordAxis)).flatten}{for (variable <- fileMetadata.coordVars) yield getVariable(fileMetadata, variable, timeRegularSpecs)}{for (variable <- fileMetadata.variables) yield getVariable(fileMetadata, variable, timeRegularSpecs)}{getAggregation(fileMetadata, timeRegularSpecs.isDefined)}
 
-      { for( attribute <- fileMetadata.attributes ) yield getAttribute(attribute) }
-      { (for (coordAxis <- fileMetadata.coordinateAxes) yield getDimension(coordAxis)).flatten }
-      { for (variable <- fileMetadata.coordVars) yield getVariable( fileMetadata, variable, timeRegularSpecs ) }
-      { for (variable <- fileMetadata.variables) yield getVariable( fileMetadata, variable, timeRegularSpecs ) }
-      { getAggregation( fileMetadata, timeRegularSpecs.isDefined ) }
-
-    </netcdf>
-    val varNames: List[String] = fileMetadata.variables.map( _.getShortName )
-    fileMetadata.close
-    ( varNames, result )
+      </netcdf>
+      val varNames: List[String] = fileMetadata.variables.map(_.getShortName)
+      (varNames, result)
+    } finally {
+      fileMetadata.close
+    }
   }
 
 //  def defineNewTimeVariable: xml.Node =
@@ -526,9 +527,12 @@ object FileHeader extends Loggable {
   val retryIntervalSecs = 10
   def apply(file: URI, timeRegular: Boolean): FileHeader = {
     val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.openFile(file.toString)
-    val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
-    ncDataset.close()
-    new FileHeader(file.toString, axisValues, boundsValues, timeRegular)
+    try {
+      val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
+      new FileHeader(file.toString, axisValues, boundsValues, timeRegular)
+    } finally {
+      ncDataset.close()
+    }
   }
 
   def factory(files: IndexedSeq[URI], workerIndex: Int): IndexedSeq[FileHeader] = {
@@ -572,17 +576,19 @@ object FileHeader extends Loggable {
 
   def getTimeAxisRegularity(ncFile: URI): Boolean = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncFile.toString)
-    val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
-      case Some(coordAxis) =>
-        coordAxis match {
-          case coordAxis: CoordinateAxis1D => coordAxis.isRegular
-          case _ => throw new Exception( "Time axis of this type not currently supported: " + coordAxis.getClass.getName )
-        }
-      case None =>
-        throw new Exception("ncFile does not have a time axis: " + ncFile)
+    try {
+      Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
+        case Some(coordAxis) =>
+          coordAxis match {
+            case coordAxis: CoordinateAxis1D => coordAxis.isRegular
+            case _ => throw new Exception("Time axis of this type not currently supported: " + coordAxis.getClass.getName)
+          }
+        case None =>
+          throw new Exception("ncFile does not have a time axis: " + ncFile)
+      }
+    } finally {
+      ncDataset.close()
     }
-    ncDataset.close()
-    result
   }
 
   def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): (Array[Long], Array[Double]) = {
@@ -644,9 +650,7 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
   val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable] ) = getVariableLists(ncDataset)
   val attributes: List[nc2.Attribute] = ncDataset.getGlobalAttributes.toList
   val dimNames: List[String] = dimensions.map(NCMLWriter.getName(_))
-
   def close = ncDataset.close()
-
   def getCoordinateAxis(name: String): Option[nc2.dataset.CoordinateAxis] = coordinateAxes.find(p => NCMLWriter.getName(p).equalsIgnoreCase(name))
 
   def getAxisType(variable: nc2.Variable): AxisType = variable match {
