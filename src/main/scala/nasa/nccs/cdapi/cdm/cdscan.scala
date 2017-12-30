@@ -193,9 +193,11 @@ object NCMLWriter extends Loggable {
   def extractCommonString( pathElements: Iterable[Seq[String]] ): Seq[String] = pathElements.map( elem => commonPrefix(elem) ).toSeq
 
   def commonPrefix( elems: Seq[String] ): String = {
-    elems.foldLeft("")((_,_) => (elems.min.view,elems.max.view).zipped.takeWhile(v => v._1 == v._2).unzip._1.mkString)
+    val result = elems.foldLeft("")((_,_) => (elems.min.view,elems.max.view).zipped.takeWhile(v => v._1 == v._2).unzip._1.mkString)
+    logger.info(s" %ECP% commonPrefix: ${elems.mkString(",")}; result = ${result}" )
+    result
   }
-  
+
   def trimCommonNameElements( paths: Iterable[Path] ): Iterable[Path] =
     trimCommonNameElements( trimCommonNameElements( paths.map( _.iterator().map(_.toString).toSeq ) ,false ), true ).map( seq => Paths.get( seq.mkString("/") ) )
 
