@@ -187,7 +187,7 @@ object NCMLWriter extends Loggable {
     logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
     if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
       extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
-    } else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
+    } else { commonPrefixElems } // else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
   }
 
   def extractCommonString( pathElements: Iterable[Seq[String]] ): String = commonPrefix( pathElements.map( _.mkString("~") ).toSeq )
@@ -201,7 +201,7 @@ object NCMLWriter extends Loggable {
   def trimCommonNameElements( paths: Iterable[Path] ): Iterable[Path] =
     trimCommonNameElements( trimCommonNameElements( paths.map( _.iterator().map(_.toString).toSeq ) ,false ), true ).map( seq => Paths.get( seq.mkString("/") ) )
 
-  def getSubCollectionName( paths: Iterable[Path] ): String = extractCommonPrefix( paths.map( _.iterator().map( _.toString).toSeq ) ).mkString(".")
+  def getSubCollectionName( paths: Iterable[Path] ): String = extractCommonPrefix( paths.map( _.iterator().flatMap( _.toString.split("[_.-]")).toSeq ) ).mkString(".")
 
 //  def getVariablesKey( file: File ): String = {
 //    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( file.toString )
