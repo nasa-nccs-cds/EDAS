@@ -94,7 +94,7 @@ object NCMLWriter extends Loggable {
 
   def recursiveListNcFiles( rootPath: Path, optSearchSubDir: Option[Path] = None ): Array[Path] = {
     val children = optSearchSubDir.fold( rootPath )( rootPath.resolve ).toFile.listFiles
-    print( s"\nrecursiveListNcFiles-> root: ${rootPath.toString}, rel: ${optSearchSubDir.fold("")(_.toString)}, children: [ ${children.map(_.toString).mkString(", ")} ]" )
+//    print( s"\nrecursiveListNcFiles-> root: ${rootPath.toString}, rel: ${optSearchSubDir.fold("")(_.toString)}, children: [ ${children.map(_.toString).mkString(", ")} ]" )
     val files = children.filter( isNcDataFile ).map( child => rootPath.relativize( child.toPath  ) )
     files ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( rootPath.relativize(dir.toPath) ) ) )
   }
@@ -106,11 +106,11 @@ object NCMLWriter extends Loggable {
     var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
       val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
-      logger.info(s" %X% Extract SubCollections($collectionId)-> group_key=$group_key, subCol_name=$subCol_name, files=${files.mkString(";")}" )
+//      logger.info(s" %X% Extract SubCollections($collectionId)-> group_key=$group_key, subCol_name=$subCol_name, files=${files.mkString(";")}" )
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
       varNames.map(vname => vname -> subCollectionId)
     }
-    logger.info(s" %C% extractSubCollections varMap: " + varMap.map(_.toString()).mkString("; ") )
+//    logger.info(s" %C% extractSubCollections varMap: " + varMap.map(_.toString()).mkString("; ") )
     val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 } .values.map( scopeRepeatedVarNames ).toSeq.flatten
     writeCollectionDirectory( collectionId, Map( contextualizedVarMap:_* ) )
   }
@@ -119,11 +119,11 @@ object NCMLWriter extends Loggable {
     if (singleVarMaps.size == 1) { singleVarMaps }
     else {
       val collIds: Seq[Array[String]] = singleVarMaps.map( _._2.split('-').last.split('.') )
-      logger.info(s" %C% scopeRepeatedVarNames CollIds: " + collIds.map(_.mkString("(",", ",")")).mkString("; ") )
+//      logger.info(s" %C% scopeRepeatedVarNames CollIds: " + collIds.map(_.mkString("(",", ",")")).mkString("; ") )
       val scopeElems: IndexedSeq[Seq[String]] = collIds.head.indices.map( index => collIds.map( a => a(index))).filter( _.groupBy( x => x ).size > 1 )
       val scopes = scopeElems.head.indices.map( index => scopeElems.map( a => a(index) ) ).map (_.mkString("."))
-      val result = singleVarMaps.zipWithIndex map { case (elem, i) => ( scopes(i) + "." + elem._1, elem._2 ) }
-      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}]\n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
+      val result = singleVarMaps.zipWithIndex map { case (elem, i) => ( scopes(i) + "/" + elem._1, elem._2 ) }
+//      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}]\n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
       result
     }
   }
@@ -184,7 +184,7 @@ object NCMLWriter extends Loggable {
   def extractCommonPrefix( pathElements: Iterable[Seq[String]], commonPrefixElems: Seq[String] = Seq.empty ): Seq[String] = if( pathElements.size < 2 ) {
     commonPrefixElems
   } else {
-    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
+//    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
     if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
       extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
     } else { commonPrefixElems } // else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
