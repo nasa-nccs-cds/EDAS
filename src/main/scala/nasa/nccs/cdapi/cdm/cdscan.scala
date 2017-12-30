@@ -184,12 +184,18 @@ object NCMLWriter extends Loggable {
   def extractCommonPrefix( pathElements: Iterable[Seq[String]], commonPrefixElems: Seq[String] = Seq.empty ): Seq[String] = if( pathElements.size < 2 ) {
     commonPrefixElems
   } else {
-    logger.info(s" %X% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
+    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
     if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
       extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
-    } else { commonPrefixElems }
+    } else if( commonPrefixElems.isEmpty ) { extractCommonString( pathElements ) } else { commonPrefixElems }
   }
 
+  def extractCommonString( pathElements: Iterable[Seq[String]] ): Seq[String] = pathElements.map( elem => commonPrefix(elem) ).toSeq
+
+  def commonPrefix( elems: Seq[String] ): String = {
+    elems.foldLeft("")((_,_) => (elems.min.view,elems.max.view).zipped.takeWhile(v => v._1 == v._2).unzip._1.mkString)
+  }
+  
   def trimCommonNameElements( paths: Iterable[Path] ): Iterable[Path] =
     trimCommonNameElements( trimCommonNameElements( paths.map( _.iterator().map(_.toString).toSeq ) ,false ), true ).map( seq => Paths.get( seq.mkString("/") ) )
 
