@@ -13,6 +13,7 @@ export WPS_CMD="$CDWPS_HOME_DIR/target/universal/cdwps-1.1-SNAPSHOT/bin/cdwps $E
 export CDSHELL_CMD="$CDSHELL_HOME_DIR/target/universal/stage/bin/edasclientconsole $EDAS_JAVA_ARGS"
 export PATH=${HOME}/.edas/sbin:${EDAS_STAGE_DIR}/bin:${EDAS_BIN_DIR}:${PATH}
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
+export SBT_OPTS="-Xmx2G -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -Xss2M -Duser.timezone=GMT"
 
 alias edas='cd $EDAS_HOME_DIR'
 alias cdist='cd $CDWPS_HOME_DIR; sbt dist; cd target/universal/; rm -rf cdwps-*-SNAPSHOT; unzip *.zip; cd ../..; chmod -R a+rwX target; chmod -R a+rX ../CDWPS'

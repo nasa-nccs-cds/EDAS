@@ -121,11 +121,16 @@ object NCMLWriter extends Loggable {
       val collIds: Seq[Array[String]] = singleVarMaps.map( _._2.split('-').last.split('.') )
 //      logger.info(s" %C% scopeRepeatedVarNames CollIds: " + collIds.map(_.mkString("(",", ",")")).mkString("; ") )
       val scopeElems: IndexedSeq[Seq[String]] = collIds.head.indices.map( index => collIds.map( a => a(index))).filter( _.groupBy( x => x ).size > 1 )
-      val scopes = scopeElems.head.indices.map( index => scopeElems.map( a => a(index) ) ).map (_.mkString("."))
+      val scopes: IndexedSeq[String] = getScopes(scopeElems)
       val result = singleVarMaps.zipWithIndex map { case (elem, i) => ( scopes(i) + "/" + elem._1, elem._2 ) }
 //      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}]\n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
       result
     }
+  }
+
+  def getScopes( scopeElems: IndexedSeq[Seq[String]] ): IndexedSeq[String] = {
+//    scopeElems.head.indices.map( index => scopeElems.map( a => a(index) ) ).map (_.mkString("."))
+    scopeElems.map (_.mkString("."))
   }
 
 
@@ -187,7 +192,7 @@ object NCMLWriter extends Loggable {
 //    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
     if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
       extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
-    } else { commonPrefixElems } // else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
+    } else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
   }
 
   def extractCommonString( pathElements: Iterable[Seq[String]] ): String = commonPrefix( pathElements.map( _.mkString("~") ).toSeq )
