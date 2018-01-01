@@ -429,6 +429,21 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for Max")
   }
 
+  test("giss-ave-dap") {
+    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/CMIP5/ESGF/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0","cache":"false"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"tyx"}]]"""
+    val result_node = executeTest(datainputs)
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkDataString(", ") )
+  }
+
+  test("giss-ss-ave-dap") {
+    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/CMIP5/ESGF/GISS/historical/E2-H_historical_r1i1p1/tas_Amon_GISS-E2-H_historical_r1i1p1_185001-190012.nc","name":"tas:v1","domain":"d0","cache":"false"}],operation=[{"name":"SparkSQL.ave","input":"v1","domain":"d0","axes":"tyx"}]]"""
+    val result_node = executeTest(datainputs)
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkDataString(", ") )
+  }
+
+
   test("anomaly")  { if(test_binning) {
     val datainputs = s"""[domain=[{"name":"d0","lat":{"start":40,"end":50,"system":"values"},"lon":{"start":10,"end":10,"system":"values"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.binAve","input":"v1","domain":"d0","axes":"yt","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]"""
     val result_node = executeTest( datainputs )

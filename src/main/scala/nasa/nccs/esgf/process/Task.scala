@@ -931,7 +931,8 @@ object DataContainer extends ContainerBase {
         //       if (!path.isEmpty) { assert(absPath(path).equals(absPath(collection.dataPath)), "Collection %s already exists and its path (%s) does not correspond to the specified path (%s)".format(collection.id, collection.dataPath, path)) }
         (Some(collection), fragIdOpt)
       case None =>
-        throw new Exception( s" The collection ${colId} is not yet available." )
+       logger.warn( s" The collection ${colId} is not yet available." )
+        (None, fragIdOpt)
     }
   }
 
