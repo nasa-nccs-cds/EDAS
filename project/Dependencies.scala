@@ -57,7 +57,7 @@ object Dependencies {
 
   val jackson = Seq( jacksonCore, jacksonDatabind, jacksonModule )
 
-  val spark = Seq( sparkCore, sparkStreaming, sparkMLLib )
+  val spark = Seq( sparkCore, sparkStreaming, sparkMLLib, sparkSQL )
 
   val cache = Seq( concurrentlinkedhashmap )
 
