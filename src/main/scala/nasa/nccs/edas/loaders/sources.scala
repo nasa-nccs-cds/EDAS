@@ -309,13 +309,14 @@ object Collections extends XmlResource with Loggable {
   }
 
   def addMetaCollection(  id: String, collectionFilePath: String ): Option[Collection] = try {
-    assert( collectionFilePath.endsWith(".csv"), "Error, invalid path for meta collection: " + collectionFilePath )
-    val vars = for( line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim) ) yield elems.head
-    val collection = new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList )
-    addSubCollections( collectionFilePath, collection.grid )
-    _datasets.put( id, collection  )
-    //    persistLocalCollections()
-    Some(collection)
+    if( ! _datasets.containsKey(id) ) {
+      assert(collectionFilePath.endsWith(".csv"), "Error, invalid path for meta collection: " + collectionFilePath)
+      val vars = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head
+      val collection = new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList)
+      addSubCollections(collectionFilePath, collection.grid)
+      _datasets.put( id, collection )
+      Some(collection)
+    } else { None }
   } catch {
     case err: Exception =>
       logger.error( s"Error reading collection ${id} from ncml ${collectionFilePath}: ${err.toString}" )
@@ -323,7 +324,7 @@ object Collections extends XmlResource with Loggable {
   }
 
   def addSubCollection(  id: String, collectionFilePath: String, grid: CDGrid ): Option[Collection] = try {
-    if( ! _datasets.keys.contains(id) ) {
+    if( ! _datasets.containsKey(id) ) {
       logger.info(s" ---> Loading sub collection $id")
       val collection = createCollection(id, collectionFilePath, grid)
       _datasets.put(id, collection)
