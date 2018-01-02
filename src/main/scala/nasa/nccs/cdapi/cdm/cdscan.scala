@@ -222,7 +222,7 @@ object NCMLWriter extends Loggable {
 //  }
 
   def getPathKey( rootPath: Path, relFilePath: Path ): String = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(rootPath.resolve(relFilePath).toString)
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(rootPath.resolve(relFilePath).toString, 1.toString )
     try {
       val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
       variables map { _.getShortName } mkString "."
@@ -533,7 +533,7 @@ object FileHeader extends Loggable {
   val maxOpenAttempts = 1
   val retryIntervalSecs = 10
   def apply(file: URI, timeRegular: Boolean): FileHeader = {
-    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.openFile(file.toString)
+    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.openFile(file.toString, 2.toString)
     try {
       val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
       new FileHeader(file.toString, axisValues, boundsValues, timeRegular)
@@ -582,7 +582,7 @@ object FileHeader extends Loggable {
   }
 
   def getTimeAxisRegularity(ncFile: URI): Boolean = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncFile.toString)
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile(ncFile.toString, 3.toString)
     try {
       Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
         case Some(coordAxis) =>
@@ -636,7 +636,7 @@ class FileHeader(val filePath: String,
 
 object FileMetadata extends Loggable {
   def apply(file: URI): FileMetadata = {
-    val dataset  = NetcdfDatasetMgr.openFile(file.toString)
+    val dataset  = NetcdfDatasetMgr.openFile(file.toString, 4.toString)
     new FileMetadata(dataset)
   }
   def getVariableLists(ncDataset: NetcdfDataset): ( List[nc2.Variable], List[nc2.Variable] ) = {
