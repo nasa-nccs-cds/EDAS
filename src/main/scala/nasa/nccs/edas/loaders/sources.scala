@@ -323,11 +323,12 @@ object Collections extends XmlResource with Loggable {
   }
 
   def addSubCollection(  id: String, collectionFilePath: String, grid: CDGrid ): Option[Collection] = try {
-    logger.info( s" ---> Loading sub collection $id" )
-    val collection = createCollection( id, collectionFilePath, grid )
-    _datasets.put( id, collection  )
-    //    persistLocalCollections()
-    Some(collection)
+    if( ! _datasets.keys.contains(id) ) {
+      logger.info(s" ---> Loading sub collection $id")
+      val collection = createCollection(id, collectionFilePath, grid)
+      _datasets.put(id, collection)
+      Some(collection)
+    } else { None }
   } catch {
     case err: Exception =>
       logger.error( s"Error reading collection ${id} from ncml ${collectionFilePath}: ${err.toString}" )

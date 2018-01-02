@@ -13,9 +13,6 @@ import org.apache.spark.sql.{ Dataset, Column, Encoders }
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.StructType
 
-/**
-  * Created by tpmaxwel on 1/1/18.
-  */
 class SQLKernel extends Kernel {
   override val status = KernelStatus.restricted
   val inputs = List(WPSDataInput("input variable", 1, 1))
@@ -26,8 +23,8 @@ class SQLKernel extends Kernel {
 
   override def execute( workflow: Workflow, input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
     val options: EDASOptions = new EDASOptions( Array.empty )
-    val rowRdd: RDD[Float] = input.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
-    val dataset: Dataset[Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )(Encoders.scalaFloat)
+    val rowRdd: RDD[java.lang.Float] = input.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
+    val dataset: Dataset[java.lang.Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )(Encoders.FLOAT)
     val aveCol: Column = avg( dataset.col("value") )
     logger.info( "Computed ave" )
     ( RecordKey.empty, RDDRecord.empty )
