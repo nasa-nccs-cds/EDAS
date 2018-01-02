@@ -303,8 +303,8 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
     }
   }
 
-  def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = {
-    val gridDS = NetcdfDatasetMgr.openFile(gridFilePath, 7.toString)
+  def getTimeCoordinateAxis(context: String): Option[CoordinateAxis1DTime] = {
+    val gridDS = NetcdfDatasetMgr.openFile(gridFilePath, context )
     try {
       val axisOpt = Option( gridDS.findCoordinateAxis( AxisType.Time ) )
       axisOpt.map( axis => {

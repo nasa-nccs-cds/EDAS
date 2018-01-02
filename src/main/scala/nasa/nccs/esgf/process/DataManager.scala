@@ -555,10 +555,10 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
   def toXml: xml.Elem = <grid> { axes.map(_.toXml) } </grid>
   def getGridSpec: String  = grid.getGridSpec
   def getGridFile: String  = grid.getGridFile
-  def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = grid.getTimeCoordinateAxis
+  def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = grid.getTimeCoordinateAxis( "getTime")
   //  def getCalendarDate ( idx: Int ): CalendarDate = grid.getTimeCoordinateAxis match { case Some(axis) => axis.getCalendarDate(idx); case None => throw new Exception( "Can't get the time axis for grid " + grid.name ) }
 
-  def getCalendarDate ( idx: Int ): CalendarDate = grid.getTimeCoordinateAxis match {
+  def getCalendarDate ( idx: Int ): CalendarDate = grid.getTimeCoordinateAxis("getDate") match {
     case Some(axis) =>
       val testdate = axis.getCalendarDate(0);
       try { axis.getCalendarDate(idx); }
@@ -570,7 +570,7 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
       throw new Exception("Can't get time axis for grid " + grid.name)
   }
 
-  def getTimeRange: RecordKey = grid.getTimeCoordinateAxis match {
+  def getTimeRange: RecordKey = grid.getTimeCoordinateAxis("getTimeRange") match {
     case Some(axis) =>
       val ( t0, t1 ) = ( axis.getCalendarDate(0), axis.getCalendarDate( axis.getSize.toInt-1 ) )
       RecordKey( t0.getMillis/1000, t1.getMillis/1000, 0, axis.getSize.toInt )
