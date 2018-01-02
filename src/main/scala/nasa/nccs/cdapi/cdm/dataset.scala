@@ -83,7 +83,7 @@ object CDGrid extends Loggable {
   }
 
   def create(name: String, gridFilePath: String): CDGrid = {
-    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 5.toString)
+    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 5.toString, true)
     val coordSystems: List[CoordinateSystem] = gridDS.getCoordinateSystems.toList
     val dset_attributes: List[nc2.Attribute] = gridDS.getGlobalAttributes.map(a => {
       new nc2.Attribute(name + "--" + a.getFullName, a)
@@ -288,7 +288,7 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
   def getGridFile: String = "file://" + gridFilePath
 
   def findCoordinateAxis(name: String): Option[CoordinateAxis] = {
-    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 6.toString)
+    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 6.toString, true)
     try {
       val axisOpt = Option( gridDS.findCoordinateAxis( name ) )
       axisOpt.map( axis => {
@@ -327,7 +327,7 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
 
 
   def findCoordinateAxis( atype: AxisType ): Option[CoordinateAxis] = {
-    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 8.toString)
+    val gridDS = NetcdfDatasetMgr.aquireFile( gridFilePath, 8.toString, true )
     try {
       Option( gridDS.findCoordinateAxis( atype ) ).map( axis => {
         if (precache) { axis.setCaching(true); axis.read() }
@@ -342,7 +342,7 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
   }
 
   def getVariable( varShortName: String ): ( Int, nc2.Variable ) = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile( gridFilePath, 9.toString )
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile( gridFilePath, 9.toString, true )
     val numDataFiles: Int = ncDataset.findGlobalAttribute("NumDataFiles").getNumericValue.intValue()
     val variables = ncDataset.getVariables.toList
     variables.find ( v => (v.getShortName equals varShortName) ) match {
@@ -394,7 +394,7 @@ class Collection( val ctype: String, val id: String, val uri: String, val fileFi
     ) ++ grid.attributes
 
   def generateAggregation(): xml.Elem = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(grid.gridFilePath, 10.toString)
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(grid.gridFilePath, 10.toString, true)
     try {
       _aggCollection(ncDataset)
     } catch {
