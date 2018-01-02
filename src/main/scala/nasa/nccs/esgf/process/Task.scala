@@ -545,10 +545,10 @@ class DataFragmentSpec(val uid: String = "",
       case Some(grid) =>
         val trange = roi.getRange(0)
         val start = trange.first()
-        val startDate = grid.getCalendarDate(start)
+        val startDate = grid.getCalendarDate(start,"getPartitionKey")
         val startTime = startDate.getMillis / 1000
         val end = trange.last()
-        val endDate = grid.getCalendarDate(end)
+        val endDate = grid.getCalendarDate(end,"getPartitionKey")
         val endTime = endDate.getMillis / 1000
         RecordKey(startTime, endTime, start, end-start )
     case None => throw new Exception( "Missing target grid ")

@@ -558,7 +558,7 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
   def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = grid.getTimeCoordinateAxis( "getTime")
   //  def getCalendarDate ( idx: Int ): CalendarDate = grid.getTimeCoordinateAxis match { case Some(axis) => axis.getCalendarDate(idx); case None => throw new Exception( "Can't get the time axis for grid " + grid.name ) }
 
-  def getCalendarDate ( idx: Int ): CalendarDate = grid.getTimeCoordinateAxis("getDate") match {
+  def getCalendarDate ( idx: Int, context: String ): CalendarDate = grid.getTimeCoordinateAxis(context) match {
     case Some(axis) =>
       val testdate = axis.getCalendarDate(0);
       try { axis.getCalendarDate(idx); }
@@ -696,7 +696,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
   def getGridFile: String  = grid.getGridFile
   def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = grid.getTimeCoordinateAxis
   def getTimeUnits: String  = grid.getTimeCoordinateAxis match { case Some(timeAxis) => timeAxis.getUnitsString; case None => "" }
-  def getCalendarDate ( idx: Int ): CalendarDate = grid.getCalendarDate(idx)
+  def getCalendarDate ( idx: Int, context: String ): CalendarDate = grid.getCalendarDate(idx,context)
 
   def addSectionMetadata( section: ma2.Section ): ma2.Section = grid.addRangeNames( section )
 

@@ -184,13 +184,13 @@ abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int,
 
   def getPartitionRecordKey(grid: TargetGrid ): RecordKey = {
     val start = origin(0)+startIndex
-    val startDate = grid.getCalendarDate(start)
+    val startDate = grid.getCalendarDate(start,"getPartitionRecordKey")
     val startDateStr = startDate.toString
     val startTime = startDate.getMillis/1000
     val end = Math.min( start+partSize, grid.shape(0)-1 )
-    val endDate = grid.getCalendarDate(end)
+    val endDate = grid.getCalendarDate(end,"getPartitionRecordKey")
     val endDateStr = endDate.toString
-    val endTime =  grid.getCalendarDate(end).getMillis/1000
+    val endTime =  grid.getCalendarDate(end,"getPartitionRecordKey").getMillis/1000
     RecordKey( startTime, endTime, startIndex, partSize )
   }
 
@@ -228,13 +228,13 @@ class RegularPartition( index: Int,  dimIndex: Int,  startIndex: Int,  partSize:
 
   override def getRecordKey( iRecord: Int, grid: TargetGrid ): RecordKey = {
     val start = recordStartIndex(iRecord)
-    val startDate = grid.getCalendarDate(start)
+    val startDate = grid.getCalendarDate(start,"RegularPartition-getRecordKey")
     val startDateStr = startDate.toString
     val startTime = startDate.getMillis/1000
     val end = Math.min( start+recordSize, grid.shape(0)-1 )
-    val endDate = grid.getCalendarDate(end)
+    val endDate = grid.getCalendarDate(end,"RegularPartition-getRecordKey")
     val endDateStr = endDate.toString
-    val endTime =  grid.getCalendarDate(end).getMillis/1000
+    val endTime =  grid.getCalendarDate(end,"RegularPartition-getRecordKey").getMillis/1000
     RecordKey( startTime, endTime, startIndex, recordSize )
   }
 
@@ -253,13 +253,13 @@ class FilteredPartition(index: Int, dimIndex: Int, startIndex: Int, partSize: In
 
   override def getRecordKey( iRecord: Int, grid: TargetGrid ): RecordKey = {
     val record = records(iRecord)
-    val startDate = grid.getCalendarDate(record.first)
+    val startDate = grid.getCalendarDate(record.first,"FilteredPartition-getRecordKey")
     val startDateStr = startDate.toString
     val startTime = startDate.getMillis/1000
     val end = Math.min( record.last+1, grid.shape(0)-1 )
-    val endDate = grid.getCalendarDate(end)
+    val endDate = grid.getCalendarDate(end,"FilteredPartition-getRecordKey")
     val endDateStr = endDate.toString
-    val endTime =  grid.getCalendarDate(end).getMillis/1000
+    val endTime =  grid.getCalendarDate(end,"FilteredPartition-getRecordKey").getMillis/1000
     RecordKey( startTime, endTime, record.first, record.length )
   }
 }
