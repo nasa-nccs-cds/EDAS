@@ -106,11 +106,11 @@ object NCMLWriter extends Loggable {
     var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
       val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
-//      logger.info(s" %X% Extract SubCollections($collectionId)-> group_key=$group_key, subCol_name=$subCol_name, files=${files.mkString(";")}" )
+      logger.info(s" %X% Extract SubCollections($collectionId)-> group_key=$group_key, subCol_name=$subCol_name, files=${files.mkString(";")}" )
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
       varNames.map(vname => vname -> subCollectionId)
     }
-//    logger.info(s" %C% extractSubCollections varMap: " + varMap.map(_.toString()).mkString("; ") )
+    logger.info(s" %C% extractSubCollections varMap: " + varMap.map(_.toString()).mkString("; ") )
     val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 } .values.map( scopeRepeatedVarNames ).toSeq.flatten
     writeCollectionDirectory( collectionId, Map( contextualizedVarMap:_* ) )
   }
@@ -191,7 +191,7 @@ object NCMLWriter extends Loggable {
   def extractCommonPrefix( pathElements: Iterable[Seq[String]], commonPrefixElems: Seq[String] = Seq.empty ): Seq[String] = if( pathElements.size < 2 ) {
     commonPrefixElems
   } else {
-//    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
+    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
     if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
       extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
     } else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
