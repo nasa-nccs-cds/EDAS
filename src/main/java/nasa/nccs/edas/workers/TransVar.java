@@ -45,7 +45,7 @@ public class TransVar {
     public float getInvalid() throws IOException {
         String gridfile = _metadata.get("gridfile");
         String name = _metadata.get("name");
-        NetcdfDataset ncd = NetcdfDatasetMgr.openFile(gridfile, "16" );
+        NetcdfDataset ncd = NetcdfDatasetMgr.aquireFile(gridfile, "16" );
         Variable var = ncd.findVariable(null,name);
         Attribute missing = var.findAttribute("missing_value");
         return missing.getNumericValue().floatValue();

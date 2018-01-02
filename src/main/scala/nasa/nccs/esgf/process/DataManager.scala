@@ -392,7 +392,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   def getUnits: String =  coordAxis.getUnitsString // coordAxis.getAxisType match { case AxisType.Time => cdsutils.baseTimeUnits case x => coordAxis.getUnitsString }
 
   def getTimeAxis: CoordinateAxis1DTime = {
-    val gridDS = NetcdfDatasetMgr.openFile( grid.gridFilePath, 17.toString )
+    val gridDS = NetcdfDatasetMgr.aquireFile( grid.gridFilePath, 17.toString )
     CoordinateAxis1DTime.factory( gridDS, coordAxis, new java.util.Formatter() )
   }
 

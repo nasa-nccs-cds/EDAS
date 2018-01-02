@@ -105,7 +105,7 @@ object TimeCycleSorter {
 
 class TimeSpecs( val input_data: HeapFltArray, val startIndex: Int ) extends Loggable {
   logger.info( "\n    *************>>>>>>>>>>> Opening gridSpec: " + input_data.gridSpec )
-  private val __gridDS: NetcdfDataset = NetcdfDatasetMgr.openFile( input_data.gridSpec, 12.toString )
+  private val __gridDS: NetcdfDataset = NetcdfDatasetMgr.aquireFile( input_data.gridSpec, 12.toString )
   val timeAxis = CoordinateAxis1DTime.factory( __gridDS, __gridDS.findCoordinateAxis(AxisType.Time), new Formatter())
   val dateList: IndexedSeq[CalendarDate] = timeAxis.section( new ma2.Range( startIndex, startIndex + input_data.shape(0)-1 ) ).getCalendarDates.toIndexedSeq
   val dateRange = ( timeAxis.getCalendarDate(0), timeAxis.getCalendarDate( timeAxis.getSize.toInt-1 ) )
