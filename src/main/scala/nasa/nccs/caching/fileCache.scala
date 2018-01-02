@@ -182,15 +182,15 @@ abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int,
   def nRecords: Int
   def recordStartIndex(iRecord: Int): Int
 
-  def getPartitionRecordKey(grid: TargetGrid ): RecordKey = {
+  def getPartitionRecordKey(grid: TargetGrid, context: String ): RecordKey = {
     val start = origin(0)+startIndex
-    val startDate = grid.getCalendarDate(start,"getPartitionRecordKey")
+    val startDate = grid.getCalendarDate(start, context + "-start")
     val startDateStr = startDate.toString
     val startTime = startDate.getMillis/1000
     val end = Math.min( start+partSize, grid.shape(0)-1 )
-    val endDate = grid.getCalendarDate(end,"getPartitionRecordKey")
+    val endDate = grid.getCalendarDate(end, context + "-end" )
     val endDateStr = endDate.toString
-    val endTime =  grid.getCalendarDate(end,"getPartitionRecordKey").getMillis/1000
+    val endTime =  endDate.getMillis/1000
     RecordKey( startTime, endTime, startIndex, partSize )
   }
 
