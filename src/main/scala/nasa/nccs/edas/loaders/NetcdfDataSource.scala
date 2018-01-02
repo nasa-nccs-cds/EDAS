@@ -8,7 +8,6 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types._
-import java.lang.Float
 import scala.collection.immutable.TreeMap
 import org.apache.spark.sql.types.{ FloatType, IntegerType, ShortType, ByteType, ArrayType }
 
@@ -65,7 +64,7 @@ class RDDSimpleRecordConverter( record: RDDRecord, options: EDASOptions ) extend
 
   def next() : Float = {
     val value = inputs.head._2.array.getFloat(rowIndex)
-    if(value == missing) null else value
+    if(value == missing) Float.NaN else value
   }
 
   def inferSchema( rec: RDDRecord ): StructType = new StructType( Array( new StructField("value",FloatType,false) ) ) // { FloatType, IntegerType, ShortType, ArrayType, ByteType, DateType, StringType, TimestampType }
