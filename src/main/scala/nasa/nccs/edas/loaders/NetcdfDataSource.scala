@@ -10,16 +10,16 @@ import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types._
 import java.lang.Float
 import scala.collection.immutable.TreeMap
-import org.apache.spark.sql.types.DataTypes
+import org.apache.spark.sql.types.{ FloatType, IntegerType, ShortType, ByteType, ArrayType }
 
 case class EDASOptions( inputs: Array[String] ) {}
 
 object RDDRecordConverter {
   def apply( keyVal: (RecordKey,RDDRecord), options: EDASOptions ) = new RDDRecordConverter( keyVal._2, options )
-  def genericSchema: StructType = new StructType( Array( new StructField("index",DataTypes.IntegerType,false), new StructField("value",DataTypes.FloatType,false) ) )
+  def defaultSchema: StructType = new StructType( Array( new StructField("index",IntegerType,false), new StructField("value",FloatType,false) ) )
 }
 
-class RDDRecordConverter( record: RDDRecord, options: EDASOptions ) extends Iterator[GenericInternalRow] with Loggable {
+class RDDRecordConverter( record: RDDRecord, options: EDASOptions ) extends Iterator[Row] with Loggable {
   val schema: StructType= inferSchema( record )
   private val row = new GenericInternalRow(schema.length)
   private val input_arrays: Seq[(String,HeapFltArray)] = options.inputs.map( id => id -> record.findElements(id).head )
@@ -33,20 +33,20 @@ class RDDRecordConverter( record: RDDRecord, options: EDASOptions ) extends Iter
     rowIndex == dataSize
   }
 
-  def next() : GenericInternalRow = {
+  def next() : Row = {
     val value = inputs.head._2.array.getFloat(rowIndex)
     row(1) = if(value == missing) null else value
     row(0) = rowIndex
     rowIndex = rowIndex + 1
-    row
+    row.asInstanceOf[Row]
   }
 
-  def inferSchema( rec: RDDRecord ): StructType = new StructType( Array( new StructField("index",DataTypes.IntegerType,false), new StructField("value",DataTypes.FloatType,false) ) ) // { FloatType, IntegerType, ShortType, ArrayType, ByteType, DateType, StringType, TimestampType }
+  def inferSchema( rec: RDDRecord ): StructType = new StructType( Array( new StructField("index",IntegerType,false), new StructField("value",FloatType,false) ) ) // { FloatType, IntegerType, ShortType, ArrayType, ByteType, DateType, StringType, TimestampType }
 }
 
 object RDDSimpleRecordConverter {
   def apply( keyVal: (RecordKey,RDDRecord), options: EDASOptions ) = new RDDSimpleRecordConverter( keyVal._2, options )
-  def genericSchema: StructType = new StructType( Array( new StructField("value",DataTypes.FloatType,false) ) )
+  def genericSchema: StructType = new StructType( Array( new StructField("value",FloatType,false) ) )
 }
 
 class RDDSimpleRecordConverter( record: RDDRecord, options: EDASOptions ) extends Iterator[Float] with Loggable {
@@ -68,14 +68,14 @@ class RDDSimpleRecordConverter( record: RDDRecord, options: EDASOptions ) extend
     if(value == missing) null else value
   }
 
-  def inferSchema( rec: RDDRecord ): StructType = new StructType( Array( new StructField("value",DataTypes.FloatType,false) ) ) // { FloatType, IntegerType, ShortType, ArrayType, ByteType, DateType, StringType, TimestampType }
+  def inferSchema( rec: RDDRecord ): StructType = new StructType( Array( new StructField("value",FloatType,false) ) ) // { FloatType, IntegerType, ShortType, ArrayType, ByteType, DateType, StringType, TimestampType }
 }
 
 
-class RDDRecordsConverter( inputs: Iterator[(RecordKey,RDDRecord)], options: EDASOptions ) extends Iterator[GenericInternalRow] with Loggable {
-  val iterator = inputs.foldLeft(Iterator[GenericInternalRow]()) { case ( baseIter, newKeyVal ) => baseIter ++ RDDRecordConverter(newKeyVal,options) }
+class RDDRecordsConverter( inputs: Iterator[(RecordKey,RDDRecord)], options: EDASOptions ) extends Iterator[Row] with Loggable {
+  val iterator = inputs.foldLeft(Iterator[Row]()) { case ( baseIter, newKeyVal ) => baseIter ++ RDDRecordConverter(newKeyVal,options) }
   def hasNext : scala.Boolean = iterator.hasNext
-  def next() : GenericInternalRow = iterator.next
+  def next() : Row = iterator.next
 
 }
 
