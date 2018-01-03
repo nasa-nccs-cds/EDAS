@@ -103,7 +103,7 @@ object NCMLWriter extends Loggable {
 
   def extractSubCollections( collectionId: String, dataLocation: Path, options: Map[String,String] = Map.empty ): Unit = {
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
-    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
+//    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
     val bifurDepth: Int = options.getOrDefault("depth","0").toInt
     val nameTemplate: Regex = options.getOrDefault("template",".*").r
@@ -114,7 +114,7 @@ object NCMLWriter extends Loggable {
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
       varNames.map(vname => vname -> subCollectionId)
     }
-    logger.info(s" %C% extractSubCollections varMap: " + varMap.map(_.toString()).mkString("; ") )
+//    logger.info(s" %C% extractSubCollections varMap: " + varMap.map(_.toString()).mkString("; ") )
     val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 } .values.map( scopeRepeatedVarNames ).toSeq.flatten
     writeCollectionDirectory( collectionId, Map( contextualizedVarMap:_* ) )
   }
@@ -125,11 +125,11 @@ object NCMLWriter extends Loggable {
     if (singleVarMaps.size == 1) { singleVarMaps }
     else {
       val collIds: Seq[Array[String]] = singleVarMaps.map( _._2.split('-').last.split('.') )
-      logger.info(s" %C% scopeRepeatedVarNames CollIds: " + collIds.map(_.mkString("(",", ",")")).mkString("; ") )
+//      logger.info(s" %C% scopeRepeatedVarNames CollIds: " + collIds.map(_.mkString("(",", ",")")).mkString("; ") )
       val scopeElems: IndexedSeq[Seq[String]] = collIds.head.indices.map( index => collIds.map( a => a(index))).filter( _.groupBy( x => x ).size > 1 )
       val scopes: Map[Int,String] = Map( getScopes(scopeElems).zipWithIndex map { case (elem, i) => (i -> elem) }: _* )
       val result = singleVarMaps.zipWithIndex map { case (elem, i) => ( scopes.getOrElse(i,rid()) + "/" + elem._1, elem._2 ) }
-      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}]\n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
+//      logger.info(s" %C% scopeRepeatedVarNames[${singleVarMaps.size}]\n\tINPUT: [${singleVarMaps.map(_.toString()).mkString(", ")}] \n\tRESULT: ${result.map(_.toString()).mkString(", ")}" )
       result
     }
   }
@@ -182,7 +182,7 @@ object NCMLWriter extends Loggable {
   def getPathGroups(rootPath: Path, relFilePaths: Seq[Path], bifurDepth: Int, nameTemplate: Regex ): Seq[(String,(String,Array[Path]))] = {
     val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[Path]]
     relFilePaths.foreach(df => groupMap.getOrElseUpdate(getPathKey(rootPath, df), mutable.ListBuffer.empty[Path]) += df)
-    logger.info(s" %X% relFilePaths: \n\t ----> ${groupMap.mapValues(_.map(_.toString).mkString("[",",","]")).mkString("\n\t ----> ")} " )
+//    logger.info(s" %X% relFilePaths: \n\t ----> ${groupMap.mapValues(_.map(_.toString).mkString("[",",","]")).mkString("\n\t ----> ")} " )
     if( bifurDepth == 0 ) {
       groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
     } else {
@@ -204,7 +204,7 @@ object NCMLWriter extends Loggable {
       if( isCommon(index) ) { if (keepCommon) Some(name) else None }
       else { if (keepCommon) None else Some(name) } }
     )
-    logger.info(s" %X% dropCommonElements: isCommon=[${isCommon.mkString(";")}] paths=[${paths.mkString(";")}] result=[${result.map(_.mkString("/")).mkString(";")}]")
+//    logger.info(s" %X% dropCommonElements: isCommon=[${isCommon.mkString(";")}] paths=[${paths.mkString(";")}] result=[${result.map(_.mkString("/")).mkString(";")}]")
     result
   }
 
@@ -218,7 +218,7 @@ object NCMLWriter extends Loggable {
   def extractCommonPrefix( pathElements: Iterable[Seq[String]], commonPrefixElems: Seq[String] = Seq.empty ): Seq[String] = if( pathElements.size < 2 ) {
     commonPrefixElems
   } else {
-    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
+//    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
     if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
       extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
     } else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
