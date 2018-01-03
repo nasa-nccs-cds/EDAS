@@ -186,7 +186,7 @@ object NCMLWriter extends Loggable {
       groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
     } else {
       val discGroupMap: Seq[(String,Iterable[(String,Path)])] = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
-        val discrimPathElems: Iterable[String] = dropCommonElements(grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq).toList).map(_.mkString("/"))
+        val discrimPathElems: Iterable[String] = filterCommonElements(grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq).toList).map(_.mkString("/"))
         val result = ( groupKey, discrimPathElems.zip(grRelFilePaths) )
         logger.info(s" %X% discGroup[$groupKey]: [${discrimPathElems.mkString(";")}] [${grRelFilePaths.map(_.mkString("/")).mkString(";")}]" )
         result
@@ -195,10 +195,10 @@ object NCMLWriter extends Loggable {
     }
   }
 
-  def dropCommonElements( paths: List[ Seq[String] ] ): Iterable[ Seq[String] ] = {
+  def filterCommonElements( paths: List[ Seq[String] ] ): Iterable[ Seq[String] ] = {
     val nElems = paths.head.length
     val isCommon: Array[Boolean] = (0 until nElems).map( index => paths.map( seq => seq(index)).groupBy(x => x).size == 1 ).toArray
-    val result = paths.map( seq => seq.zipWithIndex flatMap { case (name, index) => if(isCommon(index)) None else Some(name) } )
+    val result = paths.map( seq => seq.zipWithIndex flatMap { case (name, index) => if(isCommon(index)) Some(name) else None } )
     logger.info(s" %X% dropCommonElements: isCommon=[${isCommon.mkString(";")}] paths=[${paths.mkString(";")}] result=[${result.map(_.mkString("/")).mkString(";")}]")
     result
   }
