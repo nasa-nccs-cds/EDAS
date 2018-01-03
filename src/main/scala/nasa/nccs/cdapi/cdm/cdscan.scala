@@ -199,6 +199,7 @@ object NCMLWriter extends Loggable {
 
   def filterCommonElements( paths: List[ Seq[String] ], keepCommon: Boolean ): Iterable[ Seq[String] ] = {
     val nElems = paths.head.length
+    logger.info(s" %XX% filterCommonElements: paths=\n\t ${paths.map(_.mkString("[",",","]")).mkString("\n\t ")}]")
     val isCommon: Array[Boolean] = (0 until nElems).map( index => paths.map( seq => seq(index)).groupBy(x => x).size == 1 ).toArray
     val result = paths.map( seq => seq.zipWithIndex flatMap { case (name, index) =>
       if( isCommon(index) ) { if (keepCommon) Some(name) else None }
