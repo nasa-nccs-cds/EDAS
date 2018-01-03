@@ -181,7 +181,7 @@ object NCMLWriter extends Loggable {
 
   def getPathGroups(rootPath: Path, relFilePaths: Seq[Path], bifurDepth: Int, nameTemplate: Regex ): Seq[(String,(String,Array[Path]))] = {
     val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[Path]]
-    relFilePaths.foreach(df => groupMap.getOrElseUpdate(getPathKey(rootPath, df), mutable.ListBuffer.empty[Path]) += df)
+    relFilePaths.foreach(df => groupMap.getOrElseUpdate(getPathKey(rootPath, df, bifurDepth), mutable.ListBuffer.empty[Path]) += df)
 //    logger.info(s" %X% relFilePaths: \n\t ----> ${groupMap.mapValues(_.map(_.toString).mkString("[",",","]")).mkString("\n\t ----> ")} " )
     if( bifurDepth == 0 ) {
       groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
@@ -249,11 +249,11 @@ object NCMLWriter extends Loggable {
 //    vkey
 //  }
 
-  def getPathKey( rootPath: Path, relFilePath: Path ): String = {
+  def getPathKey( rootPath: Path, relFilePath: Path, bifurDepth: Int ): String = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(rootPath.resolve(relFilePath).toString, 1.toString )
     try {
       val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
-      relFilePath.mkString(".") + "-" + ( variables map { _.getShortName } mkString "." )
+      relFilePath.subpath(0, bifurDepth).mkString(".") + "-" + ( variables map { _.getShortName } mkString "." )
     } finally {
       ncDataset.close
     }
