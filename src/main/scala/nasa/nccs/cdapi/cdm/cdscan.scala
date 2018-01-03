@@ -193,7 +193,7 @@ object NCMLWriter extends Loggable {
         result
       }
       val filteredColIds: IndexedSeq[String] = filterCommonElements( unsimplifiedResult.map( _._2._1).toList, false ).map( _.mkString(colIdSep) ).toIndexedSeq
-      unsimplifiedResult.zipWithIndex  map { case (elem, index) => ( elem._1, ( filteredColIds(index), elem._2._2 ) )
+      unsimplifiedResult.zipWithIndex  map { case (elem, index) => ( elem._1, ( filteredColIds(index), elem._2._2 ) ) }
     }
   }
 
