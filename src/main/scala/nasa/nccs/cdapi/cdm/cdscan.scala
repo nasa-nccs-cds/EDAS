@@ -253,7 +253,7 @@ object NCMLWriter extends Loggable {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(rootPath.resolve(relFilePath).toString, 1.toString )
     try {
       val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
-      variables map { _.getShortName } mkString "."
+      relFilePath.mkString(".") + "-" + ( variables map { _.getShortName } mkString "." )
     } finally {
       ncDataset.close
     }
