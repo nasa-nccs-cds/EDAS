@@ -330,9 +330,6 @@ class EDASExecutionManager extends WPSServer with Loggable {
 
   def clearCache: Set[String] = serverContext.clearCache
 
-
-
-
   def isCollectionPath( path: File ): Boolean = { path.isDirectory || path.getName.endsWith(".csv") }
 
   def executeUtilityRequest(jobId: String, util_id: String, request: TaskRequest, run_args: Map[String, String]): WPSMergedEventReport = {

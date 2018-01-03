@@ -24,6 +24,18 @@ class TimeStamp( val elapasedJobTime: Float, val label: String ) extends Seriali
   def compare (that: TimeStamp) = { elapasedJobTime.compareTo( that.elapasedJobTime ) }
 }
 
+object Duration {
+  def apply( elapsedTime: Long, label: String): TimeStamp = {
+    new Duration( elapsedTime / 1.0E3f, label )
+  }
+}
+
+
+class Duration( elapasedJobTime: Float, label: String ) extends TimeStamp( elapasedJobTime, label ) {
+  import TimeStamp._
+  override val sval = s"DURATION,${getWorkerSignature},$label,${elapasedJobTime.toString}"
+}
+
 object ProfilingTool extends Loggable {
 
   implicit def listAccum[TimeStamp]: AccumulableParam[mutable.ListBuffer[TimeStamp], TimeStamp] =
@@ -49,6 +61,11 @@ class ProfilingTool( val startTime: Long, timestamps: Accumulable[mutable.ListBu
     timestamps += TimeStamp( startTime, label )
     if( log ) { logger.info(label) }
   }
+  def duration( label: String, elapsedTime: Long, log: Boolean = false ): Unit = {
+    timestamps += Duration( elapsedTime, label )
+    if( log ) { logger.info(label) }
+  }
+
   def getTimestamps: List[TimeStamp] = timestamps.value.sorted.toList
   override def toString = " *** TIMESTAMPS: ***\n\n\t" + getTimestamps.map( _.toString() ).mkString("\n\t") + "\n\n"
 }

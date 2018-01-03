@@ -28,6 +28,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.io.Source
+import scala.util.matching.Regex
 
 object NCMLWriter extends Loggable {
   val ncExtensions = Seq( "nc", "nc4")
@@ -104,7 +105,7 @@ object NCMLWriter extends Loggable {
     logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
     val bifurDepth: Int = options.getOrDefault("depth","0").toInt
-    val nameTemplate: String = options.getOrDefault("template","")
+    val nameTemplate: Regex = options.getOrDefault("template",".*").r
     var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
       val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
@@ -177,15 +178,18 @@ object NCMLWriter extends Loggable {
 //    groupMap.mapValues(_.toArray).toMap
 //  }
 
-  def getPathGroups(rootPath: Path, relFilePaths: Seq[Path], bifurDepth: Int, nameTemplate: String ): Seq[(String,(String,Array[Path]))] = {
+  def getPathGroups(rootPath: Path, relFilePaths: Seq[Path], bifurDepth: Int, nameTemplate: Regex ): Seq[(String,(String,Array[Path]))] = {
     val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[Path]]
     relFilePaths.foreach(df => groupMap.getOrElseUpdate(getPathKey(rootPath, df), mutable.ListBuffer.empty[Path]) += df)
+    logger.info(s" %X% relFilePaths: ${groupMap.mapValues(_.map(_.toString).mkString("[",",","]")).mkString("{",";","}")} " )
     if( bifurDepth == 0 ) {
       groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
     } else {
-      val discGroupMap = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
+      val discGroupMap: Seq[(String,Iterable[(String,Path)])] = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
         val discrimPathElems: Iterable[String] = dropCommonElements(grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq).toList).map(_.mkString("/"))
-        ( groupKey, discrimPathElems.zip(grRelFilePaths) )
+        val result = ( groupKey, discrimPathElems.zip(grRelFilePaths) )
+        logger.info(s" %X% discGroup[$groupKey]: [${discrimPathElems.mkString(";")}] [${grRelFilePaths.map(_.mkString("/")).mkString(";")}]" )
+        result
       }
       for( (groupKey, collectionPaths ) <- discGroupMap; ( collId, path ) <- collectionPaths ) yield ( groupKey, (collId, path.iterator.toArray) )
     }
