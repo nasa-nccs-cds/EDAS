@@ -185,13 +185,13 @@ object NCMLWriter extends Loggable {
     if( bifurDepth == 0 ) {
       groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
     } else {
-      val discGroupMap: Seq[(String,Iterable[(String,Path)])] = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
-        val discrimPathElems: Iterable[String] = filterCommonElements(grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq).toList).map(_.mkString("/"))
-        val result = ( groupKey, discrimPathElems.zip(grRelFilePaths) )
-        logger.info(s" %X% discGroup[$groupKey]: [${discrimPathElems.mkString(";")}] [${grRelFilePaths.map(_.mkString("/")).mkString(";")}]" )
+      groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
+        val discrimPathElems: Iterable[Seq[String]] = filterCommonElements(grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq).toList)
+        val CollId = discrimPathElems.head.mkString("--")
+        val result = ( groupKey, ( CollId, grRelFilePaths.toArray)  )
+        logger.info(s" %X% discGroup[$groupKey]: [$CollId] [${grRelFilePaths.map(_.mkString("/")).mkString(";")}]" )
         result
       }
-      for( (groupKey, collectionPaths ) <- discGroupMap; ( collId, path ) <- collectionPaths ) yield ( groupKey, (collId, path.iterator.toArray) )
     }
   }
 
