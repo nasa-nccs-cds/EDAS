@@ -199,13 +199,13 @@ object NCMLWriter extends Loggable {
 
   def filterCommonElements( paths: List[ Seq[String] ], keepCommon: Boolean ): Iterable[ Seq[String] ] = {
     val nElems = paths.head.length
-    logger.info(s" %XX% filterCommonElements: paths=\n\t ${paths.map(_.mkString("[",",","]")).mkString("\n\t ")}]")
+    logger.info(s" %XX% filterCommonElements[$keepCommon]: paths=\n\t ${paths.map(_.mkString("[",",","]")).mkString("\n\t ")}]")
     val isCommon: Array[Boolean] = (0 until nElems).map( index => paths.map( seq => seq(index)).groupBy(x => x).size == 1 ).toArray
     val result = paths.map( seq => seq.zipWithIndex flatMap { case (name, index) =>
       if( isCommon(index) ) { if (keepCommon) Some(name) else None }
       else { if (keepCommon) None else Some(name) } }
     )
-//    logger.info(s" %X% dropCommonElements: isCommon=[${isCommon.mkString(";")}] paths=[${paths.mkString(";")}] result=[${result.map(_.mkString("/")).mkString(";")}]")
+    logger.info(s" %XX% filterCommonElements: isCommon=[${isCommon.mkString(";")}] paths=[${paths.mkString(";")}] result=[${result.map(_.mkString("/")).mkString(";")}]")
     result
   }
 
