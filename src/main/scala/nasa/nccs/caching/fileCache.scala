@@ -605,7 +605,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
     if (nSlices > 0) { full_shape(0) = nSlices }
     val memorySize = full_shape.foldLeft(4L)(_ * _)  * numElements
     if( memorySize > EDASPartitioner.maxInputSize ) {
-      throw new Exception( s"Must be authorized to execute a request this large (request input size = ${memorySize}, max unauthorized input size = ${EDASPartitioner.maxInputSize})")
+      throw new Exception( s"Must be authorized to execute a request this large (request input size = ${memorySize.toFloat}, max unauthorized input size = ${EDASPartitioner.maxInputSize})")
     }
     memorySize
   }

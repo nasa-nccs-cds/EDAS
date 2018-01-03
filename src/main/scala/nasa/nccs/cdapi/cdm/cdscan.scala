@@ -99,12 +99,14 @@ object NCMLWriter extends Loggable {
     files ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( rootPath.relativize(dir.toPath) ) ) )
   }
 
-  def extractSubCollections( collectionId: String, dataLocation: Path ): Unit = {
+  def extractSubCollections( collectionId: String, dataLocation: Path, options: Map[String,String] = Map.empty ): Unit = {
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
     logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
+    val bifurDepth: Int = options.getOrDefault("depth","0").toInt
+    val nameTemplate: String = options.getOrDefault("template","")
     var subColIndex: Int = 0
-    val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths) flatMap { case (group_key, (subCol_name, files)) =>
+    val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
       val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
       logger.info(s" %X% Extract SubCollections($collectionId)-> group_key=$group_key, subCol_name=$subCol_name, files=${files.mkString(";")}" )
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
@@ -175,10 +177,24 @@ object NCMLWriter extends Loggable {
 //    groupMap.mapValues(_.toArray).toMap
 //  }
 
-  def getPathGroups(rootPath: Path, relFilePaths: Seq[Path]): Seq[(String,(String,Array[Path]))] = {
+  def getPathGroups(rootPath: Path, relFilePaths: Seq[Path], bifurDepth: Int, nameTemplate: String ): Seq[(String,(String,Array[Path]))] = {
     val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[Path]]
-    relFilePaths.foreach( df => groupMap.getOrElseUpdate( getPathKey( rootPath, df ), mutable.ListBuffer.empty[Path] ) += df )
-    groupMap.mapValues( df => ( getSubCollectionName(df), df.toArray) ).toSeq
+    relFilePaths.foreach(df => groupMap.getOrElseUpdate(getPathKey(rootPath, df), mutable.ListBuffer.empty[Path]) += df)
+    if( bifurDepth == 0 ) {
+      groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
+    } else {
+      val discGroupMap = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
+        val discrimPathElems: Iterable[String] = dropCommonElements(grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq).toList).map(_.mkString("/"))
+        ( groupKey, discrimPathElems.zip(grRelFilePaths) )
+      }
+      for( (groupKey, collectionPaths ) <- discGroupMap; ( collId, path ) <- collectionPaths ) yield ( groupKey, (collId, path.iterator.toArray) )
+    }
+  }
+
+  def dropCommonElements( paths: List[ Seq[String] ] ): Iterable[ Seq[String] ] = {
+    val nElems = paths.head.length
+    val isCommon: Array[Boolean] = (0 until nElems).map( index => paths.map( seq => seq(index)).groupBy(x => x).size == 1 ).toArray
+    paths.map( seq => seq.zipWithIndex flatMap { case (name, index) => if(isCommon(index)) None else Some(name) } )
   }
 
   def trimCommonNameElements( paths: Iterable[ Seq[String] ], prefix: Boolean ): Iterable[ Seq[String] ] = {
@@ -672,28 +688,41 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
 
 object CDScan extends Loggable {
   val usage = """
-    Usage: mkcoll <collectionID> <datPath>
+    Usage: mkcoll [-d {collectionBifurcationDepth: Int)}] [-t {collectionNameTemplate: RegExp}] <collectionID> <datPath>
   """
 
   def main(args: Array[String]) {
-    if( args.length < 2 ) { println( usage ); return }
-    val collectionId = args(0).toLowerCase
-    val pathFile = new File(args(1))
-    NCMLWriter.extractSubCollections( collectionId, pathFile.toPath )
+    if( args.length < 1 ) { println( usage ); return }
+    var optionMap = mutable.HashMap.empty[String, String]
+    var inputs = mutable.ListBuffer.empty[String]
+    EDASLogManager.isMaster
+    val argIter = args.iterator
+    while( argIter.hasNext ) {
+      val arg = argIter.next
+      if(arg(0) == '-') arg match {
+        case "-d" => optionMap += (( "depth", argIter.next ))
+        case "-t" => optionMap += (( "template", argIter.next ))
+        case x => throw new Exception( "Unrecognized option: " + x )
+      } else { inputs += arg }
+    }
+    if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
+    val collectionId = inputs(0).toLowerCase
+    val pathFile = new File(inputs(1))
+    NCMLWriter.extractSubCollections( collectionId, pathFile.toPath, optionMap.toMap )
   }
 }
 
-object CDMultiScan extends Loggable {
-  def main(args: Array[String]) {
-    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
-    EDASLogManager.isMaster
-    val collectionsMetaFile = new File(args(0))    // If first col == 'mult' then each subdir is treated as a separate collection.
-    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
-    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
-    ncmlDir.mkdirs
-    NCMLWriter.generateNCMLFiles( collectionsMetaFile )
-  }
-}
+//object CDMultiScan extends Loggable {
+//  def main(args: Array[String]) {
+//    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
+//    EDASLogManager.isMaster
+//    val collectionsMetaFile = new File(args(0))    // If first col == 'mult' then each subdir is treated as a separate collection.
+//    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
+//    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
+//    ncmlDir.mkdirs
+//    NCMLWriter.generateNCMLFiles( collectionsMetaFile )
+//  }
+//}
 
 
 //object LegacyCDScan extends Loggable {
