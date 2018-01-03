@@ -32,6 +32,7 @@ import scala.util.matching.Regex
 
 object NCMLWriter extends Loggable {
   val ncExtensions = Seq( "nc", "nc4")
+  val colIdSep = "."
 
   def apply(path: File): NCMLWriter = { new NCMLWriter(Array(path).iterator) }
   def getName(node: nc2.CDMNode): String = node.getFullName
@@ -185,20 +186,24 @@ object NCMLWriter extends Loggable {
     if( bifurDepth == 0 ) {
       groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
     } else {
-      groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
-        val discrimPathElems: Iterable[Seq[String]] = filterCommonElements(grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq).toList)
-        val CollId = discrimPathElems.head.mkString("--")
-        val result = ( groupKey, ( CollId, grRelFilePaths.toArray)  )
-        logger.info(s" %X% discGroup[$groupKey]: [$CollId] [${grRelFilePaths.map(_.mkString("/")).mkString(";")}]" )
+      val unsimplifiedResult = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
+        val discrimPathElems: Iterable[Seq[String]] = filterCommonElements(grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq).toList,true)
+        val CollIdNames = discrimPathElems.head
+        val result = ( groupKey, ( CollIdNames, grRelFilePaths.toArray)  )
         result
       }
+      val filteredColIds: IndexedSeq[String] = filterCommonElements( unsimplifiedResult.map( _._2._1).toList, false ).map( _.mkString(colIdSep) ).toIndexedSeq
+      unsimplifiedResult.zipWithIndex  map { case (elem, index) => ( elem._1, ( filteredColIds(index), elem._2._2 ) )
     }
   }
 
-  def filterCommonElements( paths: List[ Seq[String] ] ): Iterable[ Seq[String] ] = {
+  def filterCommonElements( paths: List[ Seq[String] ], keepCommon: Boolean ): Iterable[ Seq[String] ] = {
     val nElems = paths.head.length
     val isCommon: Array[Boolean] = (0 until nElems).map( index => paths.map( seq => seq(index)).groupBy(x => x).size == 1 ).toArray
-    val result = paths.map( seq => seq.zipWithIndex flatMap { case (name, index) => if(isCommon(index)) Some(name) else None } )
+    val result = paths.map( seq => seq.zipWithIndex flatMap { case (name, index) =>
+      if( isCommon(index) ) { if (keepCommon) Some(name) else None }
+      else { if (keepCommon) None else Some(name) } }
+    )
     logger.info(s" %X% dropCommonElements: isCommon=[${isCommon.mkString(";")}] paths=[${paths.mkString(";")}] result=[${result.map(_.mkString("/")).mkString(";")}]")
     result
   }
