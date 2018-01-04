@@ -108,7 +108,7 @@ object NCMLWriter extends Loggable {
     var subColIndex: Int = 0
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
       val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
-      logger.info(s" %X% Extract SubCollections($collectionId)-> group_key=$group_key, subCol_name=$subCol_name, files=${files.mkString(";")}" )
+//      logger.info(s" %X% Extract SubCollections($collectionId)-> group_key=$group_key, subCol_name=$subCol_name, files=${files.mkString(";")}" )
       val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
       varNames.map(vname => vname -> subCollectionId)
     }
@@ -269,7 +269,7 @@ object NCMLWriter extends Loggable {
   def generateNCML( collectionId: String, paths: Array[File] ): List[String] = {
     try {
       val ncmlFile = getCachePath("NCML").resolve(collectionId + ".ncml").toFile
-      logger.info(s"Creating NCML file for collection ${collectionId} from paths ${paths.map(_.getAbsolutePath).mkString(", ")}")
+      logger.info(s"Creating NCML file for collection ${collectionId}}")
       val writer = new NCMLWriter(paths.iterator)
       writer.writeNCML(ncmlFile)
     } catch {
