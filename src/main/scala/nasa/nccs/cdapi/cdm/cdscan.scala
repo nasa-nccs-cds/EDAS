@@ -2,32 +2,25 @@ package nasa.nccs.cdapi.cdm
 
 import java.io._
 import java.net.URI
-import java.nio._
 import java.nio.file.{FileSystems, Path, Paths}
 import java.util.Formatter
+import java.util.concurrent.{Executors, Future}
 
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
-import nasa.nccs.cdapi.cdm.CDScan.logger
-import nasa.nccs.cdapi.cdm.FileMetadata.logger
-import nasa.nccs.cdapi.cdm.NCMLWriter.{generateNCML, logger, writeCollectionDirectory}
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.loaders.Collections
-import nasa.nccs.edas.utilities.{appParameters, runtime}
 import nasa.nccs.utilities.{EDASLogManager, Loggable, cdsutils}
 import org.apache.commons.lang.RandomStringUtils
-import ucar.nc2.{FileWriter => _, _}
+import ucar.nc2.Group
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
-import ucar.nc2.dataset.{NetcdfDataset, _}
+import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D, CoordinateAxis1DTime, VariableDS, NetcdfDataset}
 import ucar.nc2.time.CalendarDate
 
 import scala.collection.mutable
 import collection.mutable.{HashMap, ListBuffer}
 import collection.JavaConversions._
 import collection.JavaConversions._
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
 import scala.io.Source
 import scala.util.matching.Regex
 
@@ -109,6 +102,7 @@ object NCMLWriter extends Loggable {
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
 //    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
+    FileHeader.factory( ncSubPaths.map( relFilePath => dataLocation.resolve(relFilePath).toFile.getCanonicalPath ) )
     val bifurDepth: Int = options.getOrDefault("depth","0").toInt
     val nameTemplate: Regex = options.getOrDefault("template",".*").r
     var subColIndex: Int = 0
@@ -121,6 +115,7 @@ object NCMLWriter extends Loggable {
 //    logger.info(s" %C% extractSubCollections varMap: " + varMap.map(_.toString()).mkString("; ") )
     val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 } .values.map( scopeRepeatedVarNames ).toSeq.flatten
     writeCollectionDirectory( collectionId, Map( contextualizedVarMap:_* ) )
+    FileHeader.clearCache
   }
 
   def rid( len: Int = 6 ) = RandomStringUtils.random( 6, true, true )
@@ -336,18 +331,6 @@ object NCMLWriter extends Loggable {
     args.map((arg: File) => NCMLWriter.getNcFiles(arg)).flatten
   def getNcURIs(args: Iterator[File]): Iterator[URI] =
     args.map((arg: File) => NCMLWriter.getNcURIs(arg)).flatten
-
-  def getFileHeaders(files: IndexedSeq[URI], nReadProcessors: Int): IndexedSeq[FileHeader] = {
-    if (files.nonEmpty) {
-      val groupSize = cdsutils.ceilDiv(files.length, nReadProcessors)
-      logger.info( " Processing %d files with %d files/group with %d processors" .format(files.length, groupSize, nReadProcessors))
-      val fileGroups = files.grouped(groupSize).toIndexedSeq
-      val fileHeaderFuts = Future.sequence(
-        for (workerIndex <- fileGroups.indices; fileGroup = fileGroups(workerIndex))
-          yield Future { FileHeader.factory(fileGroup, workerIndex) })
-      Await.result(fileHeaderFuts, Duration.Inf).flatten sortWith { (afr0, afr1) => afr0.startValue < afr1.startValue }
-    } else IndexedSeq.empty[FileHeader]
-  }
 }
 
 //class NCMLSerialWriter(val args: Iterator[String]) {
@@ -371,10 +354,15 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
   private val files: IndexedSeq[URI] = NCMLWriter.getNcURIs(args).toIndexedSeq
   if (files.isEmpty) { throw new Exception( "Error, empty collection at: " + args.map(_.getAbsolutePath).mkString(",")) }
   private val nFiles = files.length
-  val fileHeaders = NCMLWriter.getFileHeaders(files, nReadProcessors)
+  val fileHeaders = FileHeader.getFileHeaders( files map uriToString, false )
   val outerDimensionSize: Int = fileHeaders.foldLeft(0)(_ + _.nElem)
   val ignored_attributes = List("comments")
   val overwriteTime = fileHeaders.length > 1
+
+  def uriToString( uri: URI ): String = {
+    if( uri.getScheme.equals("file") || uri.getScheme.isEmpty ) { uri.getPath }
+    else { uri.toString }
+  }
 
   def isIgnored(attribute: nc2.Attribute): Boolean = {
     ignored_attributes.contains(getName(attribute))
@@ -558,64 +546,51 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
 
 }
 
+class FileHeaderGenerator( file: String, timeRegular: Boolean ) extends Runnable {
+  override def run(): Unit = { FileHeader( file, timeRegular ) }
+}
+
 object FileHeader extends Loggable {
   val maxOpenAttempts = 1
   val retryIntervalSecs = 10
-  val instanceCache = new ConcurrentLinkedHashMap.Builder[String, FileHeader].initialCapacity(64).maximumWeightedCapacity(100000).build()
+  val cores: Int = Runtime.getRuntime.availableProcessors
+  private val _instanceCache = new ConcurrentLinkedHashMap.Builder[String, FileHeader].initialCapacity(64).maximumWeightedCapacity(100000).build()
+  private val _pool = Executors.newFixedThreadPool( Math.max(1,cores-2) )
 
-  def apply( uri: URI, timeRegular: Boolean ): FileHeader = apply( new File(uri.getPath), timeRegular )
+  def apply( uri: URI, timeRegular: Boolean ): FileHeader = apply( uri.toString, timeRegular )
   def apply( file: File, timeRegular: Boolean ): FileHeader = apply( file.getCanonicalPath, timeRegular )
 
-  def apply( filePath: String, timeRegular: Boolean ): FileHeader = instanceCache.getOrElse( filePath, {
+  def apply( filePath: String, timeRegular: Boolean ): FileHeader = _instanceCache.getOrElse( filePath, {
     val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.aquireFile(filePath, 2.toString)
     try {
       val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
       val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
       val fileHeader = new FileHeader(filePath, axisValues, boundsValues, timeRegular, variables map { _.getShortName }, coordVars map { _.getShortName } )
-      instanceCache.put( filePath, fileHeader )
+      _instanceCache.put( filePath, fileHeader )
       fileHeader
     } finally {
       ncDataset.close()
     }
   })
 
-  def factory(files: IndexedSeq[URI], workerIndex: Int): IndexedSeq[FileHeader] = {
-    var retryFiles = new ListBuffer[URI]()
-    val timeRegular = false // getTimeAxisRegularity( files.head )
-    val firstPass = for (iFile <- files.indices; file = files(iFile)) yield {
-      try {
-        val t0 = System.nanoTime()
-        val fileHeader = FileHeader(file, timeRegular)
-        val t1 = System.nanoTime()
-        println(
-          "Worker[%d]: Processing file[%d] '%s', start = %s, ncoords = %d, time = %.4f "
-            .format(workerIndex,
-              iFile,
-              file,
-              fileHeader.startDate,
-              fileHeader.nElem,
-              (t1 - t0) / 1.0E9))
-        if ((iFile % 5) == 0) runtime.printMemoryUsage(logger)
-        Some(fileHeader)
-      } catch {
-        case err: Exception =>
-          logger.error(
-            "Worker[%d]: Encountered error Processing file[%d] '%s': '%s'"
-              .format(workerIndex, iFile, file, err.toString))
-          if ((iFile % 10) == 0) {
-            logger.error(err.getStackTrace.mkString("\n"))
-          }
-          retryFiles += file; None
-      }
-    }
-    val secondPass =
-      for (iFile <- retryFiles.indices; file = retryFiles(iFile)) yield {
-        println(
-          "Worker[%d]: Reprocessing file[%d] '%s'"
-            .format(workerIndex, iFile, file))
-        FileHeader(file, timeRegular)
-      }
-    firstPass.flatten ++ secondPass
+  def isCached( path: String ): Boolean = _instanceCache.keys.contains( path )
+
+  def clearCache = _instanceCache.clear()
+  def filterCompleted( seq: IndexedSeq[Future[_]] ): IndexedSeq[Future[_]] = seq.filterNot( _.isDone )
+
+  def waitUntilDone( seq: IndexedSeq[Future[_]] ): Unit = if( seq.isEmpty ) { return } else {
+    Thread.sleep( 250 )
+    waitUntilDone( filterCompleted(seq) )
+  }
+
+  def factory(files: IndexedSeq[String], timeRegular: Boolean = false ):Unit = {
+    val futures: IndexedSeq[Future[_]] = files.filter { file => !isCached(file) } map { file => _pool.submit( new FileHeaderGenerator(file,timeRegular) ) }
+    waitUntilDone( futures )
+  }
+
+  def getFileHeaders(files: IndexedSeq[String], timeRegular: Boolean = false ): IndexedSeq[FileHeader] = {
+    factory( files, timeRegular )
+    files.map( file => FileHeader( file, timeRegular ) )
   }
 
   def getTimeAxisRegularity(ncFile: URI): Boolean = {
