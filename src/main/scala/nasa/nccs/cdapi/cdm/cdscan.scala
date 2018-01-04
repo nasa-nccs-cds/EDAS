@@ -6,6 +6,7 @@ import java.nio._
 import java.nio.file.{FileSystems, Path, Paths}
 import java.util.Formatter
 
+import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.cdapi.cdm.CDScan.logger
 import nasa.nccs.cdapi.cdm.FileMetadata.logger
 import nasa.nccs.cdapi.cdm.NCMLWriter.{generateNCML, logger, writeCollectionDirectory}
@@ -190,56 +191,50 @@ object NCMLWriter extends Loggable {
       groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
     } else {
       val unsimplifiedResult = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
-        val discrimPathElems: Iterable[Seq[String]] = filterCommonElements(grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq).toList,true)
-        val CollIdNames = discrimPathElems.head
-        val result = ( groupKey, ( CollIdNames, grRelFilePaths.toArray)  )
+        val collIdNames: Seq[String] = extractCommonElements( grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq) )
+        val result = ( groupKey, ( collIdNames, grRelFilePaths.toArray)  )
         result
       }
-      val filteredColIds: IndexedSeq[String] = filterCommonElements( unsimplifiedResult.map( _._2._1).toList, false ).map( _.mkString(colIdSep) ).toIndexedSeq
+      val filteredColIds: IndexedSeq[String] = filterCommonElements( unsimplifiedResult.map( _._2._1) ).map( _.mkString(colIdSep) ).toIndexedSeq
       unsimplifiedResult.zipWithIndex  map { case (elem, index) => ( elem._1, ( filteredColIds(index), elem._2._2 ) ) }
     }
   }
 
-  def filterCommonElements( paths: List[ Seq[String] ], keepCommon: Boolean ): Iterable[ Seq[String] ] = {
-    val nElems = paths.head.length
-    logger.info(s" %XX% filterCommonElements[$keepCommon]: paths=\n\t ${paths.map(_.mkString("[",",","]")).mkString("\n\t ")}]")
-    val isCommon: Array[Boolean] = (0 until nElems).map( index => paths.map( seq => seq(index)).groupBy(x => x).size == 1 ).toArray
-    val result = paths.map( seq => seq.zipWithIndex flatMap { case (name, index) =>
-      if( isCommon(index) ) { if (keepCommon) Some(name) else None }
-      else { if (keepCommon) None else Some(name) } }
-    )
-    logger.info(s" %XX% filterCommonElements: isCommon=[${isCommon.mkString(";")}] paths=[${paths.mkString(";")}] result=[${result.map(_.mkString("/")).mkString(";")}]")
-    result
+  def extractCommonElements( paths: Iterable[ Seq[String] ] ): Seq[String] = paths.head.filter( elem => paths.forall( _.contains(elem) ) )
+
+  def filterCommonElements( paths: Iterable[ Seq[String] ] ): Iterable[ Seq[String] ] = {
+    val commonElements: Seq[String]  = extractCommonElements( paths )
+    paths.map( _.filterNot( elem => commonElements.contains(elem) ) )
   }
 
-  def trimCommonNameElements( paths: Iterable[ Seq[String] ], prefix: Boolean ): Iterable[ Seq[String] ] = {
-    val pathElements: Iterable[Seq[String]] = paths.map( _.iterator().map(_.toString).toSeq )
-    if(  pathElements.groupBy { if(prefix) _.head else _.last }.size == 1 ) {
-      trimCommonNameElements( pathElements.map { if(prefix) _.drop(1) else _.dropRight(1) }, prefix )
-    } else { paths }
-  }
+//  def trimCommonNameElements( paths: Iterable[ Seq[String] ], prefix: Boolean ): Iterable[ Seq[String] ] = {
+//    val pathElements: Iterable[Seq[String]] = paths.map( _.iterator().map(_.toString).toSeq )
+//    if(  pathElements.groupBy { if(prefix) _.head else _.last }.size == 1 ) {
+//      trimCommonNameElements( pathElements.map { if(prefix) _.drop(1) else _.dropRight(1) }, prefix )
+//    } else { paths }
+//  }
+//
+//  def extractCommonPrefix( pathElements: Iterable[Seq[String]], commonPrefixElems: Seq[String] = Seq.empty ): Seq[String] = if( pathElements.size < 2 ) {
+//    commonPrefixElems
+//  } else {
+////    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
+//    if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
+//      extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
+//    } else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
+//  }
+//
+//  def extractCommonString( pathElements: Iterable[Seq[String]] ): String = commonPrefix( pathElements.map( _.mkString("~") ).toSeq )
+//
+//  def commonPrefix( elems: Seq[String] ): String = {
+//    val result = elems.foldLeft("")((_,_) => (elems.min.view,elems.max.view).zipped.takeWhile(v => v._1 == v._2).unzip._1.mkString)
+//    logger.info(s" %ECP% commonPrefix: ${elems.mkString(", ")}; result = ${result}" )
+//    result
+//  }
+//
+//  def trimCommonNameElements( paths: Iterable[Path] ): Iterable[Path] =
+//    trimCommonNameElements( trimCommonNameElements( paths.map( _.iterator().map(_.toString).toSeq ) ,false ), true ).map( seq => Paths.get( seq.mkString("/") ) )
 
-  def extractCommonPrefix( pathElements: Iterable[Seq[String]], commonPrefixElems: Seq[String] = Seq.empty ): Seq[String] = if( pathElements.size < 2 ) {
-    commonPrefixElems
-  } else {
-//    logger.info(s" %ECP% ExtractCommonPrefix --> pathElements:  [ ${pathElements.map(_.mkString(":")).mkString("; ")} ] ,  commonPrefixElems: [ ${commonPrefixElems.mkString("; ")} ]  ")
-    if( pathElements.groupBy( _.headOption.getOrElse( RandomStringUtils.random( 6, true, true ) ) ).size == 1 ) {
-      extractCommonPrefix( pathElements.map( _.drop(1) ),  commonPrefixElems ++ Seq( pathElements.head.head ) )
-    } else if( commonPrefixElems.isEmpty ) { Seq( extractCommonString( pathElements ) ) } else { commonPrefixElems }
-  }
-
-  def extractCommonString( pathElements: Iterable[Seq[String]] ): String = commonPrefix( pathElements.map( _.mkString("~") ).toSeq )
-
-  def commonPrefix( elems: Seq[String] ): String = {
-    val result = elems.foldLeft("")((_,_) => (elems.min.view,elems.max.view).zipped.takeWhile(v => v._1 == v._2).unzip._1.mkString)
-    logger.info(s" %ECP% commonPrefix: ${elems.mkString(", ")}; result = ${result}" )
-    result
-  }
-
-  def trimCommonNameElements( paths: Iterable[Path] ): Iterable[Path] =
-    trimCommonNameElements( trimCommonNameElements( paths.map( _.iterator().map(_.toString).toSeq ) ,false ), true ).map( seq => Paths.get( seq.mkString("/") ) )
-
-  def getSubCollectionName( paths: Iterable[Path] ): String = extractCommonPrefix( paths.map( _.iterator().flatMap( _.toString.split("[_.-]")).toSeq ) ).mkString(".")
+  def getSubCollectionName( paths: Iterable[Path] ): String = extractCommonElements( paths.map( _.iterator().flatMap( _.toString.split("[_.-]")).toSeq ) ).mkString(".")
 
 //  def getVariablesKey( file: File ): String = {
 //    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.openFile( file.toString )
@@ -253,14 +248,17 @@ object NCMLWriter extends Loggable {
 //  }
 
   def getPathKey( rootPath: Path, relFilePath: Path, bifurDepth: Int ): String = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(rootPath.resolve(relFilePath).toString, 1.toString )
-    try {
-      val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
-      relFilePath.subpath(0, bifurDepth).mkString(".") + "-" + ( variables map { _.getShortName } mkString "." )
-    } finally {
-      ncDataset.close
-    }
+    val fileHeader = FileHeader( rootPath.resolve(relFilePath).toFile, false )
+    Seq( getRelPathKey(relFilePath, bifurDepth), Option( fileHeader.varNames.mkString( "." ) ) ).flatten.mkString("-")
   }
+
+  def getRelPathKey( relFilePath: Path, bifurDepth: Int ): Option[String] = try {
+    if( bifurDepth < 1 ) { None } else { Option( relFilePath.subpath(0, bifurDepth).mkString(".") ) }
+  } catch { case err: Exception =>
+    logger.error(  s" Can't get subpath of length $bifurDepth from relPath ${relFilePath.toString}")
+    Option( relFilePath.mkString(".") )
+  }
+
 
   def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
     val dirFile = getCachePath("NCML").resolve(collectionId + ".csv").toFile
@@ -563,15 +561,23 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
 object FileHeader extends Loggable {
   val maxOpenAttempts = 1
   val retryIntervalSecs = 10
-  def apply(file: URI, timeRegular: Boolean): FileHeader = {
-    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.aquireFile(file.toString, 2.toString)
+  val instanceCache = new ConcurrentLinkedHashMap.Builder[String, FileHeader].initialCapacity(64).maximumWeightedCapacity(100000).build()
+
+  def apply( uri: URI, timeRegular: Boolean ): FileHeader = apply( new File(uri.getPath), timeRegular )
+  def apply( file: File, timeRegular: Boolean ): FileHeader = apply( file.getCanonicalPath, timeRegular )
+
+  def apply( filePath: String, timeRegular: Boolean ): FileHeader = instanceCache.getOrElse( filePath, {
+    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.aquireFile(filePath, 2.toString)
     try {
       val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
-      new FileHeader(file.toString, axisValues, boundsValues, timeRegular)
+      val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
+      val fileHeader = new FileHeader(filePath, axisValues, boundsValues, timeRegular, variables map { _.getShortName }, coordVars map { _.getShortName } )
+      instanceCache.put( filePath, fileHeader )
+      fileHeader
     } finally {
       ncDataset.close()
     }
-  }
+  })
 
   def factory(files: IndexedSeq[URI], workerIndex: Int): IndexedSeq[FileHeader] = {
     var retryFiles = new ListBuffer[URI]()
@@ -658,7 +664,10 @@ class DatasetFileHeaders(val aggDim: String, val aggFileMap: Seq[FileHeader]) {
 class FileHeader(val filePath: String,
                  val axisValues: Array[Long],
                  val boundsValues: Array[Double],
-                 val timeRegular: Boolean) {
+                 val timeRegular: Boolean,
+                 val varNames: List[String],
+                 val coordVarNames: List[String]
+                ) {
   def nElem: Int = axisValues.length
   def startValue: Long = axisValues.headOption.getOrElse(Long.MinValue)
   def startDate: String = CalendarDate.of(startValue).toString
