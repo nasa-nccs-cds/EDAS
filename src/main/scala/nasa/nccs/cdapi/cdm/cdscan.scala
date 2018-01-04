@@ -47,11 +47,14 @@ object NCMLWriter extends Loggable {
     for( f <- dir.listFiles ) { f.renameTo( new File( backupDir, f.getName ) ) }
   }
 
+  def isInt( ival: String ): Boolean = try { ival.toInt; true } catch { case ex: Throwable => false }
+
   def generateNCMLFiles( collectionsFile: File ): Unit = {
     logger.info(s"Generate NCML file from specs in " + collectionsFile.getAbsolutePath )
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
       val mdata = tline.split(",").map(_.trim)
-      extractSubCollections( mdata(0), Paths.get( mdata(1) ) )
+      assert( ((mdata.length == 4) && isInt(mdata(0)) && (new File(mdata(3))).exists ), s"Format error in Collections csv file, columns = { depth: Int, template: RegEx, CollectionId: String, rootCollectionPath: String }, incorrect line: { $tline }" )
+      extractSubCollections( mdata(2), Paths.get( mdata(3) ), Map( "depth" -> mdata(0), "template" -> mdata(1) ) )
     }
   }
 
@@ -724,17 +727,17 @@ object CDScan extends Loggable {
   }
 }
 
-//object CDMultiScan extends Loggable {
-//  def main(args: Array[String]) {
-//    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
-//    EDASLogManager.isMaster
-//    val collectionsMetaFile = new File(args(0))    // If first col == 'mult' then each subdir is treated as a separate collection.
-//    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
-//    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
-//    ncmlDir.mkdirs
-//    NCMLWriter.generateNCMLFiles( collectionsMetaFile )
-//  }
-//}
+object CDMultiScan extends Loggable {
+  def main(args: Array[String]) {
+    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
+    EDASLogManager.isMaster
+    val collectionsMetaFile = new File(args(0))    // cols:  depth, template, collectionID, collectionRootPath
+    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
+    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
+    ncmlDir.mkdirs
+    NCMLWriter.generateNCMLFiles( collectionsMetaFile )
+  }
+}
 
 
 //object LegacyCDScan extends Loggable {
