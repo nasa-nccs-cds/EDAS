@@ -708,6 +708,7 @@ object CDScan extends Loggable {
     val collectionId = inputs(0).toLowerCase
     val pathFile = new File(inputs(1))
     NCMLWriter.extractSubCollections( collectionId, pathFile.toPath, optionMap.toMap )
+    System.exit(0)
   }
 }
 
@@ -720,6 +721,7 @@ object CDMultiScan extends Loggable {
     val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
     ncmlDir.mkdirs
     NCMLWriter.generateNCMLFiles( collectionsMetaFile )
+    System.exit(0)
   }
 }
 
