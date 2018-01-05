@@ -959,7 +959,7 @@ object DataContainer extends ContainerBase {
           val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
           val cid = dataPath.split('/').last
           if( dataPath.toLowerCase.startsWith("collection") ) {
-            throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollectionKeys.mkString(", ")}")
+            throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getMetaCollections.mkString(", ")}")
           }
           val collection = Collection( cid, dataPath )
           for ((name, index) <- var_names.zipWithIndex) yield {

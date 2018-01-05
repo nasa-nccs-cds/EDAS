@@ -492,6 +492,12 @@ object DiskCacheFileMgr extends XmlResource {
       cacheFilePath.toString
     }
 
+  def getCacheDirectory( cachetype: String, subDir: String ): Path = {
+    val cacheFilePath = Paths.get( appParameters.cacheDir, cachetype, subDir )
+    Files.createDirectories( cacheFilePath )
+    cacheFilePath
+  }
+
 
   def getDiskCachePath( cachetype: String ): Path = {
     val cacheDirPath = Paths.get( appParameters.cacheDir, cachetype )

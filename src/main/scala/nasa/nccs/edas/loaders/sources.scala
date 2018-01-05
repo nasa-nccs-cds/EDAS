@@ -249,6 +249,7 @@ object Collections extends XmlResource with Loggable {
 
   def getVariableString( variable: nc2.Variable ): String = variable.getShortName + ":" + variable.getDimensionsString.replace(" ",",") + ":" + variable.getDescription+ ":" + variable.getUnitsString
   def getCacheFilePath( fileName: String ): String = DiskCacheFileMgr.getDiskCacheFilePath( "collections", fileName)
+  def getNCMLDirectory: Path = DiskCacheFileMgr.getCacheDirectory( "collections", "NCML")
 
   def getVariableListXml(vids: Array[String]): xml.Elem = {
     <collections>
@@ -322,6 +323,8 @@ object Collections extends XmlResource with Loggable {
       logger.error( s"Error reading collection ${id} from ncml ${collectionFilePath}: ${err.toString}" )
       None
   }
+
+  def getMetaCollections: List[String] = getNCMLDirectory.toFile.listFiles.filter(_.isFile).toList.filter { _.getName.endsWith(".csv") } map { _.getName.split('.').dropRight(1).mkString(".") }
 
   def addSubCollection(  id: String, collectionFilePath: String, grid: CDGrid ): Option[Collection] = try {
     if( ! _datasets.containsKey(id) ) {
