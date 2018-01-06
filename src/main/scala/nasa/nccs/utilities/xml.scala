@@ -181,6 +181,7 @@ object XMLParser extends AnyRef with parsing.TokenTests {
       case g: Group                     =>
         for (c <- g.nodes) serialize(c, depth+1, g.scope, sb, stripComments, decodeEntities, preserveWhitespace, minimizeTags); sb
       case el: Elem =>
+        sb.append('\n')
         ( 0 until depth ) foreach { sb.append('\t') }
         sb.append('<')
         el.nameToString(sb)
@@ -194,6 +195,8 @@ object XMLParser extends AnyRef with parsing.TokenTests {
           // children, so use long form: <xyz ...>...</xyz>
           sb.append('>')
           sequenceToXML(el.child, depth+1, el.scope, sb, stripComments, decodeEntities, preserveWhitespace, minimizeTags)
+          sb.append('\n')
+          ( 0 until depth ) foreach { sb.append('\t') }
           sb.append("</")
           el.nameToString(sb)
           sb.append('>')
