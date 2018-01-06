@@ -428,7 +428,7 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
     if (timeRegular || !overwriteTime)
         <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString}/>
     else
-        <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} coordValue={fileHeader.axisValues.map( x => "%d".format(x)).mkString(", ")}/>
+        <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} coordValue={fileHeader.axisValues.map( x => "%d".format(x)).mkString(", ")}/> 
 
   def getVariable(fileMetadata: FileMetadata, variable: nc2.Variable,  timeRegularSpecs: Option[(Double, Double)]): xml.Node = {
     val axisType = fileMetadata.getAxisType(variable)
@@ -484,7 +484,11 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
   }
 
   def getAggregation(fileMetadata: FileMetadata, timeRegular: Boolean): xml.Node = {
-    <aggregation dimName={getTimeVarName(fileMetadata: FileMetadata)} type="joinExisting">  { for (fileHeader <- fileHeaders) yield { getAggDataset(fileHeader, timeRegular) } } </aggregation>
+    <aggregation dimName={getTimeVarName(fileMetadata: FileMetadata)} type="joinExisting">
+      { for (fileHeader <- fileHeaders) yield {
+      getAggDataset(fileHeader, timeRegular)
+    }  }
+    </aggregation>
   }
 
   def findTimeVariable(fileMetadata: FileMetadata): Option[nc2.Variable] =
