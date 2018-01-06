@@ -19,12 +19,12 @@ object XMLParser extends AnyRef with parsing.TokenTests {
 
   // helper for the extremely oft-repeated sequence of creating a
   // StringBuilder, passing it around, and then grabbing its String.
-  private[xml] def sbToString(f: (StringBuilder) => Unit): String = {
+  private def sbToString(f: (StringBuilder) => Unit): String = {
     val sb = new StringBuilder
     f(sb)
     sb.toString
   }
-  private[xml] def isAtomAndNotText(x: Node) = x.isAtom && !x.isInstanceOf[Text]
+  private def isAtomAndNotText(x: Node) = x.isAtom && !x.isInstanceOf[Text]
 
   /**
     * Trims an element - call this method, when you know that it is an
