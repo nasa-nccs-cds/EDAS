@@ -9,12 +9,12 @@ import java.util.concurrent.{Executors, Future}
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.loaders.Collections
-import nasa.nccs.utilities.{EDASLogManager, Loggable, cdsutils}
+import nasa.nccs.utilities.{EDASLogManager, Loggable, XMLParser, cdsutils}
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2.Group
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
-import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D, CoordinateAxis1DTime, VariableDS, NetcdfDataset}
+import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D, CoordinateAxis1DTime, NetcdfDataset, VariableDS}
 import ucar.nc2.time.CalendarDate
 
 import scala.collection.mutable
@@ -23,6 +23,7 @@ import collection.JavaConversions._
 import collection.JavaConversions._
 import scala.io.Source
 import scala.util.matching.Regex
+import scala.xml.Utility
 
 object NCMLWriter extends Loggable {
   val ncExtensions = Seq( "nc", "nc4")
@@ -543,7 +544,7 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
     logger.info("Writing *NCML* File: " + ncmlFile.toString)
     val bw = new BufferedWriter(new FileWriter(ncmlFile))
     val ( varNames, result ) = getNCMLVerbose
-    bw.write(result.toString)
+    bw.write( XMLParser.serialize(result).toString )
     bw.close()
     varNames
   }
