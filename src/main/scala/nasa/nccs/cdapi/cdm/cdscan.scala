@@ -584,7 +584,8 @@ object FileHeader extends Loggable {
   def filterCompleted( seq: IndexedSeq[Future[_]] ): IndexedSeq[Future[_]] = seq.filterNot( _.isDone )
 
   def waitUntilDone( seq: IndexedSeq[Future[_]] ): Unit = if( seq.isEmpty ) { return } else {
-    Thread.sleep( 250 )
+    print( s"Waiting on ${seq.length} tasks (generating NCML files)")
+    Thread.sleep( 500 )
     waitUntilDone( filterCompleted(seq) )
   }
 
@@ -713,7 +714,6 @@ object CDScan extends Loggable {
     val collectionId = inputs(0).toLowerCase
     val pathFile = new File(inputs(1))
     NCMLWriter.extractSubCollections( collectionId, pathFile.toPath, optionMap.toMap )
-    System.exit(0)
   }
 }
 
@@ -726,7 +726,6 @@ object CDMultiScan extends Loggable {
     val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
     ncmlDir.mkdirs
     NCMLWriter.generateNCMLFiles( collectionsMetaFile )
-    System.exit(0)
   }
 }
 
