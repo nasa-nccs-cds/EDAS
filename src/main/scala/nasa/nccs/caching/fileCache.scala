@@ -504,6 +504,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
         }
         case x => throw new Exception( "Unrecognized partition class: " + x.getClass.getName )
       }
+      logger.info(  s"\n---------------------------------------------\n %P% PARTITIONS: \n\t:${partitions.map( p => s"PART[${p.index}]: start: ${p.start_time} end: ${p.end_time}").mkString("\n\t")}" )
       new EDASPartitionSpec( partitions )
     } else {
       val seasonFilters = filters.flatMap( SeasonFilter.get )
@@ -599,6 +600,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
   def roi: ma2.Section = new ma2.Section(_section.getRanges)
 
   def getPartition(partIndex: Int): Partition = spec.getParition( partIndex )
+
   def getPartitions: Array[Partition] = ( 0 until spec.getNPartitions ).map( getPartition ).toArray
   def getMemorySize(nSlices: Int = -1): Long = {
     var full_shape = baseShape.clone()
