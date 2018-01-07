@@ -486,7 +486,7 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
 
   def getAggregation(fileMetadata: FileMetadata, timeRegular: Boolean): xml.Node = {
     <aggregation dimName={getTimeVarName(fileMetadata: FileMetadata)} type="joinExisting">
-      { for (fileHeader <- fileHeaders) yield {
+      { for (fileHeader <- fileHeaders.sortBy(_.startDate)) yield {
       getAggDataset(fileHeader, timeRegular)
     }  }
     </aggregation>
@@ -503,8 +503,12 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
       logger.info("Processing %d files with %d workers".format(nFiles, nReadProcessors))
       val result = <netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
         <explicit/>
-        <attribute name="title" type="string" value="NetCDF aggregated dataset"/>{for (attribute <- fileMetadata.attributes) yield getAttribute(attribute)}{(for (coordAxis <- fileMetadata.coordinateAxes) yield getDimension(coordAxis)).flatten}{for (variable <- fileMetadata.coordVars) yield getVariable(fileMetadata, variable, timeRegularSpecs)}{for (variable <- fileMetadata.variables) yield getVariable(fileMetadata, variable, timeRegularSpecs)}{getAggregation(fileMetadata, timeRegularSpecs.isDefined)}
-
+        <attribute name="title" type="string" value="NetCDF aggregated dataset"/>
+            {for (attribute <- fileMetadata.attributes) yield getAttribute(attribute)}
+            {(for (coordAxis <- fileMetadata.coordinateAxes) yield getDimension(coordAxis)).flatten}
+            {for (variable <- fileMetadata.coordVars) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
+            {for (variable <- fileMetadata.variables) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
+            {getAggregation(fileMetadata, timeRegularSpecs.isDefined)}
       </netcdf>
       val varNames: List[String] = fileMetadata.variables.map(_.getShortName)
       (varNames, result)
