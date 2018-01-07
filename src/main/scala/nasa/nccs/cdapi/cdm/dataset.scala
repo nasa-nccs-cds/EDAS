@@ -146,7 +146,7 @@ object CDGrid extends Loggable {
       val src = Source.fromFile(datfilePath)
       try { src.getLines().foreach( line => collectionFiles.push( sanityCheck( line.split(",").last.trim ) ) ) } finally { src.close() }
     } else { collectionFiles.push( datfilePath ) }
-    logger.info( s"Creating #grid# file $gridFilePath from collectionFiles: [${collectionFiles.map(_.split('/').last).mkString(", ")}] from collections metafile: $datfilePath" )
+    logger.info( s" %G% Creating #grid# file $gridFilePath from collectionFiles: [${collectionFiles.map(_.split('/').last).mkString(", ")}] from collections metafile: $datfilePath" )
     testNc4()
     val gridWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf4, gridFilePath, null)
 
@@ -214,6 +214,7 @@ object CDGrid extends Loggable {
                 None
             }
           }
+          logger.info(s" %G% Writing grid coord variable[${newVar.getFullName}] data from file[${collectionFile}] range: [ ${coordAxis.getMinValue.toString} - ${coordAxis.getMaxValue.toString}  ${coordAxis.getUnitsString} ]")
           if (coordAxis.getAxisType == AxisType.Time) {
             val (time_values, bounds) = FileHeader.getTimeValues(ncDataset, coordAxis)
             newVar.addAttribute(new Attribute(CDM.UNITS, cdsutils.baseTimeUnits))
