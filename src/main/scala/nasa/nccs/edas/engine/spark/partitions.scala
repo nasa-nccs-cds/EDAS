@@ -190,8 +190,7 @@ class RangePartitioner( val partitions: Map[Int,RecordKey] ) extends spark.Parti
       val kcenter = key.asInstanceOf[LongRange].center
       val estIndex = estPartIndexAtLoc(kcenter)
       val estPart = partitions.get(estIndex).fold("NONE")( part => s"${part.start} -> ${part.end}")
-      partitions.foreach { case (index, part) => logger.info( s"PART{$index} --- start: ${part.start}, end: ${part.end}") }
-      throw new Exception(s"Can't find partition index for key ${kcenter}' est_index = ${estIndex}, numParts=${numParts}, estPart=${estPart}, partition range = ${range.start} - ${range.end}")
+      throw new Exception(s"Can't find partition index for key ${kcenter}' est_index = ${estIndex}, numParts=${numParts}, estPart=${estPart}, partition range = ${range.start} - ${range.end}, partitions:\n\t ${partitions.map { case (index, part) => s"PART{$index} --- start: ${part.start}, end: ${part.end}" }.mkString("\n\t")}")
     }
     index
   }
