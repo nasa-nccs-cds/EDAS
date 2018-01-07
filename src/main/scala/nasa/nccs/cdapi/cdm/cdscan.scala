@@ -457,13 +457,13 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
     }
   }
 
-  def getTimeSpecs: Option[(Long, Long)] = {
-    val t0 = fileHeaders.head.startValue
-    val dt = if (fileHeaders.head.nElem > 1) {
-      fileHeaders.head.axisValues(1) - fileHeaders.head.axisValues(0)
-    } else { fileHeaders(1).startValue - fileHeaders(0).startValue }
-    Some(t0 -> dt)
-  }
+//  def getTimeSpecs: Option[(Long, Long)] = {
+//    val t0 = fileHeaders.head.startValue
+//    val dt = if (fileHeaders.head.nElem > 1) {
+//      fileHeaders.head.axisValues(1) - fileHeaders.head.axisValues(0)
+//    } else { fileHeaders(1).startValue - fileHeaders(0).startValue }
+//    Some(t0 -> dt)
+//  }
 
   def makeFullName(tvar: nc2.Variable): String = {
     val g: Group = tvar.getGroup
@@ -486,7 +486,7 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
 
   def getAggregation(fileMetadata: FileMetadata, timeRegular: Boolean): xml.Node = {
     <aggregation dimName={getTimeVarName(fileMetadata: FileMetadata)} type="joinExisting">
-      { for (fileHeader <- fileHeaders.sortBy(_.startDate)) yield {
+      { for (fileHeader <- fileHeaders) yield {
       getAggDataset(fileHeader, timeRegular)
     }  }
     </aggregation>
@@ -600,7 +600,7 @@ object FileHeader extends Loggable {
 
   def getFileHeaders(files: IndexedSeq[String], timeRegular: Boolean = false ): IndexedSeq[FileHeader] = {
     factory( files, timeRegular )
-    files.map( file => FileHeader( file, timeRegular ) )
+    files.map( file => FileHeader( file, timeRegular ) ).sortBy(_.startDate)
   }
 
   def getTimeAxisRegularity(ncFile: URI): Boolean = {
