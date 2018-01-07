@@ -562,9 +562,8 @@ class FileHeaderGenerator( file: String, timeRegular: Boolean ) extends Runnable
 object FileHeader extends Loggable {
   val maxOpenAttempts = 1
   val retryIntervalSecs = 10
-  val cores: Int = Runtime.getRuntime.availableProcessors
   private val _instanceCache = new ConcurrentLinkedHashMap.Builder[String, FileHeader].initialCapacity(64).maximumWeightedCapacity(100000).build()
-  private val _pool = Executors.newFixedThreadPool( Math.max(1,cores-2) )
+  private val _pool = Executors.newFixedThreadPool( Runtime.getRuntime.availableProcessors )
 
   def apply( uri: URI, timeRegular: Boolean ): FileHeader = apply( uri.toString, timeRegular )
   def apply( file: File, timeRegular: Boolean ): FileHeader = apply( file.getCanonicalPath, timeRegular )
@@ -718,6 +717,7 @@ object CDScan extends Loggable {
     val collectionId = inputs(0).toLowerCase
     val pathFile = new File(inputs(1))
     NCMLWriter.extractSubCollections( collectionId, pathFile.toPath, optionMap.toMap )
+    System.exit(0)
   }
 }
 
@@ -730,6 +730,7 @@ object CDMultiScan extends Loggable {
     val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
     ncmlDir.mkdirs
     NCMLWriter.generateNCMLFiles( collectionsMetaFile )
+    System.exit(0)
   }
 }
 
