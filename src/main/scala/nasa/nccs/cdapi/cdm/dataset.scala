@@ -1166,7 +1166,7 @@ object NetcdfDatasetMgr extends Loggable with ContainerOps  {
 
   def openFile( dpath: String, context: String ): NetcdfDataset = try {
     val result = NetcdfDataset.openDataset(dpath)
-    logger.info(s"   *%* --> Opened Dataset from path: $dpath, context: $context ")
+//    logger.info(s"   *%* --> Opened Dataset from path: $dpath, context: $context ")
     result
   } catch {
     case err: Throwable => throw new Exception( s"Error opening netcdf file $dpath: ${err.toString} ")

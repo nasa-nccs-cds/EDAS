@@ -4,7 +4,7 @@ import java.io._
 import java.net.URI
 import java.nio.file.{FileSystems, Path, Paths}
 import java.util.Formatter
-import java.util.concurrent.{Executors, Future}
+import java.util.concurrent.{Executors, Future, TimeUnit}
 
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.cdapi.tensors.CDDoubleArray
@@ -581,13 +581,18 @@ object FileHeader extends Loggable {
     }
   })
 
+  def term() = {
+    _pool.shutdown()
+    _pool.awaitTermination(60,TimeUnit.SECONDS)
+  }
+
   def isCached( path: String ): Boolean = _instanceCache.keys.contains( path )
 
   def clearCache = _instanceCache.clear()
   def filterCompleted( seq: IndexedSeq[Future[_]] ): IndexedSeq[Future[_]] = seq.filterNot( _.isDone )
 
   def waitUntilDone( seq: IndexedSeq[Future[_]] ): Unit = if( seq.isEmpty ) { return } else {
-    print( s"Waiting on ${seq.length} tasks (generating NCML files)")
+//    print( s"Waiting on ${seq.length} tasks (generating NCML files)")
     Thread.sleep( 500 )
     waitUntilDone( filterCompleted(seq) )
   }
@@ -717,7 +722,8 @@ object CDScan extends Loggable {
     val collectionId = inputs(0).toLowerCase
     val pathFile = new File(inputs(1))
     NCMLWriter.extractSubCollections( collectionId, pathFile.toPath, optionMap.toMap )
-    System.exit(0)
+    FileHeader.term()
+//    System.exit(0)
   }
 }
 
@@ -730,7 +736,8 @@ object CDMultiScan extends Loggable {
     val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
     ncmlDir.mkdirs
     NCMLWriter.generateNCMLFiles( collectionsMetaFile )
-    System.exit(0)
+    FileHeader.term()
+    //    System.exit(0)
   }
 }
 
