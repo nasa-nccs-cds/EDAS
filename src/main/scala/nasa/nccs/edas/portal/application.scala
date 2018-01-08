@@ -229,6 +229,24 @@ object TestApplication extends Loggable {
   }
 }
 
+object TestDatasetApplication extends Loggable {
+  def main(args: Array[String]) {
+    EDASLogManager.isMaster
+    val sc = CDSparkContext()
+//    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra2_mth-atmos.tas.ncml"
+    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
+    val dataset = NetcdfDataset.openDataset(dataFile)
+    val files: Array[String] = dataset.getAggregation.getDatasets.map( _.getLocation.split('#').head ).toArray
+    dataset.close()
+    println( "" )
+  }
+  def getProfileDiagnostic( base_time: Float )( index: Int ): String = {
+    val result = s"  T{$index} => E${SparkEnv.get.executorId}:${ManagementFactory.getRuntimeMXBean.getName} -> %.4f".format( (System.currentTimeMillis() - base_time)/1.0E3 )
+    logger.info( result )
+    result
+  }
+}
+
 object TestReadApplication extends Loggable {
   def main(args: Array[String]): Unit = {
     import ucar.ma2.ArrayFloat
