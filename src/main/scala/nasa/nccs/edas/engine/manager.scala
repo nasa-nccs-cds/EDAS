@@ -417,11 +417,14 @@ class EDASExecutionManager extends WPSServer with Loggable {
     //    runtime.printMemoryUsage(logger)
     val t0 = System.nanoTime
     val req_ids = request.name.split('.')
-    val opModule = request.operations.headOption.fold("")( _.name.split('.').head )
+    val opNames = request.operations.headOption.fold( Array("") )( _.name.split('.') )
     logger.info("Blocking Execute { runargs: " + run_args.toString + ", request: " + request.toString + " }")
-    if(  Seq( opModule, req_ids(0) ).contains("util") ) {
-      logger.info( "Executing utility request " )
+    if(  req_ids.head.equals("util") ) {
+      logger.info( "Executing utility request " + req_ids(1) )
       executeUtilityRequest(jobId, req_ids(1), request, run_args)
+    } else if( opNames.head.equals("util") ) {
+      logger.info( "Executing utility request " + opNames(1) )
+      executeUtilityRequest( jobId, opNames(1), request, run_args )
     } else {
       logger.info("Executing task request " + request.name )
       val requestContext = createRequestContext ( jobId, request, run_args )
