@@ -46,16 +46,11 @@ trait ExecutionCallback extends Loggable {
 
 object EDASExecutionManager extends Loggable {
   val handler_type_key = "execution.handler.type"
-  private var _testProcesses = new ListBuffer[TestProcess]()
   private var _killed = false
+  private var _testProcesses = TrieMap.empty[ String, TestProcess ]
+  def addTestProcess( test_process: TestProcess ) = { _testProcesses +=  (test_process.id -> test_process) }
+  def getTestProcess( id: String ): Option[TestProcess] = _testProcesses.get(id)
 
-  def apply(): EDASExecutionManager = {
-    val mgr = new EDASExecutionManager
-    _testProcesses.foreach( mgr.addTestProcess )
-    mgr
-  }
-
-  def addTestProcess( tp: TestProcess ): Unit = _testProcesses += tp
   def checkIfAlive: Unit = { if(_killed) {  _killed = false; throw new Exception("Job Killed") }; }
   def killJob = _killed = true;
 
@@ -244,14 +239,13 @@ class EDASExecutionManager extends WPSServer with Loggable {
   val kernelManager = new KernelMgr()
   val EDAS_CACHE_DIR = sys.env("EDAS_CACHE_DIR")
   val USER = sys.env("USER")
-  private var _testProcesses = TrieMap.empty[ String, TestProcess ]
+
   val cleanupManager = new CleanupManager()
                           .addFileCleanupTask( Kernel.getResultDir.getPath, 2.0f, false, ".*" )
                           .addFileCleanupTask( EDAS_CACHE_DIR, 1.0f, true, "blockmgr-.*" )
                           .addFileCleanupTask( EDAS_CACHE_DIR, 1.0f, true, "spark-.*" )
                           .addFileCleanupTask( s"/tmp/$USER/logs", 4.0f, true, ".*" )
 
-  def addTestProcess( test_process: TestProcess ) = { _testProcesses +=  (test_process.id -> test_process) }
 
 //  def getOperationInputs( context: EDASExecutionContext ): Map[String,OperationInput] = {
 //    val items = for (uid <- context.operation.inputs) yield {
