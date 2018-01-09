@@ -420,7 +420,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
     val opModule = request.operations.headOption.fold("")( _.name.split('.').head )
     logger.info("Blocking Execute { runargs: " + run_args.toString + ", request: " + request.toString + " }")
     if(  Seq( opModule, req_ids(0) ).contains("util") ) {
-      logger.info("Executing utility request " + req_ids(1))
+      logger.info( "Executing utility request " )
       executeUtilityRequest(jobId, req_ids(1), request, run_args)
     } else {
       logger.info("Executing task request " + request.name )
