@@ -2,6 +2,8 @@ package nasa.nccs.edas.portal
 import java.lang.management.ManagementFactory
 import java.nio.file.{Files, Path, Paths}
 
+import nasa.nccs.cdapi.cdm.NetcdfDatasetMgr
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
@@ -10,14 +12,20 @@ import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.EDASApplication.logger
 import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
-import nasa.nccs.esgf.process.TaskRequest
+import nasa.nccs.esgf.process.{CDSection, TaskRequest}
 import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import nasa.nccs.wps._
+import org.apache.spark.sql.{DataFrame, SQLContext, SQLImplicits}
+// import org.apache.spark.implicits._
 import org.apache.spark.SparkEnv
-import ucar.ma2.ArrayFloat
-import ucar.nc2.dataset.NetcdfDataset
+import org.apache.spark.api.java.function.MapPartitionsFunction
+import org.apache.spark.sql.Row
+import ucar.ma2
+import ucar.nc2.dataset.{CoordinateAxis1DTime, NetcdfDataset}
+import ucar.nc2.time.CalendarDate
 
+import scala.collection.mutable
 import scala.io.Source
 
 //import gov.nasa.gsfc.cisto.cds.sia.scala.climatespark.core.EDASDriver
@@ -229,22 +237,68 @@ object TestApplication extends Loggable {
   }
 }
 
+case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, data: Array[Float] )
+case class FileInput( path: String )
+
+object TimeSliceIterator {
+  def apply( varName: String, cdsection: CDSection ) ( files: Iterator[Row] ): TimeSliceIterator = {
+    new TimeSliceIterator( varName, cdsection, files )
+  }
+}
+
+class TimeSliceIterator( val varName: String, val cdsection: CDSection, val files: Iterator[Row]) extends Iterator[Row] {
+  private var _fileStack = new mutable.ArrayStack[Row]() ++ files
+  private var _sliceStack = new mutable.ArrayStack[Row]()
+
+  private def getSlices( fileInput: Row ): List[Row] = {
+    import ucar.nc2.time.CalendarPeriod.Field._
+    def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
+    val path = fileInput.getString(0)
+    val dataset = NetcdfDatasetMgr.aquireFile( path, 77.toString )
+    val section: ma2.Section = cdsection.toSection
+    val data: ma2.Array = NetcdfDatasetMgr.readVariableData(varName, dataset, section ) getOrElse { throw new Exception(s"Can't find data for variable $varName in data file ${path}") }
+    val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${path}") } ).section( section.getRange(0) )
+    val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
+    assert( dates.length == data.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${data.getShape()(0)}" )
+    val slices = dates.zipWithIndex map { case ( date: CalendarDate, slice_index: Int ) =>
+      val data_section = data.sectionNoReduce( getSliceRanges(section,slice_index) ).copyTo1DJavaArray().asInstanceOf[Array[Float]]
+      Row( date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, data_section )
+    }
+    dataset.close()
+    slices
+  }
+
+  def hasNext: Boolean = { !( _sliceStack.isEmpty && _fileStack.isEmpty ) }
+
+  def next(): Row = {
+    if( _sliceStack.isEmpty ) { _sliceStack ++= getSlices( _fileStack.pop() ) }
+    _sliceStack.pop()
+  }
+}
+//time = UNLIMITED ; // (8 currently)
+//levels = 42 ;
+//longitude = 288 ;
+//latitude = 144 ;
 object TestDatasetApplication extends Loggable {
   def main(args: Array[String]) {
     EDASLogManager.isMaster
     val sc = CDSparkContext()
 //    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra2_mth-atmos.tas.ncml"
     val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
+    val varName = "t"
+    val origin = Array( 0,0,0,0 )
+    val shape = Array( 100,42,144,288 )
+    val section: CDSection = new CDSection( origin, shape )
     val dataset = NetcdfDataset.openDataset(dataFile)
-    val files: Array[String] = dataset.getAggregation.getDatasets.map( _.getLocation.split('#').head ).toArray
+    val files: List[FileInput] = dataset.getAggregation.getDatasets.map( ds => FileInput( ds.getLocation.split('#').head ) ).toList
     dataset.close()
+    val filesDataFrame: DataFrame = sc.session.createDataFrame(files)
+    val sectionDataset = filesDataFrame.mapPartitions(  TimeSliceIterator( varName, section ) )
+
     println( "" )
   }
-  def getProfileDiagnostic( base_time: Float )( index: Int ): String = {
-    val result = s"  T{$index} => E${SparkEnv.get.executorId}:${ManagementFactory.getRuntimeMXBean.getName} -> %.4f".format( (System.currentTimeMillis() - base_time)/1.0E3 )
-    logger.info( result )
-    result
-  }
+
+  def getRows( file: String ) = {}
 }
 
 object TestReadApplication extends Loggable {

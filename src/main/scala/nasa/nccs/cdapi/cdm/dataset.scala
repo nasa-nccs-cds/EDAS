@@ -1059,12 +1059,13 @@ object NetcdfDatasetMgr extends Loggable with ContainerOps  {
   def getTimeAxis( dataPath: String ): CoordinateAxis1DTime = {
     val ncDataset: NetcdfDataset = aquireFile( dataPath, 11.toString )
     try {
-      val axes = ncDataset.getCoordinateAxes.toList
-      axes.find( _.getAxisType == AxisType.Time ) match {
-        case Some( time_axis ) => CoordinateAxis1DTime.factory(ncDataset, time_axis, formatter )
-        case None => throw new Exception( "Can't find time axis in dataset: " + dataPath )
-      }
+      getTimeAxis( ncDataset ) getOrElse { throw new Exception( "Can't find time axis in dataset: " + dataPath ) }
     } finally { ncDataset.close() }
+  }
+
+  def getTimeAxis( ncDataset: NetcdfDataset ): Option[CoordinateAxis1DTime] = {
+    val axes = ncDataset.getCoordinateAxes.toList
+    axes.find( _.getAxisType == AxisType.Time ) map { time_axis => CoordinateAxis1DTime.factory(ncDataset, time_axis, formatter ) }
   }
 
   def getMissingValue(attributes: Map[String, nc2.Attribute]): Float = findAttributeValue(  attributes, "^.*missing.*$", "" ) match {
@@ -1080,27 +1081,24 @@ object NetcdfDatasetMgr extends Loggable with ContainerOps  {
   def readVariableData(varShortName: String, dataPath: String, section: ma2.Section): ma2.Array = {
     val ncDataset: NetcdfDataset = openCollection(varShortName, dataPath)
     try {
-      ncDataset.getVariables.toList.find(v => v.getShortName equals varShortName) match {
-        case Some(variable) =>
-          try {
-            runtime.printMemoryUsage(logger)
-            val t0 = System.nanoTime()
-            val ma2array = variable.read(section)
-            val sample_data = (0 until Math.min(16, ma2array.getSize).toInt) map ma2array.getFloat
-            logger.info("[T%d] Reading variable %s from path %s, section shape: (%s), section origin: (%s), variable shape: (%s), size = %.2f M, read time = %.4f sec, sample data = [ %s ]".format(
-              Thread.currentThread().getId(), varShortName, dataPath, section.getShape.mkString(","), section.getOrigin.mkString(","), variable.getShape.mkString(","), (section.computeSize * 4.0) / MB, (System.nanoTime() - t0) / 1.0E9, sample_data.mkString(", ")))
-            ma2array
-          } catch {
-            case err: Exception =>
-              logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));
-              logger.error("Variable shape: (%s),  section: { o:(%s) s:(%s) }".format(variable.getShape.mkString(","), section.getOrigin.mkString(","), section.getShape.mkString(",")));
-              logger.error(err.getStackTrace.map(_.toString).mkString("\n"))
-              throw err
-          }
-        case None => throw new Exception(s"Can't find variable $varShortName in dataset $dataPath ")
-      }
-    } finally { ncDataset.close() }
+      readVariableData( varShortName, ncDataset, section ) getOrElse { throw new Exception(s"Can't find variable $varShortName in dataset $dataPath ") }
+    } catch {
+      case err: Exception =>
+        logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));
+        logger.error(err.getStackTrace.map(_.toString).mkString("\n"))
+        throw err
+    } finally {
+      ncDataset.close()
+    }
   }
+
+  def readVariableData(varShortName: String, ncDataset: NetcdfDataset, section: ma2.Section): Option[ma2.Array] =
+    ncDataset.getVariables.toList.find(v => v.getShortName equals varShortName) map { variable =>
+//        runtime.printMemoryUsage(logger)
+        val ma2array = variable.read(section)
+        logger.error("Reading Variable %s, shape: (%s),  section: { o:(%s) s:(%s) }".format( varShortName, variable.getShape.mkString(","), section.getOrigin.mkString(","), section.getShape.mkString(",")) )
+        ma2array
+    }
 
   def createVariableMetadataRecord( varShortName: String, dataPath: String ): VariableMetadata = {
     val ncDataset: NetcdfDataset = openCollection( varShortName, dataPath )
