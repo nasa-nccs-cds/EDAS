@@ -2,11 +2,11 @@ package nasa.nccs.edas.engine
 import java.io.{IOException, PrintWriter, StringWriter}
 import java.nio.file.{Files, Paths}
 import java.io.File
-
+import scala.collection.concurrent.TrieMap
 import nasa.nccs.cdapi.cdm.{Collection, PartitionedFragment, _}
 import nasa.nccs.edas.loaders.{Collections, Masks}
 import nasa.nccs.esgf.process._
-
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}
 import nasa.nccs.edas.kernels.{Kernel, KernelMgr, KernelModule}
@@ -46,9 +46,16 @@ trait ExecutionCallback extends Loggable {
 
 object EDASExecutionManager extends Loggable {
   val handler_type_key = "execution.handler.type"
+  private var _testProcesses = new ListBuffer[TestProcess]()
   private var _killed = false
 
-  def apply(): EDASExecutionManager = { new EDASExecutionManager }
+  def apply(): EDASExecutionManager = {
+    val mgr = new EDASExecutionManager
+    _testProcesses.foreach( mgr.addTestProcess )
+    mgr
+  }
+
+  def addTestProcess( tp: TestProcess ): Unit = _testProcesses += tp
   def checkIfAlive: Unit = { if(_killed) {  _killed = false; throw new Exception("Job Killed") }; }
   def killJob = _killed = true;
 
@@ -225,6 +232,10 @@ object EDASExecutionManager extends Loggable {
 
 }
 
+abstract class TestProcess( val id: String ) extends Loggable {
+  def execute( spark: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport;
+}
+
 class EDASExecutionManager extends WPSServer with Loggable {
   import EDASExecutionManager._
   shutdown_python_workers()
@@ -233,11 +244,14 @@ class EDASExecutionManager extends WPSServer with Loggable {
   val kernelManager = new KernelMgr()
   val EDAS_CACHE_DIR = sys.env("EDAS_CACHE_DIR")
   val USER = sys.env("USER")
+  private var _testProcesses = TrieMap.empty[ String, TestProcess ]
   val cleanupManager = new CleanupManager()
                           .addFileCleanupTask( Kernel.getResultDir.getPath, 2.0f, false, ".*" )
                           .addFileCleanupTask( EDAS_CACHE_DIR, 1.0f, true, "blockmgr-.*" )
                           .addFileCleanupTask( EDAS_CACHE_DIR, 1.0f, true, "spark-.*" )
                           .addFileCleanupTask( s"/tmp/$USER/logs", 4.0f, true, ".*" )
+
+  def addTestProcess( test_process: TestProcess ) = { _testProcesses +=  (test_process.id -> test_process) }
 
 //  def getOperationInputs( context: EDASExecutionContext ): Map[String,OperationInput] = {
 //    val items = for (uid <- context.operation.inputs) yield {
@@ -333,6 +347,13 @@ class EDASExecutionManager extends WPSServer with Loggable {
   def isCollectionPath( path: File ): Boolean = { path.isDirectory || path.getName.endsWith(".csv") }
 
   def executeUtilityRequest(jobId: String, util_id: String, request: TaskRequest, run_args: Map[String, String]): WPSMergedEventReport = {
+    _testProcesses.get(util_id) match {
+      case Some( testProcess ) => testProcess.execute( serverContext.spark, jobId, Some(request), run_args )
+      case None => runUtilityRequest( jobId, util_id, request, run_args )
+    }
+  }
+
+  def runUtilityRequest( jobId: String, util_id: String, request: TaskRequest, run_args: Map[String, String] ): WPSMergedEventReport = {
     val result = util_id match {
       case "magg" =>
         val collectionNodes =  request.variableMap.values.flatMap( ds => {

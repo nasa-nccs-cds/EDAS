@@ -7,16 +7,17 @@ import nasa.nccs.cdapi.cdm.NetcdfDatasetMgr
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
-import nasa.nccs.edas.engine.{EDASExecutionManager, ExecutionCallback}
+import nasa.nccs.edas.engine.{EDASExecutionManager, ExecutionCallback, TestProcess}
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.EDASApplication.logger
+import nasa.nccs.edas.portal.TestDatasetApplication.logger
 import nasa.nccs.edas.portal.TestReadApplication.logger
 import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
-import nasa.nccs.esgf.process.{CDSection, TaskRequest}
+import nasa.nccs.esgf.process.{CDSection, ServerContext, TaskRequest}
 import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
-import nasa.nccs.wps._
+import nasa.nccs.wps.{WPSMergedEventReport, _}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Dataset, SQLContext, SQLImplicits}
 import ucar.ma2.ArrayFloat
@@ -58,6 +59,15 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   val randomIds = new RandomString(8)
   val printer = new scala.xml.PrettyPrinter(200, 3)
   Runtime.getRuntime().addShutdownHook( new Thread() { override def run() { term("ShutdownHook Called") } } )
+
+  def start( run_program: String = "" ) = {
+    if( run_program.isEmpty ) { run }
+    else { runAltProgram(run_program) }
+  }
+
+  def runAltProgram( run_program: String ): Unit = {
+
+  }
 
   override def execUtility(utilSpec: Array[String]): Message = {
     new Message("","","")
@@ -206,10 +216,12 @@ object EDASApplication extends Loggable {
     val request_port = elem(args, 0, "0").toInt
     val response_port = elem(args, 1, "0").toInt
     val parameter_file = elem(args, 2, "")
+    val run_program = elem(args, 3, "")
     val appConfiguration = getConfiguration( parameter_file )
     val client_address: String = appConfiguration.getOrElse("client","*")
+    EDASExecutionManager.addTestProcess( new TestDatasetProcess( "testDataset") )
     val app = new EDASapp( client_address, request_port, response_port, appConfiguration )
-    app.run()
+    app.start( run_program )
     logger.info(s"EXIT EDASApplication");
     sys.exit();
   }
@@ -296,17 +308,16 @@ class TimeSliceIterator( val varName: String, val cdsection: CDSection, val gene
 //levels = 42 ;
 //longitude = 288 ;
 //latitude = 144 ;
-object TestDatasetApplication extends Loggable {
-  def main(args: Array[String]) {
-    EDASLogManager.isMaster
-    val sc = CDSparkContext()
+
+class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
+  def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {
     import sc.session.implicits._
     val useRDD = false
     val generateTimeSlices = true
     val t0 = System.nanoTime()
     val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra2_mth-atmos.tas.ncml"
     logger.info( "Starting read test")
-//    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
+    //    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
     val varName = "t"
     val origin = Array( 0,0,0,0 )
     val shape = Array( 100,42,144,288 )
@@ -329,6 +340,14 @@ object TestDatasetApplication extends Loggable {
       val nParts = sectionDataset.rdd.getNumPartitions
       logger.info(s"Completed test, nFiles = ${files.length}, time = %.4f sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}".format((t1 - t0) / 1.0E9))
     }
+    new WPSMergedEventReport( Seq.empty )
+  }
+}
+object TestDatasetApplication extends Loggable {
+  def main(args: Array[String]) {
+    EDASLogManager.isMaster
+    val valtest = new TestDatasetProcess("test")
+    valtest.execute( CDSparkContext(), "test" )
   }
 
   def getRows( file: String ) = {}

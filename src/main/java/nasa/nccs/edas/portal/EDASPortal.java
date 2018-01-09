@@ -156,7 +156,7 @@ class Responder extends Thread {
         }
     }
 
-    public void run()  {
+    public void run( )  {
         int pause_time = 100;
         int accum_sleep_time = 0;
         int heartbeat_interval = 2000;
