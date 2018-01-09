@@ -347,6 +347,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
   def isCollectionPath( path: File ): Boolean = { path.isDirectory || path.getName.endsWith(".csv") }
 
   def executeUtilityRequest(jobId: String, util_id: String, request: TaskRequest, run_args: Map[String, String]): WPSMergedEventReport = {
+    logger.info("executeUtilityRequest, test processses: " + _testProcesses.keys.mkString(", ") )
     _testProcesses.get(util_id) match {
       case Some( testProcess ) => testProcess.execute( serverContext.spark, jobId, Some(request), run_args )
       case None => runUtilityRequest( jobId, util_id, request, run_args )

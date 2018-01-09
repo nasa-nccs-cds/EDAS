@@ -328,7 +328,7 @@ object Collections extends XmlResource with Loggable {
 
   def addSubCollection(  id: String, collectionFilePath: String, grid: CDGrid ): Option[Collection] = try {
     if( ! _datasets.containsKey(id) ) {
-      logger.info(s" ---> Loading sub collection $id")
+//      logger.info(s" ---> Loading sub collection $id")
       val collection = createCollection(id, collectionFilePath, grid)
       _datasets.put(id, collection)
       Some(collection)
