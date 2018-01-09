@@ -167,11 +167,18 @@ case class KernelExecutionResult( key: RecordKey, record: RDDRecord, files: List
 }
 
 class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager ) extends Loggable {
-  val nodes: Seq[WorkflowNode] = request.operations.map(opCx => WorkflowNode( opCx, createKernel( opCx.name.toLowerCase ) ) )
+  val nodes: Seq[WorkflowNode] = request.operations flatMap getWorkflowNode
   val roots = findRootNodes()
   private val _nodeInputs: mutable.HashMap[String, OperationInput] = mutable.HashMap.empty[String, OperationInput]
 
   def createKernel(id: String): Kernel = executionMgr.getKernel(id)
+
+  def getWorkflowNode( operation: OperationContext ): Option[WorkflowNode] = {
+    val opName = operation.name.toLowerCase
+    val moduleName = opName.split('.').head
+    if( moduleName.toLowerCase.equals("util") ) { None }
+    else { Some(  WorkflowNode( operation, createKernel( opName ) ) ) }
+  }
 
   def generateProduct( executor: WorkflowExecutor ): Option[WPSProcessExecuteResponse] = {
     val kernelExecutionResult = executeKernel( executor )
