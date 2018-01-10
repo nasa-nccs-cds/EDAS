@@ -268,12 +268,13 @@ class TimeSliceIterator( val varName: String, val cdsection: CDSection, val gene
 
   private def getSlices( fileInput: FileInput ): List[CDTimeSlice] = {
     import ucar.nc2.time.CalendarPeriod.Field._
+    logger.info( s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}")
     def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
     val path = fileInput.path
     val t0 = System.nanoTime()
     val dataset = NetcdfDatasetMgr.aquireFile( path, 77.toString )
     val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${path}") }
-    logger.info( s"Executing TimeSliceIterator.getSlices, global section: ${cdsection.toSection.toString}, variable section: ${variable.getShapeAsSection.toString}")
+    logger.info( s"global section: ${cdsection.toSection.toString}, variable section: ${variable.getShapeAsSection.toString}")
     val section: ma2.Section = cdsection.toSection.intersect( variable.getShapeAsSection )
     val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${path}") } ).section( section.getRange(0) )
     val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
