@@ -318,7 +318,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra2_mth-atmos.tas.ncml"
     logger.info( "Starting read test")
     //    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
-    val varName = "t"
+    val varName = "tas"
     val origin = Array( 0,0,0,0 )
     val shape = Array( 100,42,144,288 )
     val section: CDSection = new CDSection( origin, shape )
