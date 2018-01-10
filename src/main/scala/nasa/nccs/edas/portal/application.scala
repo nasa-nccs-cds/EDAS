@@ -257,14 +257,14 @@ case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, data: A
 case class FileInput( path: String )
 
 object TimeSliceMultiIterator {
-  def apply( varName: String, section: String, preFetch: Boolean ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
-    new TimeSliceMultiIterator( varName, section, preFetch, files )
+  def apply( varName: String, section: String, tslice: String ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
+    new TimeSliceMultiIterator( varName, section, tslice, files )
   }
 }
 
-class TimeSliceMultiIterator( val varName: String, val section: String, val preFetch: Boolean, val files: Iterator[FileInput]) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceMultiIterator( val varName: String, val section: String, val tslice: String, val files: Iterator[FileInput]) extends Iterator[CDTimeSlice] with Loggable {
   private var _optSliceIterator: Iterator[CDTimeSlice] = if( files.hasNext ) { getSliceIterator( files.next() ) } else { Iterator.empty }
-  private def getSliceIterator( fileInput: FileInput ): TimeSliceIterator = new TimeSliceIterator( varName, section, preFetch, fileInput )
+  private def getSliceIterator( fileInput: FileInput ): TimeSliceIterator = new TimeSliceIterator( varName, section, tslice, fileInput )
   val t0 = System.nanoTime()
 
   def hasNext: Boolean = { !( _optSliceIterator.isEmpty && files.isEmpty ) }
@@ -279,11 +279,12 @@ class TimeSliceMultiIterator( val varName: String, val section: String, val preF
   }
 }
 
-class TimeSliceIterator( val varName: String, val section: String, val preFetch: Boolean, val fileInput: FileInput ) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceIterator( val varName: String, val section: String, val tslice: String, val fileInput: FileInput ) extends Iterator[CDTimeSlice] with Loggable {
   import ucar.nc2.time.CalendarPeriod.Field._
   private var _dateStack = new mutable.ArrayStack[(CalendarDate,Int)]()
   private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
   val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
+  val preFetch = tslice.equals("prefetch")
   logger.info( s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}")
   val path = fileInput.path
   val t0 = System.nanoTime()
@@ -338,21 +339,20 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val nPartitions: Int = config.get( "parts" ).fold( nNodes * usedCoresPerNode ) (_.toInt)
     val mode = config.getOrElse( "mode", "rdd" )
     val tslice = config.getOrElse( "tslice", "prefetch" )
-    val preFetch = tslice.equals("prefetch")
     dataset.close()
     if( mode.equals("rdd") ) {
       val parallelism = Math.min( files.length, nPartitions )
       val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
       filesDataset.count()
       val t1 = System.nanoTime()
-      val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, preFetch ) )
+      val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
       timesliceRDD.count()
       val t2 = System.nanoTime()
       val nParts = timesliceRDD.getNumPartitions
-      logger.info(s"Completed test, nFiles = ${files.length}, prep time = ${(t1 - t0) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}")
+      logger.info(s"Completed test, nFiles = ${files.length}, prep time = ${(t1 - t0) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t0) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}")
     } else {
       val filesDataset: Dataset[FileInput] = sc.session.createDataset(files)
-      val sectionDataset = filesDataset.mapPartitions(TimeSliceMultiIterator( varName, section, preFetch ) )
+      val sectionDataset = filesDataset.mapPartitions(TimeSliceMultiIterator( varName, section, tslice ) )
       sectionDataset.count()
       val t1 = System.nanoTime()
       val nParts = sectionDataset.rdd.getNumPartitions
