@@ -271,11 +271,10 @@ class TimeSliceMultiIterator( val varName: String, val section: String, val preF
 
   def next(): CDTimeSlice = {
     val t1 = System.nanoTime()
-    val file = files.next()
-    if( _optSliceIterator.isEmpty ) { _optSliceIterator = getSliceIterator( file ) }
+    if( _optSliceIterator.isEmpty ) { _optSliceIterator = getSliceIterator( files.next() ) }
     val result = _optSliceIterator.next()
     val t2 = System.nanoTime()
-    logger.info(s"Completed time slice read (file: ${file.path}) time = ${(t2 - t1) / 1.0E9} sec, accum time = ${(t2 - t0) / 1.0E9} sec")
+    logger.info(s"Completed time slice: time = ${(t2 - t1) / 1.0E9} sec, accum time = ${(t2 - t0) / 1.0E9} sec")
     result
   }
 }
@@ -296,6 +295,7 @@ class TimeSliceIterator( val varName: String, val section: String, val preFetch:
   val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
   assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
   val t1 = System.nanoTime()
+  def filePath: String = fileInput.path
 
   private def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
 
