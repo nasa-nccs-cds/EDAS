@@ -270,11 +270,8 @@ class TimeSliceMultiIterator( val varName: String, val section: String, val tsli
   def hasNext: Boolean = { !( _optSliceIterator.isEmpty && files.isEmpty ) }
 
   def next(): CDTimeSlice = {
-    val t1 = System.nanoTime()
     if( _optSliceIterator.isEmpty ) { _optSliceIterator = getSliceIterator( files.next() ) }
     val result = _optSliceIterator.next()
-    val t2 = System.nanoTime()
-    logger.info(s"Completed time slice: time = ${(t2 - t1) / 1.0E9} sec, accum time = ${(t2 - t0) / 1.0E9} sec")
     result
   }
 }
@@ -285,7 +282,6 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
   private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
   val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
   val preFetch = tslice.equals("prefetch")
-  logger.info( s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}")
   val path = fileInput.path
   val t0 = System.nanoTime()
   val dataset = NetcdfDatasetMgr.aquireFile( path, 77.toString )
@@ -296,6 +292,7 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
   val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
   assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
   val t1 = System.nanoTime()
+//  logger.info( s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, prep time = ${(t1 - t0) / 1.0E9} sec")
   def filePath: String = fileInput.path
 
   private def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
@@ -326,7 +323,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     import sc.session.implicits._
     val nNodes = 18
     val usedCoresPerNode = 8
-    val t0 = System.nanoTime()
+    val t00 = System.nanoTime()
     val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_inst1_2d_asm_Nx-MERRA2.inst1.2d.asm.Nx.nc4.ncml"
     logger.info( "Starting read test")
     //    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
@@ -340,6 +337,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val mode = config.getOrElse( "mode", "rdd" )
     val tslice = config.getOrElse( "tslice", "prefetch" )
     dataset.close()
+    val t01 = System.nanoTime()
     if( mode.equals("rdd") ) {
       val parallelism = Math.min( files.length, nPartitions )
       val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
@@ -349,14 +347,14 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
       timesliceRDD.count()
       val t2 = System.nanoTime()
       val nParts = timesliceRDD.getNumPartitions
-      logger.info(s"Completed test, nFiles = ${files.length}, prep time = ${(t1 - t0) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t0) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}")
+      logger.info(s"Completed test, nFiles = ${files.length}, prep time = ${(t01 - t00) / 1.0E9} sec, parallization time = ${(t1 - t01) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t00) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}")
     } else {
       val filesDataset: Dataset[FileInput] = sc.session.createDataset(files)
       val sectionDataset = filesDataset.mapPartitions(TimeSliceMultiIterator( varName, section, tslice ) )
       sectionDataset.count()
       val t1 = System.nanoTime()
       val nParts = sectionDataset.rdd.getNumPartitions
-      logger.info(s"Completed test, nFiles = ${files.length}, time = %.4f sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}".format((t1 - t0) / 1.0E9))
+      logger.info(s"Completed test, nFiles = ${files.length}, time = %.4f sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}".format((t1 - t00) / 1.0E9))
     }
     new WPSMergedEventReport( Seq.empty )
   }
