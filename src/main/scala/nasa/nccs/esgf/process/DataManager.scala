@@ -637,6 +637,10 @@ object CDSection {
   def deserialize( section: String ): ma2.Section = new ma2.Section( section.split('+').map( rspec => { val sspec = rspec.split(','); new ma2.Range(sspec(0).trim,sspec(1).toInt,sspec(2).toInt) } ):_* )
   def merge( sect0: String, sect1: String ): String = CDSection.serialize( CDSection.deserialize(sect0).union( CDSection.deserialize(sect1) ) )
   def getRange( section: ma2.Section, axis: String ): Option[ma2.Range] = section.getRanges.find( _.getName == axis )
+  def fromString( serializedSection: String  ): Option[CDSection] = if( serializedSection.isEmpty ) { None } else {
+    val specs = serializedSection.split("[{}]")(1).split(':').map( _.split(',').map(_.toInt ) )
+    Some( new CDSection( specs(0), specs(1) ) )
+  }
 }
 class CDSection( origin: Array[Int], shape: Array[Int] ) extends Serializable {
   def toSection: ma2.Section = new ma2.Section( origin, shape )
@@ -644,7 +648,7 @@ class CDSection( origin: Array[Int], shape: Array[Int] ) extends Serializable {
   def getRange( axis_index: Int ) = toSection.getRange(axis_index)
   def getShape = toSection.getShape
   def getOrigin = toSection.getOrigin
-  override def toString() = "Section[%s:%s]".format( origin.mkString(","), shape.mkString(","))
+  override def toString() = "Section{%s:%s}".format( origin.mkString(","), shape.mkString(","))
   def merge( cdsect: CDSection ): CDSection = CDSection( cdsect.toSection.union( toSection ) )
 }
 

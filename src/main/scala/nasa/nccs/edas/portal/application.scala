@@ -257,14 +257,15 @@ case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, data: A
 case class FileInput( path: String )
 
 object TimeSliceIterator {
-  def apply( varName: String, cdsection: CDSection, generateTimeSlices: Boolean ) ( files: Iterator[FileInput] ): TimeSliceIterator = {
-    new TimeSliceIterator( varName, cdsection, generateTimeSlices, files )
+  def apply( varName: String, section: String, generateTimeSlices: Boolean ) ( files: Iterator[FileInput] ): TimeSliceIterator = {
+    new TimeSliceIterator( varName, section, generateTimeSlices, files )
   }
 }
 
-class TimeSliceIterator( val varName: String, val cdsection: CDSection, val generateTimeSlices: Boolean, val files: Iterator[FileInput]) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceIterator( val varName: String, val section: String, val generateTimeSlices: Boolean, val files: Iterator[FileInput]) extends Iterator[CDTimeSlice] with Loggable {
   private var _fileStack = new mutable.ArrayStack[FileInput]() ++ files
   private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
+  val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
 
   private def getSlices( fileInput: FileInput ): List[CDTimeSlice] = {
     import ucar.nc2.time.CalendarPeriod.Field._
@@ -274,8 +275,8 @@ class TimeSliceIterator( val varName: String, val cdsection: CDSection, val gene
     val t0 = System.nanoTime()
     val dataset = NetcdfDatasetMgr.aquireFile( path, 77.toString )
     val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${path}") }
-    logger.info( s"global section: ${cdsection.toSection.toString}, variable section: ${variable.getShapeAsSection.toString}")
-    val section: ma2.Section = cdsection.toSection.intersect( variable.getShapeAsSection )
+    val varSection = variable.getShapeAsSection
+    val section: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
     val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${path}") } ).section( section.getRange(0) )
     val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
     assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
@@ -321,9 +322,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     logger.info( "Starting read test")
     //    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
     val varName = "tas"
-    val origin = Array( 0,0,0,0 )
-    val shape = Array( 100,42,144,288 )
-    val section: CDSection = new CDSection( origin, shape )
+    val section = ""
     val dataset = NetcdfDataset.openDataset(dataFile)
     val files: List[FileInput] = dataset.getAggregation.getDatasets.map( ds => FileInput( ds.getLocation.split('#').head ) ).toList
     dataset.close()
