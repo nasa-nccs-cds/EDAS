@@ -307,10 +307,7 @@ class TimeSliceIterator( val varName: String, val section: String, val generateT
     _sliceStack.pop()
   }
 }
-//time = UNLIMITED ; // (8 currently)
-//levels = 42 ;
-//longitude = 288 ;
-//latitude = 144 ;
+
 
 class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
   def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {
@@ -320,10 +317,10 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val nNodes = 18
     val usedCoresPerNode = 8
     val t0 = System.nanoTime()
-    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra2_mth-atmos.tas.ncml"
+    val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_inst1_2d_asm_Nx-MERRA2.inst1.2d.asm.Nx.nc4.ncml"
     logger.info( "Starting read test")
     //    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
-    val varName = "tas"
+    val varName = "TS"
     val section = ""
     val dataset = NetcdfDataset.openDataset(dataFile)
     val files: List[FileInput] = dataset.getAggregation.getDatasets.map( ds => FileInput( ds.getLocation.split('#').head ) ).toList
