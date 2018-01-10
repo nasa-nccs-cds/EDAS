@@ -312,7 +312,7 @@ class TimeSliceIterator( val varName: String, val cdsection: CDSection, val gene
 class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
   def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {
     import sc.session.implicits._
-    val useRDD = false
+    val useRDD = true
     val generateTimeSlices = true
     val t0 = System.nanoTime()
     val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra2_mth-atmos.tas.ncml"
