@@ -317,6 +317,8 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     import sc.session.implicits._
     val useRDD = true
     val generateTimeSlices = true
+    val nNodes = 18
+    val usedCoresPerNode = 8
     val t0 = System.nanoTime()
     val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra2_mth-atmos.tas.ncml"
     logger.info( "Starting read test")
@@ -327,8 +329,9 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val files: List[FileInput] = dataset.getAggregation.getDatasets.map( ds => FileInput( ds.getLocation.split('#').head ) ).toList
     dataset.close()
     if( useRDD ) {
-      val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize(files)
-      val sectionRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions(TimeSliceIterator(varName, section, generateTimeSlices) )
+      val parallelism = Math.min( files.length, nNodes * usedCoresPerNode )
+      val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
+      val sectionRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceIterator(varName, section, generateTimeSlices) )
       sectionRDD.count()
       val t1 = System.nanoTime()
       val nParts = sectionRDD.getNumPartitions
