@@ -312,8 +312,6 @@ class TimeSliceIterator( val varName: String, val section: String, val generateT
 class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
   def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {
     import sc.session.implicits._
-    val useRDD = true
-    val generateTimeSlices = true
     val nNodes = 18
     val usedCoresPerNode = 8
     val t0 = System.nanoTime()
@@ -324,9 +322,14 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val section = ""
     val dataset = NetcdfDataset.openDataset(dataFile)
     val files: List[FileInput] = dataset.getAggregation.getDatasets.map( ds => FileInput( ds.getLocation.split('#').head ) ).toList
+    val config = optRequest.fold(Map.empty[String,String])( _.operations.head.getConfiguration )
+    val nPartitions: Int = config.get( "parts" ).fold( nNodes * usedCoresPerNode ) (_.toInt)
+    val mode = config.getOrElse( "mode", "rdd" )
+    val tslice = config.getOrElse( "tslice", "read" )
+    val generateTimeSlices = !tslice.equals("none")
     dataset.close()
-    if( useRDD ) {
-      val parallelism = Math.min( files.length, nNodes * usedCoresPerNode )
+    if( mode.equals("rdd") ) {
+      val parallelism = Math.min( files.length, nPartitions )
       val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
       val sectionRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceIterator(varName, section, generateTimeSlices) )
       sectionRDD.count()
