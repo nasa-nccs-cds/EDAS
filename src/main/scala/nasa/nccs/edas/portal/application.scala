@@ -257,26 +257,33 @@ case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, data: A
 case class FileInput( path: String )
 
 object TimeSliceMultiIterator {
-  def apply( varName: String, section: String, generateTimeSlices: Boolean ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
-    new TimeSliceMultiIterator( varName, section, generateTimeSlices, files )
+  def apply( varName: String, section: String, preFetch: Boolean ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
+    new TimeSliceMultiIterator( varName, section, preFetch, files )
   }
 }
 
-class TimeSliceMultiIterator( val varName: String, val section: String, val generateTimeSlices: Boolean, val files: Iterator[FileInput]) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceMultiIterator( val varName: String, val section: String, val preFetch: Boolean, val files: Iterator[FileInput]) extends Iterator[CDTimeSlice] with Loggable {
   private var _optSliceIterator: Iterator[CDTimeSlice] = if( files.hasNext ) { getSliceIterator( files.next() ) } else { Iterator.empty }
-  private def getSliceIterator( fileInput: FileInput ): TimeSliceIterator = new TimeSliceIterator( varName, section, generateTimeSlices, fileInput )
+  private def getSliceIterator( fileInput: FileInput ): TimeSliceIterator = new TimeSliceIterator( varName, section, preFetch, fileInput )
+  val t0 = System.nanoTime()
 
   def hasNext: Boolean = { !( _optSliceIterator.isEmpty && files.isEmpty ) }
 
   def next(): CDTimeSlice = {
-    if( _optSliceIterator.isEmpty ) { _optSliceIterator = getSliceIterator( files.next() ) }
-    _optSliceIterator.next()
+    val t1 = System.nanoTime()
+    val file = files.next()
+    if( _optSliceIterator.isEmpty ) { _optSliceIterator = getSliceIterator( file ) }
+    val result = _optSliceIterator.next()
+    val t2 = System.nanoTime()
+    logger.info(s"Completed time slice read (file: ${file.path}) time = ${(t2 - t1) / 1.0E9} sec, accum time = ${(t2 - t0) / 1.0E9} sec")
+    result
   }
 }
 
-class TimeSliceIterator( val varName: String, val section: String, val generateTimeSlices: Boolean, val fileInput: FileInput ) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceIterator( val varName: String, val section: String, val preFetch: Boolean, val fileInput: FileInput ) extends Iterator[CDTimeSlice] with Loggable {
   import ucar.nc2.time.CalendarPeriod.Field._
-  private var _sliceStack = new mutable.ArrayStack[(CalendarDate,Int)]()
+  private var _dateStack = new mutable.ArrayStack[(CalendarDate,Int)]()
+  private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
   val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
   logger.info( s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}")
   val path = fileInput.path
@@ -289,15 +296,25 @@ class TimeSliceIterator( val varName: String, val section: String, val generateT
   val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
   assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
   val t1 = System.nanoTime()
-  _sliceStack ++=  dates.zipWithIndex
 
   private def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
 
-  def hasNext: Boolean = _sliceStack.nonEmpty
+  if( preFetch ) {
+    _sliceStack ++= dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
+        //      val start = slice_size * slice_index
+        //      val data_section = data.slice( start, start + slice_size )
+      val data_section = variable.read(getSliceRanges( interSect, slice_index)).getStorage.asInstanceOf[Array[Float]]
+      CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, data_section)
+    }
+  } else {
+    _dateStack ++= dates.zipWithIndex
+  }
 
-  def next(): CDTimeSlice = {
-    val (date, slice_index ) = _sliceStack.pop()
-    val data_section = variable.read(getSliceRanges(interSect, slice_index)).getStorage.asInstanceOf[Array[Float]]
+  def hasNext: Boolean = if( preFetch ) { _sliceStack.nonEmpty } else { _dateStack.nonEmpty }
+
+  def next(): CDTimeSlice = if( preFetch ) { _sliceStack.pop } else {
+    val (date, slice_index ) = _dateStack.pop()
+    val data_section = variable.read( getSliceRanges( interSect, slice_index ) ).getStorage.asInstanceOf[Array[Float]]
     CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, data_section)
   }
 }
@@ -320,20 +337,22 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val domains = optRequest.fold(Map.empty[String,DomainContainer])( _.domainMap )
     val nPartitions: Int = config.get( "parts" ).fold( nNodes * usedCoresPerNode ) (_.toInt)
     val mode = config.getOrElse( "mode", "rdd" )
-    val tslice = config.getOrElse( "tslice", "read" )
-    val generateTimeSlices = !tslice.equals("none")
+    val tslice = config.getOrElse( "tslice", "prefetch" )
+    val preFetch = tslice.equals("prefetch")
     dataset.close()
     if( mode.equals("rdd") ) {
       val parallelism = Math.min( files.length, nPartitions )
       val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
-      val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, generateTimeSlices) )
-      timesliceRDD.count()
+      filesDataset.count()
       val t1 = System.nanoTime()
+      val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, preFetch ) )
+      timesliceRDD.count()
+      val t2 = System.nanoTime()
       val nParts = timesliceRDD.getNumPartitions
-      logger.info(s"Completed test, nFiles = ${files.length}, time = %.4f sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}".format((t1 - t0) / 1.0E9))
+      logger.info(s"Completed test, nFiles = ${files.length}, prep time = ${(t1 - t0) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}")
     } else {
       val filesDataset: Dataset[FileInput] = sc.session.createDataset(files)
-      val sectionDataset = filesDataset.mapPartitions(TimeSliceMultiIterator(varName, section, generateTimeSlices) )
+      val sectionDataset = filesDataset.mapPartitions(TimeSliceMultiIterator( varName, section, preFetch ) )
       sectionDataset.count()
       val t1 = System.nanoTime()
       val nParts = sectionDataset.rdd.getNumPartitions
