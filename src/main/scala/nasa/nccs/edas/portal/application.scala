@@ -273,6 +273,7 @@ class TimeSliceIterator( val varName: String, val cdsection: CDSection, val gene
     val t0 = System.nanoTime()
     val dataset = NetcdfDatasetMgr.aquireFile( path, 77.toString )
     val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${path}") }
+    logger.info( s"Executing TimeSliceIterator.getSlices, global section: ${cdsection.toSection.toString}, variable section: ${variable.getShapeAsSection.toString}")
     val section: ma2.Section = cdsection.toSection.intersect( variable.getShapeAsSection )
     val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${path}") } ).section( section.getRange(0) )
     val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
