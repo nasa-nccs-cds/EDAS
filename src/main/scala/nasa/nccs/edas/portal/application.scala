@@ -280,45 +280,37 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
   import ucar.nc2.time.CalendarPeriod.Field._
   private var _dateStack = new mutable.ArrayStack[(CalendarDate,Int)]()
   private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
-  val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
-  val preFetch = tslice.equals("prefetch")
   val fileInput = fileInputTup._1
   val fileIndex = fileInputTup._2
-  val path = fileInput.path
-  val t0 = System.nanoTime()
-  val dataset = NetcdfDatasetMgr.aquireFile( path, 77.toString )
-  val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${path}") }
-  val varSection = variable.getShapeAsSection
-  val interSect: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
-  val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${path}") } ).section( interSect.getRange(0) )
-  val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
-  assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
-  val t1 = System.nanoTime()
+  val filePath: String = fileInput.path
+  _sliceStack ++= getSlices
 
-  if( preFetch ) {
-    _sliceStack ++= dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
-        //      val start = slice_size * slice_index
-        //      val data_section = data.slice( start, start + slice_size )
+  def hasNext: Boolean = _sliceStack.nonEmpty
+
+  def next(): CDTimeSlice =  _sliceStack.pop
+
+  private def getSlices: List[CDTimeSlice] = {
+    def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
+    val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
+    val path = fileInput.path
+    val t0 = System.nanoTime()
+    val dataset = NetcdfDatasetMgr.aquireFile( path, 77.toString )
+    val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${path}") }
+    val varSection = variable.getShapeAsSection
+    val interSect: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
+    val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${path}") } ).section( interSect.getRange(0) )
+    val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
+    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
+    val t1 = System.nanoTime()
+    val slices =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
       val data_section = variable.read(getSliceRanges( interSect, slice_index)).getStorage.asInstanceOf[Array[Float]]
       CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, data_section)
     }
-  } else {
-    _dateStack ++= dates.zipWithIndex
-  }
-  if( fileIndex % 100 == 0 ) {
-    logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec")
-  }
-  def filePath: String = fileInput.path
-
-  private def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
-
-
-  def hasNext: Boolean = if( preFetch ) { _sliceStack.nonEmpty } else { _dateStack.nonEmpty }
-
-  def next(): CDTimeSlice = if( preFetch ) { _sliceStack.pop } else {
-    val (date, slice_index ) = _dateStack.pop()
-    val data_section = variable.read( getSliceRanges( interSect, slice_index ) ).getStorage.asInstanceOf[Array[Float]]
-    CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, data_section)
+    dataset.close()
+    if( fileIndex % 100 == 0 ) {
+      logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec")
+    }
+    slices
   }
 }
 
