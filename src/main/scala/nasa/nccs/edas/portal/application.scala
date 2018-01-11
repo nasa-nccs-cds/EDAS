@@ -253,9 +253,10 @@ object TestApplication extends Loggable {
   }
 }
 
-case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, data: Array[Float] ) {
+case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, missing: Float, data: Array[Float] ) {
 
-  def ave( missing: Float ): (Float, Int) = {
+  def ave: (Float, Int, Float) = {
+    val t0 = System.nanoTime()
     val array =  ma2.Array.factory( ma2.DataType.FLOAT, Array( data.length ), data )
     val rank = array.getRank
     val iter: IndexIterator = array.getIndexIterator()
@@ -269,7 +270,8 @@ case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, data: A
         count = count + 1
       }
     }
-    ( result, count )
+    val t1 = System.nanoTime()
+    ( result, count, (t1-t0)/1.0E9f )
   }
 }
 case class FileInput( path: String )
@@ -316,6 +318,7 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
     val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${path}") }
     val global_shape = variable.getShape()
     val metadata = variable.getAttributes.map(_.toString).mkString(", ")
+    val missing: Float = variable.findAttributeIgnoreCase("fmissing_value").getNumericValue.floatValue()
     val varSection = variable.getShapeAsSection
     val interSect: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
     val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${path}") } ).section( interSect.getRange(0) )
@@ -324,7 +327,7 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
     val t1 = System.nanoTime()
     val slices =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
       val data_section = variable.read(getSliceRanges( interSect, slice_index)).getStorage.asInstanceOf[Array[Float]]
-      CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, data_section)
+      CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, missing, data_section)
     }
     dataset.close()
     if( fileIndex % 500 == 0 ) {
@@ -371,10 +374,13 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val t1 = System.nanoTime()
     val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
     if( mode.equals("count") ) { timesliceRDD.count() }
-    else if( mode.equals("ave") ) { timesliceRDD.map(_.ave(missing)).count() }
+    else if( mode.equals("ave") ) {
+      val (vsum,n,tsum) = timesliceRDD.map( _.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
+      logger.info(s"\n ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
+    }
     val t2 = System.nanoTime()
     val nParts = timesliceRDD.getNumPartitions
-    logger.info(s"Completed test, nFiles = ${files.length}, prep times = [${prepTimes.mkString(", ")}], parallization time = ${(t1 - t03) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t00) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}")
+    logger.info(s"\n\nCompleted test, nFiles = ${files.length}, prep times = [${prepTimes.mkString(", ")}], parallization time = ${(t1 - t03) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t00) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
 
     new WPSMergedEventReport( Seq.empty )
   }
