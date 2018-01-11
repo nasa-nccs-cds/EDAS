@@ -14,7 +14,7 @@ import nasa.nccs.edas.portal.TestDatasetApplication.logger
 import nasa.nccs.edas.portal.TestReadApplication.logger
 import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
-import nasa.nccs.esgf.process.{CDSection, DomainContainer, ServerContext, TaskRequest}
+import nasa.nccs.esgf.process._
 import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import nasa.nccs.wps.{WPSMergedEventReport, _}
@@ -321,10 +321,11 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val nNodes = 18
     val usedCoresPerNode = 8
     val t00 = System.nanoTime()
-//    val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_inst1_2d_asm_Nx-MERRA2.inst1.2d.asm.Nx.nc4.ncml"
-//    val varName = "TS"
-    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra_mth-tas.ncml"
-    val varName = "tas"
+    val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_inst1_2d_asm_Nx-MERRA2.inst1.2d.asm.Nx.nc4.ncml"
+    val varName = "TS"
+//    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra_mth-tas.ncml"
+//    val varName = "tas"
+    val inputVar: DataContainer = optRequest.map( _.variableMap.head._2 ).getOrElse( throw new Exception("Missing input"))
     logger.info( "Starting read test")
     //    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
 
@@ -343,24 +344,17 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     dataset.close()
     val t04 = System.nanoTime()
     val prepTimes = Seq( (t04-t03), (t03-t02), (t02-t01), (t01-t00) ).map( _ / 1.0E9 )
-    if( mode.equals("rdd") ) {
-      val parallelism = Math.min( files.length, nPartitions )
-      val filesDataset: RDD[(FileInput,Int)] = sc.sparkContext.parallelize( files, parallelism )
-      filesDataset.count()
-      val t1 = System.nanoTime()
-      val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
-      timesliceRDD.count()
-      val t2 = System.nanoTime()
-      val nParts = timesliceRDD.getNumPartitions
-      logger.info(s"Completed test, nFiles = ${files.length}, prep times = [${prepTimes.mkString(", ")}], parallization time = ${(t1 - t03) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t00) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}")
-    } else {
-      val filesDataset: Dataset[(FileInput,Int)] = sc.session.createDataset(files)
-      val sectionDataset = filesDataset.mapPartitions(TimeSliceMultiIterator( varName, section, tslice ) )
-      sectionDataset.count()
-      val t1 = System.nanoTime()
-      val nParts = sectionDataset.rdd.getNumPartitions
-      logger.info(s"Completed test, nFiles = ${files.length}, time = %.4f sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}".format((t1 - t00) / 1.0E9))
-    }
+    val parallelism = Math.min( files.length, nPartitions )
+    val filesDataset: RDD[(FileInput,Int)] = sc.sparkContext.parallelize( files, parallelism )
+    filesDataset.count()
+    val t1 = System.nanoTime()
+    val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
+    if( mode.equals("rdd") ) { timesliceRDD.count() }
+    else { timesliceRDD.toDF().count() }
+    val t2 = System.nanoTime()
+    val nParts = timesliceRDD.getNumPartitions
+    logger.info(s"Completed test, nFiles = ${files.length}, prep times = [${prepTimes.mkString(", ")}], parallization time = ${(t1 - t03) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t00) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}")
+
     new WPSMergedEventReport( Seq.empty )
   }
 }
