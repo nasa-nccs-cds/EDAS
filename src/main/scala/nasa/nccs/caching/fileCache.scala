@@ -370,15 +370,14 @@ class RegularPartitionSpecs( nPartitions: Int, val partMemorySize: Long, nSlices
 
 case class PartitionConstraints( partsConfig: Map[String,String] ) {
   val numDataFiles: Int = partsConfig.getOrElse("numDataFiles","0").toInt
-  val numParts: Int = partsConfig.getOrElse("numParts","0").toInt
-  val period = partsConfig.getOrElse("period","")
-  val nSlicesPerRecord: Int = partsConfig.getOrElse("numSlicesPerRecord","0").toInt
-  val oneRecPerSlice: Boolean = partsConfig.getOrElse("oneRecPerSlice","false").toBoolean
+  val numParts: Int = partsConfig.get("numParts").fold(numDataFiles)(_.toInt)
+  val groupBy = partsConfig.getOrElse("groupBy","")
+  val nSlicesPerRecord: Int = partsConfig.getOrElse("numSlicesPerRecord","1").toInt
 //  val numParts: Int = if( _numParts > 0 ) { _numParts } else {
 //    val _numfilesPerPart: Double = math.ceil( _numDataFiles / BatchSpec.nParts.toFloat )
 //    if ( _numfilesPerPart == 0.0 ) 0 else math.ceil( _numDataFiles / _numfilesPerPart ).toInt
 //  }
-  override val toString = { s"{ numDataFiles: ${numDataFiles.toString}, numParts: ${numParts.toString}, period: ${period}, nSlicesPerRecord: ${nSlicesPerRecord.toString}, oneRecPerSlice: ${oneRecPerSlice.toString} }"}
+  override val toString = { s"{ numDataFiles: ${numDataFiles.toString}, numParts: ${numParts.toString}, groupBy: ${groupBy}, nSlicesPerRecord: ${nSlicesPerRecord.toString} }"}
 }
 
 class EDASPartitioner( val uid: String, private val _section: ma2.Section, val partsConfig: Map[String,String], timeAxisOpt: Option[CoordinateAxis1DTime], val numDataFiles: Int, val numElements: Int, val regridSpec: RegridSpec, dataType: ma2.DataType = ma2.DataType.FLOAT, val cacheType: String = "fragment") extends Loggable {
@@ -390,7 +389,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
   val sliceMemorySize: Long = getMemorySize(1)
   val filters = partsConfig.getOrElse("filter","").split(",").filter( !_.isEmpty )
   val sectionRange: ma2.Range = _section.getRange(0)
-  lazy val spec = computeRecordSizes()
+//  lazy val spec = computeRecordSizes()
   lazy val partitions = new Partitions( _section, getPartitions )
   def nPartitions = partitions.parts.size
 
@@ -428,39 +427,39 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
     ranges.toArray
   }
 
-  def getPartitionSpecs( constraints: PartitionConstraints ): PartitionSpecs = {
-    if( constraints.period.isEmpty ) {
-      val timeAxisCoverageFraction = sectionRange.length() / timeAxis.getShape(0).toFloat
-      val nFiles = constraints.numDataFiles * timeAxisCoverageFraction
-      val desiredPartSize = if (2 > nFiles) { partitionSize } else { math.min( partitionSize, sectionMemorySize / math.min( nFiles, BatchSpec.nNodes ) ).toInt }
-      logger.info(  s"\n--> %E% getPartitionSpecs: timeAxisCoverageFraction=${timeAxisCoverageFraction}, nFiles=${nFiles}, nNodes=${BatchSpec.nNodes}, sectionMemorySize=${sectionMemorySize}, desiredPartSize=${desiredPartSize}, section.len=${sectionRange.length()}, timeAxis.len=${timeAxis.getShape(0)}")
-      val currentPartitionSize: Float = math.max(desiredPartSize, sliceMemorySize)
-      val currentRecordSize: Float = if (constraints.oneRecPerSlice) { sliceMemorySize } else {
-        if (constraints.nSlicesPerRecord == 0) {
-          math.min(recordSize, currentPartitionSize)
-        } else {
-          constraints.nSlicesPerRecord * sliceMemorySize
-        }
-      }
-      val _nSlicesPerRecord: Int = math.max( currentRecordSize / sliceMemorySize, 1.0).round.toInt
-      val _recordMemorySize: Long = getMemorySize(_nSlicesPerRecord)
-      val _nRecordsPerPart: Int = math.max(currentPartitionSize / _recordMemorySize, 1.0).round.toInt
-      val _partMemorySize: Long = _nRecordsPerPart * _recordMemorySize
-      var _nSlicesPerPart: Int = _nRecordsPerPart * _nSlicesPerRecord
-      val _nPartitions: Int = math.ceil(sectionMemorySize / _partMemorySize.toFloat).toInt
-      new RegularPartitionSpecs(_nPartitions, _partMemorySize, _nSlicesPerRecord, _recordMemorySize, _nRecordsPerPart, _nSlicesPerPart)
-    } else {
-      if ( constraints.period.toLowerCase.startsWith("month") ) {
-        val months: IndexedSeq[Int] = timeAxis.section(sectionRange).getCalendarDates.map( _.getFieldValue(CalendarPeriod.Field.Month) ).toIndexedSeq
-        val parts: Array[Range] = getPeriodRanges( months )
-        val _nSlicesPerRecord: Int = if (constraints.nSlicesPerRecord == 0) { math.max( recordSize/sliceMemorySize, 1.0).round.toInt } else { constraints.nSlicesPerRecord }
-//        logger.info( s"Generating custom parts, period=${constraints.period}, nparts=${parts.length.toString}, parts = [ ${parts.map(_.toString).mkString(", ")} ]")
-        new CustomPartitionSpecs( parts.length, parts, _nSlicesPerRecord )
-      } else {
-        throw new Exception( "Unrecognized partition period: " + constraints.period )
-      }
-    }
-  }
+//  def getPartitionSpecs( constraints: PartitionConstraints ): PartitionSpecs = {
+//    if( constraints.period.isEmpty ) {
+//      val timeAxisCoverageFraction = sectionRange.length() / timeAxis.getShape(0).toFloat
+//      val nFiles = constraints.numDataFiles * timeAxisCoverageFraction
+//      val desiredPartSize = if (2 > nFiles) { partitionSize } else { math.min( partitionSize, sectionMemorySize / math.min( nFiles, BatchSpec.nNodes ) ).toInt }
+//      logger.info(  s"\n--> %E% getPartitionSpecs: timeAxisCoverageFraction=${timeAxisCoverageFraction}, nFiles=${nFiles}, nNodes=${BatchSpec.nNodes}, sectionMemorySize=${sectionMemorySize}, desiredPartSize=${desiredPartSize}, section.len=${sectionRange.length()}, timeAxis.len=${timeAxis.getShape(0)}")
+//      val currentPartitionSize: Float = math.max(desiredPartSize, sliceMemorySize)
+//      val currentRecordSize: Float = if (constraints.oneRecPerSlice) { sliceMemorySize } else {
+//        if (constraints.nSlicesPerRecord == 0) {
+//          math.min(recordSize, currentPartitionSize)
+//        } else {
+//          constraints.nSlicesPerRecord * sliceMemorySize
+//        }
+//      }
+//      val _nSlicesPerRecord: Int = math.max( currentRecordSize / sliceMemorySize, 1.0).round.toInt
+//      val _recordMemorySize: Long = getMemorySize(_nSlicesPerRecord)
+//      val _nRecordsPerPart: Int = math.max(currentPartitionSize / _recordMemorySize, 1.0).round.toInt
+//      val _partMemorySize: Long = _nRecordsPerPart * _recordMemorySize
+//      var _nSlicesPerPart: Int = _nRecordsPerPart * _nSlicesPerRecord
+//      val _nPartitions: Int = math.ceil(sectionMemorySize / _partMemorySize.toFloat).toInt
+//      new RegularPartitionSpecs(_nPartitions, _partMemorySize, _nSlicesPerRecord, _recordMemorySize, _nRecordsPerPart, _nSlicesPerPart)
+//    } else {
+//      if ( constraints.period.toLowerCase.startsWith("month") ) {
+//        val months: IndexedSeq[Int] = timeAxis.section(sectionRange).getCalendarDates.map( _.getFieldValue(CalendarPeriod.Field.Month) ).toIndexedSeq
+//        val parts: Array[Range] = getPeriodRanges( months )
+//        val _nSlicesPerRecord: Int = if (constraints.nSlicesPerRecord == 0) { math.max( recordSize/sliceMemorySize, 1.0).round.toInt } else { constraints.nSlicesPerRecord }
+////        logger.info( s"Generating custom parts, period=${constraints.period}, nparts=${parts.length.toString}, parts = [ ${parts.map(_.toString).mkString(", ")} ]")
+//        new CustomPartitionSpecs( parts.length, parts, _nSlicesPerRecord )
+//      } else {
+//        throw new Exception( "Unrecognized partition period: " + constraints.period )
+//      }
+//    }
+//  }
 
   def getForceNParts(): Int = {
     val forceNParts = partsConfig.getOrElse("numParts","0").toInt
@@ -474,7 +473,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
     }
   }
 
-  def computeRecordSizes( ): EDASPartitionSpec = {
+/*  def computeRecordSizes( ): EDASPartitionSpec = {
     val sparkConfig = BatchSpec.serverContext.spark.sparkContext.getConf.getAll map { case (key, value ) =>  key + " -> " + value } mkString( "\n\t")
     if( filters.isEmpty ) {
       val constraints = PartitionConstraints( partsConfig ++ Map( "numDataFiles" -> numDataFiles.toString ) )
@@ -534,7 +533,7 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
       logger.info(  s"\n---------------------------------------------\n ~~~~ Generating partitions for ${BatchSpec.nParts} procs: \n ${partitions.map( _.toString ).mkString( "\n\t" )}  \n---------------------------------------------\n")
       new EDASPartitionSpec( partitions )
     }
-  }
+  }*/
 
 //  def computeRecordSizes1( ): EDASPartitionSpec = {
 //    val sparkConfig = BatchSpec.serverContext.spark.sparkContext.getConf.getAll map { case (key, value ) =>  key + " -> " + value } mkString( "\n\t")

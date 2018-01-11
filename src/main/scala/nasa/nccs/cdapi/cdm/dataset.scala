@@ -344,7 +344,7 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
 
   def getVariable( varShortName: String ): ( Int, nc2.Variable ) = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile( gridFilePath, 9.toString, true )
-    val numDataFiles: Int = ncDataset.findGlobalAttribute("NumDataFiles").getNumericValue.intValue()
+    val numDataFiles: Int = Option(ncDataset.findGlobalAttribute("NumDataFiles")).fold(0)(_.getNumericValue.intValue())
     val variables = ncDataset.getVariables.toList
     variables.find ( v => (v.getShortName equals varShortName) ) match {
       case Some( variable ) => ( numDataFiles, variable )
