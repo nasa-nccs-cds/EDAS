@@ -323,7 +323,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val t00 = System.nanoTime()
 //    val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_inst1_2d_asm_Nx-MERRA2.inst1.2d.asm.Nx.nc4.ncml"
 //    val varName = "TS"
-    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra_mth-tas.ncml")
+    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra_mth-tas.ncml"
     val varName = "tas"
     logger.info( "Starting read test")
     //    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
