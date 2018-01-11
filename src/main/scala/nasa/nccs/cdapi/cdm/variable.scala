@@ -74,8 +74,10 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
     </variable>
 
   def toXmlHeader: xml.Node = {
-      val ( index: Int, variable: nc2.Variable ) = collection.grid.getVariable(name)
-      <variable name={name} fullname={fullname} description={description} units={units} shape={shape.mkString("[", " ", "]")} dims={variable.getDimensionsString}/>
+      collection.grid.getVariable(name) match {
+        case Some( (index, variable) ) =>   <variable name={name} fullname={fullname} description={description} units={units} shape={shape.mkString("[", " ", "]")} dims={variable.getDimensionsString}/>
+        case None =>                        <variable name={name} fullname={fullname} description={description} units={units} shape={shape.mkString("[", " ", "]")} />
+      }
   }
 
   //  def read( section: ma2.Section ) = ncVariable.read(section)

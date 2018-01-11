@@ -272,104 +272,120 @@ object CDGrid extends Loggable {
 //      case None => Unit
 //    }
 
-class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[CoordinateAxis], val coordSystems: List[CoordinateSystem], val dimensions: List[Dimension], val resolution: Map[String,Float], val attributes: List[nc2.Attribute] ) extends Loggable {  val precache = false
+class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[CoordinateAxis], val coordSystems: List[CoordinateSystem], val dimensions: List[Dimension], val resolution: Map[String,Float], val attributes: List[nc2.Attribute] ) extends Loggable {
+  val precache = false
   private var _timeAxis: Option[CoordinateAxis1DTime] = None
 
   def gridFileExists(): Boolean = try {
     val file = new File(gridFilePath)
     val path = file.toPath()
-    ( Files.exists(path) && Files.isRegularFile(path) )
-  } catch { case err: Exception => false }
+    (Files.exists(path) && Files.isRegularFile(path))
+  } catch {
+    case err: Exception => false
+  }
 
-  def deleteAggregation = if( gridFileExists ) new File(gridFilePath).delete()
+  def deleteAggregation = if (gridFileExists) new File(gridFilePath).delete()
+
   override def toString = gridFilePath
+
   def getCoordinateAxes: List[CoordinateAxis] = coordAxes
 
   def getGridSpec: String = "file://" + gridFilePath
+
   def getGridFile: String = "file://" + gridFilePath
 
   def findCoordinateAxis(name: String): Option[CoordinateAxis] = {
     val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 6.toString, true)
     try {
-      val axisOpt = Option( gridDS.findCoordinateAxis( name ) )
-      axisOpt.map( axis => {
-          if (precache) { axis.setCaching(true); axis.read() }
-          axis
+      val axisOpt = Option(gridDS.findCoordinateAxis(name))
+      axisOpt.map(axis => {
+        if (precache) {
+          axis.setCaching(true); axis.read()
         }
+        axis
+      }
       )
     } catch {
       case err: Exception =>
-        logger.error("Can't find Coordinate Axis " + name + " in gridFile " + gridFilePath + " , error = " + err.toString );
+        logger.error("Can't find Coordinate Axis " + name + " in gridFile " + gridFilePath + " , error = " + err.toString);
         logger.error(err.getStackTrace.mkString("\n"))
         None
     }
   }
 
   def getTimeCoordinateAxis(context: String): Option[CoordinateAxis1DTime] = {
-    if( _timeAxis.isEmpty ) { updateTimeCoordinateAxis(context) }
+    if (_timeAxis.isEmpty) {
+      updateTimeCoordinateAxis(context)
+    }
     _timeAxis
   }
 
   def updateTimeCoordinateAxis(context: String): Unit = {
-    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, context, true )
+    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, context, true)
     try {
-      val axisOpt = Option( gridDS.findCoordinateAxis( AxisType.Time ) )
-      _timeAxis = axisOpt.map( axis => {
-        if (precache) { axis.setCaching(true); axis.read() }
-        CoordinateAxis1DTime.factory( gridDS, axis, new Formatter() )
+      val axisOpt = Option(gridDS.findCoordinateAxis(AxisType.Time))
+      _timeAxis = axisOpt.map(axis => {
+        if (precache) {
+          axis.setCaching(true); axis.read()
+        }
+        CoordinateAxis1DTime.factory(gridDS, axis, new Formatter())
       })
     } catch {
       case err: Exception =>
-        logger.error("Can't create time Coordinate Axis for collection " + name + " in gridFile " + gridFilePath + ", error = " + err.toString );
+        logger.error("Can't create time Coordinate Axis for collection " + name + " in gridFile " + gridFilePath + ", error = " + err.toString);
         logger.error(err.getStackTrace.mkString("\n"))
         None
     }
   }
 
 
-  def findCoordinateAxis( atype: AxisType ): Option[CoordinateAxis] = {
-    val gridDS = NetcdfDatasetMgr.aquireFile( gridFilePath, 8.toString, true )
+  def findCoordinateAxis(atype: AxisType): Option[CoordinateAxis] = {
+    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 8.toString, true)
     try {
-      Option( gridDS.findCoordinateAxis( atype ) ).map( axis => {
-        if (precache) { axis.setCaching(true); axis.read() }
+      Option(gridDS.findCoordinateAxis(atype)).map(axis => {
+        if (precache) {
+          axis.setCaching(true); axis.read()
+        }
         axis
-      } )
+      })
     } catch {
       case err: Exception =>
-        logger.error("Can't find Coordinate Axis with type: " + atype.toString + " in gridFile " + gridFilePath + ", error = " + err.toString  );
+        logger.error("Can't find Coordinate Axis with type: " + atype.toString + " in gridFile " + gridFilePath + ", error = " + err.toString);
         logger.error(err.getStackTrace.mkString("\n"))
         None
     }
   }
 
-  def getVariable( varShortName: String ): ( Int, nc2.Variable ) = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile( gridFilePath, 9.toString, true )
+  def getVariable(varShortName: String): Option[(Int, nc2.Variable)] = {
+    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(gridFilePath, 9.toString, true)
     val numDataFiles: Int = Option(ncDataset.findGlobalAttribute("NumDataFiles")).fold(0)(_.getNumericValue.intValue())
     val variables = ncDataset.getVariables.toList
-    variables.find ( v => (v.getShortName equals varShortName) ) match {
-      case Some( variable ) => ( numDataFiles, variable )
-      case None => throw new Exception("Can't find variable %s in collection %s (%s), variable names = [ %s ] ".format(varShortName,name,gridFilePath, variables.map(_.getShortName).mkString(", ") ) )
+    val result: Option[(Int, nc2.Variable)] = variables.find(v => (v.getShortName equals varShortName)) map { variable => (numDataFiles, variable) }
+    if (result.isEmpty) {
+      logger.error("Can't find variable %s in collection %s (%s), variable names = [ %s ] ".format(varShortName, name, gridFilePath, variables.map(_.getShortName).mkString(", ")))
     }
+    result
   }
 
-  def getAttribute( keyValuePair: (String, Option[String] )  ): Option[nc2.Attribute] = keyValuePair._2 match {
-    case Some( value ) => if(value.isEmpty) None else Some( new nc2.Attribute( keyValuePair._1, value ) )
+  def getAttribute(keyValuePair: (String, Option[String])): Option[nc2.Attribute] = keyValuePair._2 match {
+    case Some(value) => if (value.isEmpty) None else Some(new nc2.Attribute(keyValuePair._1, value))
     case None => None
   }
 
-  def getVariableMetadata( varShortName: String ): List[nc2.Attribute] = {
-    val ( numDataFiles, ncVariable ) = getVariable( varShortName )
-    val attributes = ncVariable.getAttributes.toList
-    val keyValuePairs = List(
-      "description" -> ncVariable.getDescription,
-      "units" -> ncVariable.getUnitsString,
-      "dtype" -> ncVariable.getDataType.toString,
-      "dims" -> ncVariable.getDimensionsString,
-      "shape" -> ncVariable.getShape.mkString(","),
-      "fullname" -> ncVariable.getFullName,
-      "numDataFiles" -> numDataFiles.toString
-    ) map { case (key,value) => getAttribute(key, Option(value)) }
-    attributes ++ keyValuePairs.flatten
+  def getVariableMetadata(varShortName: String): List[nc2.Attribute] = {
+    getVariable(varShortName).fold(List.empty[nc2.Attribute]) { case (numDataFiles, ncVariable) => {
+      val attributes = ncVariable.getAttributes.toList
+      val keyValuePairs = List(
+        "description" -> ncVariable.getDescription,
+        "units" -> ncVariable.getUnitsString,
+        "dtype" -> ncVariable.getDataType.toString,
+        "dims" -> ncVariable.getDimensionsString,
+        "shape" -> ncVariable.getShape.mkString(","),
+        "fullname" -> ncVariable.getFullName,
+        "numDataFiles" -> numDataFiles.toString
+      ) map { case (key, value) => getAttribute(key, Option(value)) }
+      attributes ++ keyValuePairs.flatten
+    }}
   }
 }
 
