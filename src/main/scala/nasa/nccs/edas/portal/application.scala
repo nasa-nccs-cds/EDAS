@@ -6,7 +6,7 @@ import nasa.nccs.cdapi.cdm.NetcdfDatasetMgr
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
+import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray, RDDRecord}
 import nasa.nccs.edas.engine.{EDASExecutionManager, ExecutionCallback, TestProcess}
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.EDASApplication.logger
@@ -20,7 +20,7 @@ import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import nasa.nccs.wps.{WPSMergedEventReport, _}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Dataset, SQLContext, SQLImplicits}
-import ucar.ma2.ArrayFloat
+import ucar.ma2.{ArrayFloat, IndexIterator}
 import ucar.nc2.Variable
 // import org.apache.spark.implicits._
 import org.apache.spark.SparkEnv
@@ -253,7 +253,25 @@ object TestApplication extends Loggable {
   }
 }
 
-case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, data: Array[Float] )
+case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, data: Array[Float] ) {
+
+  def ave( missing: Float ): (Float, Int) = {
+    val array =  ma2.Array.factory( ma2.DataType.FLOAT, Array( data.length ), data )
+    val rank = array.getRank
+    val iter: IndexIterator = array.getIndexIterator()
+    var result = 0f
+    var count = 0
+    var result_shape = Array.fill[Int](rank)(1)
+    while ( iter.hasNext ) {
+      val fval = iter.getFloatNext
+      if( ( fval != missing ) && !fval.isNaN ) {
+        result = result + fval
+        count = count + 1
+      }
+    }
+    ( result, count )
+  }
+}
 case class FileInput( path: String )
 
 object TimeSliceMultiIterator {
@@ -296,6 +314,8 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
     val t0 = System.nanoTime()
     val dataset = NetcdfDatasetMgr.aquireFile( path, 77.toString )
     val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${path}") }
+    val global_shape = variable.getShape()
+    val metadata = variable.getAttributes.map(_.toString).mkString(", ")
     val varSection = variable.getShapeAsSection
     val interSect: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
     val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${path}") } ).section( interSect.getRange(0) )
@@ -307,8 +327,8 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
       CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, data_section)
     }
     dataset.close()
-    if( fileIndex % 100 == 0 ) {
-      logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec")
+    if( fileIndex % 500 == 0 ) {
+      logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
     }
     slices
   }
@@ -340,6 +360,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val domains = optRequest.fold(Map.empty[String,DomainContainer])( _.domainMap )
     val nPartitions: Int = config.get( "parts" ).fold( nNodes * usedCoresPerNode ) (_.toInt)
     val mode = config.getOrElse( "mode", "rdd" )
+    val missing = Float.NaN
     val tslice = config.getOrElse( "tslice", "prefetch" )
     dataset.close()
     val t04 = System.nanoTime()
@@ -349,8 +370,8 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     filesDataset.count()
     val t1 = System.nanoTime()
     val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
-    if( mode.equals("rdd") ) { timesliceRDD.count() }
-    else { timesliceRDD.toDF().count() }
+    if( mode.equals("count") ) { timesliceRDD.count() }
+    else if( mode.equals("ave") ) { timesliceRDD.map(_.ave(missing)).count() }
     val t2 = System.nanoTime()
     val nParts = timesliceRDD.getNumPartitions
     logger.info(s"Completed test, nFiles = ${files.length}, prep times = [${prepTimes.mkString(", ")}], parallization time = ${(t1 - t03) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t00) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}")
