@@ -110,7 +110,7 @@ object NCMLWriter extends Loggable {
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
       val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
 //      logger.info(s" %X% Extract SubCollections($collectionId)-> group_key=$group_key, subCol_name=$subCol_name, files=${files.mkString(";")}" )
-      val varNames = generateNCML(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
+      val varNames = writeAggregationSpec(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
       varNames.map(vname => vname -> subCollectionId)
     }
 //    logger.info(s" %C% extractSubCollections varMap: " + varMap.map(_.toString()).mkString("; ") )
@@ -267,12 +267,13 @@ object NCMLWriter extends Loggable {
     pw.close
   }
 
-  def generateNCML( collectionId: String, paths: Array[File] ): List[String] = {
+  def writeAggregationSpec(collectionId: String, paths: Array[File], writeNcml: Boolean = true, writeCsv: Boolean = true ): List[String] = {
     try {
-      val ncmlFile = getCachePath("NCML").resolve(collectionId + ".ncml").toFile
+      val cacheDir = getCachePath("NCML")
       logger.info(s"Creating NCML file for collection ${collectionId}}")
       val writer = new NCMLWriter(paths.iterator)
-      writer.writeNCML(ncmlFile)
+      writer.writeAg1Csv( cacheDir.resolve(collectionId + ".ag1.csv").toFile )
+      writer.writeNCML( cacheDir.resolve(collectionId + ".ncml").toFile )
     } catch {
       case err: Exception =>
         logger.error( s"Error writing NCML file for collection ${collectionId}: ${err.getMessage}")
@@ -552,6 +553,33 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
     bw.close()
     varNames
   }
+
+  def writeAg1Csv(aggFile: File) = {
+    val msecPerMin = 1000*60
+    logger.info("Writing *Ag1Csv* File: " + aggFile.toString)
+    val bw = new BufferedWriter(new FileWriter(aggFile))
+    val fileMetadata = FileMetadata(files.head)
+    try {
+      for (fileHeader <- fileHeaders) {
+        bw.write( s"F, ${fileHeader.nElem.toString}, ${fileHeader.startValue/msecPerMin}, ${fileHeader.filePath}\n" )
+      }
+
+//      logger.info(s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n")
+//      val timeRegularSpecs = None //  getTimeSpecs( fileMetadata )
+//      logger.info("Processing %d files with %d workers".format(nFiles, nReadProcessors))
+//        <attribute name="title" type="string" value="NetCDF aggregated dataset"/>
+//        {for (attribute <- fileMetadata.attributes) yield getAttribute(attribute)}
+//        {(for (coordAxis <- fileMetadata.coordinateAxes) yield getDimension(coordAxis)).flatten}
+//        {for (variable <- fileMetadata.coordVars) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
+//        {for (variable <- fileMetadata.variables) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
+//      val varNames: List[String] = fileMetadata.variables.map(_.getShortName)
+    } finally {
+      fileMetadata.close
+    }
+    bw.close()
+  }
+
+
 
 }
 

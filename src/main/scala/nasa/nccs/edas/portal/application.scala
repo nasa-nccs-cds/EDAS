@@ -381,6 +381,8 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     else if( mode.equals("ave") ) {
       val (vsum,n,tsum) = timesliceRDD.map( _._2.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
       logger.info(s"\n ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
+    } else {
+      throw new Exception( "Unrecognized mode: " + mode )
     }
     val t2 = System.nanoTime()
     val nParts = timesliceRDD.getNumPartitions
