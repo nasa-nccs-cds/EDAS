@@ -257,11 +257,16 @@ object TestApplication extends Loggable {
   }
 }
 
-case class CDTimeSlice( timestamp: java.sql.Timestamp, missing: Float, data: scala.collection.Map[String,Array[Float]] ) {   // java.sql.Timestamp
+// case class ArraySpec(  )
+// case class ArraySpecs( arrays: scala.collection.Map[String,ArraySpec]  )
+
+case class ArraySpec( missing: Float, shape: Array[Int], data: Array[Float] )
+case class CDTimeSlice( timestamp: java.sql.Timestamp,  arrays: scala.collection.Map[String,ArraySpec] ) {
 
   def ave: (Float, Int, Float) = {
     val t0 = System.nanoTime()
-    val fltArray = data.head._2
+    val arraySpec = arrays.head._2
+    val fltArray = arraySpec.data
     val ma2Array =  ma2.Array.factory( ma2.DataType.FLOAT, Array( fltArray.length ), fltArray )
     val rank = ma2Array.getRank
     val iter: IndexIterator = ma2Array.getIndexIterator()
@@ -270,7 +275,7 @@ case class CDTimeSlice( timestamp: java.sql.Timestamp, missing: Float, data: sca
     var result_shape = Array.fill[Int](rank)(1)
     while ( iter.hasNext ) {
       val fval = iter.getFloatNext
-      if( ( fval != missing ) && !fval.isNaN ) {
+      if( ( fval != arraySpec.missing ) && !fval.isNaN ) {
         result = result + fval
         count = count + 1
       }
@@ -282,14 +287,14 @@ case class CDTimeSlice( timestamp: java.sql.Timestamp, missing: Float, data: sca
 case class FileInput( index: Int, startTime: Long, nRows: Int, path: String )
 
 object TimeSliceMultiIterator {
-  def apply( varName: String, section: String, tslice: String ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
-    new TimeSliceMultiIterator( varName, section, tslice, files )
+  def apply( varId: String, varName: String, section: String, tslice: String ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
+    new TimeSliceMultiIterator( varId, varName, section, tslice, files )
   }
 }
 
-class TimeSliceMultiIterator( val varName: String, val section: String, val tslice: String, val files: Iterator[FileInput]) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceMultiIterator( val varId: String, val varName: String, val section: String, val tslice: String, val files: Iterator[FileInput]) extends Iterator[CDTimeSlice] with Loggable {
   private var _optSliceIterator: Iterator[CDTimeSlice] = if( files.hasNext ) { getSliceIterator( files.next() ) } else { Iterator.empty }
-  private def getSliceIterator( fileInput: FileInput ): TimeSliceIterator = new TimeSliceIterator( varName, section, tslice, fileInput )
+  private def getSliceIterator( fileInput: FileInput ): TimeSliceIterator = new TimeSliceIterator( varId, varName, section, tslice, fileInput )
   val t0 = System.nanoTime()
 
   def hasNext: Boolean = { !( _optSliceIterator.isEmpty && files.isEmpty ) }
@@ -301,7 +306,7 @@ class TimeSliceMultiIterator( val varName: String, val section: String, val tsli
   }
 }
 
-class TimeSliceIterator( val varName: String, val section: String, val tslice: String, val fileInput: FileInput ) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceIterator( val varId: String, val varName: String, val section: String, val tslice: String, val fileInput: FileInput ) extends Iterator[CDTimeSlice] with Loggable {
   import ucar.nc2.time.CalendarPeriod.Field._
   private var _dateStack = new mutable.ArrayStack[(CalendarDate,Int)]()
   private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
@@ -330,15 +335,19 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
     assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
     val t1 = System.nanoTime()
     val slices: List[CDTimeSlice] =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
-      val data_section = variable.read(getSliceRanges( interSect, slice_index)).getStorage.asInstanceOf[Array[Float]]
+      val data_section = variable.read(getSliceRanges( interSect, slice_index))
+      val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
+      val data_shape: Array[Int] = data_section.getShape
+      val arraySpec = ArraySpec( missing, data_section.getShape, data_array )
 //      (timestamp/millisPerMin).toInt -> CDTimeSlice( timestamp, missing, data_section )  // new java.sql.Timestamp( date.getMillis )
-      CDTimeSlice( new java.sql.Timestamp( date.getMillis ), missing, data_section )  //
+      CDTimeSlice( new java.sql.Timestamp( date.getMillis ), Map( varId -> arraySpec ) )  //
     }
     dataset.close()
     if( fileInput.index % 500 == 0 ) {
-      val datasize: Int = slices.head.data.length
-      val dataSample = slices.head.data(datasize/2)
-      logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toFloat}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
+      val sample_array =  slices.head.arrays.head._2.data
+      val datasize: Int = sample_array.length
+      val dataSample = sample_array(datasize/2)
+      logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toString}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
     }
     slices
   }
@@ -369,6 +378,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
 //    val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_inst1_2d_asm_Nx-MERRA2.inst1.2d.asm.Nx.nc4.ncml"
     val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_m2i1nxint-MERRA2.inst1.2d.int.Nx.nc4.ag1.csv"
     val varName = "KE"
+    val varId = "v1"
 //    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra_mth-tas.ncml"
 //    val varName = "tas"
     val inputVar: DataContainer = optRequest.map( _.variableMap.head._2 ).getOrElse( throw new Exception("Missing input"))
@@ -395,7 +405,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
     filesDataset.count()
     val t1 = System.nanoTime()
-    val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
+    val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator( varId, varName, section, tslice ) )
     if( mode.equals("count") ) { timesliceRDD.count() }
     else if( mode.equals("ave") ) {
       val (vsum,n,tsum) = timesliceRDD.map( _.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
