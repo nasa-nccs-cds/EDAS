@@ -257,7 +257,7 @@ object TestApplication extends Loggable {
   }
 }
 
-case class CDTimeSlice( timestamp: Long, missing: Float, data: Array[Float] ) {   // java.sql.Timestamp
+case class CDTimeSlice( timestamp: java.sql.Timestamp, missing: Float, data: Array[Float] ) {   // java.sql.Timestamp
 
   def ave: (Float, Int, Float) = {
     val t0 = System.nanoTime()
@@ -286,33 +286,33 @@ object TimeSliceMultiIterator {
   }
 }
 
-class TimeSliceMultiIterator( val varName: String, val section: String, val tslice: String, val files: Iterator[FileInput]) extends Iterator[(Int,CDTimeSlice)] with Loggable {
-  private var _optSliceIterator: Iterator[(Int,CDTimeSlice)] = if( files.hasNext ) { getSliceIterator( files.next() ) } else { Iterator.empty }
+class TimeSliceMultiIterator( val varName: String, val section: String, val tslice: String, val files: Iterator[FileInput]) extends Iterator[CDTimeSlice] with Loggable {
+  private var _optSliceIterator: Iterator[CDTimeSlice] = if( files.hasNext ) { getSliceIterator( files.next() ) } else { Iterator.empty }
   private def getSliceIterator( fileInput: FileInput ): TimeSliceIterator = new TimeSliceIterator( varName, section, tslice, fileInput )
   val t0 = System.nanoTime()
 
   def hasNext: Boolean = { !( _optSliceIterator.isEmpty && files.isEmpty ) }
 
-  def next(): (Int,CDTimeSlice) = {
+  def next(): CDTimeSlice = {
     if( _optSliceIterator.isEmpty ) { _optSliceIterator = getSliceIterator( files.next() ) }
     val result = _optSliceIterator.next()
     result
   }
 }
 
-class TimeSliceIterator( val varName: String, val section: String, val tslice: String, val fileInput: FileInput ) extends Iterator[(Int,CDTimeSlice)] with Loggable {
+class TimeSliceIterator( val varName: String, val section: String, val tslice: String, val fileInput: FileInput ) extends Iterator[CDTimeSlice] with Loggable {
   import ucar.nc2.time.CalendarPeriod.Field._
   private var _dateStack = new mutable.ArrayStack[(CalendarDate,Int)]()
-  private var _sliceStack = new mutable.ArrayStack[(Int,CDTimeSlice)]()
+  private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
   val millisPerMin = 1000*60
   val filePath: String = fileInput.path
   _sliceStack ++= getSlices
 
   def hasNext: Boolean = _sliceStack.nonEmpty
 
-  def next(): (Int, CDTimeSlice) =  _sliceStack.pop
+  def next(): CDTimeSlice =  _sliceStack.pop
 
-  private def getSlices: List[(Int,CDTimeSlice)] = {
+  private def getSlices: List[CDTimeSlice] = {
     def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
     val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
     val path = fileInput.path
@@ -328,15 +328,15 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
     val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
     assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
     val t1 = System.nanoTime()
-    val slices: List[(Int,CDTimeSlice)] =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
+    val slices: List[CDTimeSlice] =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
       val data_section = variable.read(getSliceRanges( interSect, slice_index)).getStorage.asInstanceOf[Array[Float]]
-      val timestamp: Long = date.getMillis
-      (timestamp/millisPerMin).toInt -> CDTimeSlice( timestamp, missing, data_section )  // new java.sql.Timestamp( date.getMillis )
+//      (timestamp/millisPerMin).toInt -> CDTimeSlice( timestamp, missing, data_section )  // new java.sql.Timestamp( date.getMillis )
+      CDTimeSlice( new java.sql.Timestamp( date.getMillis ), missing, data_section )  //
     }
     dataset.close()
     if( fileInput.index % 500 == 0 ) {
-      val datasize: Int = slices.head._2.data.length
-      val dataSample = slices.head._2.data(datasize/2)
+      val datasize: Int = slices.head.data.length
+      val dataSample = slices.head.data(datasize/2)
       logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toFloat}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
     }
     slices
@@ -394,10 +394,10 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
     filesDataset.count()
     val t1 = System.nanoTime()
-    val timesliceRDD: RDD[(Int,CDTimeSlice)] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
+    val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
     if( mode.equals("count") ) { timesliceRDD.count() }
     else if( mode.equals("ave") ) {
-      val (vsum,n,tsum) = timesliceRDD.map( _._2.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
+      val (vsum,n,tsum) = timesliceRDD.map( _.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
       logger.info(s"\n ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
     } else {
       throw new Exception( "Unrecognized mode: " + mode )
