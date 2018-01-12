@@ -282,24 +282,25 @@ object TimeSliceMultiIterator {
   }
 }
 
-class TimeSliceMultiIterator( val varName: String, val section: String, val tslice: String, val files: Iterator[(FileInput,Int)]) extends Iterator[CDTimeSlice] with Loggable {
-  private var _optSliceIterator: Iterator[CDTimeSlice] = if( files.hasNext ) { getSliceIterator( files.next() ) } else { Iterator.empty }
+class TimeSliceMultiIterator( val varName: String, val section: String, val tslice: String, val files: Iterator[(FileInput,Int)]) extends Iterator[(Int,CDTimeSlice)] with Loggable {
+  private var _optSliceIterator: Iterator[(Int,CDTimeSlice)] = if( files.hasNext ) { getSliceIterator( files.next() ) } else { Iterator.empty }
   private def getSliceIterator( fileInput: (FileInput,Int) ): TimeSliceIterator = new TimeSliceIterator( varName, section, tslice, fileInput )
   val t0 = System.nanoTime()
 
   def hasNext: Boolean = { !( _optSliceIterator.isEmpty && files.isEmpty ) }
 
-  def next(): CDTimeSlice = {
+  def next(): (Int,CDTimeSlice) = {
     if( _optSliceIterator.isEmpty ) { _optSliceIterator = getSliceIterator( files.next() ) }
     val result = _optSliceIterator.next()
     result
   }
 }
 
-class TimeSliceIterator( val varName: String, val section: String, val tslice: String, val fileInputTup: (FileInput, Int) ) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceIterator( val varName: String, val section: String, val tslice: String, val fileInputTup: (FileInput, Int) ) extends Iterator[(Int,CDTimeSlice)] with Loggable {
   import ucar.nc2.time.CalendarPeriod.Field._
   private var _dateStack = new mutable.ArrayStack[(CalendarDate,Int)]()
-  private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
+  private var _sliceStack = new mutable.ArrayStack[(Int,CDTimeSlice)]()
+  val millisPerHour = 1000*60*60
   val fileInput = fileInputTup._1
   val fileIndex = fileInputTup._2
   val filePath: String = fileInput.path
@@ -307,9 +308,9 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
 
   def hasNext: Boolean = _sliceStack.nonEmpty
 
-  def next(): CDTimeSlice =  _sliceStack.pop
+  def next(): (Int, CDTimeSlice) =  _sliceStack.pop
 
-  private def getSlices: List[CDTimeSlice] = {
+  private def getSlices: List[(Int,CDTimeSlice)] = {
     def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
     val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
     val path = fileInput.path
@@ -325,9 +326,10 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
     val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
     assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${path}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
     val t1 = System.nanoTime()
-    val slices =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
+    val slices: List[(Int,CDTimeSlice)] =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
       val data_section = variable.read(getSliceRanges( interSect, slice_index)).getStorage.asInstanceOf[Array[Float]]
-      CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, missing, data_section)
+      val timeIndex: Int = (date.getMillis / millisPerHour).toInt
+      timeIndex -> CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, missing, data_section)
     }
     dataset.close()
     if( fileIndex % 500 == 0 ) {
@@ -372,10 +374,10 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val filesDataset: RDD[(FileInput,Int)] = sc.sparkContext.parallelize( files, parallelism )
     filesDataset.count()
     val t1 = System.nanoTime()
-    val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
+    val timesliceRDD: RDD[(Int,CDTimeSlice)] = filesDataset.mapPartitions( TimeSliceMultiIterator(varName, section, tslice ) )
     if( mode.equals("count") ) { timesliceRDD.count() }
     else if( mode.equals("ave") ) {
-      val (vsum,n,tsum) = timesliceRDD.map( _.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
+      val (vsum,n,tsum) = timesliceRDD.map( _._2.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
       logger.info(s"\n ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
     }
     val t2 = System.nanoTime()
