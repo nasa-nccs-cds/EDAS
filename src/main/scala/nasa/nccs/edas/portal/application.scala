@@ -261,7 +261,7 @@ object TestApplication extends Loggable {
 // case class ArraySpecs( arrays: scala.collection.Map[String,ArraySpec]  )
 
 case class ArraySpec( missing: Float, shape: Array[Int], data: Array[Float] )
-case class CDTimeSlice( timestamp: java.sql.Timestamp,  arrays: scala.collection.Map[String,ArraySpec] ) {
+case class CDTimeSlice( timestamp: java.sql.Timestamp, arrays: scala.collection.Map[String,ArraySpec] ) {
 
   def ave: (Float, Int, Float) = {
     val t0 = System.nanoTime()
