@@ -1,6 +1,8 @@
 package nasa.nccs.edas.portal
+import java.io.File
 import java.lang.management.ManagementFactory
 import java.nio.file.{Files, Path, Paths}
+import java.sql.Date
 
 import nasa.nccs.cdapi.cdm.NetcdfDatasetMgr
 
@@ -22,6 +24,8 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Dataset, SQLContext, SQLImplicits}
 import ucar.ma2.{ArrayFloat, IndexIterator}
 import ucar.nc2.Variable
+
+import scala.collection.mutable.ListBuffer
 // import org.apache.spark.implicits._
 import org.apache.spark.SparkEnv
 import org.apache.spark.api.java.function.MapPartitionsFunction
@@ -274,7 +278,7 @@ case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, missing
     ( result, count, (t1-t0)/1.0E9f )
   }
 }
-case class FileInput( path: String )
+case class FileInput( startTime: Long, nRows: Int, path: String )
 
 object TimeSliceMultiIterator {
   def apply( varName: String, section: String, tslice: String ) ( files: Iterator[(FileInput,Int)] ): TimeSliceMultiIterator = {
@@ -341,6 +345,13 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
   }
 }
 
+class AggReader( val aggFile: File ) {
+  val files = ListBuffer.empty[FileInput]
+  for (line <- Source.fromFile(aggFile).getLines; toks = line.split(',') ) toks.head match {
+    case "F" => FileInput(  toks(1).toLong*1000, toks(2).toInt, toks(3).trim )
+  }
+}
+
 
 class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
   def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {
@@ -361,7 +372,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val t01 = System.nanoTime()
     val agg = dataset.getAggregation
     val t02 = System.nanoTime()
-    val files: mutable.Buffer[(FileInput,Int)] = agg.getDatasets.map( ds => FileInput( ds.getLocation.split('#').head ) ).zipWithIndex
+    val files: mutable.Buffer[(FileInput,Int)] = agg.getDatasets.map( ds => FileInput( 0, 0, ds.getLocation.split('#').head ) ).zipWithIndex
     val t03 = System.nanoTime()
     val config = optRequest.fold(Map.empty[String,String])( _.operations.head.getConfiguration )
     val domains = optRequest.fold(Map.empty[String,DomainContainer])( _.domainMap )

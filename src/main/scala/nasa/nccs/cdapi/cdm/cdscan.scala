@@ -555,13 +555,12 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
   }
 
   def writeAg1Csv(aggFile: File) = {
-    val msecPerMin = 1000*60
     logger.info("Writing *Ag1Csv* File: " + aggFile.toString)
     val bw = new BufferedWriter(new FileWriter(aggFile))
     val fileMetadata = FileMetadata(files.head)
     try {
       for (fileHeader <- fileHeaders) {
-        bw.write( s"F, ${fileHeader.nElem.toString}, ${fileHeader.startValue/msecPerMin}, ${fileHeader.filePath}\n" )
+        bw.write( s"F, ${fileHeader.startValue/1000}, ${fileHeader.nElem.toString}, ${fileHeader.filePath}\n" )
       }
 
 //      logger.info(s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n")
