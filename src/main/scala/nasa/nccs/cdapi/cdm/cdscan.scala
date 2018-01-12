@@ -560,7 +560,7 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
     val fileMetadata = FileMetadata(files.head)
     try {
       for (fileHeader <- fileHeaders) {
-        bw.write( s"F, ${fileHeader.startValue/1000}, ${fileHeader.nElem.toString}, ${fileHeader.filePath}\n" )
+        bw.write( s"F, ${fileHeader.startValue}, ${fileHeader.nElem.toString}, ${fileHeader.filePath}\n" )
       }
 
 //      logger.info(s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n")
