@@ -35,24 +35,24 @@ class SQLKernel extends Kernel {
 
 }
 
-class DFKernel extends Kernel {
-  override val status = KernelStatus.restricted
-  val inputs = List(WPSDataInput("input variable", 1, 1))
-  val outputs = List(WPSProcessOutput("operation result"))
-  val title = "SQLKernel"
-  val doesAxisElimination: Boolean = false
-  val description = "Implement SparkSQL operations"
-
-  override def execute(workflow: Workflow, input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
-    val options: EDASOptions = new EDASOptions( Array.empty )
-    val rowRdd: RDD[java.lang.Float] = input.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
-    val dataset: Dataset[java.lang.Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )(Encoders.FLOAT)
-    val aveCol: Column = avg( dataset.col("value") )
-    logger.info( "Computed ave" )
-    ( RecordKey.empty, RDDRecord.empty )
-  }
-
-  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord = { rdd }   // Not used-> bypassed
-
-}
-
+//class DFKernel extends Kernel {
+//  override val status = KernelStatus.restricted
+//  val inputs = List(WPSDataInput("input variable", 1, 1))
+//  val outputs = List(WPSProcessOutput("operation result"))
+//  val title = "SQLKernel"
+//  val doesAxisElimination: Boolean = false
+//  val description = "Implement SparkSQL operations"
+//
+//  override def execute(workflow: Workflow, input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+//    val options: EDASOptions = new EDASOptions( Array.empty )
+//    val rowRdd: RDD[java.lang.Float] = input.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
+//    val dataset: Dataset[java.lang.Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )(Encoders.FLOAT)
+//    val aveCol: Column = avg( dataset.col("value") )
+//    logger.info( "Computed ave" )
+//    ( RecordKey.empty, RDDRecord.empty )
+//  }
+//
+//  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord = { rdd }   // Not used-> bypassed
+//
+//}
+//
