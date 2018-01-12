@@ -342,13 +342,15 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
   }
 }
 
-class AggReader( val aggFile: File ) {
+class AggReader( val aggFile: String ) extends Loggable  {
 
-  def getFileInputs: Seq[FileInput] = {
+  def getFileInputs: List[FileInput] = {
     val source = Source.fromFile(aggFile)
     try {
       var index = -1;
-      ( for (line <- source.getLines; toks = line.split(','); if toks(0).equals("F") ) yield { index = index + 1; FileInput( index, toks(1).trim.toLong, toks(2).trim.toInt, toks(3).trim ); } ).toSeq
+      val files = ( for (line <- source.getLines; toks = line.split(','); if toks(0).equals("F") ) yield { index = index + 1; FileInput( index, toks(1).trim.toLong, toks(2).trim.toInt, toks(3).trim ); } ).toList
+      logger.info( s"Read ${files.length} file refs from ag1 file: ${aggFile}")
+      files
     } finally {
       source.close()
     }
@@ -375,9 +377,9 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
 //    val dataset = NetcdfDataset.openDataset(dataFile)
 
     val t01 = System.nanoTime()
-    val agg = new AggReader( new File( dataFile ) )
+    val agg = new AggReader( dataFile )
     val t02 = System.nanoTime()
-    val files: Seq[FileInput] = agg.getFileInputs
+    val files: List[FileInput] = agg.getFileInputs
     val t03 = System.nanoTime()
     val config = optRequest.fold(Map.empty[String,String])( _.operations.head.getConfiguration )
     val domains = optRequest.fold(Map.empty[String,DomainContainer])( _.domainMap )
