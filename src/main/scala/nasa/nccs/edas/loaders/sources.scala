@@ -12,6 +12,7 @@ import scala.collection.JavaConversions._
 import collection.mutable
 import nasa.nccs.caching.FragmentPersistence
 import nasa.nccs.cdapi.cdm._
+import nasa.nccs.edas.rdd.FileInput
 import nasa.nccs.utilities.Loggable
 import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
@@ -51,6 +52,20 @@ object EDAS_XML extends XMLLoader[Node]  {
   }
 }
 
+class AggReader( val aggFile: String ) extends Loggable  {
+
+  def getFileInputs: List[FileInput] = {
+    val source = Source.fromFile(aggFile)
+    try {
+      var index = -1;
+      val files = ( for (line <- source.getLines; toks = line.split(','); if toks(0).equals("F") ) yield { index = index + 1; FileInput( index, toks(1).trim.toLong, toks(2).trim.toInt, toks(3).trim ); } ).toList
+      logger.info( s"Read ${files.length} file refs from ag1 file: ${aggFile}")
+      files
+    } finally {
+      source.close()
+    }
+  }
+}
 
 trait XmlResource extends Loggable {
   val Encoding = "UTF-8"
