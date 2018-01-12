@@ -257,13 +257,14 @@ object TestApplication extends Loggable {
   }
 }
 
-case class CDTimeSlice( timestamp: java.sql.Timestamp, missing: Float, data: Array[Float] ) {   // java.sql.Timestamp
+case class CDTimeSlice( timestamp: java.sql.Timestamp, missing: Float, data: scala.collection.Map[String,Array[Float]] ) {   // java.sql.Timestamp
 
   def ave: (Float, Int, Float) = {
     val t0 = System.nanoTime()
-    val array =  ma2.Array.factory( ma2.DataType.FLOAT, Array( data.length ), data )
-    val rank = array.getRank
-    val iter: IndexIterator = array.getIndexIterator()
+    val fltArray = data.head._2
+    val ma2Array =  ma2.Array.factory( ma2.DataType.FLOAT, Array( fltArray.length ), fltArray )
+    val rank = ma2Array.getRank
+    val iter: IndexIterator = ma2Array.getIndexIterator()
     var result = 0f
     var count = 0
     var result_shape = Array.fill[Int](rank)(1)
