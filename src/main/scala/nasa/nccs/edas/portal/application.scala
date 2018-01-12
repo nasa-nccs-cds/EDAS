@@ -257,7 +257,7 @@ object TestApplication extends Loggable {
   }
 }
 
-case class CDTimeSlice( timestamp: java.sql.Timestamp, missing: Float, data: Array[Float] ) {
+case class CDTimeSlice( timestamp: Long, missing: Float, data: Array[Float] ) {   // java.sql.Timestamp
 
   def ave: (Float, Int, Float) = {
     val t0 = System.nanoTime()
@@ -330,7 +330,8 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
     val t1 = System.nanoTime()
     val slices: List[(Int,CDTimeSlice)] =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
       val data_section = variable.read(getSliceRanges( interSect, slice_index)).getStorage.asInstanceOf[Array[Float]]
-      (date.getMillis/millisPerMin).toInt -> CDTimeSlice( new java.sql.Timestamp( date.getMillis ), missing, data_section )
+      val timestamp: Long = date.getMillis
+      (timestamp/millisPerMin).toInt -> CDTimeSlice( timestamp, missing, data_section )  // new java.sql.Timestamp( date.getMillis )
     }
     dataset.close()
     if( fileInput.index % 500 == 0 ) {
@@ -403,7 +404,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     }
     val t2 = System.nanoTime()
     val nParts = timesliceRDD.getNumPartitions
-    logger.info(s"\n\nCompleted test, nFiles = ${files.length}, prep times = [${prepTimes.mkString(", ")}], parallization time = ${(t1 - t03) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t00) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
+    logger.info(s"\n\nCompleted test, nFiles = ${files.length}, prep times = [${prepTimes.mkString(", ")}], parallization time = ${(t1 - t04) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t00) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
 
     new WPSMergedEventReport( Seq.empty )
   }
