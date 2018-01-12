@@ -345,11 +345,11 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
 
 class AggReader( val aggFile: File ) {
 
-  def getFileInputs: Iterator[FileInput] = {
+  def getFileInputs: Seq[FileInput] = {
     val source = Source.fromFile(aggFile)
     try {
       var index = -1;
-      for (line <- source.getLines; toks = line.split(','); if toks(0).equals("F") ) yield { index = index + 1; FileInput( index, toks(1).toLong, toks(2).toInt, toks(3).trim ); }
+      ( for (line <- source.getLines; toks = line.split(','); if toks(0).equals("F") ) yield { index = index + 1; FileInput( index, toks(1).toLong, toks(2).toInt, toks(3).trim ); } ).toSeq
     } finally {
       source.close()
     }
@@ -378,7 +378,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val t01 = System.nanoTime()
     val agg = new AggReader( new File( dataFile ) )
     val t02 = System.nanoTime()
-    val files: Seq[FileInput] = agg.getFileInputs.toSeq
+    val files: Seq[FileInput] = agg.getFileInputs
     val t03 = System.nanoTime()
     val config = optRequest.fold(Map.empty[String,String])( _.operations.head.getConfiguration )
     val domains = optRequest.fold(Map.empty[String,DomainContainer])( _.domainMap )
