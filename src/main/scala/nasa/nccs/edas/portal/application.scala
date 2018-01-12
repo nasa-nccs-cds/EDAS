@@ -377,8 +377,10 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val t00 = System.nanoTime()
 //    val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_inst1_2d_asm_Nx-MERRA2.inst1.2d.asm.Nx.nc4.ncml"
     val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_m2i1nxint-MERRA2.inst1.2d.int.Nx.nc4.ag1.csv"
-    val varName = "KE"
-    val varId = "v1"
+    val varName1 = "KE"
+    val varId1 = "v1"
+    val varName2 = "THV"
+    val varId2 = "v2"
 //    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra_mth-tas.ncml"
 //    val varName = "tas"
     val inputVar: DataContainer = optRequest.map( _.variableMap.head._2 ).getOrElse( throw new Exception("Missing input"))
@@ -405,13 +407,21 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
     filesDataset.count()
     val t1 = System.nanoTime()
-    val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator( varId, varName, section, tslice ) )
+    val timesliceRDD: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator( varId1, varName1, section, tslice ) )
     if( mode.equals("count") ) { timesliceRDD.count() }
     else if( mode.equals("ave") ) {
       val (vsum,n,tsum) = timesliceRDD.map( _.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
       logger.info(s"\n ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
+    } else if( mode.equals("double")  ) {
+      val timesliceRDD1: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator( varId2, varName2, section, tslice ) )
+      timesliceRDD.count()
+      timesliceRDD1.count()
+    } else if( mode.equals("merge")  ) {
+      val timesliceRDD1: RDD[CDTimeSlice] = filesDataset.mapPartitions( TimeSliceMultiIterator( varId2, varName2, section, tslice ) )
+      val mergedRDD = timesliceRDD.keyBy( _.timestamp.getNanos ).cogroup( timesliceRDD1.keyBy( _.timestamp.getNanos ) )
+      mergedRDD.count()
     } else {
-      throw new Exception( "Unrecognized mode: " + mode )
+        throw new Exception( "Unrecognized mode: " + mode )
     }
     val t2 = System.nanoTime()
     val nParts = timesliceRDD.getNumPartitions
