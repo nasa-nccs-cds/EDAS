@@ -2,7 +2,7 @@ package nasa.nccs.edas.portal
 import java.io.File
 import java.lang.management.ManagementFactory
 import java.nio.file.{Files, Path, Paths}
-import java.sql.Date
+import java.sql.{Date, Timestamp}
 
 import nasa.nccs.cdapi.cdm.NetcdfDatasetMgr
 
@@ -257,7 +257,7 @@ object TestApplication extends Loggable {
   }
 }
 
-case class CDTimeSlice( year: Short, month: Byte, day: Byte, hour: Byte, missing: Float, data: Array[Float] ) {
+case class CDTimeSlice( timestamp: java.sql.Timestamp, missing: Float, data: Array[Float] ) {
 
   def ave: (Float, Int, Float) = {
     val t0 = System.nanoTime()
@@ -304,7 +304,7 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
   import ucar.nc2.time.CalendarPeriod.Field._
   private var _dateStack = new mutable.ArrayStack[(CalendarDate,Int)]()
   private var _sliceStack = new mutable.ArrayStack[(Int,CDTimeSlice)]()
-  val millisPerHour = 1000*60*60
+  val millisPerMin = 1000*60
   val filePath: String = fileInput.path
   _sliceStack ++= getSlices
 
@@ -330,8 +330,7 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
     val t1 = System.nanoTime()
     val slices: List[(Int,CDTimeSlice)] =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
       val data_section = variable.read(getSliceRanges( interSect, slice_index)).getStorage.asInstanceOf[Array[Float]]
-      val timeIndex: Int = (date.getMillis / millisPerHour).toInt
-      timeIndex -> CDTimeSlice(date.getFieldValue(Year).toShort, date.getFieldValue(Month).toByte, date.getDayOfMonth.toByte, date.getHourOfDay.toByte, missing, data_section)
+      (date.getMillis/millisPerMin).toInt -> CDTimeSlice( new java.sql.Timestamp( date.getMillis ), missing, data_section )
     }
     dataset.close()
     if( fileInput.index % 500 == 0 ) {
@@ -349,7 +348,7 @@ class AggReader( val aggFile: File ) {
     val source = Source.fromFile(aggFile)
     try {
       var index = -1;
-      ( for (line <- source.getLines; toks = line.split(','); if toks(0).equals("F") ) yield { index = index + 1; FileInput( index, toks(1).toLong, toks(2).toInt, toks(3).trim ); } ).toSeq
+      ( for (line <- source.getLines; toks = line.split(','); if toks(0).equals("F") ) yield { index = index + 1; FileInput( index, toks(1).trim.toLong, toks(2).trim.toInt, toks(3).trim ); } ).toSeq
     } finally {
       source.close()
     }
