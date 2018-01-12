@@ -333,7 +333,9 @@ class TimeSliceIterator( val varName: String, val section: String, val tslice: S
     }
     dataset.close()
     if( fileIndex % 500 == 0 ) {
-      logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
+      val datasize: Int = slices.head._2.data.length
+      val dataSample = slices.head._2.data(datasize/2)
+      logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toFloat}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
     }
     slices
   }
