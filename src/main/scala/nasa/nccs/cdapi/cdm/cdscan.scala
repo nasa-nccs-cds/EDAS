@@ -267,12 +267,12 @@ object NCMLWriter extends Loggable {
     pw.close
   }
 
-  def writeAggregationSpec(collectionId: String, paths: Array[File], writeNcml: Boolean = true, writeCsv: Boolean = true ): List[String] = {
+  def writeAggregationSpec(collectionId: String, paths: Array[File], format: String = "ag1" ): List[String] = {
     try {
       val cacheDir = getCachePath("NCML")
       logger.info(s"Creating NCML file for collection ${collectionId}}")
       val writer = new NCMLWriter(paths.iterator)
-      writer.writeAg1Csv( cacheDir.resolve(collectionId + ".ag1.csv").toFile )
+      if( !format.isEmpty ) { writer.writeAggregation( cacheDir.resolve(collectionId + format).toFile, format ) }
       writer.writeNCML( cacheDir.resolve(collectionId + ".ncml").toFile )
     } catch {
       case err: Exception =>
@@ -554,32 +554,32 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
     varNames
   }
 
-  def writeAg1Csv(aggFile: File) = {
-    logger.info("Writing *Ag1Csv* File: " + aggFile.toString)
+  def writeAggregation( aggFile: File, format: String ): Unit = {
+    logger.info(s"Writing Aggregation[$format] File: " + aggFile.toString)
+    logger.info("Processing %d files with %d workers".format(nFiles, nReadProcessors))
     val bw = new BufferedWriter(new FileWriter(aggFile))
     val fileMetadata = FileMetadata(files.head)
+    val dt: Int = Math.round( ( fileHeaders.last.startValue - fileHeaders.head.startValue ) / ( fileHeaders.length - 1 ).toFloat )
+    val ( basePath, reducedFileheaders ) = FileHeader.extractSubpath( fileHeaders )
     try {
-      for (fileHeader <- fileHeaders) {
-        bw.write( s"F, ${fileHeader.startValue}, ${fileHeader.nElem.toString}, ${fileHeader.filePath}\n" )
+      bw.write( s"P; time.step; $dt")
+      bw.write( s"P; base.path; $basePath")
+      bw.write( s"P; num.files; ${reducedFileheaders.length}")
+      for (attr <- fileMetadata.attributes ) { bw.write( s"P; ${attr.getFullName}; ${attr.getStringValue} ") }
+      for (coordAxis <- fileMetadata.coordinateAxes; ctype = coordAxis.getAxisType.getCFAxisName ) {
+        if(ctype.equals("Z") ) {  bw.write( s"A; ${coordAxis.getShortName}; ${ctype}; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}") }
+        else {                    bw.write( s"A; ${coordAxis.getShortName}; ${ctype}; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}" ) }
       }
-
-//      logger.info(s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n")
-//      val timeRegularSpecs = None //  getTimeSpecs( fileMetadata )
-//      logger.info("Processing %d files with %d workers".format(nFiles, nReadProcessors))
-//        <attribute name="title" type="string" value="NetCDF aggregated dataset"/>
-//        {for (attribute <- fileMetadata.attributes) yield getAttribute(attribute)}
-//        {(for (coordAxis <- fileMetadata.coordinateAxes) yield getDimension(coordAxis)).flatten}
-//        {for (variable <- fileMetadata.coordVars) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
-//        {for (variable <- fileMetadata.variables) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
-//      val varNames: List[String] = fileMetadata.variables.map(_.getShortName)
+      for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} " ) }
+      for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName};  ${variable.getShape.mkString(",")};  ${variable.getDimensionsString};  ${variable.getUnitsString} " ) }
+      for (fileHeader <- reducedFileheaders) {
+        bw.write( s"F; ${fileHeader.startValue}; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
+      }
     } finally {
       fileMetadata.close
     }
     bw.close()
   }
-
-
-
 }
 
 class FileHeaderGenerator( file: String, timeRegular: Boolean ) extends Runnable {
@@ -632,6 +632,17 @@ object FileHeader extends Loggable {
   def getFileHeaders(files: IndexedSeq[String], timeRegular: Boolean = false ): IndexedSeq[FileHeader] = {
     factory( files, timeRegular )
     files.map( file => FileHeader( file, timeRegular ) ).sortBy(_.startDate)
+  }
+
+  def getNumCommonElements( elemList: IndexedSeq[Array[String]] ): Int = {
+    elemList.indices.foreach { elemIndex => if( elemList.map( _(elemIndex) ).toSet.size > 1 ) return elemIndex }
+    elemList.length
+  }
+
+  def extractSubpath( headers: IndexedSeq[FileHeader] ): ( String, IndexedSeq[FileHeader] ) = {
+    val elemList: IndexedSeq[Array[String]] = headers.map( header => header.filePath.split('/'))
+    val nCommon = getNumCommonElements(elemList)
+    ( elemList.head.take(nCommon).mkString("/"), headers.map( _.dropPrefix(nCommon) ) )
   }
 
   def getTimeAxisRegularity(ncFile: URI): Boolean = {
@@ -688,6 +699,7 @@ class FileHeader(val filePath: String,
   def startValue: Long = axisValues.headOption.getOrElse(Long.MinValue)
   def startDate: String = CalendarDate.of(startValue).toString
   override def toString: String = " *** FileHeader { path='%s', nElem=%d, startValue=%d startDate=%s} ".format(filePath, nElem, startValue, startDate)
+  def dropPrefix( nElems: Int ): FileHeader = new FileHeader( filePath.split("/").drop(nElems).mkString("/"), axisValues, boundsValues, timeRegular, varNames, coordVarNames )
 }
 
 object FileMetadata extends Loggable {
