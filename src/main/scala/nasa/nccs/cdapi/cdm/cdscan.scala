@@ -8,7 +8,7 @@ import java.util.concurrent.{Executors, Future, TimeUnit}
 
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.cdapi.tensors.CDDoubleArray
-import nasa.nccs.edas.loaders.Collections
+import nasa.nccs.edas.loaders.{Aggregation, Collections}
 import nasa.nccs.utilities.{EDASLogManager, Loggable, XMLParser, cdsutils}
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2.Group
@@ -29,7 +29,6 @@ object NCMLWriter extends Loggable {
   val ncExtensions = Seq( "nc", "nc4")
   val colIdSep = "."
 
-  def apply(path: File): NCMLWriter = { new NCMLWriter(Array(path).iterator) }
   def getName(node: nc2.CDMNode): String = node.getFullName
   def isNcFileName(fName: String): Boolean = {
     val fname = fName.toLowerCase;
@@ -49,7 +48,7 @@ object NCMLWriter extends Loggable {
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
       val mdata = tline.split(",").map(_.trim)
       assert( ((mdata.length == 4) && isInt(mdata(0)) && (new File(mdata(3))).exists ), s"Format error in Collections csv file, columns = { depth: Int, template: RegEx, CollectionId: String, rootCollectionPath: String }, incorrect line: { $tline }" )
-      extractSubCollections( mdata(2), Paths.get( mdata(3) ), Map( "depth" -> mdata(0), "template" -> mdata(1) ) )
+      extractAggregations( mdata(2), Paths.get( mdata(3) ), Map( "depth" -> mdata(0), "template" -> mdata(1) ) )
     }
   }
 
@@ -99,7 +98,7 @@ object NCMLWriter extends Loggable {
     files ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( rootPath.relativize(dir.toPath) ) ) )
   }
 
-  def extractSubCollections( collectionId: String, dataLocation: Path, options: Map[String,String] = Map.empty ): Unit = {
+  def extractAggregations(collectionId: String, dataLocation: Path, options: Map[String,String] = Map.empty ): Unit = {
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
 //    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
@@ -110,7 +109,7 @@ object NCMLWriter extends Loggable {
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
       val subCollectionId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
 //      logger.info(s" %X% Extract SubCollections($collectionId)-> group_key=$group_key, subCol_name=$subCol_name, files=${files.mkString(";")}" )
-      val varNames = writeAggregationSpec(subCollectionId, files.map(fp => dataLocation.resolve(fp).toFile))
+      val varNames = Aggregation.write(subCollectionId, files.map(fp => dataLocation.resolve(fp).toString))
       varNames.map(vname => vname -> subCollectionId)
     }
 //    logger.info(s" %C% extractSubCollections varMap: " + varMap.map(_.toString()).mkString("; ") )
@@ -257,50 +256,24 @@ object NCMLWriter extends Loggable {
 
 
   def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
-    val dirFile = getCachePath("NCML").resolve(collectionId + ".csv").toFile
+    val dirFile = Collections.getCachePath("NCML").resolve(collectionId + ".csv").toFile
     logger.info( s"Generating CollectionDirectory ${dirFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
     val pw = new PrintWriter( dirFile )
     variableMap foreach { case ( varName, subCollectionId ) =>
-      val collectionFile = getCachePath("NCML").resolve(subCollectionId + ".ncml").toString
+      val collectionFile = Collections.getCachePath("NCML").resolve(subCollectionId + ".ncml").toString
       pw.write(s"$varName, ${collectionFile}\n")
     }
     pw.close
   }
 
-  def writeAggregationSpec(collectionId: String, paths: Array[File], format: String = "ag1" ): List[String] = {
-    try {
-      val cacheDir = getCachePath("NCML")
-      logger.info(s"Creating NCML file for collection ${collectionId}}")
-      val writer = new NCMLWriter(paths.iterator)
-      if( !format.isEmpty ) { writer.writeAggregation( cacheDir.resolve(collectionId + format).toFile, format ) }
-      writer.writeNCML( cacheDir.resolve(collectionId + ".ncml").toFile )
-    } catch {
-      case err: Exception =>
-        logger.error( s"Error writing NCML file for collection ${collectionId}: ${err.getMessage}")
-        List.empty[String]
-    }
-  }
+
 
   def isNcFile(file: File): Boolean = {
     file.isFile && isNcFileName(file.getName.toLowerCase)
   }
 
-  def isCollectionFile(file: File): Boolean = {
-    val fname = file.getName.toLowerCase
-    file.isFile && fname.endsWith(".txt")
-  }
-  def getCacheDir: String = {
-    val collection_file_path =
-      Collections.getCacheFilePath("local_collections.xml")
-    new java.io.File(collection_file_path).getParent.stripSuffix("/")
-  }
-
-  def getCachePath(subdir: String): Path = {
-    FileSystems.getDefault.getPath(getCacheDir, subdir)
-  }
-
   def getNcURIs(file: File): Iterable[URI] = {
-    if (isCollectionFile(file)) {
+    if (Collections.isCollectionFile(file)) {
       val bufferedSource = Source.fromFile(file)
       val entries =
         for (line <- bufferedSource.getLines; if isNcFileName(line))
@@ -350,13 +323,10 @@ object NCMLWriter extends Loggable {
 //  }
 //}
 
-class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable {
+class NCMLWriter(fileHeaders: IndexedSeq[FileHeader], val maxCores: Int = 8)  extends Loggable {
   import NCMLWriter._
   private val nReadProcessors = Math.min( Runtime.getRuntime.availableProcessors, maxCores )
-  private val files: IndexedSeq[URI] = NCMLWriter.getNcURIs(args).toIndexedSeq
-  if (files.isEmpty) { throw new Exception( "Error, empty collection at: " + args.map(_.getAbsolutePath).mkString(",")) }
-  private val nFiles = files.length
-  val fileHeaders = FileHeader.getFileHeaders( files map uriToString, false )
+  private val nFiles = fileHeaders.length
   val outerDimensionSize: Int = fileHeaders.foldLeft(0)(_ + _.nElem)
   val ignored_attributes = List("comments")
   val overwriteTime = fileHeaders.length > 1
@@ -497,7 +467,7 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
     fileMetadata.coordVars find (fileMetadata.getAxisType(_) == AxisType.Time)
 
   def getNCMLVerbose: ( List[String], xml.Node ) = {
-    val fileMetadata = FileMetadata(files.head)
+    val fileMetadata = FileMetadata(fileHeaders.head.filePath)
     try {
       logger.info(s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n")
       val timeRegularSpecs = None //  getTimeSpecs( fileMetadata )
@@ -552,33 +522,6 @@ class NCMLWriter(args: Iterator[File], val maxCores: Int = 8)  extends Loggable 
     bw.write( XMLParser.serialize(result).toString )
     bw.close()
     varNames
-  }
-
-  def writeAggregation( aggFile: File, format: String ): Unit = {
-    logger.info(s"Writing Aggregation[$format] File: " + aggFile.toString)
-    logger.info("Processing %d files with %d workers".format(nFiles, nReadProcessors))
-    val bw = new BufferedWriter(new FileWriter(aggFile))
-    val fileMetadata = FileMetadata(files.head)
-    val dt: Int = Math.round( ( fileHeaders.last.startValue - fileHeaders.head.startValue ) / ( fileHeaders.length - 1 ).toFloat )
-    val ( basePath, reducedFileheaders ) = FileHeader.extractSubpath( fileHeaders )
-    try {
-      bw.write( s"P; time.step; $dt")
-      bw.write( s"P; base.path; $basePath")
-      bw.write( s"P; num.files; ${reducedFileheaders.length}")
-      for (attr <- fileMetadata.attributes ) { bw.write( s"P; ${attr.getFullName}; ${attr.getStringValue} ") }
-      for (coordAxis <- fileMetadata.coordinateAxes; ctype = coordAxis.getAxisType.getCFAxisName ) {
-        if(ctype.equals("Z") ) {  bw.write( s"A; ${coordAxis.getShortName}; ${ctype}; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}") }
-        else {                    bw.write( s"A; ${coordAxis.getShortName}; ${ctype}; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}" ) }
-      }
-      for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} " ) }
-      for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName};  ${variable.getShape.mkString(",")};  ${variable.getDimensionsString};  ${variable.getUnitsString} " ) }
-      for (fileHeader <- reducedFileheaders) {
-        bw.write( s"F; ${fileHeader.startValue}; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
-      }
-    } finally {
-      fileMetadata.close
-    }
-    bw.close()
   }
 }
 
@@ -703,7 +646,7 @@ class FileHeader(val filePath: String,
 }
 
 object FileMetadata extends Loggable {
-  def apply(file: URI): FileMetadata = {
+  def apply(file: String): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.aquireFile(file.toString, 4.toString)
     new FileMetadata(dataset)
   }
@@ -760,7 +703,7 @@ object CDScan extends Loggable {
     if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
     val collectionId = inputs(0).toLowerCase
     val pathFile = new File(inputs(1))
-    NCMLWriter.extractSubCollections( collectionId, pathFile.toPath, optionMap.toMap )
+    NCMLWriter.extractAggregations( collectionId, pathFile.toPath, optionMap.toMap )
     FileHeader.term()
   }
 }
@@ -828,7 +771,7 @@ object CDScanTest {
     val collectionId = "MERRA2-daily-test1"
     val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/DAILY/2005/JAN"
     val pathFile = new File(dataPath)
-    NCMLWriter.extractSubCollections(collectionId, pathFile.toPath )
+    NCMLWriter.extractAggregations(collectionId, pathFile.toPath )
   }
 }
 

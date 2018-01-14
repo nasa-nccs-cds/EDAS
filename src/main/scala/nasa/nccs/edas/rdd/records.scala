@@ -46,7 +46,6 @@ case class CDTimeSlice( timestamp: java.sql.Timestamp, arrays: scala.collection.
     ( result, count, (t1-t0)/1.0E9f )
   }
 }
-case class FileInput( index: Int, startTime: Long, nRows: Int, path: String )
 
 object TimeSliceMultiIterator {
   def apply( varId: String, varName: String, section: String, tslice: String ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {

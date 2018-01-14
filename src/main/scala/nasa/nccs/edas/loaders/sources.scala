@@ -2,7 +2,7 @@ package nasa.nccs.edas.loaders
 import java.io._
 import java.net.URL
 import java.nio.channels.Channels
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{FileSystems, Files, Path, Paths}
 import javax.xml.parsers.{ParserConfigurationException, SAXParserFactory}
 import java.util.concurrent.{ExecutorService, Executors}
 
@@ -52,20 +52,6 @@ object EDAS_XML extends XMLLoader[Node]  {
   }
 }
 
-class AggReader( val aggFile: String ) extends Loggable  {
-
-  def getFileInputs: List[FileInput] = {
-    val source = Source.fromFile(aggFile)
-    try {
-      var index = -1;
-      val files = ( for (line <- source.getLines; toks = line.split(','); if toks(0).equals("F") ) yield { index = index + 1; FileInput( index, toks(1).trim.toLong, toks(2).trim.toInt, toks(3).trim ); } ).toList
-      logger.info( s"Read ${files.length} file refs from ag1 file: ${aggFile}")
-      files
-    } finally {
-      source.close()
-    }
-  }
-}
 
 trait XmlResource extends Loggable {
   val Encoding = "UTF-8"
@@ -207,7 +193,20 @@ object Collections extends XmlResource with Loggable {
   def getCollectionFromPath( path: String ): Option[Collection] = _datasets.values.find( _.dataPath == path )
   def getCollectionPaths: Iterable[String] = _datasets.values.map( _.dataPath )
 
+  def getCacheDir: String = {
+    val collection_file_path =
+      Collections.getCacheFilePath("local_collections.xml")
+    new java.io.File(collection_file_path).getParent.stripSuffix("/")
+  }
 
+  def isCollectionFile(file: File): Boolean = {
+    val fname = file.getName.toLowerCase
+    file.isFile && fname.endsWith(".txt")
+  }
+
+  def getCachePath(subdir: String): Path = {
+    FileSystems.getDefault.getPath(getCacheDir, subdir)
+  }
 //  def refreshCollectionList = {
 //    var collPath: Path = null
 //    try {
