@@ -1,4 +1,5 @@
-package nasa.nccs.edas.loaders
+package nasa.nccs.edas.sources
+
 import java.io._
 import java.net.URL
 import java.nio.channels.Channels
@@ -12,7 +13,7 @@ import scala.collection.JavaConversions._
 import collection.mutable
 import nasa.nccs.caching.FragmentPersistence
 import nasa.nccs.cdapi.cdm._
-import nasa.nccs.edas.rdd.FileInput
+import nasa.nccs.edas.sources.netcdf.NCMLWriter
 import nasa.nccs.utilities.Loggable
 import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
@@ -70,13 +71,13 @@ trait XmlResource extends Loggable {
   }
 
   def getFilePath(resourcePath: String) = Option( getClass.getResource(resourcePath) ) match {
-      case None => Option( getClass.getClassLoader.getResource(resourcePath) ) match {
-        case None =>
-          throw new Exception(s"Resource $resourcePath does not exist!")
-        case Some(r) => r.getPath
-      }
+    case None => Option( getClass.getClassLoader.getResource(resourcePath) ) match {
+      case None =>
+        throw new Exception(s"Resource $resourcePath does not exist!")
       case Some(r) => r.getPath
     }
+    case Some(r) => r.getPath
+  }
 
   def attr( node: xml.Node, att_name: String ): String = { node.attribute(att_name) match { case None => ""; case Some(x) => x.toString }}
   def attrOpt( node: xml.Node, att_name: String ): Option[String] = node.attribute(att_name).map( _.toString )
@@ -179,7 +180,7 @@ object Collections extends XmlResource with Loggable {
   val initialCapacity: Int=10
   private val _datasets: TrieMap[String,Collection] =  loadCollectionXmlData( )
 
-//  def initCollectionList = if( datasets.isEmpty ) { refreshCollectionList }
+  //  def initCollectionList = if( datasets.isEmpty ) { refreshCollectionList }
 
   def hasGridFiles( collectionFile: File ): Boolean = {
     val gridFiles = for( line <- Source.fromFile( collectionFile ).getLines; elems = line.split(",").map(_.trim) ) yield ( elems.last.split('.').dropRight(1) + "nc" ).mkString(".")
@@ -207,23 +208,23 @@ object Collections extends XmlResource with Loggable {
   def getCachePath(subdir: String): Path = {
     FileSystems.getDefault.getPath(getCacheDir, subdir)
   }
-//  def refreshCollectionList = {
-//    var collPath: Path = null
-//    try {
-//      collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
-//      val ncmlExtensions = List( ".ncml", ".csv" )
-//      val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
-////      val collFuts = Future.sequence( for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
-////                            if (collId != "local_collections") && !datasets.containsKey(collId) ) yield Future { Collections.addCollection(collId, ncmlFile.toString) } )
-////      Await.result( collFuts, Duration.Inf )
-//
-//      for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
-//             if (collId != "local_collections") && !datasets.containsKey(collId) ) { Collections.addCollection(collId, ncmlFile.toString) }
-//
-//      logger.info( " ---> Updating Collections from files: \n\t" + ncmlFiles.map(_.toString).sorted.mkString("\n\t") + "\n----> Collections = \n\t" + Collections.getCollectionKeys.sorted.mkString("\n\t"))
-//
-//    } catch { case ex: Exception => logger.error( " Error refreshing Collection List from '%s': %s".format( collPath , ex.getMessage ) ) }
-//  }
+  //  def refreshCollectionList = {
+  //    var collPath: Path = null
+  //    try {
+  //      collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
+  //      val ncmlExtensions = List( ".ncml", ".csv" )
+  //      val ncmlFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
+  ////      val collFuts = Future.sequence( for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
+  ////                            if (collId != "local_collections") && !datasets.containsKey(collId) ) yield Future { Collections.addCollection(collId, ncmlFile.toString) } )
+  ////      Await.result( collFuts, Duration.Inf )
+  //
+  //      for (  ncmlFile <- ncmlFiles;  fileName = ncmlFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase;
+  //             if (collId != "local_collections") && !datasets.containsKey(collId) ) { Collections.addCollection(collId, ncmlFile.toString) }
+  //
+  //      logger.info( " ---> Updating Collections from files: \n\t" + ncmlFiles.map(_.toString).sorted.mkString("\n\t") + "\n----> Collections = \n\t" + Collections.getCollectionKeys.sorted.mkString("\n\t"))
+  //
+  //    } catch { case ex: Exception => logger.error( " Error refreshing Collection List from '%s': %s".format( collPath , ex.getMessage ) ) }
+  //  }
 
   def toXml: xml.Elem = {
     <collections>
@@ -258,7 +259,7 @@ object Collections extends XmlResource with Loggable {
       _datasets.put( collection.id, newCollection  )
       dataset.close()
     }
-//    persistLocalCollections()
+    //    persistLocalCollections()
   }
 
   def getVariableString( variable: nc2.Variable ): String = variable.getShortName + ":" + variable.getDimensionsString.replace(" ",",") + ":" + variable.getDescription+ ":" + variable.getUnitsString
@@ -296,18 +297,18 @@ object Collections extends XmlResource with Loggable {
         case None => logger.error("Attempt to delete collection that does not exist: " + collectionId ); None
       }
     } )
-//    persistLocalCollections()
+    //    persistLocalCollections()
     removedCids
   }
 
-//  def aggregateCollection( id: String, dataPath: String, fileFilter: String, title: String, vars: List[String] ): Collection = {
-//    val cvars = if(vars.isEmpty) getVariableList( dataPath ) else vars
-//    val collection = Collection( id, dataPath, fileFilter, "local", title, cvars )
-//    collection.generateAggregation()
-//    _datasets.put( id, collection  )
-////    persistLocalCollections()
-//    collection
-//  }
+  //  def aggregateCollection( id: String, dataPath: String, fileFilter: String, title: String, vars: List[String] ): Collection = {
+  //    val cvars = if(vars.isEmpty) getVariableList( dataPath ) else vars
+  //    val collection = Collection( id, dataPath, fileFilter, "local", title, cvars )
+  //    collection.generateAggregation()
+  //    _datasets.put( id, collection  )
+  ////    persistLocalCollections()
+  //    collection
+  //  }
 
   def addSubCollections( collectionFilePath: String, grid: CDGrid  ): Unit = {
     val ncmlFiles: Iterator[File] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
@@ -342,7 +343,7 @@ object Collections extends XmlResource with Loggable {
 
   def addSubCollection(  id: String, collectionFilePath: String, grid: CDGrid ): Option[Collection] = try {
     if( ! _datasets.containsKey(id) ) {
-//      logger.info(s" ---> Loading sub collection $id")
+      //      logger.info(s" ---> Loading sub collection $id")
       val collection = createCollection(id, collectionFilePath, grid)
       _datasets.put(id, collection)
       Some(collection)
@@ -356,24 +357,24 @@ object Collections extends XmlResource with Loggable {
 
 
   //  def addCollection(  id: String, dataPath: String, title: String, vars: List[String] ): Collection = {
-//    val collection = Collection( id, dataPath, "", "local", title, vars )
-////    collection.generateAggregation
-//    _datasets.put( id, collection  )
-////    persistLocalCollections()
-//    collection
-//  }
+  //    val collection = Collection( id, dataPath, "", "local", title, vars )
+  ////    collection.generateAggregation
+  //    _datasets.put( id, collection  )
+  ////    persistLocalCollections()
+  //    collection
+  //  }
 
   def updateCollection( collection: Collection ): Collection = {
     _datasets.put( collection.id, collection  )
     logger.info( " *----> Persist New Collection: " + collection.id )
-//    persistLocalCollections()
+    //    persistLocalCollections()
     collection
   }
 
   def findNcFile(file: File): Option[File] = {
     file.listFiles.filter( _.isFile ) foreach {
       f =>  if( f.getName.startsWith(".") ) return None
-            else if (NCMLWriter.isNcFile(f)) return Some(f)
+      else if (NCMLWriter.isNcFile(f)) return Some(f)
     }
     file.listFiles.filter( _.isDirectory ) foreach { f => findNcFile(f) match { case Some(f) => return Some(f); case None => Unit } }
     None
@@ -391,12 +392,12 @@ object Collections extends XmlResource with Loggable {
     }
   }
 
-//  def loadCollectionTextData(url:URL): Map[String,Collection] = {
-//    val lines = scala.io.Source.fromURL( url ).getLines
-//    val mapItems = for( line <- lines; toks =  line.split(';')) yield
-//      nospace(toks(0)) -> Collection( url=nospace(toks(1)), url=nospace(toks(1)), vars=getVarList(toks(3)) )
-//    mapItems.toMap
-//  }
+  //  def loadCollectionTextData(url:URL): Map[String,Collection] = {
+  //    val lines = scala.io.Source.fromURL( url ).getLines
+  //    val mapItems = for( line <- lines; toks =  line.split(';')) yield
+  //      nospace(toks(0)) -> Collection( url=nospace(toks(1)), url=nospace(toks(1)), vars=getVarList(toks(3)) )
+  //    mapItems.toMap
+  //  }
 
   def isChild( subDir: String,  parentDir: String ): Boolean = Paths.get( subDir ).toAbsolutePath.startsWith( Paths.get( parentDir ).toAbsolutePath )
   def findCollectionByPath( subDir: String ): Option[Collection] = _datasets.values.toList.find { case collection => if( collection.dataPath.isEmpty) { false } else { isChild( subDir, collection.dataPath ) } }
@@ -406,27 +407,27 @@ object Collections extends XmlResource with Loggable {
     val initialCapacity: Int=250
     val datasets = TrieMap.empty[String, Collection]
     for ( ( scope, filePath ) <- filePaths.iterator ) if( Files.exists( Paths.get(filePath) ) ) {
-        try {
-          logger.info( "Loading collections from file: " + filePath )
-          val children = EDAS_XML.loadFile(filePath).child
-          children.foreach( node => node.attribute("id") match {
-            case None => None;
-            case Some(id) => try {
-              val collection = getCollection(node, scope)
-              datasets.put(id.toString.toLowerCase, collection)
-              logger.info("Loading collection: " + id.toString.toLowerCase)
-            } catch { case err: Exception =>
-              logger.warn( "Skipping collection " + id.toString + " due to error: " + err.toString )
-            }
-          })
-        } catch {
-          case err: Throwable =>
-            logger.error("Error opening collection data file {%s}: %s".format(filePath, err.getMessage))
-            logger.error( "\n\t\t" + err.getStackTrace.mkString("\n\t") )
-        }
-      } else {
-        logger.warn( "Collections file does not exist: " + filePath )
+      try {
+        logger.info( "Loading collections from file: " + filePath )
+        val children = EDAS_XML.loadFile(filePath).child
+        children.foreach( node => node.attribute("id") match {
+          case None => None;
+          case Some(id) => try {
+            val collection = getCollection(node, scope)
+            datasets.put(id.toString.toLowerCase, collection)
+            logger.info("Loading collection: " + id.toString.toLowerCase)
+          } catch { case err: Exception =>
+            logger.warn( "Skipping collection " + id.toString + " due to error: " + err.toString )
+          }
+        })
+      } catch {
+        case err: Throwable =>
+          logger.error("Error opening collection data file {%s}: %s".format(filePath, err.getMessage))
+          logger.error( "\n\t\t" + err.getStackTrace.mkString("\n\t") )
       }
+    } else {
+      logger.warn( "Collections file does not exist: " + filePath )
+    }
     datasets
   }
   def persistLocalCollections(prettyPrint: Boolean = true) = {
@@ -458,17 +459,17 @@ object Collections extends XmlResource with Loggable {
     }
   }
 
-//  def getCollection(collection_uri: String, var_names: List[String] = List()): Option[Collection] = {
-//    parseUri(collection_uri) match {
-//      case (ctype, cpath) => ctype match {
-//        case "file" => Some(Collection( url = collection_uri, vars = var_names ))
-//        case "collection" =>
-//          val collection_key = cpath.stripPrefix("/").stripSuffix("\"").toLowerCase
-//          logger.info( " getCollection( %s ) ".format(collection_key) )
-//          datasets.get( collection_key )
-//      }
-//    }
-//  }
+  //  def getCollection(collection_uri: String, var_names: List[String] = List()): Option[Collection] = {
+  //    parseUri(collection_uri) match {
+  //      case (ctype, cpath) => ctype match {
+  //        case "file" => Some(Collection( url = collection_uri, vars = var_names ))
+  //        case "collection" =>
+  //          val collection_key = cpath.stripPrefix("/").stripSuffix("\"").toLowerCase
+  //          logger.info( " getCollection( %s ) ".format(collection_key) )
+  //          datasets.get( collection_key )
+  //      }
+  //    }
+  //  }
 
   def getCollectionKeys: Array[String] = _datasets.keys.toArray
 }

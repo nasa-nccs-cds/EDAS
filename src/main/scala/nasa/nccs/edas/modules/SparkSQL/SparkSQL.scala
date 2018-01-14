@@ -3,11 +3,13 @@ import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelStatus}
-import nasa.nccs.edas.loaders.{EDASOptions, RDDRecordConverter, RDDRecordsConverter, RDDSimpleRecordsConverter}
+import nasa.nccs.edas.loaders.{RDDRecordConverter, RDDRecordsConverter, RDDSimpleRecordsConverter}
+import nasa.nccs.edas.sources.netcdf.{EDASOptions, RDDRecordConverter, RDDRecordsConverter, RDDSimpleRecordsConverter}
+import nasa.nccs.edas.sources.{RDDRecordConverter, RDDRecordsConverter, RDDSimpleRecordsConverter}
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.functions.{avg,col}
-import org.apache.spark.sql.{ Row, DataFrame, Dataset, Encoders }
+import org.apache.spark.sql.functions.{avg, col}
+import org.apache.spark.sql.{DataFrame, Dataset, Encoders, Row}
 
 class ave extends Kernel {
   override val status = KernelStatus.restricted

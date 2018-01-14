@@ -1,18 +1,11 @@
-package nasa.nccs.edas.loaders
+package nasa.nccs.edas.sources.netcdf
+
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray, RDDRecord}
 import nasa.nccs.edas.engine.spark.RecordKey
-import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.utilities.Loggable
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, GenericRow}
-import org.apache.spark.sql.types._
-
-import scala.collection.immutable.TreeMap
-import org.apache.spark.sql.types.{ArrayType, ByteType, DataTypes, FloatType, IntegerType, ShortType}
-
-import scala.collection.mutable.ArrayBuffer
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.types.{DataTypes, FloatType, IntegerType, _}
 
 class TempRow( val values: Seq[Any] ) extends Row {
   override def length: Int = values.size
