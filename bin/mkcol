@@ -1,4 +1,4 @@
 #!/bin/bash
-cd "$( dirname "${BASH_SOURCE[0]}" )"; cd ..; sbt "runMain nasa.nccs.cdapi.cdm.CDScan $*"
+cd "$( dirname "${BASH_SOURCE[0]}" )"; cd ..; sbt "runMain nasa.nccs.edas.sources.CDScan $*"
 
 
