@@ -124,13 +124,13 @@ object CDGrid extends Loggable {
       val collectionFile = collectionFiles.pop()
       val ncDataset: NetcdfDataset = NetcdfDataset.openDataset(collectionFile)
       val groupMap: mutable.HashMap[String,nc2.Group] = mutable.HashMap.empty[String,nc2.Group]
-      val localDims = ncDataset.getDimensions.map( d => NCMLWriter.getName(d) )
-      for (d <- ncDataset.getDimensions; dname = NCMLWriter.getName(d); if !dimList.contains(dname)) {
+      val localDims = ncDataset.getDimensions.map( d => AggregationWriter.getName(d) )
+      for (d <- ncDataset.getDimensions; dname = AggregationWriter.getName(d); if !dimList.contains(dname)) {
         val dimension = gridWriter.addDimension(null, dname, d.getLength)
         dimList += dname
       }
 
-      val varTups = for (cvar <- ncDataset.getVariables; varName = NCMLWriter.getName(cvar); if !newVarsMap.contains( varName ) ) yield {
+      val varTups = for (cvar <- ncDataset.getVariables; varName = AggregationWriter.getName(cvar); if !newVarsMap.contains( varName ) ) yield {
         val dataType = cvar match {
           case coordAxis: CoordinateAxis =>
             if (coordAxis.getAxisType == AxisType.Time) ma2.DataType.LONG
@@ -140,7 +140,7 @@ object CDGrid extends Loggable {
         val oldGroup = cvar.getGroup
         val newGroup = getNewGroup(groupMap, oldGroup, gridWriter)
         val newVar: nc2.Variable = gridWriter.addVariable(newGroup, varName, dataType, getDimensionNames( cvar.getDimensionsString.split(' '), localDims ).mkString(" "))
-        //      val newVar = gridWriter.addVariable( newGroup, NCMLWriter.getName(cvar), dataType, cvar.getDimensionsString  )
+        //      val newVar = gridWriter.addVariable( newGroup, AggregationWriter.getName(cvar), dataType, cvar.getDimensionsString  )
         if( cvar.isCoordinateVariable && (cvar.getRank == 1) ) {
           cvarOrigins += (collectionFile -> (cvarOrigins.getOrElse(collectionFile, Seq.empty[nc2.Variable]) ++ Seq(newVar)))
         }
@@ -923,7 +923,7 @@ object VariableRecord {
 
 
 class MetaCollectionFile( val path: String ) {
-  private val _subCollections: Map[String,String]  = parse
+  private val _aggregations: Map[String,String]  = parse
 
   private def parse: Map[String,String] = {
     val items: Iterator[(String,String)] = for( line <- Source.fromFile(path).getLines; tline = line.trim; if !tline.startsWith("#") ) yield {
@@ -933,9 +933,9 @@ class MetaCollectionFile( val path: String ) {
     Map( items.toSeq: _* )
   }
 
-  def getPath( varName: String ): Option[String] = _subCollections.get( varName.toLowerCase )
-  def paths: Seq[String] = _subCollections.values.toSeq
-  def subCollections: Seq[Collection] = paths flatMap Collections.getCollectionFromPath
+  def getPath( varName: String ): Option[String] = _aggregations.get( varName.toLowerCase )
+  def paths: Seq[String] = _aggregations.values.toSeq
+  def aggregations: Seq[Collection] = paths flatMap Collections.getCollectionFromPath
 }
 
 //class ncWriteTest extends Loggable {

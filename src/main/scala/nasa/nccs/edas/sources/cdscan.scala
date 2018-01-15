@@ -187,9 +187,9 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
   val dimensions: List[nc2.Dimension] = ncDataset.getDimensions.toList
   val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable] ) = getVariableLists(ncDataset)
   val attributes: List[nc2.Attribute] = ncDataset.getGlobalAttributes.toList
-  val dimNames: List[String] = dimensions.map(NCMLWriter.getName(_))
+  val dimNames: List[String] = dimensions.map(AggregationWriter.getName(_))
   def close = ncDataset.close()
-  def getCoordinateAxis(name: String): Option[nc2.dataset.CoordinateAxis] = coordinateAxes.find(p => NCMLWriter.getName(p).equalsIgnoreCase(name))
+  def getCoordinateAxis(name: String): Option[nc2.dataset.CoordinateAxis] = coordinateAxes.find(p => AggregationWriter.getName(p).equalsIgnoreCase(name))
 
   def getAxisType(variable: nc2.Variable): AxisType = variable match {
     case coordVar: CoordinateAxis1D => coordVar.getAxisType;
@@ -223,7 +223,7 @@ object CDScan extends Loggable {
     if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
     val collectionId = inputs(0).toLowerCase
     val pathFile = new File(inputs(1))
-    NCMLWriter.extractAggregations( collectionId, pathFile.toPath, optionMap.toMap )
+    AggregationWriter.extractAggregations( collectionId, pathFile.toPath, optionMap.toMap )
     FileHeader.term()
   }
 }
@@ -236,7 +236,7 @@ object CDMultiScan extends Loggable {
     if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
     val ncmlDir = Collections.getCachePath("NCML").toFile
     ncmlDir.mkdirs
-    NCMLWriter.generateNCMLFiles( collectionsMetaFile )
+    AggregationWriter.generateAggregations( collectionsMetaFile )
     FileHeader.term()
   }
 }
@@ -267,13 +267,13 @@ class FileHeaderGenerator(file: String, timeRegular: Boolean ) extends Runnable 
 //    val collectionId = inputs(0).toLowerCase
 //    val subCollectionId = collectionId + "-sub"
 //    val pathFile = new File(inputs(1))
-//    val ncmlFile = NCMLWriter.getCachePath("NCML").resolve(subCollectionId + ".ncml").toFile
+//    val ncmlFile = AggregationWriter.getCachePath("NCML").resolve(subCollectionId + ".ncml").toFile
 //    if ( ncmlFile.exists ) { throw new Exception("Collection already exists, defined by: " + ncmlFile.toString) }
 //    logger.info(s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
 //    ncmlFile.getParentFile.mkdirs
-//    val ncmlWriter = NCMLWriter(pathFile)
+//    val AggregationWriter = AggregationWriter(pathFile)
 //    val variableMap = new collection.mutable.HashMap[String,String]()
-//    val varNames: List[String] = ncmlWriter.writeNCML(ncmlFile)
+//    val varNames: List[String] = AggregationWriter.writeNCML(ncmlFile)
 //    varNames.foreach( vname => variableMap += ( vname -> subCollectionId ) )
 //    writeCollectionDirectory( collectionId, variableMap.toMap )
 //  }
@@ -285,9 +285,9 @@ class FileHeaderGenerator(file: String, timeRegular: Boolean ) extends Runnable 
 //    EDASLogManager.isMaster
 //    val collectionsMetaFile = new File(args(0))    // If first col == 'mult' then each subdir is treated as a separate collection.
 //    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
-//    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
+//    val ncmlDir = AggregationWriter.getCachePath("NCML").toFile
 //    ncmlDir.mkdirs
-//    NCMLWriter.updateNCMLFiles( collectionsMetaFile, ncmlDir )
+//    AggregationWriter.updateNCMLFiles( collectionsMetaFile, ncmlDir )
 //  }
 //}
 
@@ -296,7 +296,7 @@ object CDScanTest {
     val collectionId = "MERRA2-daily-test1"
     val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/DAILY/2005/JAN"
     val pathFile = new File(dataPath)
-    NCMLWriter.extractAggregations(collectionId, pathFile.toPath )
+    AggregationWriter.extractAggregations(collectionId, pathFile.toPath )
   }
 }
 

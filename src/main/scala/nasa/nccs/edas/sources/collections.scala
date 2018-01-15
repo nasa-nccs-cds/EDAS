@@ -8,6 +8,7 @@ import javax.xml.parsers.{ParserConfigurationException, SAXParserFactory}
 import java.util.concurrent.{ExecutorService, Executors}
 
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -15,7 +16,7 @@ import collection.JavaConverters._
 import scala.collection.JavaConversions._
 import collection.mutable
 import nasa.nccs.caching.FragmentPersistence
-import nasa.nccs.cdapi.cdm._
+import nasa.nccs.cdapi.cdm.{CDGrid, CDSVariable, DiskCacheFileMgr}
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.DataSource
@@ -136,13 +137,13 @@ object CollectionLoadServices {
   }
 }
 
-class Collection( val ctype: String, val id: String, val dataPath: String, val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List(), optGrid: Option[CDGrid] = None ) extends Serializable with Loggable {
+class Collection( val ctype: String, val id: String, val dataPath: String, val aggregations: List[Aggregation], val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List(), optGrid: Option[CDGrid] = None ) extends Serializable with Loggable {
   val collId = Collections.idToFile(id)
   private val variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()
   override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
   def isEmpty = dataPath.isEmpty
   lazy val varNames = vars.map( varStr => varStr.split(Array(':', '|')).head )
-  val grid = optGrid.getOrElse( CDGrid(id, dataPath) )
+  lazy val grid = optGrid.getOrElse( CDGrid(id, dataPath) )
 
   def isMeta: Boolean = dataPath.endsWith(".csv")
   def deleteAggregation() = grid.deleteAggregation
@@ -156,38 +157,38 @@ class Collection( val ctype: String, val id: String, val dataPath: String, val f
     new nc2.Attribute("ctype", ctype)
   ) ++ grid.attributes
 
-  def generateAggregation(): xml.Elem = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(grid.gridFilePath, 10.toString, true)
-    try {
-      _aggCollection(ncDataset)
-    } catch {
-      case err: Exception => logger.error("Can't aggregate collection for dataset " + ncDataset.toString); throw err
-    }
-  }
+//  def generateAggregation(): xml.Elem = {
+//    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(grid.gridFilePath, 10.toString, true)
+//    try {
+//      _aggCollection(ncDataset)
+//    } catch {
+//      case err: Exception => logger.error("Can't aggregate collection for dataset " + ncDataset.toString); throw err
+//    }
+//  }
 
   def readVariableData(varShortName: String, section: ma2.Section): ma2.Array =
     NetcdfDatasetMgr.readVariableData(varShortName, dataPath, section )
 
-  private def _aggCollection(dataset: NetcdfDataset): xml.Elem = {
-    val vars = dataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
-    val title: String = Collections.findAttribute(dataset, List("Title", "LongName"))
-    val newCollection = new Collection(ctype, id, dataPath, fileFilter, scope, title, vars)
-    Collections.updateCollection(newCollection)
-    newCollection.toXml
-  }
-  def url(varName: String = "") = ctype match {
-    case "http" => dataPath
-    case _ => "file://" + dataPath
-  }
+//  private def _aggCollection(dataset: NetcdfDataset): xml.Elem = {
+//    val vars = dataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
+//    val title: String = Collections.findAttribute(dataset, List("Title", "LongName"))
+//    val newCollection = new Collection(ctype, id, dataPath, fileFilter, scope, title, vars)
+//    Collections.updateCollection(newCollection)
+//    newCollection.toXml
+//  }
+//  def url(varName: String = "") = ctype match {
+//    case "http" => dataPath
+//    case _ => "file://" + dataPath
+//  }
 
 
-  def getVarNodes: Seq[(String,Node)] = if(isMeta) {
-    val subCollections = new MetaCollectionFile(dataPath).subCollections
-    subCollections flatMap ( _.getVarNodes )
-  } else {
-    val vnames: List[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") )
-    vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) )
-  }
+//  def getVarNodes: Seq[(String,Node)] = if(isMeta) {
+//    val subCollections = new MetaCollectionFile(dataPath).aggregations
+//    subCollections flatMap ( _.getVarNodes )
+//  } else {
+//    val vnames: List[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") )
+//    vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) )
+//  }
 
   def getResolution: String = try {
     grid.resolution.map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")
@@ -201,7 +202,7 @@ class Collection( val ctype: String, val id: String, val dataPath: String, val f
 
   def toXml: xml.Elem = {
     <collection id={id} title={title} resolution={getResolution}>
-      { SortedMap( getVarNodes: _* ).values }
+      { aggregations.map( _.toXml) }
     </collection>
   }
 
@@ -246,25 +247,25 @@ class Collection( val ctype: String, val id: String, val dataPath: String, val f
 }
 
 
-object Collection extends Loggable {
-  def apply( id: String, ncmlFile: File ) = {
-    new Collection( "file", id, ncmlFile.toString )
-  }
-  def apply( id: String,  dataPath: String, fileFilter: String = "", scope: String="", title: String= "", vars: List[String] = List() ) = {
-    val ctype = dataPath match {
-      case url if(url.startsWith("http")) => "dap"
-      case url if(url.startsWith("file:")) => "file"
-      case col if(col.startsWith("collection:")) => "collection"
-      case dpath if(dpath.toLowerCase.endsWith(".csv")) => "csv"
-      case dpath if(dpath.toLowerCase.endsWith(".txt")) => "txt"
-      case fpath if(new File(fpath).isFile) => "file"
-      case dir if(new File(dir).isDirectory) => "file"
-      case _ => throw new Exception( "Unrecognized Collection type, dataPath = " + dataPath )
-    }
-    new Collection( ctype, id, dataPath, fileFilter, scope, title, vars )
-  }
-
-}
+//object Collection extends Loggable {
+////  def apply( id: String, ncmlFile: File ) = {
+////    new Collection( "file", id, ncmlFile.toString )
+////  }
+//  def apply( id: String,  dataPath: String, fileFilter: String = "", scope: String="", title: String= "", vars: List[String] = List() ) = {
+//    val ctype = dataPath match {
+//      case url if(url.startsWith("http")) => "dap"
+//      case url if(url.startsWith("file:")) => "file"
+//      case col if(col.startsWith("collection:")) => "collection"
+//      case dpath if(dpath.toLowerCase.endsWith(".csv")) => "csv"
+//      case dpath if(dpath.toLowerCase.endsWith(".txt")) => "txt"
+//      case fpath if(new File(fpath).isFile) => "file"
+//      case dir if(new File(dir).isDirectory) => "file"
+//      case _ => throw new Exception( "Unrecognized Collection type, dataPath = " + dataPath )
+//    }
+//    new Collection( ctype, id, dataPath, fileFilter, scope, title, vars )
+//  }
+//
+//}
 
 
 class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 1 ) extends Runnable {
@@ -328,7 +329,7 @@ object Collections extends XmlResource with Loggable {
     Files.exists( Paths.get( gridFile )  )
   }
 
-  def getCollectionFromPath( path: String ): Option[Collection] = _datasets.values.find( _.dataPath == path )
+  def getCollectionFromPath( path: String ): Option[Collection] = _datasets.values.find( _.dataPath.equals( path ) )
   def getCollectionPaths: Iterable[String] = _datasets.values.map( _.dataPath )
 
   def getCacheDir: String = {
@@ -385,19 +386,19 @@ object Collections extends XmlResource with Loggable {
   def findAttribute( dataset: NetcdfDataset, possible_names: List[String] ): String =
     dataset.getGlobalAttributes.toList.find( attr => possible_names.contains( attr.getShortName ) ) match { case Some(attr) => attr.getStringValue; case None => "" }
 
-  def updateVars = {
-    for( ( id: String, collection:Collection ) <- _datasets; if collection.scope.equalsIgnoreCase("local") ) {
-      logger.info( "Opening NetCDF dataset(4) at: " + collection.dataPath )
-      val dataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile( collection.dataPath, 13.toString )
-      val vars = dataset.getVariables.filter(!_.isCoordinateVariable).map(v => getVariableString(v) ).toList
-      val title = findAttribute( dataset, List( "Title", "LongName" ) )
-      val newCollection = new Collection( collection.ctype, id, collection.dataPath, collection.fileFilter, "local", title, vars)
-      println( "\nUpdating collection %s, vars = %s".format( id, vars.mkString(";") ))
-      _datasets.put( collection.id, newCollection  )
-      dataset.close()
-    }
-    //    persistLocalCollections()
-  }
+//  def updateVars = {
+//    for( ( id: String, collection:Collection ) <- _datasets; if collection.scope.equalsIgnoreCase("local") ) {
+//      logger.info( "Opening NetCDF dataset(4) at: " + collection.dataPath )
+//      val dataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile( collection.dataPath, 13.toString )
+//      val vars = dataset.getVariables.filter(!_.isCoordinateVariable).map(v => getVariableString(v) ).toList
+//      val title = findAttribute( dataset, List( "Title", "LongName" ) )
+//      val newCollection = new Collection( collection.ctype, id, collection.dataPath, collection.fileFilter, "local", title, vars)
+//      println( "\nUpdating collection %s, vars = %s".format( id, vars.mkString(";") ))
+//      _datasets.put( collection.id, newCollection  )
+//      dataset.close()
+//    }
+//    //    persistLocalCollections()
+//  }
 
   def getVariableString( variable: nc2.Variable ): String = variable.getShortName + ":" + variable.getDimensionsString.replace(" ",",") + ":" + variable.getDescription+ ":" + variable.getUnitsString
   def getCacheFilePath( fileName: String ): String = DiskCacheFileMgr.getDiskCacheFilePath( "collections", fileName)
@@ -447,26 +448,12 @@ object Collections extends XmlResource with Loggable {
   //    collection
   //  }
 
-  def addSubCollections( collectionFilePath: String, grid: CDGrid  ): Unit = {
-    val ncmlFiles: Iterator[File] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
-    ncmlFiles.foreach( file => addSubCollection( fileToId( file), file.getAbsolutePath, grid ) )
-  }
-
-  def createCollection( collId: String, ncmlFilePath: String, grid: CDGrid ): Collection = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(ncmlFilePath, 14.toString)
-    try {
-      val vars = ncDataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
-      val title: String = Collections.findAttribute(ncDataset, List("Title", "LongName"))
-      new Collection("file", collId, ncmlFilePath, "", "", title, vars, Some(grid) )
-    } finally { ncDataset.close() }
-  }
-
   def addMetaCollection(  id: String, collectionFilePath: String ): Option[Collection] = try {
     if( ! _datasets.containsKey(id) ) {
       assert(collectionFilePath.endsWith(".csv"), "Error, invalid path for meta collection: " + collectionFilePath)
       val vars = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head
-      val collection = new Collection("file", id, collectionFilePath, "", "", "Aggregated Collection", vars.toList)
-      addSubCollections(collectionFilePath, collection.grid)
+      val aggregations = getAggregations( collectionFilePath  )
+      val collection = new Collection("file", id, collectionFilePath, aggregations, "", "", "Aggregated Collection", vars.toList)
       _datasets.put( id, collection )
       Some(collection)
     } else { None }
@@ -478,18 +465,11 @@ object Collections extends XmlResource with Loggable {
 
   def getMetaCollections: List[String] = getNCMLDirectory.toFile.listFiles.filter(_.isFile).toList.filter { _.getName.endsWith(".csv") } map { _.getName.split('.').dropRight(1).mkString(".") }
 
-  def addSubCollection(  id: String, collectionFilePath: String, grid: CDGrid ): Option[Collection] = try {
-    if( ! _datasets.containsKey(id) ) {
-      //      logger.info(s" ---> Loading sub collection $id")
-      val collection = createCollection(id, collectionFilePath, grid)
-      _datasets.put(id, collection)
-      Some(collection)
-    } else { None }
-  } catch {
-    case err: Exception =>
-      logger.error( s"Error reading collection ${id} from ncml ${collectionFilePath}: ${err.toString}" )
-      None
+  def getAggregations(collectionFilePath: String ): List[Aggregation] = {
+    val agFiles: Iterator[File] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
+    agFiles.map( file => Aggregation.read( file.getAbsolutePath ) ).toList
   }
+
 
 
 
@@ -508,10 +488,19 @@ object Collections extends XmlResource with Loggable {
     collection
   }
 
+  def isNcFileName(fName: String): Boolean = {
+    val fname = fName.toLowerCase;
+    fname.endsWith(".nc4") || fname.endsWith(".nc") || fname.endsWith(".hdf") || fname.endsWith(".ncml")
+  }
+
+  def isNcFile(file: File): Boolean = {
+    file.isFile && isNcFileName(file.getName.toLowerCase)
+  }
+
   def findNcFile(file: File): Option[File] = {
     file.listFiles.filter( _.isFile ) foreach {
       f =>  if( f.getName.startsWith(".") ) return None
-      else if (NCMLWriter.isNcFile(f)) return Some(f)
+      else if ( isNcFile(f) ) return Some(f)
     }
     file.listFiles.filter( _.isDirectory ) foreach { f => findNcFile(f) match { case Some(f) => return Some(f); case None => Unit } }
     None
@@ -574,9 +563,9 @@ object Collections extends XmlResource with Loggable {
   }
 
   def getVarList( var_list_data: String  ): List[String] = var_list_data.filter(!List(' ','(',')').contains(_)).split(',').toList
-  def getCollection( n: xml.Node, scope: String ): Collection = {
-    Collection( attr(n,"id"), attr(n,"path"), attr(n,"fileFilter"), scope, attr(n,"title"), n.text.split(";").toList )
-  }
+//  def getCollection( n: xml.Node, scope: String ): Collection = {
+//    Collection( attr(n,"id"), attr(n,"path"), attr(n,"fileFilter"), scope, attr(n,"title"), n.text.split(";").toList )
+//  }
 
   def hasCollection( collectionId: String ): Boolean = _datasets.containsKey( collectionId.toLowerCase )
 

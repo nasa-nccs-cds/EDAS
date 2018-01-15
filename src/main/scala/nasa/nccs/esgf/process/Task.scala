@@ -491,9 +491,9 @@ object SectionMerge {
   }
 }
 
-class DataFragmentSpec(val uid: String = "",
-                       val varname: String = "",
-                       val collection: Collection = new Collection("empty", "", ""),
+class DataFragmentSpec(val uid: String,
+                       val varname: String,
+                       val collection: Collection,
                        val fragIdOpt: Option[String] = None,
                        val targetGridOpt: Option[TargetGrid] = None,
                        val dimensions: String = "",
@@ -955,24 +955,25 @@ object DataContainer extends ContainerBase {
       val autocache = metadata.getOrElse( "cache", false ).toString.toBoolean
       collectionOpt match {
         case None =>
-          val var_names: Array[String] = fullname.toString.split(',')
-          val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
-          val cid = dataPath.split('/').last
-          if( dataPath.toLowerCase.startsWith("collection") ) {
-            throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getMetaCollections.mkString(", ")}")
-          }
-          val collection = Collection( cid, dataPath )
-          for ((name, index) <- var_names.zipWithIndex) yield {
-            val name_items = name.split(Array(':', '|'))
-            val dsource = new DataSource( stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
-            val vid = stripQuotes(name_items.last)
-            val vname = normalize(name_items.head)
-            val dcid =
-              if (vid.isEmpty) uid + s"c-$base_index$index"
-              else if (vname.isEmpty) vid
-              else uid + vid
-            new DataContainer(dcid, source = Some(dsource))
-          }
+          throw new Exception( "Can't find collection: " + metadata.getOrElse("collection", "UNDEF") )
+//          val var_names: Array[String] = fullname.toString.split(',')
+//          val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
+//          val cid = dataPath.split('/').last
+//          if( dataPath.toLowerCase.startsWith("collection") ) {
+//            throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getMetaCollections.mkString(", ")}")
+//          }
+//          val collection = Collection( cid, dataPath )
+//          for ((name, index) <- var_names.zipWithIndex) yield {
+//            val name_items = name.split(Array(':', '|'))
+//            val dsource = new DataSource( stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
+//            val vid = stripQuotes(name_items.last)
+//            val vname = normalize(name_items.head)
+//            val dcid =
+//              if (vid.isEmpty) uid + s"c-$base_index$index"
+//              else if (vname.isEmpty) vid
+//              else uid + vid
+//            new DataContainer(dcid, source = Some(dsource))
+//          }
         case Some(collection) =>
           val var_names: Array[String] =
             if (fullname.equals("*")) collection.varNames.toArray
