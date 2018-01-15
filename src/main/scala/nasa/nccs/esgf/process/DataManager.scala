@@ -12,6 +12,8 @@ import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext, RDDContainer}
 import nasa.nccs.edas.portal.TestReadApplication.logger
+import nasa.nccs.edas.sources.Collection
+import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}

@@ -1,4 +1,4 @@
-package nasa.nccs.cdapi.cdm
+package nasa.nccs.edas.sources
 
 import java.io._
 import java.net.URI
@@ -8,8 +8,7 @@ import java.util.concurrent.{Executors, Future, TimeUnit}
 
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.cdapi.tensors.CDDoubleArray
-import nasa.nccs.edas.loaders.Collections
-import nasa.nccs.edas.sources.Aggregation
+import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.utilities.{EDASLogManager, Loggable, XMLParser, cdsutils}
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2.Group
@@ -45,9 +44,15 @@ import scala.xml.Utility
 
 
 
-class FileHeaderGenerator( file: String, timeRegular: Boolean ) extends Runnable {
-  override def run(): Unit = { FileHeader( file, timeRegular ) }
+class DatasetFileHeaders(val aggDim: String, val aggFileMap: Seq[FileHeader]) {
+  def getNElems: Int = {
+    assert( aggFileMap.nonEmpty, "Error, aggregated dataset has no files!")
+    aggFileMap.head.nElem
+  }
+  def getAggAxisValues: Array[Long] =
+    aggFileMap.foldLeft(Array[Long]()) { _ ++ _.axisValues }
 }
+
 
 object FileHeader extends Loggable {
   val maxOpenAttempts = 1
@@ -82,7 +87,7 @@ object FileHeader extends Loggable {
   def filterCompleted( seq: IndexedSeq[Future[_]] ): IndexedSeq[Future[_]] = seq.filterNot( _.isDone )
 
   def waitUntilDone( seq: IndexedSeq[Future[_]] ): Unit = if( seq.isEmpty ) { return } else {
-//    print( s"Waiting on ${seq.length} tasks (generating NCML files)")
+    //    print( s"Waiting on ${seq.length} tasks (generating NCML files)")
     Thread.sleep( 500 )
     waitUntilDone( filterCompleted(seq) )
   }
@@ -142,15 +147,6 @@ object FileHeader extends Loggable {
   }
 }
 
-class DatasetFileHeaders(val aggDim: String, val aggFileMap: Seq[FileHeader]) {
-  def getNElems: Int = {
-    assert( aggFileMap.nonEmpty, "Error, aggregated dataset has no files!")
-    aggFileMap.head.nElem
-  }
-  def getAggAxisValues: Array[Long] =
-    aggFileMap.foldLeft(Array[Long]()) { _ ++ _.axisValues }
-}
-
 class FileHeader(val filePath: String,
                  val axisValues: Array[Long],
                  val boundsValues: Array[Double],
@@ -164,6 +160,10 @@ class FileHeader(val filePath: String,
   override def toString: String = " *** FileHeader { path='%s', nElem=%d, startValue=%d startDate=%s} ".format(filePath, nElem, startValue, startDate)
   def dropPrefix( nElems: Int ): FileHeader = new FileHeader( filePath.split("/").drop(nElems).mkString("/"), axisValues, boundsValues, timeRegular, varNames, coordVarNames )
 }
+
+
+
+
 
 object FileMetadata extends Loggable {
   def apply(file: String): FileMetadata = {
@@ -234,12 +234,17 @@ object CDMultiScan extends Loggable {
     EDASLogManager.isMaster
     val collectionsMetaFile = new File(args(0))    // cols:  depth, template, collectionID, collectionRootPath
     if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
-    val ncmlDir = NCMLWriter.getCachePath("NCML").toFile
+    val ncmlDir = Collections.getCachePath("NCML").toFile
     ncmlDir.mkdirs
     NCMLWriter.generateNCMLFiles( collectionsMetaFile )
     FileHeader.term()
   }
 }
+
+class FileHeaderGenerator(file: String, timeRegular: Boolean ) extends Runnable {
+  override def run(): Unit = { FileHeader( file, timeRegular ) }
+}
+
 
 
 //object LegacyCDScan extends Loggable {

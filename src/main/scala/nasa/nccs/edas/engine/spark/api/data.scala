@@ -2,7 +2,7 @@ package nasa.nccs.edas.engine.spark.api
 
 import nasa.nccs.cdapi.data.{RDDRecord, RDDataManager}
 import nasa.nccs.edas.engine.EDASExecutionManager
-import nasa.nccs.edas.loaders.Collections
+import nasa.nccs.edas.sources.Collections
 import org.apache.spark.rdd.RDD
 import ucar.nc2
 import ucar.nc2.constants.AxisType

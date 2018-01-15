@@ -2,18 +2,19 @@ package nasa.nccs.edas.sources.netcdf
 
 import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.net.URI
-import java.nio.file.{ Path, Paths }
+import java.nio.file.{Path, Paths}
 
-import nasa.nccs.cdapi.cdm.{FileHeader, FileMetadata}
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import ucar.{ma2, nc2}
-import nasa.nccs.edas.sources.{Aggregation, Collections}
+import nasa.nccs.edas.sources.{Aggregation, Collections, FileHeader, FileMetadata}
 import nasa.nccs.utilities.{Loggable, XMLParser, cdsutils}
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2.Group
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D}
 
+import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.io.Source
 import scala.util.matching.Regex
@@ -182,7 +183,8 @@ object NCMLWriter extends Loggable {
       groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
     } else {
       val unsimplifiedResult = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
-        val collIdNames: Seq[String] = extractCommonElements( grRelFilePaths.map(df => df.subpath(0, bifurDepth).map(_.toString).toSeq) )
+        val paths: Iterable[ Seq[String] ] = grRelFilePaths.map( df => df.subpath( 0, bifurDepth).map(_.toString).toSeq )
+        val collIdNames: Seq[String] = extractCommonElements( paths )
         val result = ( groupKey, ( collIdNames, grRelFilePaths.toArray)  )
         result
       }

@@ -1,21 +1,20 @@
 package nasa.nccs.cdapi.cdm
 
+import java.io._
 import java.nio.channels.{FileChannel, NonReadableChannelException, ReadableByteChannel}
 
 import ucar.{ma2, nc2}
 import java.nio.file.{Files, Path, Paths}
-import java.io.{FileWriter, _}
 import java.net.URI
 import java.nio._
 import java.util.{Date, Formatter, Locale}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
-import nasa.nccs.caching.{EDASCachePartitioner, EDASPartitioner}
 import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
 import nasa.nccs.cdapi.tensors.{CDDoubleArray, CDFloatArray, CDLongArray}
 import nasa.nccs.edas.engine.spark.RecordKey
-import nasa.nccs.edas.loaders.{Collections, EDAS_XML, XmlResource}
+import nasa.nccs.edas.sources.{Variable => _, _}
+import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import ucar.nc2.constants.AxisType
@@ -30,7 +29,7 @@ import scala.reflect.ClassTag
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
 import nasa.nccs.esgf.process.{CDSection, ContainerBase, ContainerOps, DataSource}
-import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}
+import nasa.nccs.esgf.wps.ProcessManager
 import ucar.nc2._
 import ucar.nc2.write.Nc4Chunking
 import ucar.nc2.time.CalendarPeriod
@@ -40,44 +39,10 @@ import scala.collection.immutable.SortedMap
 import scala.io.Source
 import scala.xml.Node
 
-object Collection extends Loggable {
-  def apply( id: String, ncmlFile: File ) = {
-    new Collection( "file", id, ncmlFile.toString )
-  }
-  def apply( id: String,  dataPath: String, fileFilter: String = "", scope: String="", title: String= "", vars: List[String] = List() ) = {
-    val ctype = dataPath match {
-      case url if(url.startsWith("http")) => "dap"
-      case url if(url.startsWith("file:")) => "file"
-      case col if(col.startsWith("collection:")) => "collection"
-      case dpath if(dpath.toLowerCase.endsWith(".csv")) => "csv"
-      case dpath if(dpath.toLowerCase.endsWith(".txt")) => "txt"
-      case fpath if(new File(fpath).isFile) => "file"
-      case dir if(new File(dir).isDirectory) => "file"
-      case _ => throw new Exception( "Unrecognized Collection type, dataPath = " + dataPath )
-    }
-    new Collection( ctype, id, dataPath, fileFilter, scope, title, vars )
-  }
-
-  def aggregate( dsource: DataSource ): xml.Elem = {
-    val col = dsource.collection
-    logger.info( "XXXX-> Creating collection '" + col.id + "' path: " + col.dataPath )
-//    val url = if ( col.dataPath.startsWith("http:") ) {
-//      col.dataPath
-//    } else {
-//      col.createNCML()
-//    }
-    col.generateAggregation()
-  }
-
-  def aggregate( colId: String, path: File ): xml.Elem = {
-    val col = Collection(colId, path.getAbsolutePath)
-    col.generateAggregation()
-  }
-}
 
 object CDGrid extends Loggable {
   def apply(name: String, datfilePath: String): CDGrid = {
-    val gridFilePath: String = NCMLWriter.getCachePath("NCML").resolve(Collections.idToFile(name, ".nc")).toString
+    val gridFilePath: String = Collections.getCachePath("NCML").resolve(Collections.idToFile(name, ".nc")).toString
     if( !Files.exists( Paths.get(gridFilePath) ) ) { createGridFile(gridFilePath, datfilePath) }
     CDGrid.create(name, gridFilePath)
   }
@@ -389,115 +354,6 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
   }
 }
 
-class Collection( val ctype: String, val id: String, val uri: String, val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List(), optGrid: Option[CDGrid] = None ) extends Serializable with Loggable {
-  val collId = Collections.idToFile(id)
-  val dataPath = getDataFilePath(uri,collId)
-  private val variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()
-  override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
-  def isEmpty = dataPath.isEmpty
-  lazy val varNames = vars.map( varStr => varStr.split(Array(':', '|')).head )
-  val grid = optGrid.getOrElse( CDGrid(id, dataPath) )
-
-  def isMeta: Boolean = dataPath.endsWith(".csv")
-  def deleteAggregation() = grid.deleteAggregation
-  def getVariableMetadata(varName: String): List[nc2.Attribute] = grid.getVariableMetadata(varName)
-  def getGridFilePath = grid.gridFilePath
-  def getVariable(varName: String): CDSVariable = variables.getOrElseUpdate(varName, new CDSVariable(varName, this))
-
-  def getDatasetMetadata(): List[nc2.Attribute] = List(
-      new nc2.Attribute("variables", varNames),
-      new nc2.Attribute("path", dataPath),
-      new nc2.Attribute("ctype", ctype)
-    ) ++ grid.attributes
-
-  def generateAggregation(): xml.Elem = {
-    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(grid.gridFilePath, 10.toString, true)
-    try {
-      _aggCollection(ncDataset)
-    } catch {
-      case err: Exception => logger.error("Can't aggregate collection for dataset " + ncDataset.toString); throw err
-    }
-  }
-
-  def readVariableData(varShortName: String, section: ma2.Section): ma2.Array =
-    NetcdfDatasetMgr.readVariableData(varShortName, dataPath, section )
-
-  private def _aggCollection(dataset: NetcdfDataset): xml.Elem = {
-    val vars = dataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
-    val title: String = Collections.findAttribute(dataset, List("Title", "LongName"))
-    val newCollection = new Collection(ctype, id, dataPath, fileFilter, scope, title, vars)
-    Collections.updateCollection(newCollection)
-    newCollection.toXml
-  }
-  def url(varName: String = "") = ctype match {
-    case "http" => dataPath
-    case _ => "file://" + dataPath
-  }
-
-
-  def getVarNodes: Seq[(String,Node)] = if(isMeta) {
-    val subCollections = new MetaCollectionFile(dataPath).subCollections
-    subCollections flatMap ( _.getVarNodes )
-  } else {
-    val vnames: List[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") )
-    vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) )
-  }
-
-  def getResolution: String = try {
-    grid.resolution.map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")
-  } catch {
-    case ex: Exception =>
-      print( s"Exception in Collection.getResolution: ${ex.getMessage}" )
-      ex.printStackTrace()
-      ""
-  }
-
-
-  def toXml: xml.Elem = {
-    <collection id={id} title={title} resolution={getResolution}>
-      { SortedMap( getVarNodes: _* ).values }
-    </collection>
-  }
-
-  // <variable name={elems.head} axes={elems.last}> {v} </variable> } ) }
-
-  def createNCML( pathFile: File, collectionId: String  ): String = {
-    val _ncmlFile = NCMLWriter.getCachePath("NCML").resolve(collectionId).toFile
-    val recreate = appParameters.bool("ncml.recreate", false)
-    if (!_ncmlFile.exists || recreate) {
-      logger.info( s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
-      _ncmlFile.getParentFile.mkdirs
-      val ncmlWriter = NCMLWriter(pathFile)
-      val variableMap = new collection.mutable.HashMap[String,String]()
-      val varNames: List[String] = ncmlWriter.writeNCML(_ncmlFile)
-      varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
-      NCMLWriter.writeCollectionDirectory( collectionId, variableMap.toMap )
-    }
-    _ncmlFile.toString
-  }
-
-  def getDataFilePath( uri: String, collectionId: String ) : String = ctype match {
-    case "csv" =>
-      val pathFile: File = new File(toFilePath(uri))
-      createNCML( pathFile, collectionId )
-    case "txt" =>
-      val pathFile: File = new File(toFilePath(uri))
-      createNCML( pathFile, collectionId )
-    case "file" =>
-      val pathFile: File = new File(toFilePath(uri))
-      if( pathFile.isDirectory ) createNCML( pathFile, collectionId )
-      else pathFile.toString
-    case "dap" => uri
-    case _ => throw new Exception( "Unexpected attempt to create Collection data file from ctype " + ctype )
-  }
-
-  def toFilePath(path: String): String = path.split(':').last.trim
-
-  def toFilePath1(path: String): String = {
-    if (path.startsWith("file:")) path.substring(5)
-    else path
-  }
-}
 
 object DiskCacheFileMgr extends XmlResource {
   val diskCacheMap = loadDiskCacheMap
@@ -1064,163 +920,7 @@ object VariableRecord {
 
 }
 
-object NetcdfDatasetMgr extends Loggable with ContainerOps  {
-    import CDSVariable._
-//  NetcdfDataset.initNetcdfFileCache(10,1000,3600)   // Bugs in Netcdf file caching cause NullPointerExceptions on MERRA2 npana datasets (var T): ( 3/3/2017 )
-  val datasetCache = new ConcurrentLinkedHashMap.Builder[String, NetcdfDataset].initialCapacity(64).maximumWeightedCapacity(1000).build()
-  val MB = 1024*1024
-  val formatter = new Formatter(Locale.US)
-  def findAttributeValue( attributes: Map[String, nc2.Attribute], keyRegExp: String, default_value: String ): String = filterAttrMap( attributes, keyRegExp.r, default_value )
 
-  def getTimeAxis( dataPath: String ): CoordinateAxis1DTime = {
-    val ncDataset: NetcdfDataset = aquireFile( dataPath, 11.toString )
-    try {
-      getTimeAxis( ncDataset ) getOrElse { throw new Exception( "Can't find time axis in dataset: " + dataPath ) }
-    } finally { ncDataset.close() }
-  }
-
-  def getTimeAxis( ncDataset: NetcdfDataset ): Option[CoordinateAxis1DTime] = {
-    val axes = ncDataset.getCoordinateAxes.toList
-    axes.find( _.getAxisType == AxisType.Time ) map { time_axis => CoordinateAxis1DTime.factory(ncDataset, time_axis, formatter ) }
-  }
-
-  def getMissingValue(attributes: Map[String, nc2.Attribute]): Float = findAttributeValue(  attributes, "^.*missing.*$", "" ) match {
-    case "" =>
-      logger.warn( "Can't find missing value, attributes = " + attributes.keys.mkString(", ") )
-      Float.MaxValue;
-    case s =>
-      logger.info( "Found missing attribute value: " + s )
-      s.toFloat
-  }
-
-
-  def readVariableData(varShortName: String, dataPath: String, section: ma2.Section): ma2.Array = {
-    val ncDataset: NetcdfDataset = openCollection(varShortName, dataPath)
-    try {
-      readVariableData( varShortName, ncDataset, section ) getOrElse { throw new Exception(s"Can't find variable $varShortName in dataset $dataPath ") }
-    } catch {
-      case err: Exception =>
-        logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));
-        logger.error(err.getStackTrace.map(_.toString).mkString("\n"))
-        throw err
-    } finally {
-      ncDataset.close()
-    }
-  }
-
-  def readVariableData(varShortName: String, ncDataset: NetcdfDataset, section: ma2.Section): Option[ma2.Array] =
-    ncDataset.getVariables.toList.find(v => v.getShortName equals varShortName) map { variable =>
-//        runtime.printMemoryUsage(logger)
-        val ma2array = variable.read(section)
-        logger.error("Reading Variable %s, shape: (%s),  section: { o:(%s) s:(%s) }".format( varShortName, variable.getShape.mkString(","), section.getOrigin.mkString(","), section.getShape.mkString(",")) )
-        ma2array
-    }
-
-  def createVariableMetadataRecord( varShortName: String, dataPath: String ): VariableMetadata = {
-    val ncDataset: NetcdfDataset = openCollection( varShortName, dataPath )
-    try {
-      ncDataset.getVariables.toList.find(v => v.getShortName equals varShortName) match {
-        case Some(variable) =>
-          try {
-            val attributes = Map(variable.getAttributes.toList.map(attr => attr.getShortName -> attr): _*)
-            val missing = getMissingValue(attributes)
-            val metadata = attributes.mapValues(_.getStringValue).mkString(";")
-            new VariableMetadata(variable.getNameAndDimensions, variable.getUnitsString, missing, metadata, variable.getShape)
-          } catch {
-            case err: Exception =>
-              logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));
-              logger.error(err.getStackTrace.map(_.toString).mkString("\n"))
-              throw err
-          }
-        case None => throw new Exception(s"Can't find variable $varShortName in dataset $dataPath ")
-      }
-    } finally { ncDataset.close() }
-  }
-
-  def createVariableDataRecord(varShortName: String, dataPath: String, section: ma2.Section): VariableRecord = {
-    import org.apache.spark.sql.functions._
-    val ncDataset: NetcdfDataset = openCollection( varShortName, dataPath )
-    try {
-      ncDataset.getVariables.toList.find(v => v.getShortName equals varShortName) match {
-        case Some(variable) =>
-          try {
-            val t0 = System.nanoTime()
-            val ma2array = variable.read(section)
-            val axes = ncDataset.getCoordinateAxes
-            val coordAxis = Option(ncDataset.findCoordinateAxis(AxisType.Time)).getOrElse(throw new Exception("Can't find time axis in dataset: " + dataPath))
-            val timeAxis = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
-            val timeIndex = section.getRange(0).first
-            val date = timeAxis.getCalendarDate(timeIndex)
-            val sample_data = (0 until Math.min(16, ma2array.getSize).toInt) map ma2array.getFloat
-            val attributes = Map(variable.getAttributes.toList.map(attr => attr.getShortName -> attr): _*)
-            val missing = getMissingValue(attributes)
-            val fltData: CDFloatArray = CDFloatArray.factory(ma2array, missing)
-            val dataArray = HeapFltArray(fltData, section.getOrigin, attributes.mapValues(_.toString), None)
-            logger.info("[T%d] Reading variable %s from path %s, section shape: (%s), section origin: (%s), variable shape: (%s), size = %.2f M, read time = %.4f sec, sample data = [ %s ]".format(
-              Thread.currentThread().getId(), varShortName, dataPath, section.getShape.mkString(","), section.getOrigin.mkString(","), variable.getShape.mkString(","), (section.computeSize * 4.0) / MB, (System.nanoTime() - t0) / 1.0E9, sample_data.mkString(", ")))
-            new VariableRecord(date.toString, dataArray.missing.getOrElse(Float.NaN), dataArray.data)
-          } catch {
-            case err: Exception =>
-              logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));
-              logger.error("Variable shape: (%s),  section: { o:(%s) s:(%s) }".format(variable.getShape.mkString(","), section.getOrigin.mkString(","), section.getShape.mkString(",")));
-              logger.error(err.getStackTrace.map(_.toString).mkString("\n"))
-              throw err
-          }
-        case None => throw new Exception(s"Can't find variable $varShortName in dataset $dataPath ")
-      }
-    } finally { ncDataset.close() }
-  }
-
-  def keys: Set[String] = datasetCache.keySet().toSet
-  def values: Iterable[NetcdfDataset] = datasetCache.values()
-  def getKey( path: String ): String =  path + ":" + Thread.currentThread().getId()
-
-  def aquireFile(dpath: String, context: String, cache: Boolean = false ): NetcdfDataset =
-    if( cache ) { datasetCache.getOrElseUpdate( dpath, openFile(dpath,context) ) } else { openFile(dpath,context) }
-
-  def openFile( dpath: String, context: String ): NetcdfDataset = try {
-    val result = NetcdfDataset.openDataset(dpath)
-//    logger.info(s"   *%* --> Opened Dataset from path: $dpath, context: $context ")
-    result
-  } catch {
-    case err: Throwable => throw new Exception( s"Error opening netcdf file $dpath: ${err.toString} ")
-  }
-
-  def openCollection(varName: String, path: String ): NetcdfDataset = {
-    val cpath = cleanPath(path)
-    val key = getKey(path)
-    val result = acquireCollection(cpath,varName)
-    //    logger.info(s"   Accessed Dataset using key: $key, path: $cpath")
-    result
-  }
-
-  def cleanPath( path: String ): String =
-    if( path.startsWith("file:///") ) path.substring(7)
-    else if( path.startsWith("file://") ) path.substring(6)
-    else if( path.startsWith("file:/") ) path.substring(5)
-    else path
-
-  def closeAll: Iterable[NetcdfDataset]  = keys flatMap _close
-  private def _close( key: String ): Option[NetcdfDataset] = Option( datasetCache.remove( key ) ).map ( dataset => { dataset.close(); dataset } )
-  def close( path: String ): Option[NetcdfDataset] = _close( getKey(cleanPath(path)) )
-
-  private def acquireCollection( dpath: String, varName: String ): NetcdfDataset = {
-    val collectionPath: String = getCollectionPath( dpath, varName )
-    logger.info(s" *%* --> Opening Dataset from path: $collectionPath   ")
-    NetcdfDataset.openDataset(collectionPath)
-  }
-
-  def getCollectionPath( path: String, varName: String ): String = {
-    if( path.endsWith("csv") ) {
-      val metaFile = new MetaCollectionFile(path)
-      metaFile.getPath( varName ) match {
-        case Some(path) => path
-        case None => throw new Exception( s"Can't locate variable ${varName} in Collection Directory ${path}")
-      }
-    } else { path }
-  }
-
-}
 
 class MetaCollectionFile( val path: String ) {
   private val _subCollections: Map[String,String]  = parse

@@ -17,7 +17,7 @@ import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray}
 import nasa.nccs.edas.engine.{EDASExecutionManager, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.TransientFragment
-import nasa.nccs.edas.loaders.Masks
+import nasa.nccs.edas.sources.Masks
 import nasa.nccs.esgf.process.{DataFragmentKey, _}
 import nasa.nccs.esgf.wps.edasServiceProvider
 import nasa.nccs.utilities.{Loggable, cdsutils}

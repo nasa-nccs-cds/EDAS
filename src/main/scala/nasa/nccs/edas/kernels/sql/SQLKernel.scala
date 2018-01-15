@@ -4,9 +4,6 @@ import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelStatus}
-import nasa.nccs.edas.loaders.{RDDRecordConverter, RDDRecordsConverter, RDDSimpleRecordsConverter}
-import nasa.nccs.edas.rdd.CDTimeSlice
-import nasa.nccs.edas.sources.RDDSimpleRecordsConverter
 import nasa.nccs.edas.sources.netcdf.{EDASOptions, RDDSimpleRecordsConverter}
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}

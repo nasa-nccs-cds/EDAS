@@ -1,9 +1,9 @@
 package nasa.nccs.edas.rdd
 
-import nasa.nccs.cdapi.cdm.NetcdfDatasetMgr
 import nasa.nccs.edas.engine.TestProcess
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.edas.loaders.AggReader
+import nasa.nccs.edas.sources.{Aggregation, FileInput}
+import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.esgf.process.{CDSection, DataContainer, DomainContainer, TaskRequest}
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import nasa.nccs.wps.WPSMergedEventReport
@@ -139,7 +139,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     //    val dataset = NetcdfDataset.openDataset(dataFile)
 
     val t01 = System.nanoTime()
-    val agg = new AggReader( dataFile )
+    val agg = Aggregation.read( dataFile )
     val t02 = System.nanoTime()
     val files: List[FileInput] = agg.getFileInputs
     val t03 = System.nanoTime()

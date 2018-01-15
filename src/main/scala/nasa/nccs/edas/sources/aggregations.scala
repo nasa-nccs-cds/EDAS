@@ -1,12 +1,8 @@
 package nasa.nccs.edas.sources
 
 import java.io.{BufferedWriter, File, FileWriter}
-
-import nasa.nccs.cdapi.cdm.{FileHeader, FileMetadata, NCMLWriter}
-import nasa.nccs.edas.loaders._
 import nasa.nccs.edas.sources.netcdf.NCMLWriter
 import nasa.nccs.utilities.Loggable
-
 import scala.collection.mutable
 import scala.io.Source
 

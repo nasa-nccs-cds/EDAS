@@ -1,10 +1,9 @@
 package nasa.nccs.esgf.process
 
 import nasa.nccs.caching.{EDASPartitioner, JobRecord}
-import nasa.nccs.cdapi.cdm.{CDSVariable, Collection, MetaCollectionFile, PartitionedFragment}
+import nasa.nccs.cdapi.cdm.{CDSVariable, MetaCollectionFile, PartitionedFragment}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import nasa.nccs.cdapi.tensors.{CDCoordMap, CDFloatArray}
-import nasa.nccs.edas.loaders.Collections
 import ucar.{ma2, nc2}
 import org.joda.time.{DateTime, DateTimeZone}
 import nasa.nccs.utilities.Loggable
@@ -14,6 +13,7 @@ import nasa.nccs.cdapi.data.RDDVariableSpec
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.kernels.AxisIndices
+import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.OperationContext.OpResultType
 import nasa.nccs.esgf.process.UID.ndigits
@@ -562,7 +562,7 @@ class DataFragmentSpec(val uid: String = "",
       "name" -> varname,
       "collection" -> collection.id,
       "dataPath" -> collection.dataPath,
-      "uri" -> collection.uri,
+      "uri" -> collection.dataPath,
       "gridfile" -> collection.getGridFilePath, // "gridbnds" -> getBounds(section).map(_.toFloat).mkString(","),
       "fragment" -> fragIdOpt.getOrElse(""),
       "dimensions" -> dimensions,

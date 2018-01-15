@@ -1,7 +1,7 @@
 package nasa.nccs.cdapi.data
 
 import nasa.nccs.caching.{CachePartition, Partition, RegularPartition}
-import nasa.nccs.cdapi.cdm.{NetcdfDatasetMgr, RemapElem, TimeConversionSpec}
+import nasa.nccs.cdapi.cdm.{RemapElem, TimeConversionSpec}
 import nasa.nccs.cdapi.tensors.{CDFloatArray, _}
 import nasa.nccs.edas.engine.spark.{RangePartitioner, RecordKey}
 import nasa.nccs.edas.workers.TransVar
@@ -21,6 +21,7 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.portal.TestReadApplication.logger
+import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import ucar.ma2.{ArrayFloat, Index, IndexIterator}
 import ucar.nc2.dataset.{CoordinateAxis1DTime, NetcdfDataset}
 import ucar.nc2.time.{CalendarDate, CalendarPeriod}

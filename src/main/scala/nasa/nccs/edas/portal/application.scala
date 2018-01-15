@@ -4,14 +4,13 @@ import java.lang.management.ManagementFactory
 import java.nio.file.{Files, Path, Paths}
 import java.sql.{Date, Timestamp}
 
-import nasa.nccs.cdapi.cdm.NetcdfDatasetMgr
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray, RDDRecord}
 import nasa.nccs.edas.engine.{EDASExecutionManager, ExecutionCallback, TestProcess}
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.rdd.TestDatasetProcess
+import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process._

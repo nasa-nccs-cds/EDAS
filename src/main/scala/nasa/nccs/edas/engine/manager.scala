@@ -2,10 +2,11 @@ package nasa.nccs.edas.engine
 import java.io.{IOException, PrintWriter, StringWriter}
 import java.nio.file.{Files, Paths}
 import java.io.File
+
 import scala.collection.concurrent.TrieMap
-import nasa.nccs.cdapi.cdm.{Collection, PartitionedFragment, _}
-import nasa.nccs.edas.loaders.{Collections, Masks}
+import nasa.nccs.cdapi.cdm.PartitionedFragment
 import nasa.nccs.esgf.process._
+
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}
@@ -23,6 +24,7 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.CleanupManager
+import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.wps.{WPSExecuteStatusStarted, WPSResponse, _}
 import ucar.nc2.Attribute
 import ucar.nc2.dataset.CoordinateAxis

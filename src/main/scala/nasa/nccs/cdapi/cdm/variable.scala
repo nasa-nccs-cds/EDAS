@@ -6,6 +6,7 @@ import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray, CDIndexMap}
 import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.KernelContext
+import nasa.nccs.edas.sources.Collection
 import nasa.nccs.esgf.process.DomainContainer.{filterMap, key_equals}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
 import nasa.nccs.esgf.utilities.wpsNameMatchers
