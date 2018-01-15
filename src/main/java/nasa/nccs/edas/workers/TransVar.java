@@ -1,6 +1,6 @@
 package nasa.nccs.edas.workers;
 
-import nasa.nccs.cdapi.cdm.NetcdfDatasetMgr;
+import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr;
 import ucar.nc2.Attribute;
 import ucar.nc2.Variable;
 import ucar.nc2.dataset.NetcdfDataset;

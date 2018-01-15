@@ -3,7 +3,6 @@ package edas.wps
 import java.nio.file.Paths
 
 import nasa.nccs.caching.{FragmentPersistence, collectionDataCache}
-import nasa.nccs.cdapi.cdm.{CDSVariable, Collection}
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.wps.{ProcessManager, wpsObjectParser}

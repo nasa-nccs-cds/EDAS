@@ -352,20 +352,20 @@ class EDASExecutionManager extends WPSServer with Loggable {
 
   def runUtilityRequest( jobId: String, util_id: String, request: TaskRequest, run_args: Map[String, String] ): WPSMergedEventReport = {
     val result = util_id match {
-      case "magg" =>
-        val collectionNodes =  request.variableMap.values.flatMap( ds => {
-          val pcol = ds.getSource.collection
-          val base_dir = new File(pcol.dataPath)
-          val base_id = pcol.id
-          val col_dirs: Array[File] = base_dir.listFiles
-          for( col_path <- col_dirs; if isCollectionPath(col_path); col_id = base_id + "/" + col_path.getName ) yield {
-            Collection.aggregate( col_id, col_path )
-          }
-        })
-        new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
-      case "agg" =>
-        val collectionNodes =  request.variableMap.values.flatMap( ds => if(ds.isSource) { Some( Collection.aggregate( ds.getSource ) ) } else { None } )
-        new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
+//      case "magg" =>
+//        val collectionNodes =  request.variableMap.values.flatMap( ds => {
+//          val pcol = ds.getSource.collection
+//          val base_dir = new File(pcol.dataPath)
+//          val base_id = pcol.id
+//          val col_dirs: Array[File] = base_dir.listFiles
+//          for( col_path <- col_dirs; if isCollectionPath(col_path); col_id = base_id + "/" + col_path.getName ) yield {
+//            Collection.aggregate( col_id, col_path )
+//          }
+//        })
+//        new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
+//      case "agg" =>
+//        val collectionNodes =  request.variableMap.values.flatMap( ds => if(ds.isSource) { Some( Collection.aggregate( ds.getSource ) ) } else { None } )
+//        new WPSMergedEventReport( collectionNodes.map( cnode => new UtilityExecutionResult( "aggregate", cnode )).toList )
       case "clearCache" =>
         val fragIds = clearCache
         new WPSMergedEventReport( List( new UtilityExecutionResult( "clearCache", <deleted fragments={fragIds.mkString(",")}/> ) ) )

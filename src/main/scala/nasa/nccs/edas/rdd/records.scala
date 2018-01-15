@@ -141,7 +141,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val t01 = System.nanoTime()
     val agg = Aggregation.read( dataFile )
     val t02 = System.nanoTime()
-    val files: List[FileInput] = agg.getFileInputs
+    val files: List[FileInput] = agg.files
     val t03 = System.nanoTime()
     val config = optRequest.fold(Map.empty[String,String])( _.operations.head.getConfiguration )
     val domains = optRequest.fold(Map.empty[String,DomainContainer])( _.domainMap )
