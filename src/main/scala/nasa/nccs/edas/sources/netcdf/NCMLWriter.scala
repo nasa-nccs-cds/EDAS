@@ -103,15 +103,16 @@ object NCMLWriter extends Loggable {
     val bifurDepth: Int = options.getOrElse("depth","0").toInt
     val nameTemplate: Regex = options.getOrElse("template",".*").r
     var subColIndex: Int = 0
+    val agFormat = "ag1"
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
-      val aggregatoinId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
+      val aggregationId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
 //      logger.info(s" %X% extract Aggregations($collectionId)-> group_key=$group_key, aggregatoinId=$aggregatoinId, files=${files.mkString(";")}" )
-      val varNames = Aggregation.write(aggregatoinId, files.map(fp => dataLocation.resolve(fp).toString))
-      varNames.map(vname => vname -> aggregatoinId)
+      val varNames = Aggregation.write(aggregationId, files.map(fp => dataLocation.resolve(fp).toString), agFormat )
+      varNames.map(vname => vname -> aggregationId)
     }
 //    logger.info(s" %C% extract Aggregations varMap: " + varMap.map(_.toString()).mkString("; ") )
     val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 } .values.map( scopeRepeatedVarNames ).toSeq.flatten
-    writeCollectionDirectory( collectionId, Map( contextualizedVarMap:_* ) )
+    writeCollection( collectionId, Map( contextualizedVarMap:_* ), agFormat )
     FileHeader.clearCache
   }
 
@@ -253,13 +254,13 @@ object NCMLWriter extends Loggable {
   }
 
 
-  def writeCollectionDirectory( collectionId: String, variableMap: Map[String,String] ): Unit = {
+  def writeCollection(collectionId: String, variableMap: Map[String,String], agFormat: String ): Unit = {
     val dirFile = Collections.getCachePath("NCML").resolve(collectionId + ".csv").toFile
-    logger.info( s"Generating CollectionDirectory ${dirFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
+    logger.info( s"Generating Collection ${dirFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
     val pw = new PrintWriter( dirFile )
-    variableMap foreach { case ( varName, subCollectionId ) =>
-      val collectionFile = Collections.getCachePath("NCML").resolve(subCollectionId + ".ncml").toString
-      pw.write(s"$varName, ${collectionFile}\n")
+    variableMap foreach { case ( varName, aggregation ) =>
+      val agFile = Collections.getCachePath("NCML").resolve( aggregation + "." + agFormat ).toString
+      pw.write(s"$varName, ${agFile}\n")
     }
     pw.close
   }

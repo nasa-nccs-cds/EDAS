@@ -38,7 +38,7 @@ object Aggregation extends Loggable {
     try {
       val cacheDir = Collections.getCachePath("NCML")
       val fileHeaders = FileHeader.getFileHeaders( files, false )
-      if( !format.isEmpty ) { writeAggregation( cacheDir.resolve(aggregationId + format).toFile, fileHeaders, format ) }
+      if( !format.isEmpty ) { writeAggregation( cacheDir.resolve(aggregationId + "." + format).toFile, fileHeaders, format ) }
       val writer = new NCMLWriter( fileHeaders )
       writer.writeNCML( cacheDir.resolve(aggregationId + ".ncml").toFile )
     } catch {
