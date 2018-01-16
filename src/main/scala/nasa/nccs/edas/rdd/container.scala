@@ -31,28 +31,33 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], val metadata: Map[String,String] 
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
 }
 
-object RDDExtensionGenerator {
-  def apply() = new RDDExtensionGenerator()
+object PartitionExtensionGenerator {
+  def apply() = new PartitionExtensionGenerator()
 }
 
-class RDDExtensionGenerator {
+class PartitionExtensionGenerator {
   private var _optCurrentGenerator: Option[TimeSliceGenerator] = None
-
-  def getGenerator( varId: String, varName: String, section: String, fileInput: FileInput  ): TimeSliceGenerator = {
+  private def _close = if( _optCurrentGenerator.isDefined ) { _optCurrentGenerator.get.close }
+  private def _updateCache( varId: String, varName: String, section: String, fileInput: FileInput  ) = {
     if( _optCurrentGenerator.isEmpty || _optCurrentGenerator.get.fileInput.startTime != fileInput.startTime ) {
-      if( _optCurrentGenerator.isDefined ) { _optCurrentGenerator.get.close }
+      _close
       _optCurrentGenerator = Some( new TimeSliceGenerator(varId, varName, section, fileInput) )
     }
+  }
+  private def _getGenerator( varId: String, varName: String, section: String, fileInput: FileInput  ): TimeSliceGenerator = {
+    _updateCache( varId, varName, section, fileInput  );
     _optCurrentGenerator.get
   }
 
   def extendPartition( existingSlices: Iterator[CDTimeSlice], fileBase: FileBase, varId: String, varName: String, section: String ): Iterator[CDTimeSlice] = {
-    existingSlices map { tSlice =>
-      val fileInput = fileBase.getFileInput( tSlice.timestamp )
-      val generator = getGenerator( varId, varName, section, fileInput )
-      val newSlice = generator.getSlice( tSlice.timestamp )
+    val sliceIter = existingSlices map { tSlice =>
+      val fileInput: FileInput = fileBase.getFileInput( tSlice.timestamp )
+      val generator: TimeSliceGenerator = _getGenerator( varId, varName, section, fileInput )
+      val newSlice: CDTimeSlice = generator.getSlice( tSlice.timestamp )
       tSlice ++ newSlice
     }
+    _close
+    sliceIter
   }
 }
 
@@ -73,7 +78,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
   def parallelize( template: TimeSliceRDD, agg: Aggregation, varId: String, varName: String ): TimeSliceRDD = {
     val variable = agg.findVariable( varName )
     val section = template.getParameter( "section" )
-    val rdd = template.rdd.mapPartitions( tSlices => RDDExtensionGenerator().extendPartition( tSlices, agg.getFilebase, varId, varName, section ) )
+    val rdd = template.rdd.mapPartitions( tSlices => PartitionExtensionGenerator().extendPartition( tSlices, agg.getFilebase, varId, varName, section ) )
     val metadata = Map( "section" -> section, varId -> variable.toString )
     new TimeSliceRDD( rdd, metadata )
   }
