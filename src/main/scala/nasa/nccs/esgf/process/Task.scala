@@ -13,7 +13,7 @@ import nasa.nccs.cdapi.data.RDDVariableSpec
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.kernels.AxisIndices
-import nasa.nccs.edas.sources.{Collection, Collections}
+import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.OperationContext.OpResultType
 import nasa.nccs.esgf.process.UID.ndigits
@@ -303,9 +303,8 @@ class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) 
     s"PartitionSpec { axis = $axisIndex, nPart = $nPart, partIndex = $partIndex }"
 }
 
-class DataSource(val name: String, metaCollection: Collection, val declared_domain: Option[String], val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
+class DataSource(val name: String, val collection: Collection, val declared_domain: Option[String], val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
   val debug = 1
-  val collection: Collection = getSubCollection( metaCollection, name )
   private val _inferredDomains = new scala.collection.mutable.HashSet[String]()
   declared_domain.foreach( _addDomain )
   def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.getDomain, dsource.autoCache )
@@ -321,22 +320,10 @@ class DataSource(val name: String, metaCollection: Collection, val declared_doma
     _inferredDomains += domain_id;
     true
   }
-  def getSubCollection( metaCollection: Collection, varName: String  ): Collection = {
-    val result = if( metaCollection.dataPath.endsWith(".csv") ) {
-      val metaFile = new MetaCollectionFile( metaCollection.dataPath )
-      metaFile.getPath( varName ) match {
-        case Some(path) => Collections.getCollectionFromPath( path ) match {
-          case Some( collection ) => collection
-          case None =>  throw new Exception( s"Can't locate collection with path ${path}: paths = ${Collections.getCollectionPaths.mkString(", ")}" )
-        }
-        case None => throw new Exception( s"Can't locate variable ${varName} in metaCollection ${metaCollection.dataPath}")
-      }
-    } else { metaCollection }
-    logger.info( s"DataSource::GetSubCollection: metaCollection= ${metaCollection.dataPath}, subCollection= ${result.dataPath}" )
-    result
-  }
+  def getAggregation( varName: String  ): Option[Aggregation] = collection.getAggregation(varName)
+
   def updateDomainsFromOperation( operation: OperationContext ): Boolean = if( declared_domain.isEmpty ) {
-    logger.info( s"DataSource(${metaCollection.collId}:${name})--> Update Domains From Operation(${operation.name}) --> op domains: ${operation.getDomains.mkString(", ")}")
+    logger.info( s"DataSource(${collection.collId}:${name})--> Update Domains From Operation(${operation.name}) --> op domains: ${operation.getDomains.mkString(", ")}")
     val updated = operation.getDomains.exists( _addDomain )
     if( _inferredDomains.size > 1 ) { throw new Exception( s"Ambiguous Domain for input ${name}, domains: ${_inferredDomains.mkString(", ")}") }
     updated
@@ -489,6 +476,11 @@ object SectionMerge {
     "Attempt to combine incommensurate sections: %s vs %s".format(s0.toString,
                                                                   s1.toString)
   }
+}
+
+
+class DataInputSpec( ) {
+
 }
 
 class DataFragmentSpec(val uid: String,
@@ -955,25 +947,23 @@ object DataContainer extends ContainerBase {
       val autocache = metadata.getOrElse( "cache", false ).toString.toBoolean
       collectionOpt match {
         case None =>
-          throw new Exception( "Can't find collection: " + metadata.getOrElse("collection", "UNDEF") )
-//          val var_names: Array[String] = fullname.toString.split(',')
-//          val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
-//          val cid = dataPath.split('/').last
-//          if( dataPath.toLowerCase.startsWith("collection") ) {
-//            throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getMetaCollections.mkString(", ")}")
-//          }
-//          val collection = Collection( cid, dataPath )
-//          for ((name, index) <- var_names.zipWithIndex) yield {
-//            val name_items = name.split(Array(':', '|'))
-//            val dsource = new DataSource( stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
-//            val vid = stripQuotes(name_items.last)
-//            val vname = normalize(name_items.head)
-//            val dcid =
-//              if (vid.isEmpty) uid + s"c-$base_index$index"
-//              else if (vname.isEmpty) vid
-//              else uid + vid
-//            new DataContainer(dcid, source = Some(dsource))
-//          }
+          val var_names: Array[String] = fullname.toString.split(',')
+          val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
+          val cid = dataPath.split('/').last
+          val collection = Collections.addCollection( cid ) getOrElse {
+            throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
+          }
+          for ((name, index) <- var_names.zipWithIndex) yield {
+            val name_items = name.split(Array(':', '|'))
+            val dsource = new DataSource( stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
+            val vid = stripQuotes(name_items.last)
+            val vname = normalize(name_items.head)
+            val dcid =
+              if (vid.isEmpty) uid + s"c-$base_index$index"
+              else if (vname.isEmpty) vid
+              else uid + vid
+            new DataContainer(dcid, source = Some(dsource))
+          }
         case Some(collection) =>
           val var_names: Array[String] =
             if (fullname.equals("*")) collection.varNames.toArray

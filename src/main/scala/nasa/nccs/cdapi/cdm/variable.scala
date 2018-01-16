@@ -197,20 +197,20 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
   def getRDDVariableSpec( uid: String, optSection: Option[ma2.Section] = None ): DirectRDDVariableSpec  =
     domainSection(optSection) match {
       case Some( ( domFragSpec, section ) ) =>
-        new DirectRDDVariableSpec( uid, domFragSpec.getMetadata( Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.dataPath )
+        new DirectRDDVariableSpec( uid, domFragSpec.getMetadata( Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.collId )
       case _ =>
-        new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath )
+        new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.collId )
     }
 
   def getRDDVariableSpec: DirectRDDVariableSpec  =
-    new DirectRDDVariableSpec( fragmentSpec.uid, fragmentSpec.getMetadata( Some(fragmentSpec.roi)), fragmentSpec.missing_value, CDSection(fragmentSpec.roi), fragmentSpec.varname, fragmentSpec.collection.dataPath )
+    new DirectRDDVariableSpec( fragmentSpec.uid, fragmentSpec.getMetadata( Some(fragmentSpec.roi)), fragmentSpec.missing_value, CDSection(fragmentSpec.roi), fragmentSpec.varname, fragmentSpec.collection.collId )
 
   def getKeyedRDDVariableSpec( uid: String, optSection: Option[ma2.Section] ): ( RecordKey, DirectRDDVariableSpec ) =
     domainSection(optSection) match {
       case Some( ( domFragSpec, section ) ) =>
-        domFragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, domFragSpec.getMetadata(Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.dataPath )
+        domFragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, domFragSpec.getMetadata(Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.collId )
       case _ =>
-        fragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath )
+        fragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.collId )
     }
 }
 
@@ -228,7 +228,7 @@ class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,St
     val varSpec = getRDDVariableSpec(uid)
     val opSection: Option[CDSection] = workflow.getOpSectionIntersection( gridRefInput.getGrid, node ).map( CDSection(_) )
     logger.info("\n\n ----------------------- BEGIN addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]   -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(executor), executor.contents.mkString(", ") ) )
-    executor.addKernelInputs( workflow.executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex )
+    executor.addFileInputs( workflow.executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex )
     logger.info("\n\n ----------------------- END addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]  -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(executor), executor.contents.mkString(", ") ) )
   }
 }

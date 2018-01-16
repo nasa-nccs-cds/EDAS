@@ -103,7 +103,11 @@ object CDGrid extends Loggable {
     ncDataset.getAggregation.getDatasets.size()
   } catch { case ex: Exception => 1 }
 
-  def sanityCheck ( filePath: String ):  String = if( filePath.endsWith(".ncml.ncml") ) { filePath.split('.').dropRight(1).mkString(".") } else { filePath }
+  def sanityCheck ( filePath: String ):  String = {
+    val pathElems = if( filePath.endsWith(".ncml.ncml") ) { filePath.split('.').dropRight(1) } else { filePath.split('.') }
+    val ncmlElems = if( pathElems.last.startsWith("ag") ) { pathElems.dropRight(1) ++ Seq("ncml") } else pathElems
+    ncmlElems.mkString(".")
+  }
 
   def createGridFile(gridFilePath: String, datfilePath: String) = {
     val collectionFiles = new mutable.Stack[String]()

@@ -31,7 +31,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val nExp = 3
   val use_6hr_data = false
   val use_npana_data = false
-  val use_local_data = false
+  val use_local_data = true
   val test_cache = false
   val test_python = false
   val test_binning = true
@@ -519,6 +519,13 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("Maximum-local") { if(use_local_data) {
     val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val result_node = executeTest(datainputs, Map("response"->"xml"))
+    val results = getResults(result_node)
+    println( "Op Result:       " + results.mkString(",") )
+  }}
+
+  test("Maximum-local-collection") { if(use_local_data) {
+    val datainputs = s"""[domain=[{"name":"d0","level":{"start":3,"end":3,"system":"indices"}}],variable=[{"uri":"collection:/merra_daily","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
     val result_node = executeTest(datainputs, Map("response"->"xml"))
     val results = getResults(result_node)
     println( "Op Result:       " + results.mkString(",") )

@@ -21,6 +21,7 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.portal.TestReadApplication.logger
+import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import ucar.ma2.{ArrayFloat, Index, IndexIterator}
 import ucar.nc2.dataset.{CoordinateAxis1DTime, NetcdfDataset}
@@ -1049,22 +1050,11 @@ class ExtRDDPartSpec(val timeRange: RecordKey, val varSpecs: List[ RDDVariableSp
 
 }
 
-class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, section: CDSection, val varShortName: String, val dataPath: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
-  def toHeapArray( partition: Partition ): HeapFltArray = {
-    val timeAxis: CoordinateAxis1DTime = NetcdfDatasetMgr.getTimeAxis(dataPath)
-    val recordSection: ma2.Section = partition.recordSection( section.toSection, partition.index, timeAxis, partition.start_time, partition.end_time )
-    val part_size = recordSection.getShape.foldLeft(1L)(_ * _)
-    if( part_size > 0 ) {
-      val fltData: CDFloatArray = CDFloatArray.factory(readVariableData(recordSection), missing)
-      logger.debug("READ Variable section: %s, part[%d]: dim=%d, origin=(%s), shape=[%s], data shape=[%s], data size=%d, part size=%d, data buffer size=%d, recordSectionShape=%s, recordSectionOrigin=%s\n\n **********--> data sample = %s\n".format(
-        section.toString(), partition.index, partition.dimIndex, recordSection.getOrigin.mkString(","), recordSection.getShape.mkString(","), fltData.getShape.mkString(","),
-        fltData.getSize, part_size, fltData.getStorageSize, recordSection.getShape.mkString(","), recordSection.getOrigin.mkString(","), fltData.mkBoundedDataString(", ", 32) ) )
-      HeapFltArray(fltData, section.getOrigin, metadata, None)
-    } else {
-      HeapFltArray.empty( section.getShape.length )
-    }
+class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, section: CDSection, val varShortName: String, val collectionId: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
+  def getAggregation(): Aggregation = {
+    val collection: Collection = Collections.findCollection(collectionId) getOrElse { throw new Exception( s"Can't find collection ${collectionId}") }
+    collection.getAggregation(varShortName) getOrElse { throw new Exception( s"Can't find aggregation for variable ${varShortName} in collection ${collectionId}" ) }
   }
-  def readVariableData(section: ma2.Section): ma2.Array =  NetcdfDatasetMgr.readVariableData(varShortName, dataPath, section )
 }
 
 class RDDVariableSpec( val uid: String, val metadata: Map[String,String], val missing: Float, val section: CDSection  ) extends Serializable with Loggable {

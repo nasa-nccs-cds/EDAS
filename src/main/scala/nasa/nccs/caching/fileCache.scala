@@ -62,7 +62,7 @@ object BatchSpec extends Loggable {
   lazy val serverContext = edasServiceProvider.cds2ExecutionManager.serverContext
   lazy val nCores = appParameters( "parts.per.node", "1" ).toInt
   lazy val nNodes = appParameters( "num.cluster.nodes", "1" ).toInt
-  lazy val nParts = nCores * nNodes
+  lazy val nParts = appParameters( "num.partitions" ).fold( nCores * nNodes * 2 )( _.toInt )
   def apply( index: Int ): BatchSpec = { new BatchSpec( index*nParts, nParts ) }
 }
 

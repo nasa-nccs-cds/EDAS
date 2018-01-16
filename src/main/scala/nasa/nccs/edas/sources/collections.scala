@@ -137,13 +137,14 @@ object CollectionLoadServices {
   }
 }
 
-class Collection( val ctype: String, val id: String, val dataPath: String, val aggregations: List[Aggregation], val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List(), optGrid: Option[CDGrid] = None ) extends Serializable with Loggable {
+class Collection( val ctype: String, val id: String, val dataPath: String, val aggregations: Map[String,Aggregation], val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List(), optGrid: Option[CDGrid] = None ) extends Serializable with Loggable {
   val collId = Collections.idToFile(id)
   private val variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()
   override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
   def isEmpty = dataPath.isEmpty
   lazy val varNames = vars.map( varStr => varStr.split(Array(':', '|')).head )
   lazy val grid = optGrid.getOrElse( CDGrid(id, dataPath) )
+  def getAggregation( varName: String ): Option[Aggregation] = aggregations.get(varName)
 
   def isMeta: Boolean = dataPath.endsWith(".csv")
   def deleteAggregation() = grid.deleteAggregation
@@ -202,7 +203,7 @@ class Collection( val ctype: String, val id: String, val dataPath: String, val a
 
   def toXml: xml.Elem = {
     <collection id={id} title={title} resolution={getResolution}>
-      { aggregations.map( _.toXml) }
+      { aggregations.values.toSet.map { agg: Aggregation => agg.toXml } }
     </collection>
   }
 
@@ -285,10 +286,9 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
             loadingCollections.remove(collId)
           } else if( !loadingCollections.contains(collId) ) {
             loadingCollections += ( collId -> collId )
-            if( Collections.hasGridFile(collectionFile) ) {
-              fastPool.execute(new CollectionLoader(collId,collectionFile))
-            } else {
-              slowPool.execute(new CollectionLoader(collId,collectionFile))
+            fastPool.execute(new CollectionLoader(collId,collectionFile))
+            if( !Collections.hasGridFile(collectionFile) ) {
+              slowPool.execute(new CollectionGridFileLoader(collId,collectionFile))
             }
           }
         }
@@ -309,9 +309,21 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
 class CollectionLoader( val collId: String, val collectionFile: File ) extends Runnable  with Loggable  {
   def run() {
     logger.info( s" ---> Loading collection $collId" )
-    Collections.addMetaCollection( collId, collectionFile.toString )
+    Collections.addCollection( collId, Some( collectionFile.toString ) )
   }
 }
+
+class CollectionGridFileLoader( val collId: String, val collectionFile: File ) extends Runnable  with Loggable  {
+  def run() {
+    logger.info( s" ---> Loading collection $collId" )
+    val optCollection = Collections.addCollection( collId, Some( collectionFile.toString ) )
+    optCollection foreach { collection =>
+      logger.info(s"Creating grid file ${collection.grid.gridFilePath} for collection ${collId}")
+    }
+  }
+}
+
+
 
 object Collections extends XmlResource with Loggable {
   val maxCapacity: Int=500
@@ -448,26 +460,30 @@ object Collections extends XmlResource with Loggable {
   //    collection
   //  }
 
-  def addMetaCollection(  id: String, collectionFilePath: String ): Option[Collection] = try {
-    if( ! _datasets.containsKey(id) ) {
-      assert(collectionFilePath.endsWith(".csv"), "Error, invalid path for meta collection: " + collectionFilePath)
-      val vars = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head
-      val aggregations = getAggregations( collectionFilePath  )
-      val collection = new Collection("file", id, collectionFilePath, aggregations, "", "", "Aggregated Collection", vars.toList)
-      _datasets.put( id, collection )
+  def addCollection( id: String, optFilePath: Option[String] = None ): Option[Collection] = {
+    val collectionFilePath = optFilePath getOrElse { getNCMLDirectory.resolve(id + ".csv").toString }
+    try {
+      val collection = _datasets.getOrElseUpdate(id, {
+        val vars = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head
+        val aggregations: Map[String,Aggregation] = getAggregations(collectionFilePath)
+        new Collection("file", id, collectionFilePath, aggregations, "", "", "Aggregated Collection", vars.toList)
+      })
       Some(collection)
-    } else { None }
-  } catch {
-    case err: Exception =>
-      logger.error( s"Error reading collection ${id} from ncml ${collectionFilePath}: ${err.toString}" )
-      None
+    } catch {
+      case err: Exception =>
+        val msg = err.getMessage
+        logger.error(s"Error reading collection ${id} from ncml ${collectionFilePath}: ${msg}")
+        None
+    }
   }
 
-  def getMetaCollections: List[String] = getNCMLDirectory.toFile.listFiles.filter(_.isFile).toList.filter { _.getName.endsWith(".csv") } map { _.getName.split('.').dropRight(1).mkString(".") }
+  def getCollections: List[String] = getNCMLDirectory.toFile.listFiles.filter(_.isFile).toList.filter { _.getName.endsWith(".csv") } map { _.getName.split('.').dropRight(1).mkString(".") }
 
-  def getAggregations(collectionFilePath: String ): List[Aggregation] = {
-    val agFiles: Iterator[File] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield new File( elems.last )
-    agFiles.map( file => Aggregation.read( file.getAbsolutePath ) ).toList
+  def getAggregations(collectionFilePath: String ): Map[String,Aggregation] = {
+    val aggs = mutable.HashMap.empty[String,Aggregation]
+    val agFiles: Iterator[(String,String)] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head -> new File( elems.last ).getAbsolutePath
+    val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( file ) ) }
+    agMapIter.toMap[String,Aggregation]
   }
 
 

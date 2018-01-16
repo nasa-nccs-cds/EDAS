@@ -11,7 +11,9 @@ import nasa.nccs.cdapi.tensors.CDFloatArray.{ReduceNOpFlt, ReduceOpFlt, ReduceWN
 import nasa.nccs.cdapi.tensors.{CDArray, CDCoordMap, CDFloatArray, CDTimeCoordMap}
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.WorkflowNode.regridKernel
-import nasa.nccs.edas.engine.spark.RecordKey
+import nasa.nccs.edas.engine.spark.{CDSparkContext, RecordKey}
+import nasa.nccs.edas.rdd.{RDDGenerator, TimeSliceRDD}
+import nasa.nccs.edas.sources.Aggregation
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -260,50 +262,6 @@ object KernelStatus {
     case x if x.startsWith("dev") => developmental
     case x if x.startsWith("exp") => experimental
     case x => throw new Exception( "Unknown Kernel Status: " + status )
-  }
-}
-
-class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
-  private val _contents = mutable.HashSet.empty[String]
-  private var _vault = new RDDVault(init_value)
-  def releaseBatch = { _vault.clear; _contents.clear() }
-
-  class RDDVault( init_value: RDD[(RecordKey,RDDRecord)] ) {
-    private var _rdd = init_value; _rdd.cache()
-    def update( new_rdd: RDD[(RecordKey,RDDRecord)] ): Unit = { _rdd.unpersist(false); _rdd = new_rdd; _rdd.cache }
-    def map( f: (RDD[(RecordKey,RDDRecord)]) => RDD[(RecordKey,RDDRecord)] ): Unit = update( f(_rdd) )
-    def updateValues( f: (RDDRecord) => RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ f(rec) ) )
-    def mapValues( f: (RDDRecord) => RDDRecord ): Unit = update( _rdd.mapValues( rec => f(rec) ) )
-    def +=( record: RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ record ) )
-    def value = _rdd
-    def fetchContents: Set[String] = _rdd.map { case (key,rec) => rec.elements.keySet }.first
-    def release( keys: Iterable[String] ): Unit = mapValues( _.release(keys) )
-    def clear: Unit = mapValues( _.clear )
-  }
-  def map( kernel: Kernel, context: KernelContext ): Unit = {
-    _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
-    _contents ++= _vault.fetchContents
-  }
-  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = node.mapReduce( value, context, batchIndex )
-  def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = node.execute( workflow, value, context, batchIndex )
-  def value: RDD[(RecordKey,RDDRecord)] = _vault.value
-  def contents: Set[String] = _contents.toSet
-  def section( section: Option[CDSection] ): Unit = _vault.mapValues( _.section(section) )
-  def fetchContents: Set[String] = _vault.fetchContents
-  def release( keys: Iterable[String] ): Unit = { _vault.release( keys ); _contents --= keys.toSet }
-
-  def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
-    logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
-    val newVSpecs = vSpecs.filter( vspec => !_contents.contains(vspec.uid) )
-    if( newVSpecs.nonEmpty ) {
-      _vault.mapValues( kernelContext.addRddElements(newVSpecs) )
-      _contents ++= newVSpecs.map(_.uid).toSet
-    }
-    logger.info("\n\n RDDContainer ###-> END addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
-  }
-  def addOperationInput( record: RDDRecord ): Unit = {
-    _vault += record
-    _contents ++= record.elements.keySet
   }
 }
 

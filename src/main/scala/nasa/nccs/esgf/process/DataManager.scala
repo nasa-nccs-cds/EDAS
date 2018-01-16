@@ -3,7 +3,7 @@ import java.util
 
 import nasa.nccs.cdapi.cdm._
 import ucar.nc2.dataset._
-import nasa.nccs.caching.{CachePartitions, EDASPartitioner, FileToCacheStream, FragmentPersistence}
+import nasa.nccs.caching._
 import nasa.nccs.cdapi.data.{RDDRecord, _}
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.WorkflowNode.regridKernel
@@ -12,7 +12,8 @@ import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext, RDDContainer}
 import nasa.nccs.edas.portal.TestReadApplication.logger
-import nasa.nccs.edas.sources.Collection
+import nasa.nccs.edas.rdd.{RDDContainer, RDDGenerator, TimeSliceRDD}
+import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
@@ -68,56 +69,50 @@ class RegridSpec( val gridFile: String, val subgrid: String ) extends Serializab
 
 class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
   val optPartitioner: Option[EDASPartitioner] = generatePartitioning
-  private var _optInputsRDD: Option[RDDContainer] = None
+  private var _inputsRDD: RDDContainer = new RDDContainer
   val rootNode = workflowCx.rootNode
   val rootNodeId = rootNode.getNodeId
   def getRegridSpec: Option[RegridSpec] = optPartitioner.map( _.regridSpec )
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
-  def fetchContents: Set[String] = _optInputsRDD.fold( Set.empty[String] )( _.fetchContents )
-  def contents: Set[String] = _optInputsRDD.fold( Set.empty[String] )( _.contents )
+  def contents: Set[String] = _inputsRDD.contents
   def getInputs(node: WorkflowNode): List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
   def getReduceOp(context: KernelContext): (RDDKeyValPair,RDDKeyValPair)=>RDDKeyValPair = rootNode.kernel.getReduceOp(context)
   def getTargetGrid: Option[TargetGrid] = workflowCx.getTargetGrid
-  def releaseBatch: Unit = _optInputsRDD.foreach( _.releaseBatch )
+  def releaseBatch: Unit = _inputsRDD.releaseBatch
   def nPartitions = optPartitioner.fold(1)( _.nPartitions )
 
-  private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
-    case None => Unit
-    case Some(partitioner) =>
-      val partitions = partitioner.partitions
-      val tgrid: TargetGrid = requestCx.getTargetGrid(partitioner.uid)
-      val batch = partitions.getBatch(batchIndex)
-      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec(partition, tgrid))
-      if (rddPartSpecs.length > 0) {
-        logger.info("\n **************************************************************** \n ---> Processing Batch [%d]: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
-        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
-        val recordSpecs = rddPartSpecs.flatMap(_.getRDDRecordSpecs())
-        val parallelized_rddspecs: RDD[(RecordKey,DirectRDDRecordSpec)] = serverContext.spark.sparkContext parallelize recordSpecs keyBy (_.timeRange) partitionBy rdd_partitioner
-        val rdd = parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex))
-        _optInputsRDD = Some( new RDDContainer(rdd) )
-      }
-  }
+//  private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
+//    case None => Unit
+//    case Some(partitioner) =>
+//      val partitions = partitioner.partitions
+//      val tgrid: TargetGrid = requestCx.getTargetGrid(partitioner.uid)
+//      val batch = partitions.getBatch(batchIndex)
+//      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec(partition, tgrid))
+//      if (rddPartSpecs.length > 0) {
+//        logger.info("\n **************************************************************** \n ---> Processing Batch [%d]: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
+//        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
+//        val recordSpecs = rddPartSpecs.flatMap(_.getRDDRecordSpecs())
+//        val parallelized_rddspecs: RDD[(RecordKey,DirectRDDRecordSpec)] = serverContext.spark.sparkContext parallelize recordSpecs keyBy (_.timeRange) partitionBy rdd_partitioner
+//        val rdd = parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex))
+//        _optInputsRDD = Some( new RDDContainer(rdd) )
+//      }
+//  }
 
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Unit = {
     for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )
     val disposable_inputs: Iterable[String] = for( (uid,input) <- getInputs(node); if input.disposable ) yield { uid }
-    _optInputsRDD.foreach( _.release(disposable_inputs) )
+    _inputsRDD.release(disposable_inputs)
   }
 
-  def execute(workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = _optInputsRDD match {
-    case Some( inputRdd:RDDContainer ) =>
-      val result = inputRdd.execute( workflow, rootNode.kernel, kernelCx, batchIndex )
+  def execute(workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): TimeSliceRDD =  {
+      val result = _inputsRDD.execute( workflow, rootNode.kernel, kernelCx, batchIndex )
       releaseInputs( rootNode, kernelCx )
       result
-    case None => throw new Exception( "Attempt to execute mapReduce on executor with no inputs.")
   }
 
-  def execInput(node: WorkflowNode, kernelCx: KernelContext, batchIndex: Int ) = _optInputsRDD match {
-    case Some( inputRdd:RDDContainer ) =>
-      inputRdd.map( node.kernel, kernelCx )
+  def execInput(node: WorkflowNode, kernelCx: KernelContext, batchIndex: Int ) =  {
+     _inputsRDD.map( node.kernel, kernelCx )
       releaseInputs( node, kernelCx )
-    case None =>
-      throw new Exception( "Attempt to execute mapReduce on executor with no inputs.")
   }
 
   def hasBatch ( batchIndex: Int ): Boolean = optPartitioner match {
@@ -134,30 +129,33 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   //      directInput.getRDDVariableSpec(uid, opSection)
   //    }
 
-  private def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], batchIndex: Int ): Unit = {
-    initializeInputsRDD( serverContext, batchIndex )
-    _optInputsRDD foreach( _.addFileInputs(kernelCx,vSpecs) )
+  def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
+    _inputsRDD.addFileInputs( serverContext.spark, kernelCx, vSpecs )
+    section.foreach( section => _inputsRDD.section(section) )
   }
 
+  def extendRDD( generator: RDDGenerator, rdd: TimeSliceRDD, vSpecs: List[DirectRDDVariableSpec]  ): TimeSliceRDD = {
+    if( vSpecs.isEmpty ) { rdd }
+    else {
+      val vspec = vSpecs.head
+      val extendedRdd = generator.parallelize(rdd, vspec.getAggregation(), vspec.uid, vspec.varShortName )
+      extendRDD( generator, extendedRdd, vSpecs.tail )
+    }
+  }
   private def addOperationInput( serverContext: ServerContext, record: RDDRecord, batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
     print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
-    if( _optInputsRDD.isDefined ) {   _optInputsRDD foreach ( _.addOperationInput(record) )                                       }
-    else {                            _optInputsRDD = Some( new RDDContainer( createUnpartitionedRDD( serverContext, record ) ) ) }
+    if( _inputsRDD.isDefined ) {   _inputsRDD foreach ( _.addOperationInput(record) )                                       }
+    else {                            _inputsRDD = Some( new RDDContainer( createUnpartitionedRDD( serverContext, record ) ) ) }
   }
 
   def createUnpartitionedRDD( serverContext: ServerContext, record: RDDRecord ): RDD[(RecordKey,RDDRecord)] = {
     serverContext.spark.sparkContext parallelize Seq( ( RecordKey(),record ) )
   }
 
-  def addKernelInputs(serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
-    addFileInputs( serverContext, kernelCx, vSpecs, batchIndex )
-    _optInputsRDD foreach ( _.section( section ) )
-  }
-
   def addOperationInput(serverContext: ServerContext, record: RDDRecord, section: Option[CDSection], batchIndex: Int ): Unit  = {
     addOperationInput( serverContext, record, batchIndex )
-    _optInputsRDD foreach ( _.section( section ) )
+    _inputsRDD foreach ( _.section( section ) )
   }
 
   //  partition.getPartitionRecordKey(tgrid)

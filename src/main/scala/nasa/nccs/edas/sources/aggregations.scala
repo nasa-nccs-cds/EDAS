@@ -352,13 +352,14 @@ object Aggregation extends Loggable {
     val axes = mutable.ListBuffer.empty[Axis]
     val parameters = mutable.HashMap.empty[String,String]
     try {
-      for (line <- source.getLines; toks = line.split(',').map(_.trim) ) toks(0) match {
+      for (line <- source.getLines; toks = line.split(',').map(_.trim) ) try{ toks(0) match {
         case "F" =>  files += FileInput(files.length, toks(1).toLong, toks(2).toInt, toks(3))
         case "P" =>  parameters += toks(1) -> toks(2)
         case "V" => variables += Variable( toks(1), toks(2).split(",").map( _.toInt ), toks(3), toks(4) )
         case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( _.toInt ), toks(3), toks(4) )
         case "A" => axes += Axis( toks(1), toks(2), toks(3).split(",").map( _.toInt ), toks(3), toks(4).toFloat, toks(5).toFloat )
-      }
+        case _ => Unit
+      } } catch { case err: Exception => logger.error( s"Error '${err.getMessage}' processing line in Aggregation file => ${line} " ) }
     } finally { source.close() }
     Aggregation( aggFile, files.toList, variables.toList, coordinates.toList, axes.toList, parameters.toMap )
   }

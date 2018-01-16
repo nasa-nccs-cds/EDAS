@@ -1,12 +1,14 @@
 package nasa.nccs.edas.rdd
 
-import nasa.nccs.cdapi.data.DirectRDDVariableSpec
+import nasa.nccs.caching.BatchSpec
+import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, FastMaskedArray, RDDRecord}
+import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.engine.Workflow
-import nasa.nccs.edas.engine.spark.CDSparkContext
+import nasa.nccs.edas.engine.spark.{CDSparkContext, RecordKey}
 import nasa.nccs.edas.kernels.{Kernel, KernelContext}
 import nasa.nccs.edas.sources.{Aggregation, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
-import nasa.nccs.esgf.process.CDSection
+import nasa.nccs.esgf.process.{CDSection, ServerContext}
 import nasa.nccs.utilities.Loggable
 import org.apache.spark.rdd.RDD
 import ucar.ma2
@@ -19,16 +21,28 @@ import scala.collection.JavaConverters._
 import scala.collection.Map
 import scala.collection.mutable
 
-case class ArraySpec( missing: Float, shape: Array[Int], data: Array[Float] )
+case class ArraySpec( missing: Float, shape: Array[Int], data: Array[Float] ) {
+  def section( section: CDSection ): ArraySpec = {
+    val ma2Array = ma2.Array.factory( ma2.DataType.FLOAT, shape, data )
+    val sectionedArray = ma2Array.section( section.toSection.getRanges )
+    new ArraySpec( missing, sectionedArray.getShape, sectionedArray.getStorage.asInstanceOf[Array[Float]] )
+  }
+}
 
-case class CDTimeSlice( timestamp: Long, dt: Int, arrays: Map[String,ArraySpec1] ) {
+case class CDTimeSlice( timestamp: Long, dt: Int, arrays: Map[String,ArraySpec] ) {
   def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( timestamp, dt, arrays ++ other.arrays ) }
 //  def validate_identity( other_index: Int ): Unit = assert ( other_index == index , s"TimeSlice index mismatch: ${index} vs ${other_index}" )
-  def clear: CDTimeSlice = { new CDTimeSlice( timestamp, dt, Map.empty[String,ArraySpec1] ) }
+  def clear: CDTimeSlice = { new CDTimeSlice( timestamp, dt, Map.empty[String,ArraySpec] ) }
+  def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, arrays.mapValues( _.section(section) ) ) }
+  def release( keys: Iterable[String] ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, arrays.filterKeys( key => !keys.contains(key) ) ) }
 }
 
 class TimeSliceRDD( val rdd: RDD[CDTimeSlice], val metadata: Map[String,String] ) {
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
+  def cache() = rdd.cache()
+  def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
+  def section( section: CDSection ): TimeSliceRDD = { new TimeSliceRDD( rdd.map( _.section(section) ), metadata ) }
+  def release( keys: Iterable[String] ): TimeSliceRDD = new TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
 }
 
 object PartitionExtensionGenerator {
@@ -137,7 +151,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
       val data_section = variable.read(getSliceRanges( interSect, slice_index))
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
       val data_shape: Array[Int] = data_section.getShape
-      val arraySpec = ArraySpec1( missing, data_section.getShape, data_array )
+      val arraySpec = ArraySpec( missing, data_section.getShape, data_array )
       //      (timestamp/millisPerMin).toInt -> CDTimeSlice( timestamp, missing, data_section )  // new java.sql.Timestamp( date.getMillis )
       CDTimeSlice( date.getMillis, dt, Map( varId -> arraySpec ) )  //
     }
@@ -195,54 +209,88 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
     val data_section = variable.read(getSliceRanges( interSect, getSliceIndex(timestamp)))
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
     val data_shape: Array[Int] = data_section.getShape
-    val arraySpec = ArraySpec1( missing, data_section.getShape, data_array )
+    val arraySpec = ArraySpec( missing, data_section.getShape, data_array )
     CDTimeSlice( timestamp, dt, Map( varId -> arraySpec ) )  //
   }
 }
 
+class RDDContainer extends Loggable {
+  private val _contents = mutable.HashSet.empty[String]
+  private var _vault: Option[RDDVault] = None
+  def releaseBatch = { _vault.foreach(_.clear); _contents.clear(); _vault = None }
+  private def vault: RDDVault = _vault.getOrElse { throw new Exception( "Unexpected attempt to access an uninitialized RDD Vault")}
+  def value: TimeSliceRDD = vault.value
+  def contents: Set[String] = _contents.toSet
+  def section( section: CDSection ): Unit = vault.map( _.section(section) )
+  def release( keys: Iterable[String] ): Unit = { vault.release( keys ); _contents --= keys.toSet }
+
+  private def initialize( init_value: TimeSliceRDD, contents: List[String] ) = {
+    _vault = Some( new RDDVault( init_value ) )
+    _contents ++= contents
+  }
+
+  class RDDVault( init_value: TimeSliceRDD ) {
+    private var _rdd = init_value; _rdd.cache()
+    def update( new_rdd: TimeSliceRDD ): Unit = { _rdd.unpersist(false); _rdd = new_rdd; _rdd.cache }
+    def map( f: (TimeSliceRDD) => TimeSliceRDD ): Unit = update( f(_rdd) )
+    def value = _rdd
+    def clear: Unit = _rdd.unpersist(false)
+    def release( keys: Iterable[String] ) = { update( _rdd.release(keys) ) }
+  }
+  def map( kernel: Kernel, context: KernelContext ): Unit = {
+    _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
+    _contents ++= _vault.fetchContents
+  }
+  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceRDD = node.mapReduce( value, context, batchIndex )
+  def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceRDD = node.execute( workflow, value, context, batchIndex )
 
 
 
-//class RDDContainer( init_value: RDD[CDTimeSlice] ) extends Loggable {
-//  private val _contents = mutable.HashSet.empty[String]
-//  private var _vault = new RDDVault(init_value)
-//  def releaseBatch = { _vault.clear; _contents.clear() }
-//
-//  class RDDVault( init_value: RDD[CDTimeSlice] ) {
-//    private var _rdd: RDD[CDTimeSlice] = init_value; _rdd.cache()
-//    private def _update( new_rdd: RDD[CDTimeSlice] ): Unit = { _rdd.unpersist(false); _rdd = new_rdd; _rdd.cache }
-//    private def _map( f: (RDD[CDTimeSlice]) => RDD[CDTimeSlice] ): Unit = update( f(_rdd) )
-//    def update( f: (CDTimeSlice) => CDTimeSlice ): Unit = update( _rdd.map( rec => rec ++ f(rec) ) )
-//    def mapValues( f: (CDTimeSlice) => CDTimeSlice ): Unit = update( _rdd.mapValues( rec => f(rec) ) )
-//    def +=( record: CDTimeSlice ): Unit = update( _rdd.mapValues( rec => rec ++ record ) )
-//    def value = _rdd
-//    def fetchContents: Set[String] = _rdd.map { case (key,rec) => rec.elements.keySet }.first
-//    def release( keys: Iterable[String] ): Unit = mapValues( _.release(keys) )
-//    def clear: Unit = map( _.clear )
+
+
+//  def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): TimeSliceRDD = {
+//    val generator = new RDDGenerator( serverContext.spark, BatchSpec.nParts )
+//    logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ]" )
+//    val tvspec = vSpecs.head
+//    val new_section: ma2.Section = section.fold( tvspec.section.toSection )( sect => sect.toSection.intersect( tvspec.section.toSection ) )
+//    val baseRdd: TimeSliceRDD = generator.parallelize(tvspec.getAggregation(), tvspec.uid, tvspec.varShortName, CDSection.serialize(new_section) )
+//    extendRDD( generator, baseRdd, vSpecs.tail )
 //  }
-//  def map( kernel: Kernel, context: KernelContext ): Unit = {
-//    _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
-//    _contents ++= _vault.fetchContents
-//  }
-//  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): CDTimeSlice = node.mapReduce( value, context, batchIndex )
-//  def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): CDTimeSlice = node.execute( workflow, value, context, batchIndex )
-//  def value: RDD[CDTimeSlice] = _vault.value
-//  def contents: Set[String] = _contents.toSet
-//  def section( section: Option[CDSection] ): Unit = _vault.mapValues( _.section(section) )
-//  def fetchContents: Set[String] = _vault.fetchContents
-//  def release( keys: Iterable[String] ): Unit = { _vault.release( keys ); _contents --= keys.toSet }
-//
-//  def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
-//    logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
-//    val newVSpecs = vSpecs.filter( vspec => !_contents.contains(vspec.uid) )
-//    if( newVSpecs.nonEmpty ) {
-//      _vault.mapValues( kernelContext.addRddElements(newVSpecs) )
-//      _contents ++= newVSpecs.map(_.uid).toSet
-//    }
-//    logger.info("\n\n RDDContainer ###-> END addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
-//  }
-//  def addOperationInput( record: CDTimeSlice ): Unit = {
-//    _vault += record
-//    _contents ++= record.arrays.keySet
-//  }
-//}
+
+  private def _extendRDD( generator: RDDGenerator, rdd: TimeSliceRDD, vSpecs: List[DirectRDDVariableSpec]  ): TimeSliceRDD = {
+    if( vSpecs.isEmpty ) { rdd }
+    else {
+      val vspec = vSpecs.head
+      val extendedRdd = generator.parallelize(rdd, vspec.getAggregation(), vspec.uid, vspec.varShortName )
+      _extendRDD( generator, extendedRdd, vSpecs.tail )
+    }
+  }
+
+  def extendVault( generator: RDDGenerator, vSpecs: List[DirectRDDVariableSpec] ) = {
+    vault.update( _extendRDD( generator, _vault.get.value, vSpecs ) )
+    _contents ++= vSpecs.map( _.uid )
+  }
+
+  def addFileInputs( sparkContext: CDSparkContext, kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
+    logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
+    val newVSpecs = vSpecs.filter( vspec => !_contents.contains(vspec.uid) )
+    if( newVSpecs.nonEmpty ) {
+      val generator = new RDDGenerator( sparkContext, BatchSpec.nParts )
+      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ]" )
+      val remainingVspecs = if( _vault.isEmpty ) {
+        val tvspec = vSpecs.head
+        val baseRdd: TimeSliceRDD = generator.parallelize(tvspec.getAggregation(), tvspec.uid, tvspec.varShortName, tvspec.section.toString)
+        initialize( baseRdd, List(tvspec.uid) )
+        vSpecs.tail
+      } else { vSpecs }
+      extendVault( generator, remainingVspecs )
+    }
+    logger.info("\n\n RDDContainer ###-> END addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
+  }
+
+
+  def addOperationInput( record: RDDRecord ): Unit = {
+    _vault += record
+    _contents ++= record.elements.keySet
+  }
+}
