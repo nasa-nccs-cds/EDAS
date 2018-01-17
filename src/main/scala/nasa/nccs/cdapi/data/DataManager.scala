@@ -869,90 +869,90 @@ object HeapLongArray {
   def apply( ucarray: ucar.ma2.Array, origin: Array[Int], metadata: Map[String,String], missing: Float ): HeapLongArray = HeapLongArray( CDLongArray.factory(ucarray), origin, metadata )
 }
 
-class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[String,String], val partition: Partition ) extends MetadataCarrier(metadata) {
-  def ++( other: RDDRecord ): RDDRecord = {
-    new RDDRecord( elements ++ other.elements, metadata ++ other.metadata, partition )
-  }
-  def release( keys: Iterable[String] ): RDDRecord  = {
-    val new_elements = elements.filterKeys( key => !keys.contains(key) )
-    new RDDRecord( new_elements, metadata, partition )
-  }
-  def clear: RDDRecord  = new RDDRecord( SortedMap.empty[String,HeapFltArray], metadata, partition )
-
-  def size: Long = elements.values.foldLeft(0L)( (size,elem) => size + elem.size )
-
-  def hasMultiGrids: Boolean = {
-    if( elements.size == 0 ) return false
-    val head_shape = elements.head._2.shape
-    elements.exists( item => !item._2.shape.sameElements(head_shape) )     // TODO: Compare axes as well?
-  }
-  def reinterp( conversionMap: Map[Int,TimeConversionSpec] ): RDDRecord = {
-    val new_elements = elements.mapValues( array => conversionMap.get(array.shape(0)) match {
-      case Some( conversionSpec ) => array.reinterp( conversionSpec.weights, conversionSpec.mapOrigin )
-      case None =>
-        if( array.shape(0) != conversionMap.values.head.toSize )  throw new Exception( s"Unexpected time conversion input size: ${array.shape(0)} vs ${conversionMap.values.head.toSize}" )
-        array
-    })
-    new RDDRecord( new_elements, metadata, partition )
-  }
-
-  def slice( startIndex: Int, size: Int ): RDDRecord = {
-    logger.info( s"RDDPartition: slice --> nElems:{${elements.size}} startIndex:{${startIndex}} size:{${size}} ")
-    val new_elems = elements.mapValues( _.slice(startIndex,size) )
-    new RDDRecord( new_elems, metadata, partition )
-  }
-  def section( optSection: Option[CDSection] ): RDDRecord = optSection match {
-    case Some( section ) =>
-      logger.info( s"RDDRecord-section[${section.toString()}]: elsems = ${elements.keys.mkString(", ")}")
-      val new_elements = elements.mapValues( _.section( section.toSection ) )
-      RDDRecord( new_elements, metadata, partition )
-    case None =>
-      this
-  }
-
-  def hasMultiTimeScales( trsOpt: Option[String]=None ): Boolean = {
-    if( elements.isEmpty ) return false
-    val ntimesteps = elements.values.head.shape(0)
-    elements.exists( item => !(item._2.shape(0)==ntimesteps) )
-  }
-  def append( other: RDDRecord ): RDDRecord = {
-    val commonElems = elements.keySet.union( other.elements.keySet )
-    val appendedElems: Set[(String,HeapFltArray)] = commonElems flatMap ( key =>
-      other.elements.get(key).fold  (elements.get(key) map (e => key -> e))  (e1 => Some( key-> elements.get(key).fold (e1) (e0 => e0.append(e1)))))
-    new RDDRecord( TreeMap(appendedElems.toSeq:_*), metadata ++ other.metadata, partition )
-  }
-  def extend( vSpec: DirectRDDVariableSpec ): RDDRecord = {
-    if (elements.contains(vSpec.uid)) {
-      this
-    } else {
-      val new_element = vSpec.toHeapArray(partition)
-      val newRec = new RDDRecord(elements + (vSpec.uid -> new_element), metadata ++ vSpec.metadata, partition)
-//      print( s"\n ********* Extend with vSpec ${vSpec.uid}, elements = [ ${elements.keys.mkString(", ")} ], part=${partition.index}, result nelems = ${newRec.elements.size}\n\n" )
-      newRec
-    }
-  }
-
-//  def split( index: Int ): (RDDPartition,RDDPartition) = { }
-  def getShape = elements.head._2.shape
-  def getOrigin = elements.head._2.origin
-  def elems = elements.keys
-  def element( id: String ): Option[HeapFltArray] = ( elements find { case (key,array) => key.split(':')(0).equals(id) } ) map ( _._2 )
-  def findElements( id: String ): Iterable[HeapFltArray] = ( elements filter { case (key,array) => key.split(':').last.equals(id) } ) values
-  def empty( id: String ) = { element(id).isEmpty }
-  def head: ( String, HeapFltArray ) = elements.head
-  def toXml: xml.Elem = {
-    val values: Iterable[xml.Node] = elements.values.map(_.toXml)
-    <partition> {values} </partition>  % metadata
-  }
-  def configure( key: String, value: String ): RDDRecord = new RDDRecord( elements, metadata + ( key -> value ), partition )
-}
-
-object RDDRecord {
-  def apply ( elements: SortedMap[String,HeapFltArray],  metadata: Map[String,String], partition: Partition ) = new RDDRecord( elements, metadata, partition )
-  def apply ( rdd: RDDRecord ) = new RDDRecord( rdd.elements, rdd.metadata, rdd.partition )
-  def merge( rdd_parts: Seq[RDDRecord] ) = rdd_parts.foldLeft( RDDRecord.empty )( _ ++ _ )
-  def empty: RDDRecord = { new RDDRecord( TreeMap.empty[String,HeapFltArray], Map.empty[String,String], RegularPartition.empty ) }
-}
+//class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[String,String], val partition: Partition ) extends MetadataCarrier(metadata) {
+//  def ++( other: RDDRecord ): RDDRecord = {
+//    new RDDRecord( elements ++ other.elements, metadata ++ other.metadata, partition )
+//  }
+//  def release( keys: Iterable[String] ): RDDRecord  = {
+//    val new_elements = elements.filterKeys( key => !keys.contains(key) )
+//    new RDDRecord( new_elements, metadata, partition )
+//  }
+//  def clear: RDDRecord  = new RDDRecord( SortedMap.empty[String,HeapFltArray], metadata, partition )
+//
+//  def size: Long = elements.values.foldLeft(0L)( (size,elem) => size + elem.size )
+//
+//  def hasMultiGrids: Boolean = {
+//    if( elements.size == 0 ) return false
+//    val head_shape = elements.head._2.shape
+//    elements.exists( item => !item._2.shape.sameElements(head_shape) )     // TODO: Compare axes as well?
+//  }
+//  def reinterp( conversionMap: Map[Int,TimeConversionSpec] ): RDDRecord = {
+//    val new_elements = elements.mapValues( array => conversionMap.get(array.shape(0)) match {
+//      case Some( conversionSpec ) => array.reinterp( conversionSpec.weights, conversionSpec.mapOrigin )
+//      case None =>
+//        if( array.shape(0) != conversionMap.values.head.toSize )  throw new Exception( s"Unexpected time conversion input size: ${array.shape(0)} vs ${conversionMap.values.head.toSize}" )
+//        array
+//    })
+//    new RDDRecord( new_elements, metadata, partition )
+//  }
+//
+//  def slice( startIndex: Int, size: Int ): RDDRecord = {
+//    logger.info( s"RDDPartition: slice --> nElems:{${elements.size}} startIndex:{${startIndex}} size:{${size}} ")
+//    val new_elems = elements.mapValues( _.slice(startIndex,size) )
+//    new RDDRecord( new_elems, metadata, partition )
+//  }
+//  def section( optSection: Option[CDSection] ): RDDRecord = optSection match {
+//    case Some( section ) =>
+//      logger.info( s"RDDRecord-section[${section.toString()}]: elsems = ${elements.keys.mkString(", ")}")
+//      val new_elements = elements.mapValues( _.section( section.toSection ) )
+//      RDDRecord( new_elements, metadata, partition )
+//    case None =>
+//      this
+//  }
+//
+//  def hasMultiTimeScales( trsOpt: Option[String]=None ): Boolean = {
+//    if( elements.isEmpty ) return false
+//    val ntimesteps = elements.values.head.shape(0)
+//    elements.exists( item => !(item._2.shape(0)==ntimesteps) )
+//  }
+//  def append( other: RDDRecord ): RDDRecord = {
+//    val commonElems = elements.keySet.union( other.elements.keySet )
+//    val appendedElems: Set[(String,HeapFltArray)] = commonElems flatMap ( key =>
+//      other.elements.get(key).fold  (elements.get(key) map (e => key -> e))  (e1 => Some( key-> elements.get(key).fold (e1) (e0 => e0.append(e1)))))
+//    new RDDRecord( TreeMap(appendedElems.toSeq:_*), metadata ++ other.metadata, partition )
+//  }
+//  def extend( vSpec: DirectRDDVariableSpec ): RDDRecord = {
+//    if (elements.contains(vSpec.uid)) {
+//      this
+//    } else {
+//      val new_element = vSpec.toHeapArray(partition)
+//      val newRec = new RDDRecord(elements + (vSpec.uid -> new_element), metadata ++ vSpec.metadata, partition)
+////      print( s"\n ********* Extend with vSpec ${vSpec.uid}, elements = [ ${elements.keys.mkString(", ")} ], part=${partition.index}, result nelems = ${newRec.elements.size}\n\n" )
+//      newRec
+//    }
+//  }
+//
+////  def split( index: Int ): (RDDPartition,RDDPartition) = { }
+//  def getShape = elements.head._2.shape
+//  def getOrigin = elements.head._2.origin
+//  def elems = elements.keys
+//  def element( id: String ): Option[HeapFltArray] = ( elements find { case (key,array) => key.split(':')(0).equals(id) } ) map ( _._2 )
+//  def findElements( id: String ): Iterable[HeapFltArray] = ( elements filter { case (key,array) => key.split(':').last.equals(id) } ) values
+//  def empty( id: String ) = { element(id).isEmpty }
+//  def head: ( String, HeapFltArray ) = elements.head
+//  def toXml: xml.Elem = {
+//    val values: Iterable[xml.Node] = elements.values.map(_.toXml)
+//    <partition> {values} </partition>  % metadata
+//  }
+//  def configure( key: String, value: String ): RDDRecord = new RDDRecord( elements, metadata + ( key -> value ), partition )
+//}
+//
+//object RDDRecord {
+//  def apply ( elements: SortedMap[String,HeapFltArray],  metadata: Map[String,String], partition: Partition ) = new RDDRecord( elements, metadata, partition )
+//  def apply ( rdd: RDDRecord ) = new RDDRecord( rdd.elements, rdd.metadata, rdd.partition )
+//  def merge( rdd_parts: Seq[RDDRecord] ) = rdd_parts.foldLeft( RDDRecord.empty )( _ ++ _ )
+//  def empty: RDDRecord = { new RDDRecord( TreeMap.empty[String,HeapFltArray], Map.empty[String,String], RegularPartition.empty ) }
+//}
 
 object RDDPartSpec {
   def apply( partition: CachePartition, tgrid: TargetGrid, varSpecs: List[ RDDVariableSpec ] ): RDDPartSpec = new RDDPartSpec( partition, partition.getPartitionRecordKey(tgrid,"RDDPartSpec"), varSpecs )
@@ -1013,14 +1013,14 @@ object DirectRDDRecordSpec {
 
 class DirectRDDRecordSpec(val partition: Partition, iRecord: Int, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
 
-  def getRDDPartition( batchIndex: Int ): RDDRecord = {
-    val t0 = System.nanoTime()
-    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition)) ).toSeq: _* )
-    val rv = RDDRecord( elements, Map( "partIndex" -> partition.index.toString, "startIndex" -> timeRange.elemStart.toString, "recIndex" -> iRecord.toString, "batchIndex" -> batchIndex.toString ), partition )
-    val dt = (System.nanoTime() - t0) / 1.0E9
-    logger.debug( "DirectRDDRecordSpec{ partition = %s, record = %d, nelems=%d }: completed data input in %.4f sec".format( partition.toString, iRecord, elements.size, dt) )
-    rv
-  }
+//  def getRDDPartition( batchIndex: Int ): RDDRecord = {
+//    val t0 = System.nanoTime()
+//    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition)) ).toSeq: _* )
+//    val rv = RDDRecord( elements, Map( "partIndex" -> partition.index.toString, "startIndex" -> timeRange.elemStart.toString, "recIndex" -> iRecord.toString, "batchIndex" -> batchIndex.toString ), partition )
+//    val dt = (System.nanoTime() - t0) / 1.0E9
+//    logger.debug( "DirectRDDRecordSpec{ partition = %s, record = %d, nelems=%d }: completed data input in %.4f sec".format( partition.toString, iRecord, elements.size, dt) )
+//    rv
+//  }
 
   def index = partition.index
   override def toString() = s"RDD-Record[${iRecord.toString}]{ ${partition.toString}, ${timeRange.toString} }"

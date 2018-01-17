@@ -10,7 +10,7 @@ import nasa.nccs.edas.engine.WorkflowNode.regridKernel
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
-import nasa.nccs.edas.kernels.{AxisIndices, KernelContext, RDDContainer}
+import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
 import nasa.nccs.edas.portal.TestReadApplication.logger
 import nasa.nccs.edas.rdd.{RDDContainer, RDDGenerator, TimeSliceRDD}
 import nasa.nccs.edas.sources.{Collection, Collections}

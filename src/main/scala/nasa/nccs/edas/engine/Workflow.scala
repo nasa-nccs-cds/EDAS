@@ -8,6 +8,7 @@ import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.engine.spark.{RecordKey, _}
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
 import nasa.nccs.edas.kernels._
+import nasa.nccs.edas.rdd.TimeSliceRDD
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
 import nasa.nccs.utilities.{DAGNode, Loggable, ProfilingTool}
@@ -261,7 +262,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     workflowCx
   }
 
-  def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  ( RecordKey, RDDRecord )  = {
+  def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  TimeSliceRDD  = {
     processInputs( executor.rootNode, executor, kernelCx, batchIndex)
     kernelCx.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ executor.rootNode.getNodeId}", true)
     val  (key: RecordKey, rec: RDDRecord) =  executor.execute( this, kernelCx, batchIndex )

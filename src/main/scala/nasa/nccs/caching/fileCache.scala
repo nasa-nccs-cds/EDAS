@@ -12,11 +12,11 @@ import com.googlecode.concurrentlinkedhashmap.{ConcurrentLinkedHashMap, EntryWei
 import nasa.nccs.caching.EDASPartitioner.{partitionSize, recordSize}
 import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
 import nasa.nccs.cdapi.cdm.{PartitionedFragment, _}
-import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray}
 import nasa.nccs.edas.engine.{EDASExecutionManager, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.TransientFragment
+import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection}
 import nasa.nccs.edas.sources.Masks
 import nasa.nccs.esgf.process.{DataFragmentKey, _}
 import nasa.nccs.esgf.wps.edasServiceProvider
@@ -907,17 +907,12 @@ class JobRecord(val id: String) {
   def elapsed: Int = ((System.nanoTime() - creationTime)/1.0e9).toInt
 }
 
-class RDDTransientVariable(val result: RDDRecord,
+class RDDTransientVariable(val result: TimeSliceCollection,
                            val operation: OperationContext,
                            val request: RequestContext) {
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
   def timestamp = Calendar.getInstance().getTime
   def getTimestamp = timeFormatter.format(timestamp)
-
-  def getGridId = result.metadata.get("gid") match {
-    case Some(x) => x;
-    case None => throw new Exception("Error, no gridId in result of operation " + operation.identifier)
-  }
 }
 
 class TransientDataCacheMgr extends Loggable {

@@ -27,6 +27,7 @@ case class ArraySpec( missing: Float, shape: Array[Int], data: Array[Float] ) {
     val sectionedArray = ma2Array.section( section.toSection.getRanges )
     new ArraySpec( missing, sectionedArray.getShape, sectionedArray.getStorage.asInstanceOf[Array[Float]] )
   }
+  def size: Long = shape.product
 }
 
 case class CDTimeSlice( timestamp: Long, dt: Int, arrays: Map[String,ArraySpec] ) {
@@ -35,14 +36,33 @@ case class CDTimeSlice( timestamp: Long, dt: Int, arrays: Map[String,ArraySpec] 
   def clear: CDTimeSlice = { new CDTimeSlice( timestamp, dt, Map.empty[String,ArraySpec] ) }
   def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, arrays.mapValues( _.section(section) ) ) }
   def release( keys: Iterable[String] ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, arrays.filterKeys( key => !keys.contains(key) ) ) }
+  def size: Long = arrays.values.reduce( (a0,a1) => a0.size + a1.size )
 }
 
-class TimeSliceRDD( val rdd: RDD[CDTimeSlice], val metadata: Map[String,String] ) {
+class DataCollection( val metadata: Map[String,String] ) {
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
+}
+
+class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) {
   def cache() = rdd.cache()
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
   def section( section: CDSection ): TimeSliceRDD = { new TimeSliceRDD( rdd.map( _.section(section) ), metadata ) }
   def release( keys: Iterable[String] ): TimeSliceRDD = new TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
+  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = new TimeSliceRDD( rdd.map( op ), metadata )
+  def getNumPartitions = rdd.getNumPartitions
+  def collect: TimeSliceCollection = new TimeSliceCollection( rdd.collect, metadata )
+  def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = new TimeSliceRDD( rdd.collect(op), metadata )
+  def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): TimeSliceCollection = TimeSliceCollection( rdd.treeReduce(op), metadata )
+  def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
+}
+
+object TimeSliceCollection {
+  def apply( slice: CDTimeSlice, metadata: Map[String,String] ): TimeSliceCollection = new TimeSliceCollection( Array(slice), metadata )
+  def apply( slices: Array[CDTimeSlice], metadata: Map[String,String] ): TimeSliceCollection = new TimeSliceCollection( slices, metadata )
+}
+
+class TimeSliceCollection( val slices: Array[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) {
+  def section( section: CDSection ): TimeSliceCollection = { new TimeSliceCollection( slices.map( _.section(section) ), metadata ) }
 }
 
 object PartitionExtensionGenerator {
