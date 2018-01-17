@@ -10,7 +10,7 @@ import java.nio._
 import java.util.{Date, Formatter, Locale}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import nasa.nccs.cdapi.data.{HeapFltArray, RDDRecord}
+import nasa.nccs.cdapi.data.{HeapFltArray, CDTimeSlice}
 import nasa.nccs.cdapi.tensors.{CDDoubleArray, CDFloatArray, CDLongArray}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.sources.{Variable => _, _}
@@ -916,11 +916,11 @@ case class VariableRecord( timestamp: String, missing: Float, data: Array[Float]
   def length: Int = data.length
 }
 object VariableRecord {
-  def apply( key: RecordKey, rec: RDDRecord, varId: String ): VariableRecord = {
+  def apply( key: RecordKey, rec: CDTimeSlice, varId: String ): VariableRecord = {
     val data: HeapFltArray = rec.element(varId).getOrElse( missingVar( rec, varId ))
     new VariableRecord( new Date(key.start).toString, data.missing.getOrElse(Float.NaN), data.data )
   }
-  def missingVar( rec: RDDRecord, varId: String ) = throw new Exception( s"Cant find variable ${varId} in RDDRecord, ids: ${rec.elems.mkString(",")}")
+  def missingVar( rec: CDTimeSlice, varId: String ) = throw new Exception( s"Cant find variable ${varId} in CDTimeSlice, ids: ${rec.elems.mkString(",")}")
 
 }
 

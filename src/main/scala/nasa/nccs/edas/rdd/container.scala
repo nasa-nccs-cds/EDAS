@@ -1,13 +1,16 @@
 package nasa.nccs.edas.rdd
 
 import nasa.nccs.caching.BatchSpec
-import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, FastMaskedArray, RDDRecord}
-import nasa.nccs.cdapi.tensors.CDFloatArray
+import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, FastMaskedArray, HeapFltArray}
+import org.apache.commons.lang.ArrayUtils
+import nasa.nccs.cdapi.tensors.{CDArray, CDFloatArray}
+import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RecordKey}
 import nasa.nccs.edas.kernels.{Kernel, KernelContext}
 import nasa.nccs.edas.sources.{Aggregation, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
+import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.esgf.process.{CDSection, ServerContext}
 import nasa.nccs.utilities.Loggable
 import org.apache.spark.rdd.RDD
@@ -21,22 +24,48 @@ import scala.collection.JavaConverters._
 import scala.collection.Map
 import scala.collection.mutable
 
-case class ArraySpec( missing: Float, shape: Array[Int], data: Array[Float] ) {
+object ArraySpec {
+  def apply( tvar: TransVar ) = {
+    val data_array =  tvar.getFloatArray
+    new ArraySpec( data_array.last, tvar.getShape, tvar.getOrigin, data_array )
+  }
+}
+
+case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
   def section( section: CDSection ): ArraySpec = {
     val ma2Array = ma2.Array.factory( ma2.DataType.FLOAT, shape, data )
     val sectionedArray = ma2Array.section( section.toSection.getRanges )
-    new ArraySpec( missing, sectionedArray.getShape, sectionedArray.getStorage.asInstanceOf[Array[Float]] )
+    new ArraySpec( missing, sectionedArray.getShape, section.getOrigin, sectionedArray.getStorage.asInstanceOf[Array[Float]] )
   }
   def size: Long = shape.product
+  def ++( other: ArraySpec ): ArraySpec = concat( other )
+  def toHeapFltArray = new HeapFltArray( shape, origin, data, Option( missing ) )
+  def toFastMaskedArray: FastMaskedArray = FastMaskedArray( shape, data, missing )
+
+  def combine( combineOp: CDArray.ReduceOp[Float], other: ArraySpec ): ArraySpec = {
+    val result: FastMaskedArray = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp )
+    ArraySpec( missing, result.shape, origin, result.getData  )
+  }
+
+  def concat( other: ArraySpec ): ArraySpec = {
+    val zippedShape = shape.zipWithIndex
+    assert( zippedShape.drop(1).forall { case ( value:Int, index: Int ) => value == other.shape(index) }, s"Incommensurate shapes in array concatenation: ${shape.mkString(",")} vs ${other.shape.mkString(",")} " )
+    val new_data: Array[Float] = ArrayUtils.addAll( data, other.data )
+    val new_shape = zippedShape map { case ( value:Int, index: Int ) => if(index==0) {shape(0)+other.shape(0)} else {shape(index)} }
+    ArraySpec( missing, new_shape, origin, new_data )
+  }
 }
 
-case class CDTimeSlice( timestamp: Long, dt: Int, arrays: Map[String,ArraySpec] ) {
-  def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( timestamp, dt, arrays ++ other.arrays ) }
+case class CDTimeSlice(timestamp: Long, dt: Int, elements: Map[String,ArraySpec] ) {
+  def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( timestamp, dt, elements ++ other.elements ) }
 //  def validate_identity( other_index: Int ): Unit = assert ( other_index == index , s"TimeSlice index mismatch: ${index} vs ${other_index}" )
   def clear: CDTimeSlice = { new CDTimeSlice( timestamp, dt, Map.empty[String,ArraySpec] ) }
-  def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, arrays.mapValues( _.section(section) ) ) }
-  def release( keys: Iterable[String] ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, arrays.filterKeys( key => !keys.contains(key) ) ) }
-  def size: Long = arrays.values.reduce( (a0,a1) => a0.size + a1.size )
+  def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, elements.mapValues( _.section(section) ) ) }
+  def release( keys: Iterable[String] ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, elements.filterKeys(key => !keys.contains(key) ) ) }
+  def size: Long = elements.values.reduce((a0, a1) => a0.size + a1.size )
+  def element( id: String ): Option[ArraySpec] = elements.get( id )
+
+  def isEmpty = elements.isEmpty
 }
 
 class DataCollection( val metadata: Map[String,String] ) {
@@ -63,6 +92,7 @@ object TimeSliceCollection {
 
 class TimeSliceCollection( val slices: Array[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) {
   def section( section: CDSection ): TimeSliceCollection = { new TimeSliceCollection( slices.map( _.section(section) ), metadata ) }
+  val sort: TimeSliceCollection = { new TimeSliceCollection( slices.sortBy( _.timestamp ), metadata ) }
 }
 
 object PartitionExtensionGenerator {
@@ -177,7 +207,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
     }
     dataset.close()
     if( fileInput.index % 500 == 0 ) {
-      val sample_array =  slices.head.arrays.head._2.data
+      val sample_array =  slices.head.elements.head._2.data
       val datasize: Int = sample_array.length
       val dataSample = sample_array(datasize/2)
       logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toString}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
@@ -261,8 +291,8 @@ class RDDContainer extends Loggable {
     _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
     _contents ++= _vault.fetchContents
   }
-  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceRDD = node.mapReduce( value, context, batchIndex )
-  def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceRDD = node.execute( workflow, value, context, batchIndex )
+  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.mapReduce( value, context, batchIndex )
+  def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
 
 
 
@@ -309,7 +339,7 @@ class RDDContainer extends Loggable {
   }
 
 
-  def addOperationInput( record: RDDRecord ): Unit = {
+  def addOperationInput( record: CDTimeSlice ): Unit = {
     _vault += record
     _contents ++= record.elements.keySet
   }

@@ -49,7 +49,7 @@ trait ScopeContext {
 
 class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[String,OperationInput] ) extends Loggable  {
   val optPartitioner: Option[EDASPartitioner] = generatePartitioning
-  private var _optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = None
+  private var _optInputsRDD: Option[RDD[CDTimeSlice]] = None
 
   private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
     case None => Unit
@@ -91,27 +91,27 @@ class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[Stri
     _optInputsRDD = optRdd
   }
 
-  private def addOperationInput( serverContext: ServerContext, record: RDDRecord, batchIndex: Int ): Unit = {
+  private def addOperationInput( serverContext: ServerContext, record: CDTimeSlice, batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
     print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
     _optInputsRDD = _optInputsRDD map ( _.mapValues( rddRec => rddRec ++ record ) )
   }
 
-  def getKernelInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+  def getKernelInputs( serverContext: ServerContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Option[RDD[CDTimeSlice]] = {
     addFileInputs( serverContext, vSpecs, batchIndex )
     _optInputsRDD.map( rdd => rdd.mapValues( rddRec => rddRec.section( section ) ) )
   }
 
-  def getOperationInput( serverContext: ServerContext, record: RDDRecord, section: Option[CDSection], batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = {
+  def getOperationInput( serverContext: ServerContext, record: CDTimeSlice, section: Option[CDSection], batchIndex: Int ): Option[RDD[CDTimeSlice]] = {
     addOperationInput( serverContext, record, batchIndex )
     _optInputsRDD.map( rdd => rdd.mapValues( rddRec => rddRec.section( section ) ) )
   }
 
-  def optInputsRDD: Option[RDD[(RecordKey,RDDRecord)]] = _optInputsRDD
+  def optInputsRDD: Option[RDD[CDTimeSlice]] = _optInputsRDD
 
 //  partition.getPartitionRecordKey(tgrid)
 //
-//  def subworkflowInputsRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = optPartitioner match {
+//  def subworkflowInputsRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[CDTimeSlice]] = optPartitioner match {
 //    case None => None
 //    case Some( partitioner ) =>
 //      val partitions = partitioner.partitions
@@ -136,9 +136,9 @@ class BatchRequest( val request: RequestContext, val subworkflowInputs: Map[Stri
 //
 //  def
 //
-//  RDDRecord.extend( vSpec: DirectRDDVariableSpec )
+//  CDTimeSlice.extend( vSpec: DirectRDDVariableSpec )
 
-//  def inputsRDD( serverContext: ServerContext, uid: String, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = optPartitioner match {
+//  def inputsRDD( serverContext: ServerContext, uid: String, batchIndex: Int ): Option[RDD[CDTimeSlice]] = optPartitioner match {
 //    case None => None
 //    case Some( partitioner ) =>
 //      val partitions = partitioner.partitions

@@ -1,6 +1,6 @@
 package nasa.nccs.edas.kernels.sql
 
-import nasa.nccs.cdapi.data.RDDRecord
+import nasa.nccs.cdapi.data.CDTimeSlice
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelStatus}
@@ -21,16 +21,16 @@ class SQLKernel extends Kernel {
   val doesAxisElimination: Boolean = false
   val description = "Implement SparkSQL operations"
 
-  override def execute( workflow: Workflow, input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+  override def execute( workflow: Workflow, input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int ): CDTimeSlice = {
     val options: EDASOptions = new EDASOptions( Array.empty )
     val rowRdd: RDD[java.lang.Float] = input.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
     val dataset: Dataset[java.lang.Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )(Encoders.FLOAT)
     val aveCol: Column = avg( dataset.col("value") )
     logger.info( "Computed ave" )
-    ( RecordKey.empty, RDDRecord.empty )
+    ( RecordKey.empty, CDTimeSlice.empty )
   }
 
-  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord = { rdd }   // Not used-> bypassed
+  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = { rdd }   // Not used-> bypassed
 
 }
 
@@ -42,16 +42,16 @@ class SQLKernel extends Kernel {
 //  val doesAxisElimination: Boolean = false
 //  val description = "Implement SparkSQL operations"
 //
-//  override def execute(workflow: Workflow, input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+//  override def execute(workflow: Workflow, input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int ): CDTimeSlice = {
 //    val options: EDASOptions = new EDASOptions( Array.empty )
 //    val rowRdd: RDD[java.lang.Float] = input.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
 //    val dataset: Dataset[java.lang.Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )(Encoders.FLOAT)
 //    val aveCol: Column = avg( dataset.col("value") )
 //    logger.info( "Computed ave" )
-//    ( RecordKey.empty, RDDRecord.empty )
+//    ( RecordKey.empty, CDTimeSlice.empty )
 //  }
 //
-//  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord = { rdd }   // Not used-> bypassed
+//  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = { rdd }   // Not used-> bypassed
 //
 //}
 //

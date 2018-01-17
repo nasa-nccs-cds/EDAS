@@ -3,7 +3,7 @@ package nasa.nccs.wps
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import nasa.nccs.caching.RDDTransientVariable
-import nasa.nccs.cdapi.data.RDDRecord
+import nasa.nccs.cdapi.data.CDTimeSlice
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.UID.ndigits
@@ -270,7 +270,7 @@ class MergedWPSExecuteResponse( serviceInstance: String, responses: Seq[WPSProce
   }
 }
 
-class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], id: String, val result: RDDRecord, resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  with Loggable {
+class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], id: String, val result: CDTimeSlice, resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  with Loggable {
   override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
     val syntax = getSyntax(response_syntax)
     result.elements map { case (id, array) => getData( syntax, id, array.toCDFloatArray, array.metadata.getOrElse("units","") ) }

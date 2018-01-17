@@ -1,9 +1,9 @@
 package nasa.nccs.edas.modules.SparkSQL
-import nasa.nccs.cdapi.data.RDDRecord
+import nasa.nccs.cdapi.data.CDTimeSlice
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelStatus}
-import nasa.nccs.edas.sources.netcdf.{EDASOptions, RDDRecordConverter, RDDRecordsConverter, RDDSimpleRecordsConverter}
+import nasa.nccs.edas.sources.netcdf.{EDASOptions, CDTimeSliceConverter, CDTimeSlicesConverter, RDDSimpleRecordsConverter}
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.{avg, col}
@@ -17,19 +17,19 @@ class ave extends Kernel {
   val doesAxisElimination: Boolean = false
   val description = "Implement SparkSQL operations"
 
-  override def execute( workflow: Workflow, input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+  override def execute( workflow: Workflow, input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int ): CDTimeSlice = {
     val options: EDASOptions = new EDASOptions( Array.empty )
-    val rowRdd: RDD[Row] = input.mapPartitions( iter => new RDDRecordsConverter( iter, options ) )
-    val df: DataFrame = workflow.executionMgr.serverContext.spark.session.createDataFrame( rowRdd, RDDRecordConverter.defaultSchema )
+    val rowRdd: RDD[Row] = input.mapPartitions( iter => new CDTimeSlicesConverter( iter, options ) )
+    val df: DataFrame = workflow.executionMgr.serverContext.spark.session.createDataFrame( rowRdd, CDTimeSliceConverter.defaultSchema )
     df.show( 3 )
     val avgCol = avg(col("value"))
     logger.info( "Computing ave" )
     df.select( avgCol.alias("Average") ).show(3)
     logger.info( "Finished computing ave" )
-    ( RecordKey.empty, RDDRecord.empty )
+    ( RecordKey.empty, CDTimeSlice.empty )
   }
 
-  def execute1( workflow: Workflow, input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+  def execute1( workflow: Workflow, input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int ): CDTimeSlice = {
     val options: EDASOptions = new EDASOptions( Array.empty )
     val rowRdd: RDD[java.lang.Float] = input.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
     val df: Dataset[java.lang.Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )( Encoders.FLOAT )
@@ -38,9 +38,9 @@ class ave extends Kernel {
     logger.info( "Computing ave" )
     df.select( avgCol.alias("Average") ).show(3)
     logger.info( "Finished computing ave" )
-    ( RecordKey.empty, RDDRecord.empty )
+    ( RecordKey.empty, CDTimeSlice.empty )
   }
 
-  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord = { rdd }   // Not used-> bypassed
+  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = { rdd }   // Not used-> bypassed
 
 }

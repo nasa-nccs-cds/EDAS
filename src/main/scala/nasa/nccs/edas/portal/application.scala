@@ -6,7 +6,7 @@ import java.sql.{Date, Timestamp}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray, RDDRecord}
+import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray, CDTimeSlice}
 import nasa.nccs.edas.engine.{EDASExecutionManager, ExecutionCallback, TestProcess}
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.rdd.TestDatasetProcess

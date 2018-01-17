@@ -38,18 +38,19 @@ public class TransVar {
 
     public int[] getOrigin() { return _origin; }
     public int[] getShape() { return _shape; }
+    public float[] getFloatArray() { return getDataBuffer().asFloatBuffer().array(); }
     public String id() { return _id; }
     public ByteBuffer getDataBuffer() { return ByteBuffer.wrap( _data, _offset,_data.length-_offset ); }
     public Map<String, String> getMetaData() { return _metadata; }
 
-    public float getInvalid() throws IOException {
-        String gridfile = _metadata.get("gridfile");
-        String name = _metadata.get("name");
-        NetcdfDataset ncd = NetcdfDatasetMgr.aquireFile(gridfile, "16", true );
-        Variable var = ncd.findVariable(null,name);
-        Attribute missing = var.findAttribute("missing_value");
-        return missing.getNumericValue().floatValue();
-    }
+//    public float getInvalid() throws IOException {
+//        String gridfile = _metadata.get("gridfile");
+//        String name = _metadata.get("name");
+//        NetcdfDataset ncd = NetcdfDatasetMgr.aquireFile(gridfile, "16", true );
+//        Variable var = ncd.findVariable(null,name);
+//        Attribute missing = var.findAttribute("missing_value");
+//        return missing.getNumericValue().floatValue();
+//    }
 
     private int[] s2ia( String s ) {
         String[] items = s.split("[,]");

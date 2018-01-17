@@ -4,7 +4,7 @@ import java.util
 import nasa.nccs.cdapi.cdm._
 import ucar.nc2.dataset._
 import nasa.nccs.caching._
-import nasa.nccs.cdapi.data.{RDDRecord, _}
+import nasa.nccs.cdapi.data.{CDTimeSlice, _}
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.WorkflowNode.regridKernel
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
@@ -12,7 +12,7 @@ import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
 import nasa.nccs.edas.portal.TestReadApplication.logger
-import nasa.nccs.edas.rdd.{RDDContainer, RDDGenerator, TimeSliceRDD}
+import nasa.nccs.edas.rdd.{RDDContainer, RDDGenerator, TimeSliceCollection, TimeSliceRDD}
 import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
@@ -62,10 +62,10 @@ class RegridSpec( val gridFile: String, val subgrid: String ) extends Serializab
   def test = 0;
 }
 
-//def mapReduceBatch( executor: executor, kernelContext: KernelContext, batchIndex: Int ): Option[ ( RecordKey, RDDRecord ) ] = {
+//def mapReduceBatch( executor: executor, kernelContext: KernelContext, batchIndex: Int ): Option[ ( RecordKey, CDTimeSlice ) ] = {
 //domainRDDPartition( executor.node, executor, kernelContext, batchIndex)
 //kernelContext.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ executor.node.getNodeId}", true)
-//val result: (RecordKey, RDDRecord) =  executor.node.mapReduce (rdd, kernelContext, batchIndex)
+//val result: (RecordKey, CDTimeSlice) =  executor.node.mapReduce (rdd, kernelContext, batchIndex)
 
 class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
   val optPartitioner: Option[EDASPartitioner] = generatePartitioning
@@ -91,8 +91,8 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
 //      if (rddPartSpecs.length > 0) {
 //        logger.info("\n **************************************************************** \n ---> Processing Batch [%d]: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
 //        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
-//        val recordSpecs = rddPartSpecs.flatMap(_.getRDDRecordSpecs())
-//        val parallelized_rddspecs: RDD[(RecordKey,DirectRDDRecordSpec)] = serverContext.spark.sparkContext parallelize recordSpecs keyBy (_.timeRange) partitionBy rdd_partitioner
+//        val recordSpecs = rddPartSpecs.flatMap(_.getCDTimeSliceSpecs())
+//        val parallelized_rddspecs: RDD[(RecordKey,DirectCDTimeSliceSpec)] = serverContext.spark.sparkContext parallelize recordSpecs keyBy (_.timeRange) partitionBy rdd_partitioner
 //        val rdd = parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex))
 //        _optInputsRDD = Some( new RDDContainer(rdd) )
 //      }
@@ -104,7 +104,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     _inputsRDD.release(disposable_inputs)
   }
 
-  def execute(workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): TimeSliceRDD =  {
+  def execute(workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): TimeSliceCollection =  {
       val result = _inputsRDD.execute( workflow, rootNode.kernel, kernelCx, batchIndex )
       releaseInputs( rootNode, kernelCx )
       result
@@ -142,25 +142,25 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
       extendRDD( generator, extendedRdd, vSpecs.tail )
     }
   }
-  private def addOperationInput( serverContext: ServerContext, record: RDDRecord, batchIndex: Int ): Unit = {
+  private def addOperationInput( serverContext: ServerContext, record: CDTimeSlice, batchIndex: Int ): Unit = {
     initializeInputsRDD( serverContext, batchIndex )
     print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
     if( _inputsRDD.isDefined ) {   _inputsRDD foreach ( _.addOperationInput(record) )                                       }
     else {                            _inputsRDD = Some( new RDDContainer( createUnpartitionedRDD( serverContext, record ) ) ) }
   }
 
-  def createUnpartitionedRDD( serverContext: ServerContext, record: RDDRecord ): RDD[(RecordKey,RDDRecord)] = {
+  def createUnpartitionedRDD( serverContext: ServerContext, record: CDTimeSlice ): RDD[CDTimeSlice] = {
     serverContext.spark.sparkContext parallelize Seq( ( RecordKey(),record ) )
   }
 
-  def addOperationInput(serverContext: ServerContext, record: RDDRecord, section: Option[CDSection], batchIndex: Int ): Unit  = {
+  def addOperationInput(serverContext: ServerContext, record: CDTimeSlice, section: Option[CDSection], batchIndex: Int ): Unit  = {
     addOperationInput( serverContext, record, batchIndex )
     _inputsRDD foreach ( _.section( section ) )
   }
 
   //  partition.getPartitionRecordKey(tgrid)
   //
-  //  def subworkflowInputsRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = optPartitioner match {
+  //  def subworkflowInputsRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[CDTimeSlice]] = optPartitioner match {
   //    case None => None
   //    case Some( partitioner ) =>
   //      val partitions = partitioner.partitions
@@ -177,17 +177,17 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   //      else {
   //        logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
   //        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
-  //        //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
-  //        val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getRDDRecordSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
+  //        //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getCDTimeSliceSpecs() ).map( _.toString() ).mkString("\n\t"))
+  //        val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getCDTimeSliceSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
   //        Some(parallelized_rddspecs mapValues (spec => spec.getRDDPartition(request, batchIndex)))
   //      }
   //  }
   //
   //  def
   //
-  //  RDDRecord.extend( vSpec: DirectRDDVariableSpec )
+  //  CDTimeSlice.extend( vSpec: DirectRDDVariableSpec )
 
-  //  def inputsRDD( serverContext: ServerContext, uid: String, batchIndex: Int ): Option[RDD[(RecordKey,RDDRecord)]] = optPartitioner match {
+  //  def inputsRDD( serverContext: ServerContext, uid: String, batchIndex: Int ): Option[RDD[CDTimeSlice]] = optPartitioner match {
   //    case None => None
   //    case Some( partitioner ) =>
   //      val partitions = partitioner.partitions
@@ -205,8 +205,8 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   //      else {
   //        logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
   //        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
-  //        //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getRDDRecordSpecs() ).map( _.toString() ).mkString("\n\t"))
-  //        val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getRDDRecordSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
+  //        //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getCDTimeSliceSpecs() ).map( _.toString() ).mkString("\n\t"))
+  //        val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getCDTimeSliceSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
   //        Some(parallelized_rddspecs mapValues (spec => spec.getRDDPartition(request, batchIndex)))
   //      }
   //  }
