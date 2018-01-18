@@ -6,6 +6,7 @@ import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray, CDIndexMap}
 import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.KernelContext
+import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection}
 import nasa.nccs.edas.sources.Collection
 import nasa.nccs.esgf.process.DomainContainer.{filterMap, key_equals}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
@@ -127,10 +128,10 @@ class DependencyOperationInput( val inputNode: WorkflowNode, val opNode: Workflo
       logger.info("\n\n ----------------------- NODE %s => BEGIN Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ") ) )
       workflow.stream(inputNode, executor, batchIndex)
       logger.info("\n\n ----------------------- NODE %s => END   Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ") ) )
-    case Some((key: RecordKey, result: CDTimeSlice)) =>
+    case Some(results: TimeSliceCollection) =>
       val opSection: Option[CDSection] = kernelContext.getDomainSections.headOption
       logger.info("\n\n ----------------------- NODE %s => Get Cached Result: %s, batch = %d, rID = %s, opSection= %s -------\n".format( node.getNodeId, inputNode.getNodeId, batchIndex, inputNode.getResultId, opSection.map(_.toString()).getOrElse("(EMPTY)") ) )
-      executor.addOperationInput(workflow.executionMgr.serverContext, result, opSection, batchIndex)
+      executor.addOperationInput( workflow.executionMgr.serverContext, results, opSection, batchIndex )
   }
 }
 
@@ -268,13 +269,6 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
   def partDataFragment( partIndex: Int ): DataFragment = {
     val partition = partitions.getPart(partIndex)
     DataFragment( partFragSpec(partIndex), partition.data( fragmentSpec.missing_value ) )
-  }
-
-  def partRDDPartition( partIndex: Int, startTime: Long ): CDTimeSlice = {
-    val partition = partitions.getPart(partIndex)
-    val data: CDFloatArray = partition.data( fragmentSpec.missing_value )
-    val spec: DataFragmentSpec = partFragSpec(partIndex)
-    CDTimeSlice( TreeMap( spec.uid -> HeapFltArray(data, fragSpec.getOrigin, spec.getMetadata(), None) ), Map.empty, partition )
   }
 
 //  def domainRDDPartition(partIndex: Int, optSection: Option[ma2.Section] ): Option[RDDPartition] = domainCDDataSection( partIndex, optSection ) match {

@@ -83,7 +83,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
   def section( section: CDSection ): TimeSliceRDD = { new TimeSliceRDD( rdd.map( _.section(section) ), metadata ) }
   def release( keys: Iterable[String] ): TimeSliceRDD = new TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
-  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = new TimeSliceRDD( rdd.map( op ), metadata )
+  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = new TimeSliceRDD( rdd.map( ts => ts ++ op(ts) ), metadata )
   def getNumPartitions = rdd.getNumPartitions
   def collect: TimeSliceCollection = new TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = new TimeSliceRDD( rdd.collect(op), metadata )
@@ -99,19 +99,19 @@ object TimeSliceCollection {
 
 class TimeSliceCollection( val slices: Array[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) {
   def section( section: CDSection ): TimeSliceCollection = { new TimeSliceCollection( slices.map( _.section(section) ), metadata ) }
-  val sort: TimeSliceCollection = { new TimeSliceCollection( slices.sortBy( _.timestamp ), metadata ) }
+  def sort(): TimeSliceCollection = { new TimeSliceCollection( slices.sortBy( _.timestamp ), metadata ) }
+  val nslices: Int = slices.length
 
-  def merge( other: TimeSliceCollection, op: CDTimeSlice.ReduceOp ) = {
-    sort; other.sort
-    val merged_slices = if(slices.isEmpty) { other.slices } else if(other.slices.isEmpty) { slices } else {
-      slices.zip( other.slices ) map { case (s0,s1) => op(s0,s1) }
+  def merge( other: TimeSliceCollection, op: CDTimeSlice.ReduceOp ): TimeSliceCollection = {
+    val ( tsc0, tsc1 ) = ( sort(), other.sort() )
+    val merged_slices = if(tsc0.slices.isEmpty) { tsc1.slices } else if(tsc1.slices.isEmpty) { tsc0.slices } else {
+      tsc0.slices.zip( tsc1.slices ) map { case (s0,s1) => op(s0,s1) }
     }
     new TimeSliceCollection( merged_slices, metadata ++ other.metadata )
   }
 
-  def concatSlices = {
-    sort;
-    val concatSlices = slices.reduce( _ ++ _ )
+  def concatSlices: TimeSliceCollection = {
+    val concatSlices = sort().slices.reduce( _ ++ _ )
     new TimeSliceCollection( Array( concatSlices ), metadata )
   }
 }
@@ -222,7 +222,8 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
       val data_section = variable.read(getSliceRanges( interSect, slice_index))
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
       val data_shape: Array[Int] = data_section.getShape
-      val arraySpec = ArraySpec( missing, data_section.getShape, data_array )
+      val section = variable.getShapeAsSection
+      val arraySpec = ArraySpec( missing, data_section.getShape, section.getOrigin, data_array )
       //      (timestamp/millisPerMin).toInt -> CDTimeSlice( timestamp, missing, data_section )  // new java.sql.Timestamp( date.getMillis )
       CDTimeSlice( date.getMillis, dt, Map( varId -> arraySpec ) )  //
     }
@@ -276,28 +277,29 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
   def getSliceIndex( timestamp: Long ): Int = datesBase.getDateIndex( timestamp )
 
   def getSlice( timestamp: Long ): CDTimeSlice = {
-    def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
-    val data_section = variable.read(getSliceRanges( interSect, getSliceIndex(timestamp)))
+    def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = {
+      section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } }
+    }
+    val data_section = variable.read( getSliceRanges( interSect, getSliceIndex(timestamp)) )
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
     val data_shape: Array[Int] = data_section.getShape
-    val arraySpec = ArraySpec( missing, data_section.getShape, data_array )
+    val section = variable.getShapeAsSection
+    val arraySpec = ArraySpec( missing, data_section.getShape, section.getOrigin, data_array )
     CDTimeSlice( timestamp, dt, Map( varId -> arraySpec ) )  //
   }
 }
 
 class RDDContainer extends Loggable {
-  private val _contents = mutable.HashSet.empty[String]
   private var _vault: Option[RDDVault] = None
-  def releaseBatch = { _vault.foreach(_.clear); _contents.clear(); _vault = None }
+  def releaseBatch = { _vault.foreach(_.clear);  _vault = None }
   private def vault: RDDVault = _vault.getOrElse { throw new Exception( "Unexpected attempt to access an uninitialized RDD Vault")}
   def value: TimeSliceRDD = vault.value
-  def contents: Set[String] = _contents.toSet
+  def contents: Iterable[String] = _vault.fold( Iterable.empty[String] ) ( _.contents )
   def section( section: CDSection ): Unit = vault.map( _.section(section) )
-  def release( keys: Iterable[String] ): Unit = { vault.release( keys ); _contents --= keys.toSet }
+  def release( keys: Iterable[String] ): Unit = { vault.release( keys ) }
 
   private def initialize( init_value: TimeSliceRDD, contents: List[String] ) = {
     _vault = Some( new RDDVault( init_value ) )
-    _contents ++= contents
   }
 
   class RDDVault( init_value: TimeSliceRDD ) {
@@ -306,13 +308,15 @@ class RDDContainer extends Loggable {
     def map( f: (TimeSliceRDD) => TimeSliceRDD ): Unit = update( f(_rdd) )
     def value = _rdd
     def clear: Unit = _rdd.unpersist(false)
+    def contents = _rdd.rdd.first().elements.keys
     def release( keys: Iterable[String] ) = { update( _rdd.release(keys) ) }
     def += ( record: CDTimeSlice ) = { update( _rdd.map( slice => slice ++ record ) ) }
+    def += ( records: TimeSliceCollection ) = {
+      assert( records.nslices <= 1, "UNIMPLEMENTED FEATURE: TimeSliceCollection -> RDDVault")
+      update( _rdd.map( slice => slice ++ records.slices.headOption.getOrElse( CDTimeSlice.empty ) ) )
+    }
   }
-  def map( kernel: Kernel, context: KernelContext ): Unit = {
-    _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
-    _contents ++= _vault.fetchContents
-  }
+  def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
 
   def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
 
@@ -325,14 +329,11 @@ class RDDContainer extends Loggable {
     }
   }
 
-  def extendVault( generator: RDDGenerator, vSpecs: List[DirectRDDVariableSpec] ) = {
-    vault.update( _extendRDD( generator, _vault.get.value, vSpecs ) )
-    _contents ++= vSpecs.map( _.uid )
-  }
+  def extendVault( generator: RDDGenerator, vSpecs: List[DirectRDDVariableSpec] ) = { vault.update( _extendRDD( generator, _vault.get.value, vSpecs ) ) }
 
   def addFileInputs( sparkContext: CDSparkContext, kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
     logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
-    val newVSpecs = vSpecs.filter( vspec => !_contents.contains(vspec.uid) )
+    val newVSpecs = vSpecs.filter( vspec => ! contents.contains(vspec.uid) )
     if( newVSpecs.nonEmpty ) {
       val generator = new RDDGenerator( sparkContext, BatchSpec.nParts )
       logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ]" )
@@ -348,8 +349,5 @@ class RDDContainer extends Loggable {
   }
 
 
-  def addOperationInput( record: CDTimeSlice ): Unit = {
-    vault += record
-    _contents ++= record.elements.keySet
-  }
+  def addOperationInput( inputs: TimeSliceCollection ): Unit = { vault += inputs }
 }

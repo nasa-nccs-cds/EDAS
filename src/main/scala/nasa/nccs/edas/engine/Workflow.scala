@@ -8,6 +8,7 @@ import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
 import nasa.nccs.utilities.{DAGNode, Loggable, ProfilingTool}
+import nasa.nccs.wps.{RDDExecutionResult, RefExecutionResult, WPSProcessExecuteResponse}
 import org.apache.spark.rdd.RDD
 import ucar.{ma2, nc2}
 import ucar.nc2.dataset.CoordinateAxis1DTime
@@ -17,15 +18,15 @@ import scala.util.Try
 
 object WorkflowNode {
 //  val regridKernel = new CDMSRegridKernel()
-  private val _productNodes = new mutable.HashMap[String,CDTimeSlice]
+  private val _nodeProducts = new mutable.HashMap[String,TimeSliceCollection]
   def apply( operation: OperationContext, kernel: Kernel  ): WorkflowNode = { new WorkflowNode( operation, kernel ) }
   def apply( node: DAGNode ) : WorkflowNode = promote( node )
   def promote( node: DAGNode ) : WorkflowNode = node match {
     case workflowNode: WorkflowNode => workflowNode
     case _ => throw new Exception( "Unknown element in workflow: " + node.getClass.getName )
   }
-  def addProduct( uid: String, product: CDTimeSlice ): Unit = { _productNodes += ( uid -> product ) }
-  def getProduct( uid: String ): Option[CDTimeSlice] = _productNodes.get(uid)
+  def addProduct( uid: String, product: TimeSliceCollection ): Unit = { _nodeProducts += ( uid -> product ) }
+  def getProduct( uid: String ): Option[TimeSliceCollection] = _nodeProducts.get(uid)
 }
 
 class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) extends DAGNode with Loggable {
@@ -43,9 +44,9 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
 
   def cacheProduct( executionResult: KernelExecutionResult  ): Unit = if(executionResult.holdsData) {
     logger.info( s"WorkflowNode CACHE PRODUCT: ${operation.rid}" )
-    WorkflowNode.addProduct( operation.rid, executionResult.kvp )
+    WorkflowNode.addProduct( operation.rid, executionResult.results )
   }
-  def getProduct: Option[CDTimeSlice] = {
+  def getProduct: Option[TimeSliceCollection] = {
     val rv = WorkflowNode.getProduct( operation.rid )
     logger.info( s"WorkflowNode GET PRODUCT: ${operation.rid}, success: ${rv.isDefined.toString}" )
     rv
@@ -57,9 +58,9 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
 
   def getKernelContext( executor: WorkflowExecutor ): KernelContext = contexts.getOrElseUpdate( executor.requestCx.jobId, KernelContext( operation, executor ) )
 
-  def mapInput(input: RDD[CDTimeSlice], context: KernelContext ): RDD[CDTimeSlice] = kernel.mapRDD( input, context )
+//  def mapInput(input: RDD[CDTimeSlice], context: KernelContext ): RDD[CDTimeSlice] = kernel.mapRDD( input, context )
 
-  def mapReduceInput(input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int  ): CDTimeSlice = kernel.mapReduce( input, context, batchIndex )
+//  def mapReduceInput(input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int  ): CDTimeSlice = kernel.mapReduce( input, context, batchIndex )
 
 //  def reduce(mapresult: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int ): CDTimeSlice = {
 //    logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
@@ -86,8 +87,8 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
 //  }
 
 
-  def regridRDDElems(input: RDD[CDTimeSlice], context: KernelContext): RDD[CDTimeSlice] =
-    input.mapValues( rec => regridKernel.map( context )(rec) ) map identity
+//  def regridRDDElems(input: RDD[CDTimeSlice], context: KernelContext): RDD[CDTimeSlice] =
+//    input.mapValues( rec => regridKernel.map( context )(rec) ) map identity
 
 //  def timeConversion(input: RDD[CDTimeSlice], partitioner: RangePartitioner, context: KernelContext, requestCx: RequestContext ): RDD[CDTimeSlice] = {
 //    val trsOpt: Option[String] = context.trsOpt
@@ -157,9 +158,8 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
   }
 }
 
-case class KernelExecutionResult( key: RecordKey, record: CDTimeSlice, files: List[String] ) {
-  val holdsData: Boolean = record.elements.nonEmpty
-  def kvp: CDTimeSlice = ( key, record )
+case class KernelExecutionResult( results: TimeSliceCollection, files: List[String] ) {
+  val holdsData: Boolean = results.slices.nonEmpty
 }
 
 class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager ) extends Loggable {
@@ -211,7 +211,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     if( Try( executor.requestCx.config("unitTest","false").toBoolean ).getOrElse(false)  ) { root_node.kernel.cleanUp(); }
     val t2 = System.nanoTime()
     logger.info(s"********** Completed Execution of Kernel[%s(%s)]: %s , total time = %.3f sec, cleanUp time = %.3f sec   ********** \n".format(root_node.kernel.name,root_node.kernel.id, root_node.operation.identifier, (t2 - t0) / 1.0E9, (t2 - t1) / 1.0E9))
-    KernelExecutionResult( aggResult._1, aggResult._2, resultFiles.toList )
+    KernelExecutionResult( aggResult, resultFiles.toList )
   }
 
   private def common_inputs( node0: WorkflowNode, node_input_map: Map[ String, Set[String] ] )( node1: WorkflowNode ): Boolean = {

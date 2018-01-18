@@ -10,9 +10,9 @@ import java.nio._
 import java.util.{Date, Formatter, Locale}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import nasa.nccs.cdapi.data.{HeapFltArray, CDTimeSlice}
 import nasa.nccs.cdapi.tensors.{CDDoubleArray, CDFloatArray, CDLongArray}
 import nasa.nccs.edas.engine.spark.RecordKey
+import nasa.nccs.edas.rdd.CDTimeSlice
 import nasa.nccs.edas.sources.{Variable => _, _}
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -663,100 +663,69 @@ class profilingTest extends Loggable {
     if (max == Float.MinValue) Float.NaN else max
   }
 
-//  def processCacheData(cache_id: String, roi: ma2.Section) = {
-//    val partitioner = new EDASCachePartitioner(cache_id, roi)
+//  def processFileData(ncmlFile: String, gridFile: String, varName: String) = {
+//    try {
+//      val datset = NetcdfDataset.openDataset(ncmlFile, true, -1, null, null)
+//      Option(datset.findVariable(varName)) match {
+//        case None => throw new IllegalStateException("Variable '%s' was not loaded".format(varName))
+//        case Some(ncVar) => processDataPython(ncVar,gridFile)
+//      }
+//    } catch {
+//      case e: java.io.IOException =>
+//        logger.error("Couldn't open dataset %s".format(ncmlFile))
+//        throw e
+//      case ex: Exception =>
+//        logger.error("Something went wrong while reading %s".format(ncmlFile))
+//        throw ex
+//    }
+//  }
+//
+//  def processDataPython(variable: Variable, gridFile: String) = {
+//    val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance();
+//    val worker: PythonWorker = workerManager.getPythonWorker();
 //    val t0 = System.nanoTime()
-//    val full_shape = partitioner.getShape
+//    val full_shape = variable.getShape
+//    val test_section = Array( 10, 10 )
+//    val test_origin = Array( 140, 140 )
 //    var total_read_time = 0.0
 //    var total_compute_time = 0.0
-//    println("Processing data, full shape = " + full_shape.mkString(", "))
-//    val partitions = partitioner.getCachePartitions
-//    for (partition <- partitions) {
-//      val itime = partition.startIndex
-//      val chunk_size = partition.shape(0)
-//      val ncycle = chunk_size * (partition.index + 1)
-//      val chunk_origin = partition.origin
-//      val chunk_shape = partition.shape
+//    val chunk_size = 1
+//    val attrs = variable.getAttributes.iterator().map( _.getShortName ).mkString(", ")
+//    val mem_size = (chunk_size*4*full_shape(2)*full_shape(3))/1.0E6
+//    val missing = variable.findAttributeIgnoreCase("fmissing_value").getNumericValue.floatValue()
+//    val isNaN = missing.isNaN
+//    println("Processing data, full shape = %s, attrs = %s".format( full_shape.mkString(", "), attrs ))
+//    println(s"Missing value = %.4f, isNaN = %s".format( missing, isNaN.toString ) )
+//
+//    (0 until full_shape(0) by chunk_size) foreach (itime => {
+//      val ncycle = (full_shape(1) * (itime + 1))
+////      val chunk_origin = Array[Int](itime, ilevel, test_origin(0), test_origin(1) )
+////      val chunk_shape = Array[Int]( chunk_size, 1, test_section(0), test_section(1) )
+//      val chunk_origin = Array[Int](itime, 0, 0, 0 )
+//      val chunk_shape = Array[Int]( chunk_size, full_shape(1), full_shape(2), full_shape(3) )
 //      val ts0 = System.nanoTime()
-//      val cfdata: CDFloatArray = partition.data(Float.NaN)
-//      println("Mapped data, P[%d]: data shape = (%s), datasize = %d, ncycles = %d, chunk_size = %d".format( partition.index, cfdata.getShape.mkString(", "), cfdata.getSize, cfdata.getSize/(full_shape(2)*full_shape(3)), chunk_size ) )
+//      val data = variable.read(chunk_origin, chunk_shape)
 //      val ts1 = System.nanoTime()
-//      val max = computeMax(cfdata)
+//      val rID = "r" + ncycle.toString
+//
+//      val metadata: Map[String, String] = Map( "name" -> variable.getShortName, "collection" -> "npana", "gridfile" -> gridFile, "dimensions" -> variable.getDimensionsString,
+//        "units" -> variable.getUnitsString, "longname" -> variable.getFullName, "uid" -> variable.getShortName, "roi" -> CDSection.serialize(new ma2.Section(chunk_origin,chunk_shape)) )
+//      val op_metadata: Map[String, String] = Map.empty[String,String] // Map( "axis" -> "x" ) // Map.empty[String,String]
+//      worker.sendRequestInput( variable.getShortName, HeapFltArray( data, chunk_origin, gridFile, metadata, missing ) )
+//      worker.sendRequest("python.numpyModule.max-"+rID, Array(variable.getShortName), op_metadata )
+//      val tvar: TransVar = worker.getResult()
+//      val result = HeapFltArray( tvar, Some(gridFile) )
 //      val ts2 = System.nanoTime()
 //      val read_time = (ts1 - ts0) / 1.0E9
 //      val compute_time = (ts2 - ts1) / 1.0E9
 //      total_read_time += read_time
 //      total_compute_time += compute_time
-//      println("Computed max = %.4f [time=%d] in %.4f sec, data read time = %.4f sec, compute time = %.4f sec".format(max, itime, read_time + compute_time, read_time, compute_time) )
-//      println("Aggretate time for %d cycles = %.4f sec".format(ncycle, (ts2 - t0) / 1.0E9))
-//      println("Average over %d cycles: read time per cycle = %.4f sec, compute time per cycle = %.4f sec".format(ncycle, total_read_time / ncycle, total_compute_time / ncycle))
-//    }
-//    println("Completed data processing for collection '%s' in %.4f sec".format(partitioner.cache_id, (System.nanoTime() - t0) / 1.0E9))
+//      println("Computed max = %.4f [time=%d, nts=%d] in %.4f sec per ts, data read time per ts = %.4f sec, compute time per ts = %.4f sec".format( result.data(0), itime, chunk_size, (read_time + compute_time)/chunk_size, read_time/chunk_size, compute_time/chunk_size))
+//      println("Aggretate time for %d cycles = %.4f sec, chunk mem size = %.2f MB".format( ncycle, (ts2 - t0) / 1.0E9, mem_size ))
+//      println("Average over %d cycles: read time per tstep = %.4f sec, compute time per tstep = %.4f sec".format(ncycle, total_read_time / ncycle, total_compute_time / ncycle ))
+//    })
+//    println("Completed data processing for '%s' in %.4f sec".format(variable.getFullName, (System.nanoTime() - t0) / 1.0E9))
 //  }
-
-  def processFileData(ncmlFile: String, gridFile: String, varName: String) = {
-    try {
-      val datset = NetcdfDataset.openDataset(ncmlFile, true, -1, null, null)
-      Option(datset.findVariable(varName)) match {
-        case None => throw new IllegalStateException("Variable '%s' was not loaded".format(varName))
-        case Some(ncVar) => processDataPython(ncVar,gridFile)
-      }
-    } catch {
-      case e: java.io.IOException =>
-        logger.error("Couldn't open dataset %s".format(ncmlFile))
-        throw e
-      case ex: Exception =>
-        logger.error("Something went wrong while reading %s".format(ncmlFile))
-        throw ex
-    }
-  }
-
-  def processDataPython(variable: Variable, gridFile: String) = {
-    val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance();
-    val worker: PythonWorker = workerManager.getPythonWorker();
-    val t0 = System.nanoTime()
-    val full_shape = variable.getShape
-    val test_section = Array( 10, 10 )
-    val test_origin = Array( 140, 140 )
-    var total_read_time = 0.0
-    var total_compute_time = 0.0
-    val chunk_size = 1
-    val attrs = variable.getAttributes.iterator().map( _.getShortName ).mkString(", ")
-    val mem_size = (chunk_size*4*full_shape(2)*full_shape(3))/1.0E6
-    val missing = variable.findAttributeIgnoreCase("fmissing_value").getNumericValue.floatValue()
-    val isNaN = missing.isNaN
-    println("Processing data, full shape = %s, attrs = %s".format( full_shape.mkString(", "), attrs ))
-    println(s"Missing value = %.4f, isNaN = %s".format( missing, isNaN.toString ) )
-
-    (0 until full_shape(0) by chunk_size) foreach (itime => {
-      val ncycle = (full_shape(1) * (itime + 1))
-//      val chunk_origin = Array[Int](itime, ilevel, test_origin(0), test_origin(1) )
-//      val chunk_shape = Array[Int]( chunk_size, 1, test_section(0), test_section(1) )
-      val chunk_origin = Array[Int](itime, 0, 0, 0 )
-      val chunk_shape = Array[Int]( chunk_size, full_shape(1), full_shape(2), full_shape(3) )
-      val ts0 = System.nanoTime()
-      val data = variable.read(chunk_origin, chunk_shape)
-      val ts1 = System.nanoTime()
-      val rID = "r" + ncycle.toString
-
-      val metadata: Map[String, String] = Map( "name" -> variable.getShortName, "collection" -> "npana", "gridfile" -> gridFile, "dimensions" -> variable.getDimensionsString,
-        "units" -> variable.getUnitsString, "longname" -> variable.getFullName, "uid" -> variable.getShortName, "roi" -> CDSection.serialize(new ma2.Section(chunk_origin,chunk_shape)) )
-      val op_metadata: Map[String, String] = Map.empty[String,String] // Map( "axis" -> "x" ) // Map.empty[String,String]
-      worker.sendRequestInput( variable.getShortName, HeapFltArray( data, chunk_origin, gridFile, metadata, missing ) )
-      worker.sendRequest("python.numpyModule.max-"+rID, Array(variable.getShortName), op_metadata )
-      val tvar: TransVar = worker.getResult()
-      val result = HeapFltArray( tvar, Some(gridFile) )
-      val ts2 = System.nanoTime()
-      val read_time = (ts1 - ts0) / 1.0E9
-      val compute_time = (ts2 - ts1) / 1.0E9
-      total_read_time += read_time
-      total_compute_time += compute_time
-      println("Computed max = %.4f [time=%d, nts=%d] in %.4f sec per ts, data read time per ts = %.4f sec, compute time per ts = %.4f sec".format( result.data(0), itime, chunk_size, (read_time + compute_time)/chunk_size, read_time/chunk_size, compute_time/chunk_size))
-      println("Aggretate time for %d cycles = %.4f sec, chunk mem size = %.2f MB".format( ncycle, (ts2 - t0) / 1.0E9, mem_size ))
-      println("Average over %d cycles: read time per tstep = %.4f sec, compute time per tstep = %.4f sec".format(ncycle, total_read_time / ncycle, total_compute_time / ncycle ))
-    })
-    println("Completed data processing for '%s' in %.4f sec".format(variable.getFullName, (System.nanoTime() - t0) / 1.0E9))
-  }
 
 
   def processData(variable: Variable) = {
@@ -916,11 +885,11 @@ case class VariableRecord( timestamp: String, missing: Float, data: Array[Float]
   def length: Int = data.length
 }
 object VariableRecord {
-  def apply( key: RecordKey, rec: CDTimeSlice, varId: String ): VariableRecord = {
-    val data: HeapFltArray = rec.element(varId).getOrElse( missingVar( rec, varId ))
-    new VariableRecord( new Date(key.start).toString, data.missing.getOrElse(Float.NaN), data.data )
+  def apply( rec: CDTimeSlice, varId: String ): VariableRecord = {
+    val element = rec.element( varId ).getOrElse( missingVar(rec,varId) )
+    new VariableRecord( new Date(rec.timestamp).toString, element.missing, element.data )
   }
-  def missingVar( rec: CDTimeSlice, varId: String ) = throw new Exception( s"Cant find variable ${varId} in CDTimeSlice, ids: ${rec.elems.mkString(",")}")
+  def missingVar( rec: CDTimeSlice, varId: String ) = throw new Exception( s"Cant find variable ${varId} in CDTimeSlice, ids: ${rec.elements.keys.mkString(",")}")
 
 }
 

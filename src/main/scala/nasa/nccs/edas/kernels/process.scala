@@ -9,10 +9,7 @@ import nasa.nccs.cdapi.data.{HeapFltArray, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.{ReduceNOpFlt, ReduceOpFlt, ReduceWNOpFlt}
 import nasa.nccs.cdapi.tensors.{CDArray, CDCoordMap, CDFloatArray, CDTimeCoordMap}
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow, WorkflowNode}
-import nasa.nccs.edas.engine.WorkflowNode.regridKernel
-import nasa.nccs.edas.engine.spark.{CDSparkContext, RecordKey}
 import nasa.nccs.edas.rdd.{ArraySpec, CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
-import nasa.nccs.edas.sources.Aggregation
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -126,13 +123,6 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
 }
 
 case class ResultManifest( val name: String, val dataset: String, val description: String, val units: String ) {}
-
-class AxisIndices( private val axisIds: Set[Int] = Set.empty ) {
-  def getAxes: Seq[Int] = axisIds.toSeq
-  def args = axisIds.toArray
-  def includes( axisIndex: Int ): Boolean = axisIds.contains( axisIndex )
-  override def toString = axisIds.mkString(",")
-}
 
 object Kernel extends Loggable {
   val customKernels = List[Kernel]( new CDMSRegridKernel() )
@@ -786,46 +776,61 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
 
 class zmqPythonKernel( _module: String, _operation: String, _title: String, _description: String, options: Map[String,String], axisElimination: Boolean, visibility_status: String  ) extends Kernel(options) {
   override def operation: String = _operation
+
   override def module = _module
+
   override def name = _module.split('.').last + "." + _operation
+
   override def id = _module + "." + _operation
+
   override val identifier = name
   override val doesAxisElimination: Boolean = axisElimination;
-  override val status = KernelStatus.parse( visibility_status )
-  val outputs = List( WPSProcessOutput( "operation result" ) )
+  override val status = KernelStatus.parse(visibility_status)
+  val outputs = List(WPSProcessOutput("operation result"))
   val title = _title
   val description = _description
 
   override def cleanUp(): Unit = PythonWorkerPortal.getInstance.shutdown()
 
-  override def map ( context: KernelContext ) ( inputs: CDTimeSlice  ): CDTimeSlice = {
+  override def map(context: KernelContext)(inputs: CDTimeSlice): CDTimeSlice = {
     val t0 = System.nanoTime
-    val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance()
+    val workerManager: PythonWorkerPortal = PythonWorkerPortal.getInstance()
     val worker: PythonWorker = workerManager.getPythonWorker
     try {
-      val input_arrays: List[ArraySpec] = getInputArrays( inputs, context )
+      val input_arrays: List[ArraySpec] = getInputArrays(inputs, context)
       val t1 = System.nanoTime
-      for( input_id <- context.operation.inputs ) inputs.element(input_id) match {
-        case Some( input_array ) =>
-          worker.sendRequestInput(input_id, input_array.toHeapFltArray )
+      for (input_id <- context.operation.inputs) inputs.element(input_id) match {
+        case Some(input_array) =>
+          worker.sendRequestInput(input_id, input_array.toHeapFltArray)
         case None =>
-          worker.sendUtility( List( "input", input_id ).mkString(";") )
+          worker.sendUtility(List("input", input_id).mkString(";"))
       }
-      val metadata = indexAxisConf( context.getConfiguration, context.grid.axisIndexMap ) ++ Map( "resultDir" -> Kernel.getResultDir.toString )
-      worker.sendRequest(context.operation.identifier, context.operation.inputs.toArray, metadata )
-      val resultItems: Seq[(String,ArraySpec)] = for( iInput <-  0 until (input_arrays.length * nOutputsPerInput)  ) yield {
+      val metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) ++ Map("resultDir" -> Kernel.getResultDir.toString)
+      worker.sendRequest(context.operation.identifier, context.operation.inputs.toArray, metadata)
+      val resultItems: Seq[(String, ArraySpec)] = for (iInput <- 0 until (input_arrays.length * nOutputsPerInput)) yield {
         val tvar: TransVar = worker.getResult
-        val uid = tvar.getMetaData.get( "uid" )
-        val result = ArraySpec( tvar )
+        val uid = tvar.getMetaData.get("uid")
+        val result = ArraySpec(tvar)
         context.operation.rid + ":" + uid + "~" + tvar.id() -> result
       }
-      logger.info( "Gateway: Executing operation %s in time %.4f s".format( context.operation.identifier, (System.nanoTime - t1) / 1.0E9 ) )
-      context.addTimestamp( "Map Op complete" )
-      CDTimeSlice(  inputs.timestamp, inputs.dt, inputs.elements ++ resultItems )
+      logger.info("Gateway: Executing operation %s in time %.4f s".format(context.operation.identifier, (System.nanoTime - t1) / 1.0E9))
+      context.addTimestamp("Map Op complete")
+      CDTimeSlice(inputs.timestamp, inputs.dt, inputs.elements ++ resultItems)
     } finally {
-      workerManager.releaseWorker( worker )
+      workerManager.releaseWorker(worker)
     }
   }
+  def indexAxisConf( metadata: Map[String,String], axisIndexMap: Map[String,Int] ): Map[String,String] = {
+    try {
+      metadata.get("axes") match {
+        case Some(axis_spec) =>
+          val axisIndices = axis_spec.map( _.toString).map( axis => axisIndexMap(axis) )
+          metadata + ( "axes" -> axisIndices.mkString(""))
+        case None => metadata
+      }
+    } catch { case e: Exception => throw new Exception( "Error converting axis spec %s to indices using axisIndexMap {%s}: %s".format( metadata.get("axes"), axisIndexMap.mkString(","), e.toString ) )  }
+  }
+}
 
 //  override def customReduceRDD(context: KernelContext)(a0: ( RecordKey, CDTimeSlice ), a1: ( RecordKey, CDTimeSlice ) ): ( RecordKey, CDTimeSlice ) = {
 //    val ( rec0, rec1 ) = ( a0._2, a1._2 )
@@ -856,16 +861,6 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
 //    new_key -> CDTimeSlice( resultItems, rec0.mergeMetadata("merge", rec1), rec0.partition )
 //  }
 //
-//  def indexAxisConf( metadata: Map[String,String], axisIndexMap: Map[String,Int] ): Map[String,String] = {
-//    try {
-//      metadata.get("axes") match {
-//        case Some(axis_spec) =>
-//          val axisIndices = axis_spec.map( _.toString).map( axis => axisIndexMap(axis) )
-//          metadata + ( "axes" -> axisIndices.mkString(""))
-//        case None => metadata
-//      }
-//    } catch { case e: Exception => throw new Exception( "Error converting axis spec %s to indices using axisIndexMap {%s}: %s".format( metadata.get("axes"), axisIndexMap.mkString(","), e.toString ) )  }
-//  }
 //}
 
 class TransientFragment( val dataFrag: DataFragment, val request: RequestContext, val varMetadata: Map[String,nc2.Attribute] ) extends OperationDataInput( dataFrag.spec, varMetadata ) {

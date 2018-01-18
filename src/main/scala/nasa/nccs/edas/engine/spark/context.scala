@@ -16,10 +16,12 @@ import nasa.nccs.edas.utilities
 import org.apache.spark.{Partitioner, SparkConf, SparkContext, SparkEnv}
 import ucar.ma2
 import java.lang.management.ManagementFactory
+
 import org.apache.spark.sql.SparkSession
 import com.sun.management.OperatingSystemMXBean
 import nasa.nccs.cdapi.tensors.CDCoordMap
 import nasa.nccs.edas.engine.EDASExecutionManager.logger
+import nasa.nccs.edas.rdd.CDTimeSlice
 import ucar.nc2.dataset.CoordinateAxis1DTime
 
 import scala.collection.JavaConversions._
@@ -177,12 +179,6 @@ class CDSparkContext(  val session: SparkSession ) extends Loggable {
 
   def getConf: SparkConf = sparkContext.getConf
 
-  def cacheRDDPartition( partFrag: PartitionedFragment, startTime : Long ): RDD[CDTimeSlice] = {
-    val nPart = partFrag.partitions.parts.length
-    val indexRDD: RDD[Int] = sparkContext.makeRDD( 0 to nPart-1, nPart )
-    indexRDD.map( iPart => partFrag.partRDDPartition( iPart, startTime ) )
-  }
-
   def getPartitions( opInputs: Iterable[OperationInput] ): Option[CachePartitions] = {
     for( opInput <- opInputs ) opInput match {
       case pfrag: PartitionedFragment => return Some( pfrag.partitions )
@@ -191,42 +187,26 @@ class CDSparkContext(  val session: SparkSession ) extends Loggable {
     None
   }
 
-  def parallelize(partition: CDTimeSlice, partitioner: RangePartitioner ): RDD[CDTimeSlice] = {
-    val new_partitions = partitioner.partitions.values.map( partKey => partKey -> partition.slice( partKey.elemStart, partKey.numElems ) )
-    sparkContext parallelize new_partitions.toSeq repartitionAndSortWithinPartitions partitioner
-  }
-
-  def getRDD( uid: String, pFrag: PartitionedFragment, requestCx: RequestContext, opSection: Option[ma2.Section], node: WorkflowNode, batchIndex: Int, kernelContext: KernelContext ): Option[ RDD[CDTimeSlice] ] = {
-    val partitions = pFrag.partitions
-    val tgrid: TargetGrid = pFrag.getGrid
-    val rddPartSpecs: Array[RDDPartSpec] = partitions.getBatch(batchIndex) map (partition =>
-      RDDPartSpec(partition, tgrid, List(pFrag.getRDDVariableSpec(uid, partition, opSection)))
-      ) filterNot (_.empty(uid))
-    logger.info("Discarded empty partitions: Creating RDD with <<%d>> items".format( rddPartSpecs.length ))
-    if (rddPartSpecs.length == 0) { None }
-    else {
-      val partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange))
-      val parallelized_rddspecs = sparkContext parallelize rddPartSpecs keyBy (_.timeRange) partitionBy partitioner
-      Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition(kernelContext,batchIndex)) )     // repartitionAndSortWithinPartitions partitioner
-    }
-  }
-
-//  def getRDD(uid: String, directInput: EDASDirectDataInput, requestCx: RequestContext, opSection: Option[ma2.Section], node: WorkflowNode, batchIndex: Int, kernelContext: KernelContext ): Option[RDD[CDTimeSlice]] = {
-//    directInput.getPartitioner(opSection) flatMap ( partMgr => {
-//      val partitions = partMgr.partitions
-//      val tgrid: TargetGrid = requestCx.getTargetGridOpt(uid).getOrElse(throw new Exception("Missing target grid for uid " + uid))
-//      val batch= partitions.getBatch(batchIndex)
-//      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map ( partition => DirectRDDPartSpec(partition, tgrid, List(directInput.getRDDVariableSpec(uid, opSection)))) filterNot (_.empty(uid))
-//      if (rddPartSpecs.length == 0) { None }
-//      else {
-//        logger.info("\n **************************************************************** \n ---> Processing Batch [%d]: Creating input RDD with <<%d>> partitions for node %s".format(batchIndex,rddPartSpecs.length,node.getNodeId))
-//        val partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange) )
-//        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getCDTimeSliceSpecs() ).map( _.toString() ).mkString("\n\t"))
-//        val parallelized_rddspecs = sparkContext parallelize rddPartSpecs.flatMap( _.getCDTimeSliceSpecs() ) keyBy (_.timeRange) partitionBy partitioner
-//        Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex)) )
-//      }
-//    } )
+//  def parallelize(partition: CDTimeSlice, partitioner: RangePartitioner ): RDD[CDTimeSlice] = {
+//    val new_partitions = partitioner.partitions.values.map( partKey => partKey -> partition.slice( partKey.elemStart, partKey.numElems ) )
+//    sparkContext parallelize new_partitions.toSeq repartitionAndSortWithinPartitions partitioner
 //  }
+
+//  def getRDD( uid: String, pFrag: PartitionedFragment, requestCx: RequestContext, opSection: Option[ma2.Section], node: WorkflowNode, batchIndex: Int, kernelContext: KernelContext ): Option[ RDD[CDTimeSlice] ] = {
+//    val partitions = pFrag.partitions
+//    val tgrid: TargetGrid = pFrag.getGrid
+//    val rddPartSpecs: Array[RDDPartSpec] = partitions.getBatch(batchIndex) map (partition =>
+//      RDDPartSpec(partition, tgrid, List(pFrag.getRDDVariableSpec(uid, partition, opSection)))
+//      ) filterNot (_.empty(uid))
+//    logger.info("Discarded empty partitions: Creating RDD with <<%d>> items".format( rddPartSpecs.length ))
+//    if (rddPartSpecs.length == 0) { None }
+//    else {
+//      val partitioner = RangePartitioner( rddPartSpecs.map(_.timeRange))
+//      val parallelized_rddspecs = sparkContext parallelize rddPartSpecs keyBy (_.timeRange) partitionBy partitioner
+//      Some( parallelized_rddspecs mapValues (spec => spec.getRDDPartition(kernelContext,batchIndex)) )     // repartitionAndSortWithinPartitions partitioner
+//    }
+//  }
+
 
 //  def getUnifiedRDD( directInputs: Iterable[EDASDirectDataInput], requestCx: RequestContext, batchIndex: Int ): Option[RDD[CDTimeSlice]] = {
 //    val partitions = requestCx.partitioner.partitions

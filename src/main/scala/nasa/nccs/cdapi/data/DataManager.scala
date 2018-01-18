@@ -956,39 +956,39 @@ object HeapLongArray {
 //  def empty: CDTimeSlice = { new CDTimeSlice( TreeMap.empty[String,HeapFltArray], Map.empty[String,String], RegularPartition.empty ) }
 //}
 
-object RDDPartSpec {
-  def apply( partition: CachePartition, tgrid: TargetGrid, varSpecs: List[ RDDVariableSpec ] ): RDDPartSpec = new RDDPartSpec( partition, partition.getPartitionRecordKey(tgrid,"RDDPartSpec"), varSpecs )
-}
-
-class RDDPartSpec(val partition: CachePartition, val timeRange: RecordKey, val varSpecs: List[ RDDVariableSpec ] ) extends Serializable with Loggable {
-
-  def getRDDPartition(kernelContext: KernelContext, batchIndex: Int): CDTimeSlice = {
-    val t0 = System.nanoTime()
-    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition)) ): _* )
-    val rv = CDTimeSlice( elements, Map( "partRange" -> partition.partRange.toString), partition )
-    val dt = (System.nanoTime() - t0) / 1.0E9
-    logger.debug( "RDDPartSpec{ partition = %s }: completed data input in %.4f sec".format( partition.toString, dt) )
-    kernelContext.addTimestamp( "Created input RDD { partition = %s, batch = %d  } in %.4f sec".format( partition.toString, batchIndex, dt ) )
-    rv
-  }
-
-  def getRDDMetaPartition: CDTimeSlice = {
-    val t0 = System.nanoTime()
-    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toMetaArray(partition)) ): _* )
-    val rv = CDTimeSlice( elements, Map.empty, partition )
-    logger.debug( "RDDPartSpec{ partition = %s }: completed data input in %.4f sec".format( partition.toString, (System.nanoTime() - t0) / 1.0E9) )
-    rv
-  }
-
-
-  def getPartitionKey( partitioner: RangePartitioner ): RecordKey = partitioner.newPartitionKey( timeRange.center )
-
-  def empty( uid: String ): Boolean = varSpecs.find( _.uid == uid ) match {
-    case Some( varSpec ) => varSpec.empty
-    case None => true
-  }
-
-}
+//object RDDPartSpec {
+//  def apply( partition: CachePartition, tgrid: TargetGrid, varSpecs: List[ RDDVariableSpec ] ): RDDPartSpec = new RDDPartSpec( partition, partition.getPartitionRecordKey(tgrid,"RDDPartSpec"), varSpecs )
+//}
+//
+//class RDDPartSpec(val partition: CachePartition, val timeRange: RecordKey, val varSpecs: List[ RDDVariableSpec ] ) extends Serializable with Loggable {
+//
+////  def getRDDPartition(kernelContext: KernelContext, batchIndex: Int): CDTimeSlice = {
+////    val t0 = System.nanoTime()
+////    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition)) ): _* )
+////    val rv = CDTimeSlice( elements, Map( "partRange" -> partition.partRange.toString), partition )
+////    val dt = (System.nanoTime() - t0) / 1.0E9
+////    logger.debug( "RDDPartSpec{ partition = %s }: completed data input in %.4f sec".format( partition.toString, dt) )
+////    kernelContext.addTimestamp( "Created input RDD { partition = %s, batch = %d  } in %.4f sec".format( partition.toString, batchIndex, dt ) )
+////    rv
+////  }
+//
+////  def getRDDMetaPartition: CDTimeSlice = {
+////    val t0 = System.nanoTime()
+////    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toMetaArray(partition)) ): _* )
+////    val rv = CDTimeSlice( elements, Map.empty, partition )
+////    logger.debug( "RDDPartSpec{ partition = %s }: completed data input in %.4f sec".format( partition.toString, (System.nanoTime() - t0) / 1.0E9) )
+////    rv
+////  }
+//
+//
+////  def getPartitionKey( partitioner: RangePartitioner ): RecordKey = partitioner.newPartitionKey( timeRange.center )
+//
+//  def empty( uid: String ): Boolean = varSpecs.find( _.uid == uid ) match {
+//    case Some( varSpec ) => varSpec.empty
+//    case None => true
+//  }
+//
+//}
 
 object DirectRDDPartSpec {
   def apply(partition: Partition, tgrid: TargetGrid, varSpecs: Iterable[ DirectRDDVariableSpec ] = Iterable.empty ): DirectRDDPartSpec = new DirectRDDPartSpec( partition, partition.getPartitionRecordKey(tgrid,"DirectRDDPartSpec"), varSpecs )
@@ -1034,23 +1034,23 @@ class DirectCDTimeSliceSpec(val partition: Partition, iRecord: Int, val timeRang
 
 }
 
-object ExtRDDPartSpec {
-  def apply(timeRange: RecordKey, varSpecs: List[ RDDVariableSpec ] ): ExtRDDPartSpec = new ExtRDDPartSpec( timeRange, varSpecs )
-}
-
-class ExtRDDPartSpec(val timeRange: RecordKey, val varSpecs: List[ RDDVariableSpec ] ) extends Serializable with Loggable {
-
-  def getRDDPartition(kernelContext: KernelContext, partition: Partition, batchIndex: Int): CDTimeSlice = {
-    val t0 = System.nanoTime()
-    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toMetaArray ) ): _* )
-    val rv = CDTimeSlice( elements, Map.empty, partition )
-    val dt = (System.nanoTime() - t0) / 1.0E9
-    logger.debug( "RDDPartSpec: completed data input in %.4f sec".format( dt) )
-    kernelContext.addTimestamp( "Created input RDD { varSpecs = (%s), batchIndex = %d } in %.4f sec".format( varSpecs.map(_.uid).mkString(","), batchIndex, dt ) )
-    rv
-  }
-
-}
+//object ExtRDDPartSpec {
+//  def apply(timeRange: RecordKey, varSpecs: List[ RDDVariableSpec ] ): ExtRDDPartSpec = new ExtRDDPartSpec( timeRange, varSpecs )
+//}
+//
+//class ExtRDDPartSpec(val timeRange: RecordKey, val varSpecs: List[ RDDVariableSpec ] ) extends Serializable with Loggable {
+//
+//  def getRDDPartition(kernelContext: KernelContext, partition: Partition, batchIndex: Int): CDTimeSlice = {
+//    val t0 = System.nanoTime()
+//    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toMetaArray ) ): _* )
+//    val rv = CDTimeSlice( elements, Map.empty, partition )
+//    val dt = (System.nanoTime() - t0) / 1.0E9
+//    logger.debug( "RDDPartSpec: completed data input in %.4f sec".format( dt) )
+//    kernelContext.addTimestamp( "Created input RDD { varSpecs = (%s), batchIndex = %d } in %.4f sec".format( varSpecs.map(_.uid).mkString(","), batchIndex, dt ) )
+//    rv
+//  }
+//
+//}
 
 class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, section: CDSection, val varShortName: String, val collectionId: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
   def getAggregation(): Aggregation = {

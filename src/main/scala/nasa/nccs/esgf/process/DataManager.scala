@@ -4,14 +4,11 @@ import java.util
 import nasa.nccs.cdapi.cdm._
 import ucar.nc2.dataset._
 import nasa.nccs.caching._
-import nasa.nccs.cdapi.data.{CDTimeSlice, _}
+import nasa.nccs.cdapi.data.DirectRDDVariableSpec
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
-import nasa.nccs.edas.engine.WorkflowNode.regridKernel
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
-import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
-import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
+import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
-import nasa.nccs.edas.portal.TestReadApplication.logger
 import nasa.nccs.edas.rdd._
 import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
@@ -142,17 +139,13 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
       extendRDD( generator, extendedRdd, vSpecs.tail )
     }
   }
-  private def addOperationInput( serverContext: ServerContext, record: CDTimeSlice, batchIndex: Int ): Unit = {
-    _inputsRDD.addOperationInput(record)
+  private def addOperationInput( serverContext: ServerContext, inputs: TimeSliceCollection, batchIndex: Int ): Unit = {
+    _inputsRDD.addOperationInput(inputs)
   }
 
-  def createUnpartitionedRDD( serverContext: ServerContext, record: CDTimeSlice ): RDD[CDTimeSlice] = {
-    serverContext.spark.sparkContext parallelize Seq( ( RecordKey(),record ) )
-  }
-
-  def addOperationInput(serverContext: ServerContext, record: CDTimeSlice, section: Option[CDSection], batchIndex: Int ): Unit  = {
-    addOperationInput( serverContext, record, batchIndex )
-    _inputsRDD foreach ( _.section( section ) )
+  def addOperationInput(serverContext: ServerContext, inputs: TimeSliceCollection, section: Option[CDSection], batchIndex: Int ): Unit  = {
+    addOperationInput( serverContext, inputs, batchIndex )
+    section.foreach( section => _inputsRDD.section( section ) )
   }
 
   //  partition.getPartitionRecordKey(tgrid)
