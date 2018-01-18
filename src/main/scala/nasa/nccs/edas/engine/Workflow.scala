@@ -160,6 +160,7 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
 
 case class KernelExecutionResult( results: TimeSliceCollection, files: List[String] ) {
   val holdsData: Boolean = results.slices.nonEmpty
+  val slice = results.getConcatSlice
 }
 
 class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager ) extends Loggable {
@@ -380,7 +381,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
         case "object" =>
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, List.empty[String] ) )
         case "xml" =>
-          Some( new RDDExecutionResult("WPS", List(node.kernel), node.operation.identifier, executionResult.record, resultId) )// TODO: serviceInstance
+          Some( new RDDExecutionResult("WPS", List(node.kernel), node.operation.identifier, executionResult.slice, resultId) )// TODO: serviceInstance
         case "file" =>
           val resultFiles: List[String] = executionMgr.getResultFilePath( executionResult, executor )
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFiles) )
@@ -389,8 +390,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 
   def cacheResult( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): String = {
     if( executionResult.holdsData ) {
-      collectionDataCache.putResult(executor.requestCx.jobId, new RDDTransientVariable( executionResult.record, executor.rootNode.operation, executor.requestCx))
-      logger.info(" ^^^^## Cached result, rid = " + executor.requestCx.jobId + ", head elem metadata = " + executionResult.record.elements.head._2.metadata)
+      collectionDataCache.putResult(executor.requestCx.jobId, new RDDTransientVariable( executionResult.results, executor.rootNode.operation, executor.requestCx))
     }
     executor.requestCx.jobId
   }

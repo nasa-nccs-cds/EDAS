@@ -73,22 +73,22 @@ object CDSparkContext extends Loggable {
     s"E${SparkEnv.get.executorId}:${node_name}:${thread.getName}:${thread.getId}"
   }
 
-  def merge(rdd0: RDD[CDTimeSlice], rdd1: RDD[CDTimeSlice] ): RDD[CDTimeSlice] = {
-    val t0 = System.nanoTime()
-    val mergedRdd = rdd0.join( rdd1 ) mapValues { case (part0,part1) => part0 ++ part1  } map identity
-    if ( mergedRdd.isEmpty() ) {
-      val keys0 = rdd0.keys.collect()
-      val keys1 = rdd1.keys.collect()
-      val msg = s"Empty merge ==> keys0: ${keys0.mkString(",")} keys1: ${keys1.mkString(",")}"
-      logger.error(msg)
-      throw new Exception(msg)
-    }
-    val result = rdd0.partitioner match { case Some(p) => mergedRdd.partitionBy(p); case None => rdd1.partitioner match { case Some(p) => mergedRdd.partitionBy(p); case None => mergedRdd } }
-    logger.info( "Completed MergeRDDs, time = %.4f sec".format( (System.nanoTime() - t0) / 1.0E9 ) )
-    result
-  }
+//  def merge(rdd0: RDD[CDTimeSlice], rdd1: RDD[CDTimeSlice] ): RDD[CDTimeSlice] = {
+//    val t0 = System.nanoTime()
+//    val mergedRdd = rdd0.join( rdd1 ) mapValues { case (part0,part1) => part0 ++ part1  } map identity
+//    if ( mergedRdd.isEmpty() ) {
+//      val keys0 = rdd0.keys.collect()
+//      val keys1 = rdd1.keys.collect()
+//      val msg = s"Empty merge ==> keys0: ${keys0.mkString(",")} keys1: ${keys1.mkString(",")}"
+//      logger.error(msg)
+//      throw new Exception(msg)
+//    }
+//    val result = rdd0.partitioner match { case Some(p) => mergedRdd.partitionBy(p); case None => rdd1.partitioner match { case Some(p) => mergedRdd.partitionBy(p); case None => mergedRdd } }
+//    logger.info( "Completed MergeRDDs, time = %.4f sec".format( (System.nanoTime() - t0) / 1.0E9 ) )
+//    result
+//  }
 
-  def append(p0: CDTimeSlice, p1: CDTimeSlice ): CDTimeSlice = ( p0._1 + p1._1, p0._2.append(p1._2) )
+//  def append(p0: CDTimeSlice, p1: CDTimeSlice ): CDTimeSlice = ( p0._1 + p1._1, p0._2.append(p1._2) )
 
   def getSparkConf( appName: String, logConf: Boolean, enableMetrics: Boolean  ) = {
     val edas_cache_dir = appParameters.getCacheDirectory
@@ -134,36 +134,28 @@ object CDSparkContext extends Loggable {
     }
   }
 
-  def coalesce(rdd: RDD[CDTimeSlice], context: KernelContext ): RDD[CDTimeSlice] = {
-    if ( rdd.getNumPartitions > 1 ) {
-      getPartitioner(rdd) match {
-        case Some(partitioner) =>
-          rdd.sortByKey(true, 1) glom() map (_.fold((partitioner.range.startPoint, CDTimeSlice.empty))((x, y) => { (x._1 + y._1, x._2.append(y._2)) } ) )
-        case None => rdd
-      }
-    } else { rdd }
-  }
-
-//  def coalesce( rdd: RDD[(PartitionKey,RDDPartition)], context: KernelContext ): RDD[(PartitionKey,RDDPartition)] = {
+//  def coalesce(rdd: RDD[CDTimeSlice], context: KernelContext ): RDD[CDTimeSlice] = {
 //    if ( rdd.getNumPartitions > 1 ) {
-//      val partitioner: RangePartitioner = getPartitioner(rdd)
-//      rdd.sortByKey(true,1) reduceByKey Kernel.mergeRDD(context)
-//      rdd.sortByKey( true, 1 ) reduce Kernel.mergeRDD(context)
+//      getPartitioner(rdd) match {
+//        case Some(partitioner) =>
+//          rdd.sortByKey(true, 1) glom() map (_.fold((partitioner.range.startPoint, CDTimeSlice.empty))((x, y) => { (x._1 + y._1, x._2.append(y._2)) } ) )
+//        case None => rdd
+//      }
 //    } else { rdd }
 //  }
 
-  def splitPartition(key: RecordKey, part: CDTimeSlice, partitioner: RangePartitioner ): IndexedSeq[CDTimeSlice] = {
-    logger.info( s"CDSparkContext.splitPartition: KEY-${key.toString} -> PART-${part.getShape.mkString(",")}")
-    val rv = partitioner.intersect(key) map ( partkey =>
-      (partkey -> part.slice(partkey.elemStart, partkey.numElems)) )
-    rv
-  }
-
-  def applyPartitioner( partitioner: RangePartitioner )( elems: Iterator[CDTimeSlice] ): Iterator[CDTimeSlice] =
-    elems.map { case (key,part ) => splitPartition(key,part,partitioner) } reduce ( _ ++ _ ) toIterator
-
-  def repartition(rdd: RDD[CDTimeSlice], partitioner: RangePartitioner ): RDD[CDTimeSlice] =
-    rdd.mapPartitions( applyPartitioner(partitioner), true ) repartitionAndSortWithinPartitions partitioner reduceByKey(_ ++ _)
+//  def splitPartition(key: RecordKey, part: CDTimeSlice, partitioner: RangePartitioner ): IndexedSeq[CDTimeSlice] = {
+//    logger.info( s"CDSparkContext.splitPartition: KEY-${key.toString} -> PART-${part.getShape.mkString(",")}")
+//    val rv = partitioner.intersect(key) map ( partkey =>
+//      (partkey -> part.slice(partkey.elemStart, partkey.numElems)) )
+//    rv
+//  }
+//
+//  def applyPartitioner( partitioner: RangePartitioner )( elems: Iterator[CDTimeSlice] ): Iterator[CDTimeSlice] =
+//    elems.map { case (key,part ) => splitPartition(key,part,partitioner) } reduce ( _ ++ _ ) toIterator
+//
+//  def repartition(rdd: RDD[CDTimeSlice], partitioner: RangePartitioner ): RDD[CDTimeSlice] =
+//    rdd.mapPartitions( applyPartitioner(partitioner), true ) repartitionAndSortWithinPartitions partitioner reduceByKey(_ ++ _)
 
 }
 

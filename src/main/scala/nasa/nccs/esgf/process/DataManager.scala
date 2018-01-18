@@ -4,7 +4,7 @@ import java.util
 import nasa.nccs.cdapi.cdm._
 import ucar.nc2.dataset._
 import nasa.nccs.caching._
-import nasa.nccs.cdapi.data.DirectRDDVariableSpec
+import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, HeapDblArray, HeapLongArray}
 import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.CDSparkContext
@@ -71,7 +71,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   val rootNodeId = rootNode.getNodeId
   def getRegridSpec: Option[RegridSpec] = optPartitioner.map( _.regridSpec )
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
-  def contents: Set[String] = _inputsRDD.contents
+  def contents: Set[String] = _inputsRDD.contents.toSet
   def getInputs(node: WorkflowNode): List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
   def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = rootNode.kernel.getReduceOp(context)
   def getTargetGrid: Option[TargetGrid] = workflowCx.getTargetGrid
@@ -560,13 +560,13 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
       throw new Exception("Can't get time axis for grid " + grid.name)
   }
 
-  def getTimeRange: RecordKey = grid.getTimeCoordinateAxis("getTimeRange") match {
-    case Some(axis) =>
-      val ( t0, t1 ) = ( axis.getCalendarDate(0), axis.getCalendarDate( axis.getSize.toInt-1 ) )
-      RecordKey( t0.getMillis/1000, t1.getMillis/1000, 0, axis.getSize.toInt )
-    case None =>
-      throw new Exception("Can't get time axis for grid " + grid.name)
-  }
+//  def getTimeRange: RecordKey = grid.getTimeCoordinateAxis("getTimeRange") match {
+//    case Some(axis) =>
+//      val ( t0, t1 ) = ( axis.getCalendarDate(0), axis.getCalendarDate( axis.getSize.toInt-1 ) )
+//      RecordKey( t0.getMillis/1000, t1.getMillis/1000, 0, axis.getSize.toInt )
+//    case None =>
+//      throw new Exception("Can't get time axis for grid " + grid.name)
+//  }
 
   def getNextCalendarDate ( axis: CoordinateAxis1DTime, idx: Int ): CalendarDate = {
     if( (idx+1) < axis.getSize ) { axis.getCalendarDate(idx+1) }

@@ -114,6 +114,8 @@ class TimeSliceCollection( val slices: Array[CDTimeSlice], metadata: Map[String,
     val concatSlices = sort().slices.reduce( _ ++ _ )
     new TimeSliceCollection( Array( concatSlices ), metadata )
   }
+
+  def getConcatSlice: CDTimeSlice = concatSlices.slices.head
 }
 
 object PartitionExtensionGenerator {

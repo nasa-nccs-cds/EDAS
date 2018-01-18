@@ -125,7 +125,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
 case class ResultManifest( val name: String, val dataset: String, val description: String, val units: String ) {}
 
 object Kernel extends Loggable {
-  val customKernels = List[Kernel]( new CDMSRegridKernel() )
+  val customKernels = List[Kernel]( ) // new CDMSRegridKernel() )
   def isEmpty( kvp: CDTimeSlice ) = kvp.elements.isEmpty
 
   def getResultFile( resultId: String, deleteExisting: Boolean = false ): File = {
@@ -254,7 +254,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = {
-    if ( reduceCombineOp.contains( _ == CDFloatArray.customOp ) ) { customReduceRDD(context) }
+    if ( reduceCombineOp.exists( _ == CDFloatArray.customOp ) ) { customReduceRDD(context) }
     else { reduceRDDOp(context) }
   }
 
