@@ -253,6 +253,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val mapCombineNOp: Option[ReduceNOpFlt] = None
   val mapCombineWNOp: Option[ReduceWNOpFlt] = None
   val reduceCombineOp: Option[ReduceOpFlt] = options.get("reduceOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
+  def hasReduceOp: Boolean = reduceCombineOp.isDefined
   val initValue: Float = 0f
   def cleanUp() = {}
 
@@ -262,25 +263,16 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     input.map( map(context) )
   }
 
-  def getReduceOp(context: KernelContext): (CDTimeSlice,CDTimeSlice)=>CDTimeSlice = {
-    if (context.doesTimeReduction) {
-      reduceCombineOp match {
-        case Some(redOp) => redOp match {
-          case CDFloatArray.customOp => customReduceRDD(context)
-          case op => reduceRDDOp(context)
-        }
-        case None => reduceRDDOp(context)
-      }
-    } else {
-      collectRDDOp(context)
-    }
+  def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = {
+    if ( reduceCombineOp.contains( _ == CDFloatArray.customOp ) ) { customReduceRDD(context) }
+    else { reduceRDDOp(context) }
   }
 
   def execute( workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
     mapReduce(input, context, batchIndex )
   }
 
-  def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
+  def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
     val mapresult: TimeSliceRDD = mapRDD( input, context )
     logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
     runtime.printMemoryUsage
@@ -290,7 +282,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     evaluateProductSize( mapresult, context )
     if( !parallelizable || (nparts==1) ) { mapresult.collect }
     else {
-      val result = mapresult reduce getReduceOp(context)
+      val result: TimeSliceCollection = if( hasReduceOp || merge ) { mapresult reduce getReduceOp(context) } else { mapresult.collect }
       logger.debug("\n\n ----------------------- FINISHED reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
       context.addTimestamp( "FINISHED reduce Operation" )
       result
@@ -505,7 +497,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def postOp(result: DataFragment, context: KernelContext): DataFragment = result
 
-  def postRDDOp( pre_result: TimeSliceCollection, context: KernelContext ): CDTimeSlice = {
+  def postRDDOp( pre_result: TimeSliceCollection, context: KernelContext ): TimeSliceCollection = {
     options.get("postOp") match {
       case Some( postOp ) =>
         if( postOp == "normw") {

@@ -12,7 +12,7 @@ import nasa.nccs.edas.engine.spark.{CDSparkContext, RangePartitioner, RecordKey}
 import nasa.nccs.edas.kernels.Kernel.RDDKeyValPair
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
 import nasa.nccs.edas.portal.TestReadApplication.logger
-import nasa.nccs.edas.rdd.{RDDContainer, RDDGenerator, TimeSliceCollection, TimeSliceRDD}
+import nasa.nccs.edas.rdd._
 import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
@@ -76,7 +76,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
   def contents: Set[String] = _inputsRDD.contents
   def getInputs(node: WorkflowNode): List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
-  def getReduceOp(context: KernelContext): (RDDKeyValPair,RDDKeyValPair)=>RDDKeyValPair = rootNode.kernel.getReduceOp(context)
+  def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = rootNode.kernel.getReduceOp(context)
   def getTargetGrid: Option[TargetGrid] = workflowCx.getTargetGrid
   def releaseBatch: Unit = _inputsRDD.releaseBatch
   def nPartitions = optPartitioner.fold(1)( _.nPartitions )
@@ -143,10 +143,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     }
   }
   private def addOperationInput( serverContext: ServerContext, record: CDTimeSlice, batchIndex: Int ): Unit = {
-    initializeInputsRDD( serverContext, batchIndex )
-    print(s"----> addOpInputs, record elems = [ ${record.elems.mkString(", ")} ]\n")
-    if( _inputsRDD.isDefined ) {   _inputsRDD foreach ( _.addOperationInput(record) )                                       }
-    else {                            _inputsRDD = Some( new RDDContainer( createUnpartitionedRDD( serverContext, record ) ) ) }
+    _inputsRDD.addOperationInput(record)
   }
 
   def createUnpartitionedRDD( serverContext: ServerContext, record: CDTimeSlice ): RDD[CDTimeSlice] = {
