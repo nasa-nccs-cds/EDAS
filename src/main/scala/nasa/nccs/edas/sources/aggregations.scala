@@ -312,7 +312,8 @@ object AggregationWriter extends Loggable {
 }
 
 case class Aggregation( dataPath: String, files: List[FileInput], variables: List[Variable], coordinates: List[Coordinate], axes: List[Axis], parms: Map[String,String] ) {
-  def findVariable( varName: String ): Option[Variable] = variables.find( _.name.equals(varName) )
+  def findVariable( varName: String ): Option[Variable] =
+    variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
   def getFilebase: FileBase = new FileBase( files )
   def toXml: xml.Elem = {

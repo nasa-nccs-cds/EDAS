@@ -22,7 +22,8 @@ import ucar.nc2.Attribute
 import ucar.{ma2, nc2}
 
 import scala.collection.JavaConversions._
-import scala.collection.immutable.{SortedMap, TreeMap}
+import scala.collection.JavaConverters._
+import scala.collection.immutable.{SortedMap, TreeMap, Map}
 import scala.collection.mutable
 
 object Port {
@@ -63,7 +64,7 @@ object KernelContext {
 class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],  _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec], val profiler: ProfilingTool ) extends Loggable with Serializable with ScopeContext {
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
-  val configuration = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
+  val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
   val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
 
   lazy val grid: GridContext = getTargetGridContext
@@ -678,13 +679,14 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
 
-  def weightedValueSumRDDPostOp(result: CDTimeSlice, context: KernelContext): CDTimeSlice = {
-    val new_elements = result.elements.filterKeys( ! _.endsWith("_WEIGHTS_") ) map { case (key, arraySpec ) =>
-      val wts = result.elements.getOrElse( key + "_WEIGHTS_" , throw new Exception( s"Missing weights in slice, ids = ${result.elements.keys.mkString(",")}") )
+  def weightedValueSumRDDPostOp(result: TimeSliceCollection, context: KernelContext): TimeSliceCollection = {
+    val slice = result.concatSlices.slices.head
+    val new_elements = slice.elements.filterKeys( ! _.endsWith("_WEIGHTS_") ) map { case (key, arraySpec ) =>
+      val wts = slice.elements.getOrElse( key + "_WEIGHTS_" , throw new Exception( s"Missing weights in slice, ids = ${slice.elements.keys.mkString(",")}") )
       val newData = arraySpec.toFastMaskedArray / wts.toFastMaskedArray
       key -> new ArraySpec( newData.missing, newData.shape, arraySpec.origin, newData.getData )
     }
-    new CDTimeSlice( result.timestamp, result.dt, new_elements )
+    new TimeSliceCollection( Array( new CDTimeSlice(slice.timestamp, slice.dt, new_elements) ), result.metadata )
   }
 
 //  def getMontlyBinMap(id: String, context: KernelContext): CDCoordMap = {
@@ -879,7 +881,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
 //
 //}
 
-class TransientFragment( val dataFrag: DataFragment, val request: RequestContext, val varMetadata: Map[String,nc2.Attribute] ) extends OperationDataInput( dataFrag.spec, varMetadata ) {
+class TransientFragment( val dataFrag: DataFragment, val request: RequestContext, val varMetadata: Map[String,nc2.Attribute] ) extends OperationDataInput( dataFrag.spec, varMetadata.toMap ) {
   def toXml(id: String): xml.Elem = {
     val units = varMetadata.get("units") match { case Some(attr) => attr.getStringValue; case None => "" }
     val long_name = varMetadata.getOrElse("long_name",varMetadata.getOrElse("fullname",varMetadata.getOrElse("varname", new Attribute("varname","UNDEF")))).getStringValue

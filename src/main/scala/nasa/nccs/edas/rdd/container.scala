@@ -342,7 +342,6 @@ class RDDContainer extends Loggable {
   def extendVault( generator: RDDGenerator, vSpecs: List[DirectRDDVariableSpec] ) = { vault.update( _extendRDD( generator, _vault.get.value, vSpecs ) ) }
 
   def addFileInputs( sparkContext: CDSparkContext, kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
-    logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
     val newVSpecs = vSpecs.filter( vspec => ! contents.contains(vspec.uid) )
     if( newVSpecs.nonEmpty ) {
       val generator = new RDDGenerator( sparkContext, BatchSpec.nParts )
@@ -355,7 +354,6 @@ class RDDContainer extends Loggable {
       } else { vSpecs }
       extendVault( generator, remainingVspecs )
     }
-    logger.info("\n\n RDDContainer ###-> END addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
   }
 
 

@@ -7,7 +7,7 @@ import ucar.ma2
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels._
-import nasa.nccs.edas.rdd.{ArraySpec, CDTimeSlice}
+import nasa.nccs.edas.rdd.{ArraySpec, CDTimeSlice, TimeSliceCollection}
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import ucar.ma2.DataType
@@ -252,7 +252,7 @@ class ave extends SingularRDDKernel(Map.empty) {
     rv
   }
   override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
-  override def postRDDOp(pre_result: CDTimeSlice, context: KernelContext ):  CDTimeSlice = weightedValueSumRDDPostOp( pre_result, context )
+  override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
 }
 
 class subset extends Kernel(Map.empty) {

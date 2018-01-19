@@ -5,7 +5,7 @@ import nasa.nccs.cdapi.cdm._
 import ucar.nc2.dataset._
 import nasa.nccs.caching._
 import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, HeapDblArray, HeapLongArray}
-import nasa.nccs.cdapi.tensors.{CDArray, CDByteArray, CDDoubleArray, CDFloatArray}
+import nasa.nccs.cdapi.tensors.{CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
@@ -25,9 +25,10 @@ import ucar.nc2.constants.AxisType
 import scala.collection.concurrent
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
+import scala.collection.immutable.Map
+import scala.collection.mutable
 
 sealed abstract class DataAccessMode
 object DataAccessMode {

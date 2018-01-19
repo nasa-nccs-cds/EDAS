@@ -18,15 +18,15 @@ class TempRow( val values: Seq[Any] ) extends Row {
 case class EDASOptions( inputs: Array[String] ) {}
 
 object CDTimeSliceConverter {
-  def apply( keyVal: CDTimeSlice, options: EDASOptions ) = new CDTimeSliceConverter( keyVal._2, options )
+  def apply( slice: CDTimeSlice, options: EDASOptions ) = new CDTimeSliceConverter( slice, options )
   def defaultSchema: StructType = new StructType( Array( new StructField("index",IntegerType,false), new StructField("value",DataTypes.FloatType,true) ) )
 }
 
 class CDTimeSliceConverter( record: CDTimeSlice, options: EDASOptions ) extends Iterator[Row] with Loggable {
   val schema: StructType= inferSchema( record )
-  private val input_arrays: Seq[(String,HeapFltArray)] = record.elements.iterator.toSeq // options.inputs.map( id => id -> record.findElements(id).head )
+  private val input_arrays: Seq[(String,ArraySpec)] = record.elements.iterator.toSeq // options.inputs.map( id => id -> record.findElements(id).head )
   private val inputs:  Seq[(String,FastMaskedArray)] = input_arrays.map { case (id,heapArray) => (id,heapArray.toFastMaskedArray) }
-  private val missing: java.lang.Float = input_arrays.head._2.getMissing()
+  private val missing: java.lang.Float = input_arrays.head._2.missing
   val shape: Array[Int] = inputs.head._2.array.getShape
   val dataSize: Int = shape.product
   private var rowIndex = 0
