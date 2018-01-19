@@ -22,7 +22,7 @@ case class Variable( name: String, shape: Array[Int], dims: String, units: Strin
   def toXml: xml.Elem = { <variable name={name} shape={shape.mkString(",")} dims={dims} units={units} /> }
   override def toString: String = s"name:${name};shape:${shape.mkString(",")};dims:${dims};units:${units}"
 }
-case class Coordinate( name: String, shape: Array[Int], dims: String, units: String )
+case class Coordinate( name: String, shape: Array[Int], dims: String="", units: String="" )
 case class Axis( name: String, ctype: String, shape: Array[Int], units: String, minval: Float, maxval: Float )
 
 object AggregationWriter extends Loggable {
@@ -312,6 +312,7 @@ object AggregationWriter extends Loggable {
 }
 
 case class Aggregation( dataPath: String, files: List[FileInput], variables: List[Variable], coordinates: List[Coordinate], axes: List[Axis], parms: Map[String,String] ) {
+  val test = 1
   def findVariable( varName: String ): Option[Variable] =
     variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
@@ -353,14 +354,17 @@ object Aggregation extends Loggable {
     val axes = mutable.ListBuffer.empty[Axis]
     val parameters = mutable.HashMap.empty[String,String]
     try {
-      for (line <- source.getLines; toks = line.split(',').map(_.trim) ) try{ toks(0) match {
+      for (line <- source.getLines; toks = line.split(';').map(_.trim) ) try{ toks(0) match {
         case "F" =>  files += FileInput(files.length, toks(1).toLong, toks(2).toInt, toks(3))
         case "P" =>  parameters += toks(1) -> toks(2)
         case "V" => variables += Variable( toks(1), toks(2).split(",").map( _.toInt ), toks(3), toks(4) )
-        case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( _.toInt ), toks(3), toks(4) )
-        case "A" => axes += Axis( toks(1), toks(2), toks(3).split(",").map( _.toInt ), toks(3), toks(4).toFloat, toks(5).toFloat )
+        case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( _.toInt ) )
+        case "A" => axes += Axis( toks(1), toks(2), toks(3).split(",").map( _.toInt ), toks(4), toks(5).toFloat, toks(6).toFloat )
         case _ => Unit
-      } } catch { case err: Exception => logger.error( s"Error '${err.getMessage}' processing line in Aggregation file => ${line} " ) }
+      } } catch {
+        case err: Exception =>
+          logger.error( s"Error '${err.getMessage}' processing line in Aggregation file => ${line} " )
+      }
     } finally { source.close() }
     Aggregation( aggFile, files.toList, variables.toList, coordinates.toList, axes.toList, parameters.toMap )
   }
