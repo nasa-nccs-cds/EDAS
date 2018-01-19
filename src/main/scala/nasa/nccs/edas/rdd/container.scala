@@ -55,6 +55,11 @@ case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], dat
     val new_shape = zippedShape map { case ( value:Int, index: Int ) => if(index==0) {shape(0)+other.shape(0)} else {shape(index)} }
     ArraySpec( missing, new_shape, origin, new_data )
   }
+  def toByteArray = {
+    HeapFltArray.bb.putFloat( 0, missing )
+    val ucarArray: ucar.ma2.Array = toCDFloatArray
+    ucarArray.getDataAsByteBuffer().array() ++ HeapFltArray.bb.array()
+  }
 }
 
 object CDTimeSlice {
@@ -64,14 +69,17 @@ object CDTimeSlice {
 
 case class CDTimeSlice(timestamp: Long, dt: Int, elements: Map[String,ArraySpec] ) {
   def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( timestamp, dt, elements ++ other.elements ) }
+  def <+( other: CDTimeSlice ): CDTimeSlice = append( other )
 //  def validate_identity( other_index: Int ): Unit = assert ( other_index == index , s"TimeSlice index mismatch: ${index} vs ${other_index}" )
   def clear: CDTimeSlice = { new CDTimeSlice( timestamp, dt, Map.empty[String,ArraySpec] ) }
   def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, elements.mapValues( _.section(section) ) ) }
   def release( keys: Iterable[String] ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, elements.filterKeys(key => !keys.contains(key) ) ) }
-  def size: Long = elements.values.reduce((a0, a1) => a0.size + a1.size )
+  def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def element( id: String ): Option[ArraySpec] = elements.get( id )
   def isEmpty = elements.isEmpty
-  def ~( other: CDTimeSlice ) = { assert( (dt == other.dt) && (timestamp == other.timestamp) , s"Mismatched Time slices: { $timestamp $dt } vs { ${other.timestamp} ${other.dt} }" ) }
+  def ~( other: CDTimeSlice ) =  { assert( (dt == other.dt) && (timestamp == other.timestamp) , s"Mismatched Time slices: { $timestamp $dt } vs { ${other.timestamp} ${other.dt} }" ) }
+  def ~>( other: CDTimeSlice ) = { assert( Math.abs( timestamp+dt - other.timestamp ) <= 1  , s"Non-adjacent Time slices: { $timestamp $dt } vs { ${other.timestamp} ${other.dt} }" ) }
+  def append( other: CDTimeSlice ): CDTimeSlice = { this ~> other;  new CDTimeSlice(timestamp, dt + other.dt, elements.flatMap { case (key,array0) => other.elements.get(key).map( array1 => key -> ( array0 ++ array1 ) ) } ) }
 }
 
 class DataCollection( val metadata: Map[String,String] ) {

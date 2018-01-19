@@ -454,12 +454,11 @@ class EDASExecutionManager extends WPSServer with Loggable {
       val resId = executor.requestCx.jobId
       getResultVariable(resId) match {
         case Some(tvar: RDDTransientVariable) =>
-          val result = tvar.result.elements.values.head
           val resultFile = Kernel.getResultFile(resId)
           if (resultFile.exists) List(resultFile.getAbsolutePath)
           else {
-            val resultMap = tvar.result.elements.mapValues(_.toCDFloatArray)
-            List(saveResultToFile(executor, resultMap, result.metadata, List.empty[nc2.Attribute]))
+            val resultMap = tvar.result.concatSlices.slices.map( _.elements.head ).toMap.mapValues( _.toCDFloatArray )
+            List(saveResultToFile(executor, resultMap, tvar.result.metadata.toMap, List.empty[nc2.Attribute]))
           }
         case None => List.empty[String]
       }

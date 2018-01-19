@@ -6,10 +6,10 @@ import java.sql.{Date, Timestamp}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray, CDTimeSlice}
+import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
 import nasa.nccs.edas.engine.{EDASExecutionManager, ExecutionCallback, TestProcess}
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.edas.rdd.TestDatasetProcess
+import nasa.nccs.edas.rdd.{CDTimeSlice, TestDatasetProcess}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
@@ -153,14 +153,17 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         logger.info( "\n\n     **** Found result Id: " + rid + " ****** \n\n")
         processManager.getResultVariable("edas",rid) match {
           case Some( resultVar ) =>
-            var gridfilename = ""
-            resultVar.result.elements.foreach { case (key, data) =>
-              if( gridfilename.isEmpty ) {
-                val gridfilepath = data.metadata("gridfile")
-                gridfilename = sendFile( clientId, rid, "gridfile", gridfilepath, true )
-              }
-              sendArrayData( clientId, rid, data.origin, data.shape, data.toByteArray, data.metadata + ("gridfile" -> gridfilename) + ( "elem" -> key.split('.').last ) )
+            val slice: CDTimeSlice = resultVar.result.concatSlices.slices.head
+            slice.elements.foreach { case ( id, array ) =>
+              sendArrayData( clientId, rid, array.origin, array.shape, array.toByteArray, resultVar.result.metadata  + ( "elem" -> id ) )  // + ("gridfile" -> gridfilename)
             }
+
+//            var gridfilename = ""
+//            resultVar.result.slices.foreach { case (key, data) =>
+//              if( gridfilename.isEmpty ) {
+//                val gridfilepath = data.metadata("gridfile")
+//                gridfilename = sendFile( clientId, rid, "gridfile", gridfilepath, true )
+//              }
           case None =>
             logger.error( "Can't find result variable " + rid)
             sendErrorReport( response_format, clientId, rid, new Exception( "Can't find result variable " + rid + " in [ " + processManager.getResultVariables("edas").mkString(", ") + " ]") )
