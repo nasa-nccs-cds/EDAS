@@ -324,8 +324,6 @@ case class Aggregation( dataPath: String, files: List[FileInput], variables: Lis
   }
 }
 
-
-
 class FileBase( files: List[FileInput] ) extends Loggable with Serializable {
   val nFiles = files.length
   val dt: Float = ( files.last.startTime - files.head.startTime ) / ( nFiles - 1 ).toFloat
