@@ -34,12 +34,15 @@ object ArraySpec {
 }
 
 case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
+  if( shape.length < 3 ) {
+    throw new Exception("XXX")
+  }
   def section( section: CDSection ): ArraySpec = {
     val ma2Array = ma2.Array.factory( ma2.DataType.FLOAT, shape, data )
     try {
       val newSection = section.toSection(origin).intersect( getRelativeSection )
-      val sectionedArray = ma2Array.section(newSection.getRanges)
-      new ArraySpec(missing, sectionedArray.getShape, section.getOrigin, sectionedArray.getStorage.asInstanceOf[Array[Float]])
+      val sectionedArray = ma2Array.section( newSection.getOrigin, newSection.getShape )
+      new ArraySpec(missing, newSection.getShape, section.getOrigin, sectionedArray.getStorage.asInstanceOf[Array[Float]])
     } catch {
       case err: Exception =>
         throw err
@@ -232,7 +235,10 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
   def next(): CDTimeSlice =  _sliceStack.pop
 
   private def getSlices: List[CDTimeSlice] = {
-    def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = { section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } } }
+    def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = {
+      section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) =>
+        if (index == 0) { new ma2.Range("time", range.first + slice_index, range.first + slice_index) } else { range } }
+    }
     val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
     val t0 = System.nanoTime()
     val dataset = NetcdfDatasetMgr.aquireFile( filePath, 77.toString )
@@ -244,11 +250,12 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
     val interSect: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
     val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") } ).section( interSect.getRange(0) )
     val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
-    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
+//    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
     val t1 = System.nanoTime()
     val dt: Int = Math.round( ( dates.last.getMillis - dates.head.getMillis ) / ( dates.length - 1 ).toFloat )
     val slices: List[CDTimeSlice] =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
-      val data_section = variable.read(getSliceRanges( interSect, slice_index))
+      val sliceRanges = getSliceRanges( interSect, slice_index)
+      val data_section = variable.read(sliceRanges)
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
       val data_shape: Array[Int] = data_section.getShape
       val section = variable.getShapeAsSection

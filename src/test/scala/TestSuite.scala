@@ -252,7 +252,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }}
 
   test("pyMaxTestLocal")  { if(test_python) {
-    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"tzyx"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"collection:/merra_daily","name":"t:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.max","input":"v1","domain":"d0","axes":"tzyx"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ) )
     println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
@@ -518,7 +518,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }}
 
   test("Maximum-local") { if(use_local_data) {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/merra_daily","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"xy"}]]"""
     val result_node = executeTest(datainputs, Map("response"->"xml"))
     val results = getResults(result_node)
     println( "Op Result:       " + results.mkString(",") )
@@ -655,7 +655,7 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("CherryPick") { if(use_local_data) {
     val unverified_result: CDFloatArray = CDFloatArray( Array(267.78323,260.57275,257.5716,249.33249,242.7927 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":1,"end":1,"system":"indices"},"lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.filter","input":"v1","plev":"975,875,775,650,550"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":1,"end":1,"system":"indices"},"lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/merra_daily","name":"t:v1","domain":"d0"}],operation=[{"name":"CDSpark.filter","input":"v1","plev":"975,875,775,650,550"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = getResultData(result_node)
     println( "Op Result:       " + result_data.mkDataString(", ") )

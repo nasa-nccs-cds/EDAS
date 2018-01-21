@@ -233,6 +233,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   }
 
   def executeRequest(requestCx: RequestContext): Seq[ WPSProcessExecuteResponse ] = {
+    val t0 =  System.nanoTime()
     linkNodes( requestCx )
     val product_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ).toList
     val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( product_nodes, requestCx ).map( _.markAsMergedSubworkflowRoot )
@@ -242,6 +243,8 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       val executor = new WorkflowExecutor( requestCx, safety_check( workflowCx ) )
       generateProduct( executor )
     }
+    val t1 =  System.nanoTime()
+    println(s"Executed request ${requestCx.jobId}, elapsed time = ${(t1 - t0) / 1.0E9} sec")
     productNodeOpts.flatten
   }
 
