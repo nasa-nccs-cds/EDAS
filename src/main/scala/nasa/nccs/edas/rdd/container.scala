@@ -34,9 +34,6 @@ object ArraySpec {
 }
 
 case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
-  if( shape.length < 3 ) {
-    throw new Exception("XXX")
-  }
   def section( section: CDSection ): ArraySpec = {
     val ma2Array = ma2.Array.factory( ma2.DataType.FLOAT, shape, data )
     try {

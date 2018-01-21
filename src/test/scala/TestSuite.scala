@@ -764,6 +764,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }}
 
   test("Minimum") {
+    // ncwa -O -v tas -d time,50,150 -d lat,5,8 -d lon,5,8 -a time -y min ${datafile} ~/test/out/maxval.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array( 214.3339, 215.8409, 205.9775, 208.0006, 206.4181, 202.4724, 202.9022, 206.9719, 217.8426, 215.4173, 216.0199, 217.2311, 231.4988, 231.5838, 232.7329, 232.5641 ).map(_.toFloat), Float.MaxValue )
     val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":8,"system":"indices"},"lon":{"start":5,"end":8,"system":"indices"},"time":{"start":50,"end":150,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.min","input":"v1","domain":"d0","axes":"t"}]]"""
     val result_node = executeTest(datainputs)
@@ -774,6 +775,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }
 
   test("subsetTestXY1") {
+    // ncks -O -v tas -d lat,10,15 -d lon,5,10 -d time,10,10  ${datafile} ~/test/out/subset.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array(   271.8525, 271.9948, 271.9691, 271.9805, 272.0052, 272.2418, 272.7861, 272.9485, 273.25, 273.4908, 273.5451, 273.45, 272.7733, 273.0835, 273.3886, 273.6199, 273.7051, 273.7632, 272.2565, 272.7566, 273.1762, 273.5975, 273.8943, 274.075, 272.4098, 272.8103, 273.2189, 273.6471, 273.8576, 274.0239, 273.3904, 273.5003, 273.667, 273.8236, 273.9353, 274.1161  ).map(_.toFloat), Float.MaxValue )
     val datainputs = s"""[domain=[{"name":"d0","lat":{"start":10,"end":15,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.subset","input":"v1","domain":"d0"}]]"""
     val result_node = executeTest(datainputs)
