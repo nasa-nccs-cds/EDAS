@@ -412,8 +412,10 @@ object Aggregation extends Loggable {
       }
       for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} \n" ) }
       for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName};  ${variable.getShape.mkString(",")};  ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
+      var startIndex = 0L
       for (fileHeader <- reducedFileheaders) {
-        bw.write( s"F; ${fileHeader.startValue}; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
+        bw.write( s"F; ${fileHeader.startValue}; $startIndex; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
+        startIndex = startIndex + fileHeader.nElem + 1
       }
     } finally {
       fileMetadata.close
