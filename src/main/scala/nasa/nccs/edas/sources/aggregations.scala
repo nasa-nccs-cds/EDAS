@@ -5,11 +5,12 @@ import java.net.URI
 import java.nio.file.{Path, Paths}
 
 import nasa.nccs.edas.sources.netcdf.NCMLWriter
+import nasa.nccs.esgf.process.CDSection
 import nasa.nccs.utilities.Loggable
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2
 import ucar.nc2.time.CalendarDate
-
+import ucar.ma2
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -321,6 +322,19 @@ case class Aggregation( dataPath: String, files: List[FileInput], variables: Lis
     <aggregation id={id}>
       { variables.map( _.toXml ) }
     </aggregation>
+  }
+
+  def getRangeMap(time_index: Int = 0, fileInputs: List[FileInput] = files, rangeMap: List[(ma2.Range,FileInput)] = List.empty[(ma2.Range,FileInput)]  ): List[(ma2.Range,FileInput)] = {
+    if( fileInputs.isEmpty ) { rangeMap } else { getRangeMap(time_index + fileInputs.head.nRows + 1, fileInputs.tail,  rangeMap ++ List( new ma2.Range( time_index, time_index + fileInputs.head.nRows ) -> fileInputs.head ) ) }
+  }
+
+  def getIntersectingFiles( sectionString: String ): List[FileInput] = {
+    CDSection.fromString(sectionString).map(_.toSection) match {
+      case None => files
+      case Some( section ) =>
+        val timeRange = section.getRange( 0 )
+        getRangeMap().filter( _._1.intersects(timeRange) ).map(_._2)
+    }
   }
 }
 

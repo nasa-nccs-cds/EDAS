@@ -263,7 +263,9 @@ class subset extends Kernel(Map.empty) {
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
   val doesAxisElimination: Boolean = false
 
-  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = { rdd }
+  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = {
+    rdd
+  }
 }
 //
 //class anomaly extends SingularRDDKernel(Map.empty) {
