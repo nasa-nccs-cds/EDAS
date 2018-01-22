@@ -83,7 +83,9 @@ case class CDTimeSlice(timestamp: Long, dt: Int, elements: Map[String,ArraySpec]
 //  def validate_identity( other_index: Int ): Unit = assert ( other_index == index , s"TimeSlice index mismatch: ${index} vs ${other_index}" )
   def clear: CDTimeSlice = { new CDTimeSlice( timestamp, dt, Map.empty[String,ArraySpec] ) }
   def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, elements.mapValues( _.section(section) ) ) }
-  def release( keys: Iterable[String] ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, elements.filterKeys(key => !keys.contains(key) ) ) }
+  def release( keys: Iterable[String] ): CDTimeSlice = {
+    new CDTimeSlice( timestamp, dt, elements.filterKeys(key => !keys.contains(key) ) )
+  }
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def element( id: String ): Option[ArraySpec] = elements.get( id )
   def isEmpty = elements.isEmpty
@@ -101,7 +103,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
   def section( section: CDSection ): TimeSliceRDD = { new TimeSliceRDD( rdd.map( _.section(section) ), metadata ) }
   def release( keys: Iterable[String] ): TimeSliceRDD = new TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
-  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = new TimeSliceRDD( rdd.map( ts => ts ++ op(ts) ), metadata )
+  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = new TimeSliceRDD( rdd.map( ts => op(ts) ), metadata )
   def getNumPartitions = rdd.getNumPartitions
   def collect: TimeSliceCollection = new TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = new TimeSliceRDD( rdd.collect(op), metadata )

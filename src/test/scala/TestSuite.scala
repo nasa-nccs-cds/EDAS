@@ -31,11 +31,11 @@ class DefaultTestSuite extends EDASTestSuite {
   val nExp = 3
   val use_6hr_data = false
   val use_npana_data = false
-  val use_local_data = true
+  val use_local_data = false
   val test_cache = false
   val test_python = false
-  val test_binning = true
-  val test_regrid = true
+  val test_binning = false
+  val test_regrid = false
   val reanalysis_ensemble = false
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
@@ -46,88 +46,6 @@ class DefaultTestSuite extends EDASTestSuite {
     val response = getCapabilities("coll")
     print( response.toString )
   }
-
-  test("RemoveCollections") {
-    Collections.removeCollections(mod_collections.map(_._2).toArray)
-    for( (model, collection) <- mod_collections ) Collections.findCollection( collection ) match {
-      case Some(c) => fail( "Error, failed to delete collection " + collection )
-      case None => Unit
-    }
-    logger.info( "Successfully deleted all test collections" )
-  }
-
-  test("Aggregate") {
-    for( (model, collection) <- mod_collections ) {
-      val location = s"/collections/${model}/$collection.txt"
-      Option(getClass.getResource(location)) match {
-        case Some( url ) =>
-          val collection_path = url.getFile
-          val datainputs = s"""[variable=[{"uri":"collection:/$collection","path":"$collection_path"}]]"""
-          val agg_result_node = executeTest (datainputs, Map.empty, "util.agg")
-          logger.info (s"Agg collection $collection Result: " + printer.format (agg_result_node) )
-        case None => throw new Exception( s"Can't find collection $collection for model  $model ")
-      }
-    }
-  }
-
-  test("Aggregate1") {
-    for( (model, collection) <- cip_collections ) {
-      val location = s"/collections/${model}/$collection.txt"
-      Option(getClass.getResource(location)) match {
-        case Some( url ) =>
-          val collection_path = url.getFile
-          val datainputs = s"""[variable=[{"uri":"collection:/$collection","path":"$collection_path"}]]"""
-          val agg_result_node = executeTest (datainputs, Map.empty, "util.agg")
-          logger.info (s"Agg collection $collection Result: " + printer.format (agg_result_node) )
-        case None => throw new Exception( s"Can't find collection $collection for model  $model")
-      }
-    }
-
-  }
-
-  test("Aggregate2") {
-    val model = "GEOS5"
-    val collection = "GEOS5_r1i1p1"
-    val location = s"/collections/${model}/$collection.txt"
-    Option(getClass.getResource(location)) match {
-      case Some( url ) =>
-        val collection_path = url.getFile
-        val datainputs = s"""[variable=[{"uri":"collection:/$collection","path":"$collection_path"}]]"""
-        val agg_result_node = executeTest (datainputs, Map.empty, "util.agg")
-        logger.info (s"Agg collection $collection Result: " + printer.format (agg_result_node) )
-      case None => throw new Exception( s"Can't find collection $collection for model  $model ")
-    }
-  }
-
-  //  test("MultiAggregate") {
-  //    val collection_path = "/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/DAILY/"
-  //    val datainputs = s"""[variable=[{"uri":"collection:/MERRA_DAILY_TEST","path":"$collection_path"}]]"""
-  //    val agg_result_node = executeTest (datainputs, false, "util.agg")
-  //    logger.info (s"Agg collection MERRA_DAILY_TEST Result: " + printer.format (agg_result_node) )
-  //  }
-
-
-  test("Cache") { if(test_cache) {
-    for( (model, collection) <- mod_collections ) {
-      val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":150,"system":"indices"}}],variable=[{"uri":"collection:/$collection","name":"tas:v1","domain":"d0"}]]"""
-      print( s"Caching collection $collection" )
-      val cache_result_node = executeTest(datainputs, Map.empty, "util.cache")
-      logger.info(s"Cache $collection:tas Result: " + printer.format(cache_result_node))
-      runtime.printMemoryUsage
-    }
-    if( use_6hr_data )
-      for( (model, collection) <- cip_collections ) {
-        val datainputs = s"""[domain=[{"name":"d0","lat":{"start":0,"end":40,"system":"values"},"lon":{"start":0,"end":40,"system":"values"},"time":{"start":"2000-01-01","end":"2005-01-01","system":"values"}}],variable=[{"uri":"collection:/$collection","name":"ta:v1","domain":"d0"}]]"""
-        print( s"Caching collection $collection" )
-        val cache_result_node = executeTest(datainputs, Map.empty, "util.cache")
-        logger.info(s"Cache $collection:tas Result: " + printer.format(cache_result_node))
-        runtime.printMemoryUsage
-      }
-  }}
-
-//  https://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/ta.ncml.html
-//  https://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/JMA/JRA-55/mon/atmos/ta.ncml.html
-// ///
 
   test("ReanalysisEnsemble") { if(test_regrid && reanalysis_ensemble) {
     print( s"Running test ReanalysisEnsemble" )
@@ -797,7 +715,8 @@ class DefaultTestSuite extends EDASTestSuite {
   }
 
   test("Max3") {
-    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 296.312, 294.3597, 293.7058, 292.8994, 291.9226, 291.0488 ).map(_.toFloat), Float.MaxValue )
+    // ncwa -O -v tas -d time,10,10 -d lat,30.0,40.0  -a lon -y max ${datafile} ~/test/out/maxval1.nc
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 296.312, 294.3597, 293.7058, 292.8994, 291.9226 ).map(_.toFloat), Float.MaxValue )
     val datainputs = s"""[domain=[{"name":"d0","lat":{"start":30,"end":40,"system":"values"},"time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"x"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = getResultData( result_node )

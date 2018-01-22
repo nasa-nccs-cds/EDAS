@@ -252,8 +252,11 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
     logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier  )
-    input.map( map(context) )
+    val result = input.map( map(context) )
+    result
   }
+
+  def filterInputs ( input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = { input }
 
   def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = {
     if ( reduceCombineOp.exists( _ == CDFloatArray.customOp ) ) { customReduceRDD(context) }
@@ -727,7 +730,7 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
     val dt = (System.nanoTime - t0) / 1.0E9
     logger.info("Executed Kernel %s map op, time = %.4f s".format(name, dt ))
     context.addTimestamp( "Map Op complete, time = %.4f s, shape = (%s)".format( dt, shape.mkString(",") ) )
-    CDTimeSlice(  inputs.timestamp, inputs.dt, inputs.elements ++ Seq(context.operation.rid -> elem) )
+    CDTimeSlice(  inputs.timestamp, inputs.dt, Seq(context.operation.rid -> elem).toMap )
   }
 }
 
@@ -740,7 +743,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
       val result_array: ArraySpec = input_arrays.reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1 ) )
       logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
       context.addTimestamp("Map Op complete")
-      CDTimeSlice(  inputs.timestamp, inputs.dt, inputs.elements ++ Seq(context.operation.rid -> result_array) )
+      CDTimeSlice(  inputs.timestamp, inputs.dt, Seq(context.operation.rid -> result_array).toMap )
     } else { inputs }
   }
 }
@@ -833,7 +836,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
       }
       logger.info("Gateway: Executing operation %s in time %.4f s".format(context.operation.identifier, (System.nanoTime - t1) / 1.0E9))
       context.addTimestamp("Map Op complete")
-      CDTimeSlice(inputs.timestamp, inputs.dt, inputs.elements ++ resultItems)
+      CDTimeSlice(inputs.timestamp, inputs.dt, resultItems.toMap )
     } finally {
       workerManager.releaseWorker(worker)
     }

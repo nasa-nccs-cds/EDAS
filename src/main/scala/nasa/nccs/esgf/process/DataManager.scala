@@ -477,7 +477,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     } else coordAxis1D.findCoordElement( cval )
   }
 
-  def getGridCoordIndex(cval: Double, role: BoundsRole.Value, strict: Boolean = true) = {
+  def getGridCoordIndex(cval: Double, role: BoundsRole.Value, strict: Boolean = true): Option[Int] = {
     val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
     val ncval = getNormalizedCoordinate( cval )
     findCoordElement( coordAxis1D, ncval ) match {
@@ -501,9 +501,20 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     if (coord_values.length == range.length) coord_values else (0 until range.length).map(iE => coord_values(range.element(iE))).toArray
   }
 
-  def getGridIndexBounds( startval: Double, endval: Double, strict: Boolean = true): Option[ma2.Range] = getGridCoordIndex(startval, BoundsRole.Start, strict).flatMap(startIndex =>
-    getGridCoordIndex(endval, BoundsRole.End, strict).map( endIndex =>
-      new ma2.Range( getCFAxisName, startIndex, endIndex ) ) )
+  def getGridIndexBounds( startval: Double, endval: Double ): Option[ma2.Range] = {
+    val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
+    val axis_size = coordAxis1D.getSize.toInt
+    val coordStartIndex = Math.max( coordAxis1D.findCoordElementBounded(startval) - 1, 0 )
+    var startIndex = -1
+    for(  coordIndex <- coordStartIndex until axis_size; cval = coordAxis1D.getCoordValue( coordIndex ); if cval >= startval ) {
+      if( cval <= endval ) {
+        if( startIndex == -1 ) { startIndex = coordIndex }
+      } else {
+        return Some( new ma2.Range( startIndex, coordIndex-1 ) )
+      }
+    }
+    if( startIndex == -1 ) { None } else { Some( new ma2.Range( startIndex, axis_size - 1) ) }
+  }
 
   def getIndexBounds( startval: GenericNumber, endval: GenericNumber, strict: Boolean = false): Option[ma2.Range] = {
     val rv = if (coordAxis.getAxisType == nc2.constants.AxisType.Time) getTimeCoordIndices( startval.toString, endval.toString ) else getGridIndexBounds( startval, endval )
