@@ -247,7 +247,7 @@ class ave extends SingularRDDKernel(Map.empty) {
     })
     logger.info("Executed Kernel %s map op, input = %s, time = %.4f s".format(name,  id, (System.nanoTime - t0) / 1.0E9))
     context.addTimestamp( "Map Op complete" )
-    val rv = CDTimeSlice( inputs.timestamp, inputs.dt, elems.toMap )
+    val rv = CDTimeSlice( inputs.timestamp, inputs.dt, inputs.elements ++ elems )
     logger.info("Returning result value")
     rv
   }
@@ -264,9 +264,7 @@ class subset extends Kernel(Map.empty) {
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
   val doesAxisElimination: Boolean = false
 
-  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = {
-    rdd
-  }
+  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = { rdd }
 }
 //
 //class anomaly extends SingularRDDKernel(Map.empty) {

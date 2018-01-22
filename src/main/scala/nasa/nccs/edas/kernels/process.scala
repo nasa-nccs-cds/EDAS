@@ -238,8 +238,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val identifier = name
   def matchesSpecs( specs: Array[String] ): Boolean = { (specs.size >= 2) && specs(0).equals(module) && specs(1).equals(operation) }
   val nOutputsPerInput: Int = options.getOrElse("nOutputsPerInput","1").toInt
-  def getInputArrays( inputs: CDTimeSlice, context: KernelContext ): List[ArraySpec] = context.operation.inputs.map( id => inputs.element( id ).getOrElse { throw new Exception(s"Can't find input ${id} for kernel ${identifier}") } )
-
+  def getInputArrays( inputs: CDTimeSlice, context: KernelContext ): List[ArraySpec] =
+    context.operation.inputs.map( id => inputs.element( id ).getOrElse { throw new Exception(s"Can't find input ${id} for kernel ${identifier}") } )
 
   val mapCombineOp: Option[ReduceOpFlt] = options.get("mapOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
   val mapCombineNOp: Option[ReduceNOpFlt] = None
@@ -730,7 +730,7 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
     val dt = (System.nanoTime - t0) / 1.0E9
     logger.info("Executed Kernel %s map op, time = %.4f s".format(name, dt ))
     context.addTimestamp( "Map Op complete, time = %.4f s, shape = (%s)".format( dt, shape.mkString(",") ) )
-    CDTimeSlice(  inputs.timestamp, inputs.dt, Seq(context.operation.rid -> elem).toMap )
+    CDTimeSlice(  inputs.timestamp, inputs.dt, inputs.elements ++ Seq(context.operation.rid -> elem) )
   }
 }
 
@@ -743,7 +743,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
       val result_array: ArraySpec = input_arrays.reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1 ) )
       logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
       context.addTimestamp("Map Op complete")
-      CDTimeSlice(  inputs.timestamp, inputs.dt, Seq(context.operation.rid -> result_array).toMap )
+      CDTimeSlice(  inputs.timestamp, inputs.dt, inputs.elements ++ Seq(context.operation.rid -> result_array) )
     } else { inputs }
   }
 }
@@ -836,7 +836,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
       }
       logger.info("Gateway: Executing operation %s in time %.4f s".format(context.operation.identifier, (System.nanoTime - t1) / 1.0E9))
       context.addTimestamp("Map Op complete")
-      CDTimeSlice(inputs.timestamp, inputs.dt, resultItems.toMap )
+      CDTimeSlice(inputs.timestamp, inputs.dt, inputs.elements ++ resultItems )
     } finally {
       workerManager.releaseWorker(worker)
     }

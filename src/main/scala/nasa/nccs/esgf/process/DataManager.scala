@@ -96,15 +96,16 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
 //      }
 //  }
 
-  private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Unit = {
+  private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Iterable[String] = {
     for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )
     val disposable_inputs: Iterable[String] = for( (uid,input) <- getInputs(node); if input.disposable ) yield { uid }
     _inputsRDD.release(disposable_inputs)
+    disposable_inputs
   }
 
   def execute(workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): TimeSliceCollection =  {
       val result = _inputsRDD.execute( workflow, rootNode.kernel, kernelCx, batchIndex )
-      releaseInputs( rootNode, kernelCx )
+      val disposable_inputs = releaseInputs( rootNode, kernelCx )
       result
   }
 
