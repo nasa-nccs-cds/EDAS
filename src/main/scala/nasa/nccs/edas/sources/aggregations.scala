@@ -17,7 +17,10 @@ import scala.collection.mutable
 import scala.io.Source
 import scala.util.matching.Regex
 
-case class FileInput( index: Int, startTime: Long, nRows: Int, path: String )
+case class FileInput( index: Int, startTime: Long, startIndex: Int, nRows: Int, path: String ) {
+  def getTimeRange: ma2.Range = new ma2.Range( startIndex, startIndex + nRows )
+  def intersects( range: ma2.Range ) = getTimeRange.intersects( range )
+}
 
 case class Variable( name: String, shape: Array[Int], dims: String, units: String ) {
   def toXml: xml.Elem = { <variable name={name} shape={shape.mkString(",")} dims={dims} units={units} /> }
@@ -328,14 +331,8 @@ case class Aggregation( dataPath: String, files: List[FileInput], variables: Lis
     if( fileInputs.isEmpty ) { rangeMap } else { getRangeMap(time_index + fileInputs.head.nRows + 1, fileInputs.tail,  rangeMap ++ List( new ma2.Range( time_index, time_index + fileInputs.head.nRows ) -> fileInputs.head ) ) }
   }
 
-  def getIntersectingFiles( sectionString: String ): List[FileInput] = {
-    CDSection.fromString(sectionString).map(_.toSection) match {
-      case None => files
-      case Some( section ) =>
-        val timeRange = section.getRange( 0 )
-        getRangeMap().filter( _._1.intersects(timeRange) ).map(_._2)
-    }
-  }
+  def getIntersectingFiles( sectionString: String ): List[FileInput] = CDSection.fromString(sectionString).map( _.toSection.getRange(0) ).fold( files )( timeRange => files.filter( _.intersects(timeRange) ) )
+
 }
 
 class FileBase( files: List[FileInput] ) extends Loggable with Serializable {
@@ -365,9 +362,13 @@ object Aggregation extends Loggable {
     val coordinates = mutable.ListBuffer.empty[Coordinate]
     val axes = mutable.ListBuffer.empty[Axis]
     val parameters = mutable.HashMap.empty[String,String]
+    var timeIndex = 0
     try {
       for (line <- source.getLines; toks = line.split(';').map(_.trim) ) try{ toks(0) match {
-        case "F" =>  files += FileInput(files.length, toks(1).toLong, toks(2).toInt, toks(3))
+        case "F" =>
+          val nTS = toks(2).toInt
+          files += FileInput(files.length, toks(1).toLong, timeIndex, nTS, toks(3))
+          timeIndex += nTS + 1
         case "P" =>  parameters += toks(1) -> toks(2)
         case "V" => variables += Variable( toks(1), toks(2).split(",").map( _.toInt ), toks(3), toks(4) )
         case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( _.toInt ) )
@@ -412,10 +413,8 @@ object Aggregation extends Loggable {
       }
       for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} \n" ) }
       for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName};  ${variable.getShape.mkString(",")};  ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
-      var startIndex = 0L
       for (fileHeader <- reducedFileheaders) {
-        bw.write( s"F; ${fileHeader.startValue}; $startIndex; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
-        startIndex = startIndex + fileHeader.nElem + 1
+        bw.write( s"F; ${fileHeader.startValue}; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
       }
     } finally {
       fileMetadata.close
