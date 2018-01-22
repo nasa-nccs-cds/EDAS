@@ -7,11 +7,12 @@ datafile="/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1/tas_Amon_GISS-E
 
 # ncks -O -v tas -d lat,0,5 -d lon,0,5 -d time,0,0 ${datafile} ~/test/out/subset_xi05_yi05_ti0_GISS_r1i1p1_185001-190012.nc
 
-#ncks -O -v tas -d lat,10,15 -d lon,5,10 -d time,10,10  ${datafile} ~/test/out/subset.nc
-#ncdump ~/test/out/subset.nc
+ncks -O -v tas -d lat,30,30 -d lon,30,30 -d time,0,100  ${datafile} ~/test/out/subset.nc
+ncdump ~/test/out/subset.nc
 
 # ncwa -O -v tas -d time,10,10 -a lat,lon -y max ${datafile} ~/test/out/maxval.nc
-# ncwa -O -v tas -d time,10,10 -a lat,lon -y min ${datafile} ~/test/out/minval.nc
+#ncwa -O -v tas -d time,0,100 -a lat,lon -y min ${datafile} ~/test/out/subset.nc
+#ncdump ~/test/out/subset.nc
 
 # ncwa -O -v tas -d time,10,10 -a lat,lon -y sum ${datafile} ~/test/out/sumval.nc
 
@@ -19,8 +20,8 @@ datafile="/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1/tas_Amon_GISS-E
 
 # ncwa -O -v tas -d lat,5,8 -d lon,5,8 -d time,50,150 -a time -y min ${datafile} maxval.nc
 
-ncwa -O -v tas -d time,10,10 -d lat,30.0,40.0  -a lon -y max ${datafile} ~/test/out/maxval1.nc
-ncdump ~/test/out/maxval1.nc
+#ncwa -O -v tas -d time,10,10 -d lat,30.0,40.0  -a lon -y max ${datafile} ~/test/out/maxval1.nc
+#ncdump ~/test/out/maxval1.nc
 
 # ncwa -O -v t -d time,4,4 -d levels,10,10 -a latitude,longitude -y min ${datafile1} maxval.nc
 

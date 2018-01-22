@@ -252,6 +252,7 @@ class ave extends SingularRDDKernel(Map.empty) {
     rv
   }
   override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
+  override def hasReduceOp: Boolean = true
   override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
 }
 

@@ -78,6 +78,7 @@ object CDTimeSlice {
 }
 
 case class CDTimeSlice(timestamp: Long, dt: Int, elements: Map[String,ArraySpec] ) {
+  val test = 0
   def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( timestamp, dt, elements ++ other.elements ) }
   def <+( other: CDTimeSlice ): CDTimeSlice = append( other )
 //  def validate_identity( other_index: Int ): Unit = assert ( other_index == index , s"TimeSlice index mismatch: ${index} vs ${other_index}" )
@@ -90,7 +91,7 @@ case class CDTimeSlice(timestamp: Long, dt: Int, elements: Map[String,ArraySpec]
   def element( id: String ): Option[ArraySpec] = elements.get( id )
   def isEmpty = elements.isEmpty
   def ~( other: CDTimeSlice ) =  { assert( (dt == other.dt) && (timestamp == other.timestamp) , s"Mismatched Time slices: { $timestamp $dt } vs { ${other.timestamp} ${other.dt} }" ) }
-  def ~>( other: CDTimeSlice ) = { assert( Math.abs( timestamp+dt - other.timestamp ) <= 1  , s"Non-adjacent Time slices: { $timestamp $dt } vs { ${other.timestamp} ${other.dt} }" ) }
+  def ~>( other: CDTimeSlice ) = { assert(  timestamp < other.timestamp, s"Disordered Time slices: { $timestamp $dt -> ${timestamp+dt} } vs { ${other.timestamp} ${other.dt} }" ) }
   def append( other: CDTimeSlice ): CDTimeSlice = { this ~> other;  new CDTimeSlice(timestamp, dt + other.dt, elements.flatMap { case (key,array0) => other.elements.get(key).map( array1 => key -> ( array0 ++ array1 ) ) } ) }
 }
 
@@ -107,7 +108,8 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
   def getNumPartitions = rdd.getNumPartitions
   def collect: TimeSliceCollection = new TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = new TimeSliceRDD( rdd.collect(op), metadata )
-  def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): TimeSliceCollection = TimeSliceCollection( rdd.treeReduce(op), metadata )
+  def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): TimeSliceCollection =
+    TimeSliceCollection( rdd.treeReduce(op), metadata )
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
 }
 
@@ -131,7 +133,7 @@ class TimeSliceCollection( val slices: Array[CDTimeSlice], metadata: Map[String,
   }
 
   def concatSlices: TimeSliceCollection = {
-    val concatSlices = sort().slices.reduce( _ ++ _ )
+    val concatSlices = sort().slices.reduce( _ <+ _ )
     new TimeSliceCollection( Array( concatSlices ), metadata )
   }
 
@@ -254,16 +256,18 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
     val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
 //    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
     val t1 = System.nanoTime()
-    val dt: Int = Math.round( ( dates.last.getMillis - dates.head.getMillis ) / ( dates.length - 1 ).toFloat )
-    val slices: List[CDTimeSlice] =  dates.zipWithIndex map { case (date: CalendarDate, slice_index: Int) =>
+    val dataMillis = dates.map( _.getMillis )
+    var dt = 0L
+    val lastTimeIndex = dataMillis.length - 1
+    val slices: List[CDTimeSlice] =  dataMillis.zipWithIndex map { case (dateMillis: Long, slice_index: Int) =>
       val sliceRanges = getSliceRanges( interSect, slice_index)
       val data_section = variable.read(sliceRanges)
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
       val data_shape: Array[Int] = data_section.getShape
       val section = variable.getShapeAsSection
       val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array )
-      //      (timestamp/millisPerMin).toInt -> CDTimeSlice( timestamp, missing, data_section )  // new java.sql.Timestamp( date.getMillis )
-      CDTimeSlice( date.getMillis, dt, Map( varId -> arraySpec ) )  //
+      if( slice_index < lastTimeIndex ) { dt = dataMillis( slice_index + 1 ) - dateMillis }
+      CDTimeSlice( dateMillis, dt.toInt, Map( varId -> arraySpec ) )
     }
     dataset.close()
     if( fileInput.index % 500 == 0 ) {
