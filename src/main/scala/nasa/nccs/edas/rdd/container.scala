@@ -93,7 +93,7 @@ case class CDTimeSlice(timestamp: Long, dt: Long, elements: Map[String,ArraySpec
   def element( id: String ): Option[ArraySpec] = elements.get( id )
   def isEmpty = elements.isEmpty
   def contains( other_timeslice: Long ): Boolean = { (other_timeslice >= timestamp) && ((other_timeslice-timestamp) <= dt) }
-  def contains( other: CDTimeSlice ): Boolean = { contains(other.midpoint) }
+  def contains( other: CDTimeSlice ): Boolean = { contains(other.timestamp) }
   def ~( other: CDTimeSlice ) =  { assert( (dt == other.dt) && (timestamp == other.timestamp) , s"Mismatched Time slices: { $timestamp $dt } vs { ${other.timestamp} ${other.dt} }" ) }
   def precedes( other: CDTimeSlice ) = { assert(  timestamp < other.timestamp, s"Disordered Time slices: { $timestamp $dt -> ${timestamp+dt} } vs { ${other.timestamp} ${other.dt} }" ) }
   def append( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice(timestamp, combinedDt(other), elements.flatMap { case (key,array0) => other.elements.get(key).map( array1 => key -> ( array0 ++ array1 ) ) } ) }
@@ -116,7 +116,8 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
   def getNumPartitions = rdd.getNumPartitions
   def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = new TimeSliceRDD( rdd.collect(op), metadata )
-  def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): TimeSliceCollection = TimeSliceCollection( rdd.sortBy(_.timestamp).treeReduce(op), metadata )
+  def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): TimeSliceCollection =
+    TimeSliceCollection( rdd.sortBy(_.timestamp).fold(CDTimeSlice.empty)(op), metadata )
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
   def selectElement( elemId: String ): TimeSliceRDD = new TimeSliceRDD ( rdd.map( _.selectElement( elemId ) ), metadata )
   def selectElements(  op: String => Boolean  ): TimeSliceRDD = new TimeSliceRDD ( rdd.map( _.selectElements( op ) ), metadata )
