@@ -77,25 +77,33 @@ object CDTimeSlice {
   def empty = new CDTimeSlice( -1, 0, Map.empty[String,ArraySpec] )
 }
 
-case class CDTimeSlice(timestamp: Long, dt: Int, elements: Map[String,ArraySpec] ) {
-  val test = 0
+case class CDTimeSlice(timestamp: Long, dt: Long, elements: Map[String,ArraySpec] ) {
+  assert( dt >= 0, s"Negative DT in CDTimeSlice: ${dt}")
   def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( timestamp, dt, elements ++ other.elements ) }
   def <+( other: CDTimeSlice ): CDTimeSlice = append( other )
-//  def validate_identity( other_index: Int ): Unit = assert ( other_index == index , s"TimeSlice index mismatch: ${index} vs ${other_index}" )
   def clear: CDTimeSlice = { new CDTimeSlice( timestamp, dt, Map.empty[String,ArraySpec] ) }
+  def midpoint: Long = timestamp + dt/2
+  def endpoint: Long = timestamp + dt
+  def combinedDt( other: CDTimeSlice ): Long = { this.precedes(other); other.endpoint - timestamp }
   def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, elements.mapValues( _.section(section) ) ) }
-  def release( keys: Iterable[String] ): CDTimeSlice = {
-    new CDTimeSlice( timestamp, dt, elements.filterKeys(key => !keys.contains(key) ) )
-  }
+  def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice( timestamp, dt, elements.filterKeys(key => !keys.contains(key) ) ) }
+  def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice( timestamp, dt, elements.filterKeys( _.equalsIgnoreCase(elemId) ) )
+  def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice( timestamp, dt, elements.filterKeys( key => op(key) ) )
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def element( id: String ): Option[ArraySpec] = elements.get( id )
   def isEmpty = elements.isEmpty
+  def contains( other_timeslice: Long ): Boolean = { (other_timeslice >= timestamp) && ((other_timeslice-timestamp) <= dt) }
+  def contains( other: CDTimeSlice ): Boolean = { contains(other.midpoint) }
   def ~( other: CDTimeSlice ) =  { assert( (dt == other.dt) && (timestamp == other.timestamp) , s"Mismatched Time slices: { $timestamp $dt } vs { ${other.timestamp} ${other.dt} }" ) }
-  def ~>( other: CDTimeSlice ) = { assert(  timestamp < other.timestamp, s"Disordered Time slices: { $timestamp $dt -> ${timestamp+dt} } vs { ${other.timestamp} ${other.dt} }" ) }
-  def append( other: CDTimeSlice ): CDTimeSlice = { this ~> other;  new CDTimeSlice(timestamp, dt + other.dt, elements.flatMap { case (key,array0) => other.elements.get(key).map( array1 => key -> ( array0 ++ array1 ) ) } ) }
+  def precedes( other: CDTimeSlice ) = { assert(  timestamp < other.timestamp, s"Disordered Time slices: { $timestamp $dt -> ${timestamp+dt} } vs { ${other.timestamp} ${other.dt} }" ) }
+  def append( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice(timestamp, combinedDt(other), elements.flatMap { case (key,array0) => other.elements.get(key).map( array1 => key -> ( array0 ++ array1 ) ) } ) }
+  def optExtractSlice( collection: TimeSliceCollection ): Option[CDTimeSlice] = collection.slices.find( _.contains( this ) )
+  def extractSlice( collection: TimeSliceCollection ): CDTimeSlice = optExtractSlice( collection ).getOrElse(
+    throw new Exception( s"Missing matching slice in broadcast: { ${timestamp}, ${dt} }")
+  )
 }
 
-class DataCollection( val metadata: Map[String,String] ) {
+class DataCollection( val metadata: Map[String,String] ) extends Serializable {
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
 }
 
@@ -106,22 +114,23 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
   def release( keys: Iterable[String] ): TimeSliceRDD = new TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
   def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = new TimeSliceRDD( rdd.map( ts => op(ts) ), metadata )
   def getNumPartitions = rdd.getNumPartitions
-  def collect: TimeSliceCollection = new TimeSliceCollection( rdd.collect, metadata )
+  def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = new TimeSliceRDD( rdd.collect(op), metadata )
-  def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): TimeSliceCollection =
-    TimeSliceCollection( rdd.treeReduce(op), metadata )
+  def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): TimeSliceCollection = TimeSliceCollection( rdd.sortBy(_.timestamp).treeReduce(op), metadata )
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
+  def selectElement( elemId: String ): TimeSliceRDD = new TimeSliceRDD ( rdd.map( _.selectElement( elemId ) ), metadata )
+  def selectElements(  op: String => Boolean  ): TimeSliceRDD = new TimeSliceRDD ( rdd.map( _.selectElements( op ) ), metadata )
 }
 
 object TimeSliceCollection {
-  def apply( slice: CDTimeSlice, metadata: Map[String,String] ): TimeSliceCollection = new TimeSliceCollection( Array(slice), metadata )
-  def apply( slices: Array[CDTimeSlice], metadata: Map[String,String] ): TimeSliceCollection = new TimeSliceCollection( slices, metadata )
-  def empty: TimeSliceCollection = new TimeSliceCollection( Array.empty[CDTimeSlice], Map.empty[String,String] )
+  def apply( slice: CDTimeSlice, metadata: Map[String,String] ): TimeSliceCollection = TimeSliceCollection( Array(slice), metadata )
+  def empty: TimeSliceCollection = TimeSliceCollection( Array.empty[CDTimeSlice], Map.empty[String,String] )
 }
 
-class TimeSliceCollection( val slices: Array[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) {
-  def section( section: CDSection ): TimeSliceCollection = { new TimeSliceCollection( slices.map( _.section(section) ), metadata ) }
-  def sort(): TimeSliceCollection = { new TimeSliceCollection( slices.sortBy( _.timestamp ), metadata ) }
+case class TimeSliceCollection( slices: Array[CDTimeSlice], metadata: Map[String,String] ) extends Serializable {
+  def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
+  def section( section: CDSection ): TimeSliceCollection = { TimeSliceCollection( slices.map( _.section(section) ), metadata ) }
+  def sort(): TimeSliceCollection = { TimeSliceCollection( slices.sortBy( _.timestamp ), metadata ) }
   val nslices: Int = slices.length
 
   def merge( other: TimeSliceCollection, op: CDTimeSlice.ReduceOp ): TimeSliceCollection = {
@@ -129,12 +138,12 @@ class TimeSliceCollection( val slices: Array[CDTimeSlice], metadata: Map[String,
     val merged_slices = if(tsc0.slices.isEmpty) { tsc1.slices } else if(tsc1.slices.isEmpty) { tsc0.slices } else {
       tsc0.slices.zip( tsc1.slices ) map { case (s0,s1) => op(s0,s1) }
     }
-    new TimeSliceCollection( merged_slices, metadata ++ other.metadata )
+    TimeSliceCollection( merged_slices, metadata ++ other.metadata )
   }
 
   def concatSlices: TimeSliceCollection = {
     val concatSlices = sort().slices.reduce( _ <+ _ )
-    new TimeSliceCollection( Array( concatSlices ), metadata )
+    TimeSliceCollection( Array( concatSlices ), metadata )
   }
 
   def getConcatSlice: CDTimeSlice = concatSlices.slices.head
@@ -267,7 +276,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
       val section = variable.getShapeAsSection
       val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array )
       if( slice_index < lastTimeIndex ) { dt = dataMillis( slice_index + 1 ) - dateMillis }
-      CDTimeSlice( dateMillis, dt.toInt, Map( varId -> arraySpec ) )
+      CDTimeSlice( dateMillis, dt, Map( varId -> arraySpec ) )
     }
     dataset.close()
     if( fileInput.index % 500 == 0 ) {
@@ -363,6 +372,7 @@ class RDDContainer extends Loggable {
   def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
 
   def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
+  def reduceBroadcast( node: Kernel, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ) )
 
   private def _extendRDD( generator: RDDGenerator, rdd: TimeSliceRDD, vSpecs: List[DirectRDDVariableSpec]  ): TimeSliceRDD = {
     if( vSpecs.isEmpty ) { rdd }

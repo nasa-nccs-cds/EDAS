@@ -103,16 +103,20 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     disposable_inputs
   }
 
-  def execute(workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): TimeSliceCollection =  {
+  def execute( workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): TimeSliceCollection =  {
       val result = _inputsRDD.execute( workflow, rootNode.kernel, kernelCx, batchIndex )
       val disposable_inputs = releaseInputs( rootNode, kernelCx )
       result
   }
 
-  def execInput(node: WorkflowNode, kernelCx: KernelContext, batchIndex: Int ) =  {
+  def streamMapReduce(node: WorkflowNode, kernelCx: KernelContext, serverContext: ServerContext, batchIndex: Int ) =  {
      _inputsRDD.map( node.kernel, kernelCx )
       releaseInputs( node, kernelCx )
+      if( node.doesTimeReduction ) {
+        _inputsRDD.reduceBroadcast( node.kernel, kernelCx, serverContext, batchIndex )
+      }
   }
+
 
   def hasBatch ( batchIndex: Int ): Boolean = optPartitioner match {
     case None => false

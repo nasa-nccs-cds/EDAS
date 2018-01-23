@@ -378,14 +378,14 @@ class DefaultTestSuite extends EDASTestSuite {
   }
 
   test("anomaly-time-2") {
-    val datainputs = s"""[domain=[{"name":"d0", "lat":{"start":30,"end":50,"system":"values"}, "lon":{"start":0,"end":20,"system":"values"}},{"name":"d1", "lat":{"start":30,"end":50,"system":"values"}, "lon":{"start":0,"end":20,"system":"values"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v0","domain":"d0"},{"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v1","domain":"d1"}],operation=[{"name":"CDSpark.ave","input":"v0","axes":"t","id":"v0ave"},{"name":"CDSpark.eDiff","input":"v1,v0ave"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0", "lat":{"start":30,"end":50,"system":"values"}, "lon":{"start":0,"end":20,"system":"values"}},{"name":"d1", "lat":{"start":30,"end":50,"system":"values"}, "lon":{"start":0,"end":20,"system":"values"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"},{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d1"}],operation=[{"name":"CDSpark.ave","input":"v0","axes":"t","id":"v0ave"},{"name":"CDSpark.eDiff","input":"v1,v0ave"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
   }
 
   test("anomaly-spatial") {
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":0,"end":60,"system":"values"},"lon":{"start":0,"end":60,"system":"values"},"time": {"start": 0, "end": 100, "crs": "indices"}},{"name":"d1","lat":{"start":30,"end":30,"system":"values"},"lon":{"start":30,"end":30,"system":"values"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v0","domain":"d0"},{"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v1","domain":"d1"}],operation=[{"name":"CDSpark.ave","input":"v0","axes":"xy","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":0,"end":60,"system":"values"},"lon":{"start":0,"end":60,"system":"values"},"time": {"start": 0, "end": 100, "crs": "indices"}},{"name":"d1","lat":{"start":30,"end":30,"system":"values"},"lon":{"start":30,"end":30,"system":"values"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"},{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d1"}],operation=[{"name":"CDSpark.ave","input":"v0","axes":"xy","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
@@ -394,7 +394,7 @@ class DefaultTestSuite extends EDASTestSuite {
   test("time-ave-giss") {
     val datainputs =
       s"""[domain=[ {"name":"d0", "time": {"start":"1980-01-01T00:00:00", "end":"1981-01-01T00:00:00", "crs": "timestamps"}} ],
-          variable=[ {"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v0","domain":"d0"}],
+          variable=[ {"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"}],
           operation=[ {"name":"CDSpark.ave","input":"v0","axes":"t","id":"v0ave"} ] ]""".stripMargin
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
@@ -407,8 +407,8 @@ class DefaultTestSuite extends EDASTestSuite {
               {"name":"d0", "time": {"start":"1980-01-01T00:00:00", "end":"1981-01-01T00:00:00", "crs": "timestamps"}},
               {"name":"d1", "time": {"start":"2000-01-01T00:00:00", "end":"2001-01-01T00:00:00", "crs": "timestamps"}}],
           variable=[
-              {"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v0","domain":"d0"},
-              {"uri":"collection:/giss_e2_r_r1i1p1","name":"tas:v1","domain":"d1"}],
+              {"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"},
+              {"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d1"}],
           operation=[
               {"name":"CDSpark.ave","input":"v0","axes":"t","id":"v0ave"},
               {"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave"},
@@ -492,7 +492,7 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("SpaceAve-dap") {
     val nco_verified_result: CDFloatArray = CDFloatArray( Array( 270.07922, 269.5924, 267.8264, 265.12802, 262.94022, 261.35474, 260.80325, 260.67126, 261.85434, 263.46478, 265.88184, 269.2312, 270.60336, 270.05328, 267.67136, 265.6528, 263.22043, 262.25778, 261.28976, 261.22495, 260.86606, 263.05197, 265.86447, 269.4156, 270.377, 269.69855, 267.54056, 264.81995, 263.0417, 261.2425, 260.65546, 260.83783, 261.6036, 263.3008, 265.84967 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/giss_e2_r_r3i1p1.ncml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"}}],variable=[{"uri":"collection:/giss_r3i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
     val result_node = executeTest( datainputs, Map("numParts"->"4") )
     val result_data = getResultData( result_node ).sample(35)
     println( "Op Result:       " + result_data.mkBoundedDataString(", ", 35) )
@@ -502,7 +502,7 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("SpaceAve-dap-weighted") {
     val unverified_result: CDFloatArray = CDFloatArray( Array( 275.33002, 275.421, 274.60782, 272.49066, 270.74817, 269.43668, 268.85538, 268.30545, 269.23157, 270.3477, 271.82803, 274.32462, 275.63687, 275.86008, 274.77255, 273.01877, 271.1244, 269.8313, 269.11166, 269.0543, 268.56665, 270.03775, 271.95786, 274.36444, 275.64667, 275.8889, 274.66507, 272.6253, 271.06415, 269.49023, 268.78036, 268.53293, 269.21652, 270.3025, 271.84027 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"}}],variable=[{"uri":"file:///Users/tpmaxwel/.edas/cache/collections/NCML/giss_e2_r_r3i1p1.ncml","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"xy"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"}}],variable=[{"uri":"collection:/giss_r3i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"xy"}]]"""
     val result_node = executeTest( datainputs, Map("numParts"->"4") )
     val result_data = getResultData( result_node ).sample(35)
     println( "Op Result:       " + result_data.mkBoundedDataString(", ", 35) )
@@ -510,7 +510,7 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( unverified_result  )  < eps, s" Incorrect value computed for Max")
   }
 
-  test("StdDev-dap") {
+  test("StdDev-GISS") {
     // # NCO Verification script:
     //  datafile="collection:/giss_r1i1p1"
     //  ncks -O -v tas  -d lat,5,5 -d lon,5,10 ${datafile} ~/test/out/sample_data.nc
@@ -532,7 +532,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkDataString(", ")  )
     println( "Verified Result: " + nco_verified_result.mkDataString(", ") )
-    assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for Max")
+    assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for StdDev")
   }
 
   test("TimeAve-npana") { if(use_npana_data) {

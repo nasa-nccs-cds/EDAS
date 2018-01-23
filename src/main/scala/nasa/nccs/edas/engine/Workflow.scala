@@ -40,7 +40,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
   def getResultId: String = operation.rid
   def getNodeId: String = operation.identifier
 
-  def isSubworkflowBoundayNode: Boolean = isRoot || doesTimeElimination
+  def isSubworkflowBoundayNode: Boolean = isRoot || doesTimeReduction
 
   def cacheProduct( executionResult: KernelExecutionResult  ): Unit = if(executionResult.holdsData) {
     logger.info( s"WorkflowNode CACHE PRODUCT: ${operation.rid}" )
@@ -54,7 +54,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) exten
 
   def fatal( msg: String ) = throw new Exception( s"Workflow Node '${operation.identifier}' Error: " + msg )
   def getKernelOption( key: String , default: String = ""): String = kernel.options.getOrElse(key,default)
-  def doesTimeElimination: Boolean = operation.operatesOnAxis('t' ) && kernel.doesAxisElimination
+  def doesTimeReduction: Boolean = operation.operatesOnAxis('t' ) && kernel.doesAxisReduction
 
   def getKernelContext( executor: WorkflowExecutor ): KernelContext = contexts.getOrElseUpdate( executor.requestCx.jobId, KernelContext( operation, executor ) )
 
@@ -235,7 +235,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def executeRequest(requestCx: RequestContext): Seq[ WPSProcessExecuteResponse ] = {
     val t0 =  System.nanoTime()
     linkNodes( requestCx )
-    val product_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeElimination ) ).toList
+    val product_nodes = DAGNode.sort( nodes.filter( node => node.isRoot || node.doesTimeReduction ) ).toList
     val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( product_nodes, requestCx ).map( _.markAsMergedSubworkflowRoot )
     val productNodeOpts = for( subworkflow_root_node <- subworkflow_root_nodes ) yield {
       val workflowCx = new WorkflowContext( getSubworkflowInputs( requestCx, subworkflow_root_node, true ), subworkflow_root_node )
@@ -297,7 +297,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def stream(node: WorkflowNode, executor: WorkflowExecutor, batchIndex: Int ): Unit = {
     val kernelContext = node.getKernelContext( executor )
     processInputs(node, executor, kernelContext, batchIndex)
-    executor.execInput( node, kernelContext, batchIndex )
+    executor.streamMapReduce( node, kernelContext, executionMgr.serverContext, batchIndex )
     logger.info( s"Executed STREAM mapReduce Batch ${batchIndex.toString}" )
   }
 

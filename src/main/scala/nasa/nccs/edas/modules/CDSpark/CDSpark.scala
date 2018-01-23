@@ -29,7 +29,7 @@ import scala.reflect.runtime.{universe => u}
 
 class max extends SingularRDDKernel(Map("mapreduceOp" -> "max")) {
   override val status = KernelStatus.public
-  val doesAxisElimination: Boolean = true
+  val doesAxisReduction: Boolean = true
 
 //  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
@@ -96,7 +96,7 @@ class eMin extends CombineRDDsKernel(Map("mapOp" -> "min")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Minimum"
-  val doesAxisElimination: Boolean = false
+  val doesAxisReduction: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise minimum values for input variables data over specified roi"
 }
 
@@ -105,7 +105,7 @@ class eMax extends CombineRDDsKernel(Map("mapOp" -> "max")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Maximum"
-  val doesAxisElimination: Boolean = false
+  val doesAxisReduction: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise maximum values for input variables data over specified roi"
 }
 
@@ -114,7 +114,7 @@ class eSum extends CombineRDDsKernel(Map("mapOp" -> "sum")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Maximum"
-  val doesAxisElimination: Boolean = false
+  val doesAxisReduction: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise sums for input variables data over specified roi"
 }
 
@@ -123,7 +123,7 @@ class eDiff extends CombineRDDsKernel(Map("mapOp" -> "subt")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Difference"
-  val doesAxisElimination: Boolean = false
+  val doesAxisReduction: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise diffs for input variables over specified roi"
 }
 
@@ -132,7 +132,7 @@ class eMult extends CombineRDDsKernel(Map("mapOp" -> "mult")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Product"
-  val doesAxisElimination: Boolean = false
+  val doesAxisReduction: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise products for input variables data over specified roi"
 }
 
@@ -141,7 +141,7 @@ class eDiv extends CombineRDDsKernel(Map("mapOp" -> "divide")) {
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Division"
-  val doesAxisElimination: Boolean = false
+  val doesAxisReduction: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise divisions for input variables data over specified roi"
 }
 
@@ -187,7 +187,7 @@ class min extends SingularRDDKernel(Map("mapreduceOp" -> "min")) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Minimum"
-  val doesAxisElimination: Boolean = true
+  val doesAxisReduction: Boolean = true
   val description = "REDUCTION OPERATION: CComputes minimum element value from input variable data over specified axes and roi"
   override val initValue: Float = Float.MaxValue
 
@@ -198,7 +198,7 @@ class sum extends SingularRDDKernel(Map("mapreduceOp" -> "sum")) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Sum"
-  val doesAxisElimination: Boolean = true
+  val doesAxisReduction: Boolean = true
   val description = "REDUCTION OPERATION: Computes sums of element values from input variable data over specified axes and roi"
   override val initValue: Float = 0f
 }
@@ -207,7 +207,7 @@ class rmSum extends SingularRDDKernel(Map("mapreduceOp" -> "sum","postOp"->"rms"
   val inputs = List( WPSDataInput("input variables", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Root Mean Sum"
-  val doesAxisElimination: Boolean = true
+  val doesAxisReduction: Boolean = true
   val description = "REDUCTION OPERATION: Computes root mean sum of input variable over specified axes and roi"
 }
 
@@ -216,7 +216,7 @@ class rms extends SingularRDDKernel( Map("mapOp" -> "sqAdd", "reduceOp" -> "sum"
   val inputs = List( WPSDataInput("input variables", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Root Mean Square"
-  val doesAxisElimination: Boolean = true
+  val doesAxisReduction: Boolean = true
   val description = "REDUCTION OPERATION: Computes root mean square of input variable over specified axes and roi"
 }
 
@@ -225,7 +225,7 @@ class ave extends SingularRDDKernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Mean"
-  val doesAxisElimination: Boolean = true
+  val doesAxisReduction: Boolean = true
   val description = "REDUCTION OPERATION: Computes (weighted) means of element values from input variable data over specified axes and roi"
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
@@ -262,9 +262,12 @@ class subset extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Subset"
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
-  val doesAxisElimination: Boolean = false
+  val doesAxisReduction: Boolean = false
 
-  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = { rdd }
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
+    val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
+    CDTimeSlice( inputs.timestamp, inputs.dt, elems.toMap )
+  }
 }
 //
 //class anomaly extends SingularRDDKernel(Map.empty) {
@@ -393,11 +396,11 @@ class noOp extends Kernel(Map.empty) {
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "NoOperation"
-  val doesAxisElimination: Boolean = false
+  val doesAxisReduction: Boolean = false
   override val description = "Returns the input data subset to the specified domain as the result"
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
-    val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => inputId -> array ) )
+    val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
     CDTimeSlice( inputs.timestamp, inputs.dt, elems.toMap )
   }
 }
