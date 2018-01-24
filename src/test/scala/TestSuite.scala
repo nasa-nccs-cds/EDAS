@@ -513,20 +513,40 @@ class DefaultTestSuite extends EDASTestSuite {
   test("StdDev-GISS") {
     // # NCO Verification script:
     //  datafile="collection:/giss_r1i1p1"
-    //  ncks -O -v tas  -d lat,5,5 -d lon,5,10 ${datafile} ~/test/out/sample_data.nc
+    //  ncks -O -v tas  -d lat,5,5 -d lon,5,10  -d time,0,500 ${datafile} ~/test/out/sample_data.nc
     //  ncwa -O -v tas -a time ~/test/out/sample_data.nc ~/test/out/time_ave.nc
     //  ncbo -O -v tas ~/test/out/sample_data.nc ~/test/out/time_ave.nc ~/test/out/dev.nc
     //  ncra -O -y rmssdn  ~/test/out/dev.nc ~/test/out/stdev.nc
     //  ncdump ~/test/out/stdev.nc
 
-    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 8.891345, 9.084756, 9.556104, 9.460443, 10.18193, 10.28795 ).map(_.toFloat), Float.MaxValue )
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 8.977108, 9.206723, 9.441524, 9.263811, 9.883913, 10.13755 ).map(_.toFloat), Float.MaxValue )
     val datainputs =
       s"""[
-            domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":0,"end":611,"system":"indices"}}],
+            domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":0,"end":500,"system":"indices"}}],
             variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
             operation=[       {"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t","id":"v1m"},
                               {"name":"CDSpark.eDiff","input":"v1,v1m","domain":"d0","id":"v1ss"},
                               {"name":"CDSpark.rms","input":"v1ss","domain":"d0","axes":"t"}]
+          ]""".replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkDataString(", ")  )
+    println( "Verified Result: " + nco_verified_result.mkDataString(", ") )
+    assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for StdDev")
+  }
+
+  test("TimeAve-GISS-1") {
+    // # NCO Verification script:
+    //  datafile="collection:/giss_r1i1p1"
+    //  ncks -O -v tas  -d lat,5,5 -d lon,5,10  -d time,0,500 ${datafile} ~/test/out/sample_data.nc
+    //  ncwa -O -v tas -a time ~/test/out/sample_data.nc ~/test/out/time_ave.nc
+
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 229.6116, 228.4243, 227.2998, 226.567, 224.8429, 224.1108 ).map(_.toFloat), Float.MaxValue )
+    val datainputs =
+      s"""[
+            domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":0,"end":500,"system":"indices"}}],
+            variable=[ {"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"} ],
+            operation=[ {"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t","id":"v1m"} ]
           ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = getResultData( result_node )
@@ -542,7 +562,7 @@ class DefaultTestSuite extends EDASTestSuite {
     println( "Op Result Data:       " + result_data.mkBoundedDataString(", ", 64) )
   }}
 
-  test("TimeAve-GISS") {
+  test("TimeAve-GISS-2") {
     val datainputs = """[domain=[{"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"}}],variable=[{"uri":"collection:/GISS_r3i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = getResultData( result_node )

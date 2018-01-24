@@ -247,7 +247,7 @@ class ave extends SingularRDDKernel(Map.empty) {
     })
     logger.info("Executed Kernel %s map op, input = %s, time = %.4f s".format(name,  id, (System.nanoTime - t0) / 1.0E9))
     context.addTimestamp( "Map Op complete" )
-    val rv = CDTimeSlice( inputs.timestamp, inputs.dt, inputs.elements ++ elems )
+    val rv = CDTimeSlice( inputs.startTime, inputs.endTime, inputs.elements ++ elems )
     logger.info("Returning result value")
     rv
   }
@@ -266,7 +266,7 @@ class subset extends Kernel(Map.empty) {
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
-    CDTimeSlice( inputs.timestamp, inputs.dt, elems.toMap )
+    CDTimeSlice( inputs.startTime, inputs.endTime, elems.toMap )
   }
 }
 //
@@ -401,7 +401,7 @@ class noOp extends Kernel(Map.empty) {
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
-    CDTimeSlice( inputs.timestamp, inputs.dt, elems.toMap )
+    CDTimeSlice( inputs.startTime, inputs.endTime, elems.toMap )
   }
 }
 //class binAve extends SingularRDDKernel(Map.empty) {

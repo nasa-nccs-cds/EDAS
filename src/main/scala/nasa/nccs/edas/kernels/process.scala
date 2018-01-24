@@ -269,7 +269,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     mapReduce(input, context, batchIndex )
   }
 
-  def reduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
+  def reduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
     logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
     runtime.printMemoryUsage
     val t0 = System.nanoTime()
@@ -280,7 +280,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     else {
       val rid = context.operation.rid.toLowerCase
       val reduceElements = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
-      val result: TimeSliceCollection = if( hasReduceOp || merge ) { reduceElements reduce getReduceOp(context) } else { reduceElements.collect }
+      val result: TimeSliceCollection = if( hasReduceOp ) { reduceElements.reduce( getReduceOp(context), ordered ) } else { reduceElements.collect }
       logger.debug("\n\n ----------------------- FINISHED reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
       context.addTimestamp( "FINISHED reduce Operation" )
       result
@@ -294,7 +294,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: TimeSliceRDD): TimeSliceRDD = {
     val reducedCollection = reduce( input, context, batchIndex, false )
-    val new_rdd = input.rdd.map ( tslice => tslice.extractSlice( reducedCollection ) )
+    val new_rdd = input.rdd.map ( tslice => tslice.addExtractedSlice( reducedCollection ) )
     new TimeSliceRDD( new_rdd, input.metadata )
   }
 
@@ -361,7 +361,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       }}
       //    logger.debug("&COMBINE: %s, time = %.4f s".format( context.operation.name, (System.nanoTime - t0) / 1.0E9 ) )
       context.addTimestamp("combineRDD complete")
-      CDTimeSlice( rec0.timestamp, rec0.dt + rec1.dt, TreeMap(new_elements.toSeq: _*) )
+      CDTimeSlice( rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*) )
     }
   }
 
@@ -671,29 +671,25 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def weightedValueSumRDDCombiner( context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = {
     val axes = context.getAxes
-    a0 precedes a1
-    if (axes.includes(0)) {
-      val t0 = System.nanoTime
-      val elems = a0.elements flatMap { case (key, data0) =>
-        a1.elements.get( key ) match {
-          case Some( data1 ) =>
-            val wKey = key + "_WEIGHTS_"
-            val vTot: FastMaskedArray = data0.toFastMaskedArray + data1.toFastMaskedArray
-            val t1 = System.nanoTime
-            val w0Opt: Option[ArraySpec] = a0.elements.get( wKey )
-            val w1Opt: Option[ArraySpec] = a1.elements.get( wKey )
-            val wTotOpt: Option[FastMaskedArray] = if(w0Opt.isDefined && w1Opt.isDefined) Option( w0Opt.get.toFastMaskedArray + w1Opt.get.toFastMaskedArray ) else None
-            val t2 = System.nanoTime
-            val resultList0 = List( key -> ArraySpec( vTot.missing, vTot.shape, data0.origin, vTot.getData ) )
-            wTotOpt.fold( resultList0 )( wTot => resultList0 ++ List( wKey -> ArraySpec(wTot.missing, wTot.shape, data0.origin, wTot.getData ) ) )
-          case None => logger.warn("Missing elemint in Record combine: " + key); List.empty[(String,ArraySpec)]
-        }
+    val t0 = System.nanoTime
+    val elems = a0.elements flatMap { case (key, data0) =>
+      a1.elements.get( key ) match {
+        case Some( data1 ) =>
+          val wKey = key + "_WEIGHTS_"
+          val vTot: FastMaskedArray = data0.toFastMaskedArray + data1.toFastMaskedArray
+          val t1 = System.nanoTime
+          val w0Opt: Option[ArraySpec] = a0.elements.get( wKey )
+          val w1Opt: Option[ArraySpec] = a1.elements.get( wKey )
+          val wTotOpt: Option[FastMaskedArray] = if(w0Opt.isDefined && w1Opt.isDefined) Option( w0Opt.get.toFastMaskedArray + w1Opt.get.toFastMaskedArray ) else None
+          val t2 = System.nanoTime
+          val resultList0 = List( key -> ArraySpec( vTot.missing, vTot.shape, data0.origin, vTot.getData ) )
+          wTotOpt.fold( resultList0 )( wTot => resultList0 ++ List( wKey -> ArraySpec(wTot.missing, wTot.shape, data0.origin, wTot.getData ) ) )
+        case None => logger.warn("Missing elemint in Record combine: " + key); List.empty[(String,ArraySpec)]
       }
-      val t3 = System.nanoTime
-      context.addTimestamp( "weightedValueSumCombiner complete" )
-      new CDTimeSlice( a0.timestamp, a0.combinedDt(a1), elems )
     }
-    else { a0 <+ a1 }
+    val t3 = System.nanoTime
+    context.addTimestamp( "weightedValueSumCombiner complete" )
+    new CDTimeSlice( a0.mergeStart(a1), a0.mergeEnd(a1), elems )
   }
 
 
@@ -704,7 +700,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val newData = arraySpec.toFastMaskedArray / wts.toFastMaskedArray
       key -> new ArraySpec( newData.missing, newData.shape, arraySpec.origin, newData.getData )
     }
-    new TimeSliceCollection( Array( new CDTimeSlice(slice.timestamp, slice.dt, new_elements) ), result.metadata )
+    new TimeSliceCollection( Array( new CDTimeSlice(slice.startTime, slice.endTime, new_elements) ), result.metadata )
   }
 
 //  def getMontlyBinMap(id: String, context: KernelContext): CDCoordMap = {
@@ -745,7 +741,7 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
     val dt = (System.nanoTime - t0) / 1.0E9
     logger.info("Executed Kernel %s map op, time = %.4f s".format(name, dt ))
     context.addTimestamp( "Map Op complete, time = %.4f s, shape = (%s)".format( dt, shape.mkString(",") ) )
-    CDTimeSlice(  inputs.timestamp, inputs.dt, inputs.elements ++ Seq(context.operation.rid -> elem) )
+    CDTimeSlice(  inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> elem) )
   }
 }
 
@@ -758,7 +754,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
       val result_array: ArraySpec = input_arrays.reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1 ) )
       logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
       context.addTimestamp("Map Op complete")
-      CDTimeSlice(  inputs.timestamp, inputs.dt, inputs.elements ++ Seq(context.operation.rid -> result_array) )
+      CDTimeSlice(  inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> result_array) )
     } else { inputs }
   }
 }
@@ -851,7 +847,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
       }
       logger.info("Gateway: Executing operation %s in time %.4f s".format(context.operation.identifier, (System.nanoTime - t1) / 1.0E9))
       context.addTimestamp("Map Op complete")
-      CDTimeSlice(inputs.timestamp, inputs.dt, inputs.elements ++ resultItems )
+      CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ resultItems )
     } finally {
       workerManager.releaseWorker(worker)
     }

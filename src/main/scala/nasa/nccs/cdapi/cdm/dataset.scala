@@ -887,7 +887,7 @@ case class VariableRecord( timestamp: String, missing: Float, data: Array[Float]
 object VariableRecord {
   def apply( rec: CDTimeSlice, varId: String ): VariableRecord = {
     val element = rec.element( varId ).getOrElse( missingVar(rec,varId) )
-    new VariableRecord( new Date(rec.timestamp).toString, element.missing, element.data )
+    new VariableRecord( new Date(rec.startTime).toString, element.missing, element.data )
   }
   def missingVar( rec: CDTimeSlice, varId: String ) = throw new Exception( s"Cant find variable ${varId} in CDTimeSlice, ids: ${rec.elements.keys.mkString(",")}")
 
