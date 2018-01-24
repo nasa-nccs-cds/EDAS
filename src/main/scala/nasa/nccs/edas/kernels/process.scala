@@ -89,6 +89,8 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
 
   def getAxes: AxisIndices = grid.getAxisIndices(config("axes", ""))
 
+  def doesTimeOperations = getAxes.includes( 0 )
+
   def getContextStr: String = getConfiguration map { case (key, value) => key + ":" + value } mkString ";"
 
   def getDomainMetadata(domId: String): Map[String, String] = domains.get(domId) match {
@@ -302,7 +304,11 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     else {
       val rid = context.operation.rid.toLowerCase
       val reduceElements = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
-      val result: TimeSliceCollection = if( hasReduceOp ) { reduceElements.reduce( getReduceOp(context), ordered ) } else { reduceElements.collect }
+      val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
+        reduceElements.reduce( getReduceOp(context), ordered )
+      } else {
+        reduceElements.collect
+      }
       logger.debug("\n\n ----------------------- FINISHED reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
       context.addTimestamp( "FINISHED reduce Operation" )
       finalize( result, context )
@@ -668,13 +674,15 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
 
   def weightedValueSumRDDPostOp(result: TimeSliceCollection, context: KernelContext): TimeSliceCollection = {
-    val slice = result.concatSlices.slices.head
-    val new_elements = slice.elements.filterKeys( ! _.endsWith("_WEIGHTS_") ) map { case (key, arraySpec ) =>
-      val wts = slice.elements.getOrElse( key + "_WEIGHTS_" , throw new Exception( s"Missing weights in slice, ids = ${slice.elements.keys.mkString(",")}") )
-      val newData = arraySpec.toFastMaskedArray / wts.toFastMaskedArray
-      key -> new ArraySpec( newData.missing, newData.shape, arraySpec.origin, newData.getData )
+    val new_slices = result.slices.map { slice =>
+      val new_elements = slice.elements.filterKeys(!_.endsWith("_WEIGHTS_")) map { case (key, arraySpec) =>
+        val wts = slice.elements.getOrElse(key + "_WEIGHTS_", throw new Exception(s"Missing weights in slice, ids = ${slice.elements.keys.mkString(",")}"))
+        val newData = arraySpec.toFastMaskedArray / wts.toFastMaskedArray
+        key -> new ArraySpec(newData.missing, newData.shape, arraySpec.origin, newData.getData)
+      }
+      CDTimeSlice(slice.startTime, slice.endTime, new_elements)
     }
-    new TimeSliceCollection( Array( new CDTimeSlice(slice.startTime, slice.endTime, new_elements) ), result.metadata )
+    new TimeSliceCollection( new_slices, result.metadata )
   }
 
 //  def getMontlyBinMap(id: String, context: KernelContext): CDCoordMap = {
