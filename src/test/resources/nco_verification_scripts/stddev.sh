@@ -40,4 +40,4 @@ ncks -O -v tas  -d lat,5,5 -d lon,5,10 -d time,0,500 ${datafile} ~/test/out/samp
 ncwa -O -v tas -a time ~/test/out/sample_data.nc ~/test/out/time_ave.nc
 ncbo -O -v tas ~/test/out/sample_data.nc ~/test/out/time_ave.nc ~/test/out/dev.nc
 ncra -O -y rmssdn  ~/test/out/dev.nc ~/test/out/stdev.nc
-ncdump ~/test/out/time_ave.nc
+ncdump ~/test/out/dev.nc

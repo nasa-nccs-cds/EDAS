@@ -555,6 +555,29 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for StdDev")
   }
 
+  test("TimeDiff-GISS") {
+    // # NCO Verification script:
+    //  datafile="collection:/giss_r1i1p1"
+    //  ncks -O -v tas  -d lat,5,5 -d lon,5,10  -d time,0,500 ${datafile} ~/test/out/sample_data.nc
+    //  ncwa -O -v tas -a time ~/test/out/sample_data.nc ~/test/out/time_ave.nc
+    //  ncbo -O -v tas ~/test/out/sample_data.nc ~/test/out/time_ave.nc ~/test/out/dev.nc
+    //  ncdump ~/test/out/dev.nc
+
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 13.99229, 14.34569, 14.92871, 14.9615, 15.70262, 15.52544, 12.26497, 12.68567, 12.18654, 11.67958, 11.54929, 10.82594, -1.039551, -0.6583405, 1.8862, 5.342392, 5.140457, 7.04039, -4.342102, -10.55997, -3.561218, -1.931107, -3.857086, -0.3062286 ).map(_.toFloat), Float.MaxValue )
+    val datainputs =
+      s"""[
+            domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":0,"end":500,"system":"indices"}}],
+            variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+            operation=[       {"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t","id":"v1m"},
+                              {"name":"CDSpark.eDiff","input":"v1,v1m","domain":"d0","id":"v1ss"} ]
+          ]""".replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkBoundedDataString(", ", 16 )  )
+    println( "Verified Result: " + nco_verified_result.mkBoundedDataString(", ", 16 ) )
+    assert( result_data.sample(nco_verified_result.getShape(0)).maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for StdDev")
+  }
+
   test("TimeAve-npana") { if(use_npana_data) {
     val datainputs = """[domain=[{"name":"d0","lat":{"start":10,"end":20,"system":"indices"},"lon":{"start":10,"end":20,"system":"indices"}},{"name":"d1","lev":{"start":5,"end":5,"system":"indices"}}],variable=[{"uri":"collection:/npana","name":"T:v1","domain":"d1"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t"}]]"""
     val result_node = executeTest(datainputs)
@@ -742,7 +765,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   val serverConfiguration = Map[String,String]()
   val webProcessManager = new ProcessManager( serverConfiguration )
   val shutdown_after = false
-  val eps = 0.00001
+  val eps = 0.0001
   val service = "cds2"
   val run_args = Map("status" -> "false")
   val printer = new scala.xml.PrettyPrinter(200, 3)

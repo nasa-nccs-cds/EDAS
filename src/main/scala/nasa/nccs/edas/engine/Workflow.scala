@@ -263,7 +263,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     kernelCx.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ executor.rootNode.getNodeId}", true)
     val result: TimeSliceCollection =  executor.execute( this, kernelCx, batchIndex )
     logger.info("\n\n ----------------------- END mapReduce: NODE %s, operation: %s, batch id: %d, contents = [ %s ]  -------\n".format( executor.rootNode.getNodeId, kernelCx.operation.identifier, batchIndex, executor.contents.mkString(", ") ) )
-    executor.rootNode.kernel.postRDDOp( result, kernelCx  )
+    result
   }
 
 //  def streamMapReduceBatchRecursive( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[CDTimeSlice]] =
