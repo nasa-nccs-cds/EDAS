@@ -556,7 +556,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
                 case PostOpOperations.sqrt =>
                   resultValues.put(Math.sqrt(value).toFloat)
                 case PostOpOperations.rms =>
-                  val norm = context.getReductionSize - 1
+                  val norm = context.getReductionSize
                   resultValues.put(Math.sqrt( value / norm ).toFloat)
                 case x => Unit // Never reached.
               }
