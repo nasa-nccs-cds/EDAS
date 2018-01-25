@@ -145,42 +145,36 @@ class eDiv extends CombineRDDsKernel(Map("mapOp" -> "divide")) {
   val description = "ENSEMBLE OPERATION: Computes element-wise divisions for input variables data over specified roi"
 }
 
-//class eAve extends Kernel(Map.empty) {
-//  override val status = KernelStatus.public
-//  val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
-//  val outputs = List( WPSProcessOutput( "operation result" ) )
-//  val title = "Ensemble Mean"
-//  val doesAxisElimination: Boolean = false
-//  val description = "ENSEMBLE OPERATION: Computes ensemble averages over inputs withing specified ROI"
-//
-//  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
-//    val t0 = System.nanoTime
-//    val axes: String = context.config("axes","")
-//    val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
-//    val input_arrays: List[HeapFltArray] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[HeapFltArray]())( _ ++ _ )
-//    val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
-//    assert( input_fastArrays.size > 1, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format( context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",") ) )
-//    val missing = input_arrays.head.getMissing()
-//    val inputId = context.operation.inputs.head
-//    val input_data = input_arrays.head
-//    logger.info(" -----> Executing Kernel %s, inputs = %s, input shapes = [ %s ]".format(name, context.operation.inputs.mkString(","), input_arrays.map( _.shape.mkString("(",",",")")).mkString(", ") ) )
-//
-//    val ( resultArray, weightArray ) = if( addWeights(context) ) {
-//      val weights: FastMaskedArray = FastMaskedArray(KernelUtilities.getWeights(inputId, context))
-//      FastMaskedArray.weightedSum( input_fastArrays, Some(weights), axisIndices )
-//    } else {
-//      FastMaskedArray.weightedSum( input_fastArrays, None, axisIndices )
-//    }
-//    val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value")  ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "axes" -> axes.toUpperCase )
-//    val elem = context.operation.rid -> HeapFltArray(resultArray.toCDFloatArray, input_data.origin, result_metadata, Some(weightArray.toCDFloatArray.getArrayData()))
-//
-//    logger.info("&MAP: Finished Kernel %s, output = %s, time = %.4f s".format(name, context.operation.rid, (System.nanoTime - t0)/1.0E9) )
-//    context.addTimestamp( "Map Op complete" )
-//    CDTimeSlice( TreeMap(elem), inputs.metadata, inputs.partition )
-//  }
-//  override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
-//  override def postRDDOp(pre_result: CDTimeSlice, context: KernelContext ):  CDTimeSlice = weightedValueSumRDDPostOp( pre_result, context )
-//}
+class eAve extends Kernel(Map.empty) {
+  override val status = KernelStatus.public
+  val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
+  val outputs = List( WPSProcessOutput( "operation result" ) )
+  val title = "Ensemble Mean"
+  val doesAxisElimination: Boolean = false
+  val description = "ENSEMBLE OPERATION: Computes ensemble averages over inputs withing specified ROI"
+  override val doesAxisReduction: Boolean = false
+
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
+    val t0 = System.nanoTime
+    val axes: String = context.config("axes","")
+    val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
+    val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
+    val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
+    assert( input_fastArrays.size > 1, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format( context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",") ) )
+    logger.info(" -----> Executing Kernel %s, inputs = %s, input shapes = [ %s ]".format(name, context.operation.inputs.mkString(","), input_arrays.map( _.shape.mkString("(",",",")")).mkString(", ") ) )
+    val input_array = input_arrays.head
+    val ( resultArray, weightArray ) = FastMaskedArray.weightedSum( input_fastArrays )
+    logger.info("&MAP: Finished Kernel %s, output = %s, time = %.4f s".format(name, context.operation.rid, (System.nanoTime - t0)/1.0E9) )
+    context.addTimestamp( "Map Op complete" )
+    val elems: Map[String,ArraySpec] = Seq(
+      context.operation.rid -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, resultArray.getData ),
+      context.operation.rid + "_WEIGHTS_" -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, weightArray.getData )
+    ).toMap
+    CDTimeSlice( inputs.startTime, inputs.endTime, elems )
+  }
+  override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
+  override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
+}
 
 class min extends SingularRDDKernel(Map("mapreduceOp" -> "min")) {
   override val status = KernelStatus.public
