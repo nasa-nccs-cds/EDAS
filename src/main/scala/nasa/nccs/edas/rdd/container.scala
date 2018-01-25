@@ -35,12 +35,15 @@ object ArraySpec {
 }
 
 case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
+  val test = 1
   def section( section: CDSection ): ArraySpec = {
     val ma2Array = ma2.Array.factory( ma2.DataType.FLOAT, shape, data )
+    val mySection: ma2.Section = getSection
+    val newSection: ma2.Section = section.toSection
+    val interSection = newSection.intersect( mySection ).shiftOrigin( mySection )
     try {
-      val newSection = section.toSection(origin).intersect( getRelativeSection )
-      val sectionedArray = ma2Array.section( newSection.getOrigin, newSection.getShape )
-      new ArraySpec(missing, newSection.getShape, section.getOrigin, sectionedArray.getStorage.asInstanceOf[Array[Float]])
+      val sectionedArray = ma2Array.section( interSection.getOrigin, interSection.getShape )
+      new ArraySpec(missing, interSection.getShape, section.getOrigin, sectionedArray.getStorage.asInstanceOf[Array[Float]])
     } catch {
       case err: Exception =>
         throw err
@@ -119,7 +122,8 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
   import TimeSliceRDD._
   def cache() = rdd.cache()
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
-  def section( section: CDSection ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.section(section) ), metadata )
+  def section( section: CDSection ): TimeSliceRDD =
+    TimeSliceRDD( rdd.map( _.section(section) ), metadata )
   def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
   def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = TimeSliceRDD( rdd.map( ts => op(ts) ), metadata )
   def getNumPartitions = rdd.getNumPartitions
@@ -144,7 +148,9 @@ object TimeSliceCollection {
 
 case class TimeSliceCollection( slices: Array[CDTimeSlice], metadata: Map[String,String] ) extends Serializable {
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
-  def section( section: CDSection ): TimeSliceCollection = { TimeSliceCollection( slices.map( _.section(section) ), metadata ) }
+  def section( section: CDSection ): TimeSliceCollection = {
+    TimeSliceCollection( slices.map( _.section(section) ), metadata )
+  }
   def sort(): TimeSliceCollection = { TimeSliceCollection( slices.sortBy( _.startTime ), metadata ) }
   val nslices: Int = slices.length
 
@@ -262,42 +268,59 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
 
   def next(): CDTimeSlice =  _sliceStack.pop
 
+  def getLocalTimeSection( globalTimeSection: ma2.Section, timeIndexOffest: Int ): Option[ma2.Section] = {
+    val mutableSection = new ma2.Section( globalTimeSection )
+    val globalTimeRange = globalTimeSection.getRange( 0 )
+    val local_start = Math.max( 0, globalTimeRange.first() - timeIndexOffest )
+    val local_last = globalTimeRange.last() - timeIndexOffest
+    if( local_last < 0 ) None else Some( mutableSection.replaceRange( 0, new ma2.Range( local_start, local_last ) ) )
+  }
+
+  def getGlobalOrigin( localOrigin: Array[Int], timeIndexOffest: Int ):  Array[Int] =
+    localOrigin.zipWithIndex map { case ( ival, index ) => if( index == 0 ) { ival + timeIndexOffest } else {ival} }
+
   private def getSlices: IndexedSeq[CDTimeSlice] = {
     def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = {
       section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) =>
         if (index == 0) { new ma2.Range("time", range.first + slice_index, range.first + slice_index) } else { range } }
     }
-    val opSectionOpt: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
-    val t0 = System.nanoTime()
-    val dataset = NetcdfDatasetMgr.aquireFile( filePath, 77.toString )
-    val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${filePath}") }
-    val global_shape = variable.getShape()
-    val metadata = variable.getAttributes.map(_.toString).mkString(", ")
-    val missing: Float = getMissing( variable )
-    val varSection = variable.getShapeAsSection
-    val localOpSect = opSectionOpt.map( opSect => opSect.replaceRange(0, opSect.getRange(0).shiftOrigin(fileInput.startIndex) ) )
-    val interSect: ma2.Section = localOpSect.fold( varSection )( _.intersect(varSection) )
-    val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") } ).section( interSect.getRange(0) )
-//    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
-    val t1 = System.nanoTime()
-    val nTimesteps = timeAxis.getShape(0)
-    val slices = for( slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map(_.getMillis) ) yield {
-      val sliceRanges = getSliceRanges( interSect, slice_index)
-      val data_section = variable.read(sliceRanges)
-      val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
-      val data_shape: Array[Int] = data_section.getShape
-      val section = variable.getShapeAsSection
-      val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array )
-      CDTimeSlice( time_bounds(0), time_bounds(1), Map( varId -> arraySpec ) )
+    CDSection.fromString(section).map(_.toSection).flatMap( global_sect => getLocalTimeSection( global_sect, fileInput.startIndex ) ) match {
+      case None => IndexedSeq.empty[CDTimeSlice]
+      case Some(opSect) =>
+        val t0 = System.nanoTime()
+        val dataset = NetcdfDatasetMgr.aquireFile(filePath, 77.toString)
+        val variable: Variable = Option(dataset.findVariable(varName)).getOrElse {
+          throw new Exception(s"Can't find variable $varName in data file ${filePath}")
+        }
+        val global_shape = variable.getShape()
+        val metadata = variable.getAttributes.map(_.toString).mkString(", ")
+        val missing: Float = getMissing(variable)
+        val varSection = variable.getShapeAsSection
+        val interSect: ma2.Section = opSect.intersect(varSection)
+        val timeAxis: CoordinateAxis1DTime = (NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse {
+          throw new Exception(s"Can't find time axis in data file ${filePath}")
+        }).section(interSect.getRange(0))
+        //    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
+        val t1 = System.nanoTime()
+        val nTimesteps = timeAxis.getShape(0)
+        val slices = for (slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map(_.getMillis)) yield {
+          val sliceRanges = getSliceRanges(interSect, slice_index)
+          val data_section = variable.read(sliceRanges)
+          val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
+          val data_shape: Array[Int] = data_section.getShape
+          val section = variable.getShapeAsSection
+          val arraySpec = ArraySpec( missing, data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.startIndex ), data_array)
+          CDTimeSlice(time_bounds(0), time_bounds(1), Map(varId -> arraySpec))
+        }
+        dataset.close()
+        if (fileInput.index % 500 == 0) {
+          val sample_array = slices.head.elements.head._2.data
+          val datasize: Int = sample_array.length
+          val dataSample = sample_array(datasize / 2)
+          logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toString}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
+        }
+        slices
     }
-    dataset.close()
-    if( fileInput.index % 500 == 0 ) {
-      val sample_array =  slices.head.elements.head._2.data
-      val datasize: Int = sample_array.length
-      val dataSample = sample_array(datasize/2)
-      logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toString}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
-    }
-    slices
   }
 
 
