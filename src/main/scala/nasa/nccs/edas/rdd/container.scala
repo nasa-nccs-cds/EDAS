@@ -31,6 +31,7 @@ object ArraySpec {
     val data_array =  tvar.getFloatArray
     new ArraySpec( data_array.last, tvar.getShape, tvar.getOrigin, data_array )
   }
+  def apply( fma: FastMaskedArray, origin: Array[Int] ): ArraySpec = new ArraySpec( fma.missing, fma.shape, origin,  fma.getData)
 }
 
 case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
@@ -77,61 +78,74 @@ object CDTimeSlice {
   def empty = new CDTimeSlice( -1, 0, Map.empty[String,ArraySpec] )
 }
 
-case class CDTimeSlice(timestamp: Long, dt: Long, elements: Map[String,ArraySpec] ) {
-  assert( dt >= 0, s"Negative DT in CDTimeSlice: ${dt}")
-  def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( timestamp, dt, elements ++ other.elements ) }
+case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String,ArraySpec] ) {
+  def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( startTime, endTime, elements ++ other.elements ) }
   def <+( other: CDTimeSlice ): CDTimeSlice = append( other )
-  def clear: CDTimeSlice = { new CDTimeSlice( timestamp, dt, Map.empty[String,ArraySpec] ) }
-  def midpoint: Long = timestamp + dt/2
-  def endpoint: Long = timestamp + dt
-  def combinedDt( other: CDTimeSlice ): Long = { this.precedes(other); other.endpoint - timestamp }
-  def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( timestamp, dt, elements.mapValues( _.section(section) ) ) }
-  def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice( timestamp, dt, elements.filterKeys(key => !keys.contains(key) ) ) }
-  def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice( timestamp, dt, elements.filterKeys( _.equalsIgnoreCase(elemId) ) )
-  def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice( timestamp, dt, elements.filterKeys( key => op(key) ) )
+  def clear: CDTimeSlice = { new CDTimeSlice( startTime, endTime, Map.empty[String,ArraySpec] ) }
+  def midpoint: Long = startTime + endTime/2
+  def endpoint: Long = startTime + endTime
+  def mergeStart( other: CDTimeSlice ): Long = Math.min( startTime, other.startTime )
+  def mergeEnd( other: CDTimeSlice ): Long = Math.max( endTime, other.endTime )
+  def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( startTime, endTime, elements.mapValues( _.section(section) ) ) }
+  def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice( startTime, endTime, elements.filterKeys(key => !keys.contains(key) ) ) }
+  def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice( startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ) )
+  def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice( startTime, endTime, elements.filterKeys(key => op(key) ) )
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def element( id: String ): Option[ArraySpec] = elements.get( id )
   def isEmpty = elements.isEmpty
-  def contains( other_timeslice: Long ): Boolean = { (other_timeslice >= timestamp) && ((other_timeslice-timestamp) <= dt) }
-  def contains( other: CDTimeSlice ): Boolean = { contains(other.timestamp) }
-  def ~( other: CDTimeSlice ) =  { assert( (dt == other.dt) && (timestamp == other.timestamp) , s"Mismatched Time slices: { $timestamp $dt } vs { ${other.timestamp} ${other.dt} }" ) }
-  def precedes( other: CDTimeSlice ) = { assert(  timestamp < other.timestamp, s"Disordered Time slices: { $timestamp $dt -> ${timestamp+dt} } vs { ${other.timestamp} ${other.dt} }" ) }
-  def append( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice(timestamp, combinedDt(other), elements.flatMap { case (key,array0) => other.elements.get(key).map( array1 => key -> ( array0 ++ array1 ) ) } ) }
-  def optExtractSlice( collection: TimeSliceCollection ): Option[CDTimeSlice] = collection.slices.find( _.contains( this ) )
-  def extractSlice( collection: TimeSliceCollection ): CDTimeSlice = optExtractSlice( collection ).getOrElse(
-    throw new Exception( s"Missing matching slice in broadcast: { ${timestamp}, ${dt} }")
-  )
+  def contains( other_startTime: Long ): Boolean = { ( other_startTime >= startTime ) && ( other_startTime <= endTime ) }
+  def contains( other: CDTimeSlice ): Boolean = { contains( other.startTime ) }
+  def ~( other: CDTimeSlice ) =  { assert( (endTime == other.endTime) && (startTime == other.startTime) , s"Mismatched Time slices: { $startTime $endTime } vs { ${other.startTime} ${other.endTime} }" ) }
+  def precedes( other: CDTimeSlice ) = {assert(  startTime < other.startTime, s"Disordered Time slices: { $startTime $endTime -> ${startTime+endTime} } vs { ${other.startTime} ${other.endTime} }" ) }
+  def append( other: CDTimeSlice ): CDTimeSlice = { this precedes other; new CDTimeSlice( mergeStart( other ), mergeEnd( other ), elements.flatMap { case (key,array0) => other.elements.get(key).map(array1 => key -> ( array0 ++ array1 ) ) } ) }
+  def addExtractedSlice( collection: TimeSliceCollection ): CDTimeSlice = collection.slices.find( _.contains( this ) ) match {
+    case None =>
+      throw new Exception( s"Missing matching slice in broadcast: { ${startTime}, ${endTime} }")
+    case Some( extracted_slice ) =>
+      CDTimeSlice( startTime, endTime, elements ++ extracted_slice.elements )
+  }
 }
 
 class DataCollection( val metadata: Map[String,String] ) extends Serializable {
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
 }
 
+object TimeSliceRDD {
+  def apply( rdd: RDD[CDTimeSlice], metadata: Map[String,String] ): TimeSliceRDD = new TimeSliceRDD( rdd, metadata)
+  def merge( slices: Array[CDTimeSlice], op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): CDTimeSlice = { slices.toSeq.sortBy( _.startTime ).fold(CDTimeSlice.empty)(op) }
+}
+
 class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) {
+  import TimeSliceRDD._
   def cache() = rdd.cache()
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
-  def section( section: CDSection ): TimeSliceRDD = { new TimeSliceRDD( rdd.map( _.section(section) ), metadata ) }
-  def release( keys: Iterable[String] ): TimeSliceRDD = new TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
-  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = new TimeSliceRDD( rdd.map( ts => op(ts) ), metadata )
+  def section( section: CDSection ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.section(section) ), metadata )
+  def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
+  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = TimeSliceRDD( rdd.map( ts => op(ts) ), metadata )
   def getNumPartitions = rdd.getNumPartitions
   def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
-  def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = new TimeSliceRDD( rdd.collect(op), metadata )
-  def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): TimeSliceCollection =
-    TimeSliceCollection( rdd.sortBy(_.timestamp).fold(CDTimeSlice.empty)(op), metadata )
+  def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata )
+  def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice, ordered: Boolean = false ): TimeSliceCollection =
+    if( ordered ) {
+      val partialProduct = rdd.mapPartitions( slices => Iterator( merge( slices.toArray, op) ) ).collect
+      TimeSliceCollection( merge( partialProduct, op ), metadata )
+    }
+    else { TimeSliceCollection( rdd.treeReduce( op ), metadata ) }
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
-  def selectElement( elemId: String ): TimeSliceRDD = new TimeSliceRDD ( rdd.map( _.selectElement( elemId ) ), metadata )
-  def selectElements(  op: String => Boolean  ): TimeSliceRDD = new TimeSliceRDD ( rdd.map( _.selectElements( op ) ), metadata )
+  def selectElement( elemId: String ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElement( elemId ) ), metadata )
+  def selectElements(  op: String => Boolean  ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElements( op ) ), metadata )
 }
 
 object TimeSliceCollection {
   def apply( slice: CDTimeSlice, metadata: Map[String,String] ): TimeSliceCollection = TimeSliceCollection( Array(slice), metadata )
   def empty: TimeSliceCollection = TimeSliceCollection( Array.empty[CDTimeSlice], Map.empty[String,String] )
+
 }
 
 case class TimeSliceCollection( slices: Array[CDTimeSlice], metadata: Map[String,String] ) extends Serializable {
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
   def section( section: CDSection ): TimeSliceCollection = { TimeSliceCollection( slices.map( _.section(section) ), metadata ) }
-  def sort(): TimeSliceCollection = { TimeSliceCollection( slices.sortBy( _.timestamp ), metadata ) }
+  def sort(): TimeSliceCollection = { TimeSliceCollection( slices.sortBy( _.startTime ), metadata ) }
   val nslices: Int = slices.length
 
   def merge( other: TimeSliceCollection, op: CDTimeSlice.ReduceOp ): TimeSliceCollection = {
@@ -170,9 +184,9 @@ class PartitionExtensionGenerator {
 
   def extendPartition( existingSlices: Iterator[CDTimeSlice], fileBase: FileBase, varId: String, varName: String, section: String ): Iterator[CDTimeSlice] = {
     val sliceIter = existingSlices map { tSlice =>
-      val fileInput: FileInput = fileBase.getFileInput( tSlice.timestamp )
+      val fileInput: FileInput = fileBase.getFileInput( tSlice.startTime )
       val generator: TimeSliceGenerator = _getGenerator( varId, varName, section, fileInput )
-      val newSlice: CDTimeSlice = generator.getSlice( tSlice.timestamp )
+      val newSlice: CDTimeSlice = generator.getSlice( tSlice.startTime, tSlice.endTime )
       tSlice ++ newSlice
     }
     _close
@@ -189,7 +203,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
     val rdd = filesDataset.mapPartitions( TimeSliceMultiIterator( varId, varName, section, agg.parms.getOrElse("base.path","") ) )
     val variable = agg.findVariable( varName ).getOrElse { throw new Exception(s"Unrecognozed variable ${varName} in aggregation, vars = ${agg.variables.map(_.name).mkString(",")}")}
     val metadata = Map( "section" -> section, varId -> variable.toString )
-    new TimeSliceRDD( rdd, metadata ++ agg.parms )
+    TimeSliceRDD( rdd, metadata ++ agg.parms )
   }
 
 
@@ -201,7 +215,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
     val section = template.getParameter( "section" )
     val rdd = template.rdd.mapPartitions( tSlices => PartitionExtensionGenerator().extendPartition( tSlices, agg.getFilebase, varId, varName, section ) )
     val metadata = Map( "section" -> section, varId -> variable.toString )
-    new TimeSliceRDD( rdd, metadata )
+    TimeSliceRDD( rdd, metadata )
   }
 }
 
@@ -248,12 +262,12 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
 
   def next(): CDTimeSlice =  _sliceStack.pop
 
-  private def getSlices: List[CDTimeSlice] = {
+  private def getSlices: IndexedSeq[CDTimeSlice] = {
     def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = {
       section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) =>
         if (index == 0) { new ma2.Range("time", range.first + slice_index, range.first + slice_index) } else { range } }
     }
-    val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
+    val opSectionOpt: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
     val t0 = System.nanoTime()
     val dataset = NetcdfDatasetMgr.aquireFile( filePath, 77.toString )
     val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${filePath}") }
@@ -261,23 +275,20 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
     val metadata = variable.getAttributes.map(_.toString).mkString(", ")
     val missing: Float = getMissing( variable )
     val varSection = variable.getShapeAsSection
-    val interSect: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
+    val localOpSect = opSectionOpt.map( opSect => opSect.replaceRange(0, opSect.getRange(0).shiftOrigin(fileInput.startIndex) ) )
+    val interSect: ma2.Section = localOpSect.fold( varSection )( _.intersect(varSection) )
     val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") } ).section( interSect.getRange(0) )
-    val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
 //    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
     val t1 = System.nanoTime()
-    val dataMillis = dates.map( _.getMillis )
-    var dt = 0L
-    val lastTimeIndex = dataMillis.length - 1
-    val slices: List[CDTimeSlice] =  dataMillis.zipWithIndex map { case (dateMillis: Long, slice_index: Int) =>
+    val nTimesteps = timeAxis.getShape(0)
+    val slices = for( slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map(_.getMillis) ) yield {
       val sliceRanges = getSliceRanges( interSect, slice_index)
       val data_section = variable.read(sliceRanges)
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
       val data_shape: Array[Int] = data_section.getShape
       val section = variable.getShapeAsSection
       val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array )
-      if( slice_index < lastTimeIndex ) { dt = dataMillis( slice_index + 1 ) - dateMillis }
-      CDTimeSlice( dateMillis, dt, Map( varId -> arraySpec ) )
+      CDTimeSlice( time_bounds(0), time_bounds(1), Map( varId -> arraySpec ) )
     }
     dataset.close()
     if( fileInput.index % 500 == 0 ) {
@@ -326,20 +337,19 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
   val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
   val datesBase: DatesBase = new DatesBase( dates )
   assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
-  val dt: Int = Math.round( ( dates.last.getMillis - dates.head.getMillis ) / ( dates.length - 1 ).toFloat )
   def close = dataset.close()
   def getSliceIndex( timestamp: Long ): Int = datesBase.getDateIndex( timestamp )
 
-  def getSlice( timestamp: Long ): CDTimeSlice = {
+  def getSlice( startTime: Long, endTime: Long ): CDTimeSlice = {
     def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = {
       section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } }
     }
-    val data_section = variable.read( getSliceRanges( interSect, getSliceIndex(timestamp)) )
+    val data_section = variable.read( getSliceRanges( interSect, getSliceIndex(startTime)) )
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
     val data_shape: Array[Int] = data_section.getShape
     val section = variable.getShapeAsSection
     val arraySpec = ArraySpec( missing, data_section.getShape, section.getOrigin, data_array )
-    CDTimeSlice( timestamp, dt, Map( varId -> arraySpec ) )  //
+    CDTimeSlice( startTime, endTime, Map( varId -> arraySpec ) )  //
   }
 }
 
