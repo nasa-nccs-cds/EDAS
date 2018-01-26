@@ -130,15 +130,15 @@ object FileHeader extends Loggable {
     }
   }
 
-  def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): (Array[Long], Array[Double]) = {
+  def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): ( Array[Long], Array[Array[Long]] ) = {
     val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
     val timeCalValues: List[CalendarDate] = timeAxis.getCalendarDates.toList
-    val bounds: Array[Double] = ((0 until timeAxis.getShape(0)) map (index => timeAxis.getCoordBoundsDate(index) map (_.getMillis / 1000.0))).toArray.flatten
-    ( timeCalValues.map(_.getMillis / 1000 ).toArray, bounds )
+    val bounds: Array[Array[Long]] = ((0 until timeAxis.getShape(0)) map (index => timeAxis.getCoordBoundsDate(index) map ( _.getMillis ))).toArray
+    ( timeCalValues.map(_.getMillis ).toArray, bounds )
   }
 
 
-  def getTimeCoordValues(ncDataset: NetcdfDataset): (Array[Long], Array[Double]) = {
+  def getTimeCoordValues(ncDataset: NetcdfDataset): ( Array[Long], Array[Array[Long]] ) = {
     val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
       case Some(timeAxis) => getTimeValues(ncDataset, timeAxis)
       case None => throw new Exception( "ncDataset does not have a time axis: " + ncDataset.getReferencedFile.getLocation )
@@ -149,13 +149,15 @@ object FileHeader extends Loggable {
 
 class FileHeader(val filePath: String,
                  val axisValues: Array[Long],
-                 val boundsValues: Array[Double],
+                 val boundsValues: Array[Array[Long]],
                  val timeRegular: Boolean,
                  val varNames: List[String],
                  val coordVarNames: List[String]
                 ) {
   def nElem: Int = axisValues.length
-  def startValue: Long = axisValues.headOption.getOrElse(Long.MinValue)
+  def startValue: Long = boundsValues.head(0)
+  def endValue: Long = boundsValues.last(1)
+  def dt = ( endValue + 1 - startValue ) / boundsValues.length
   def startDate: String = CalendarDate.of(startValue).toString
   override def toString: String = " *** FileHeader { path='%s', nElem=%d, startValue=%d startDate=%s} ".format(filePath, nElem, startValue, startDate)
   def dropPrefix( nElems: Int ): FileHeader = new FileHeader( filePath.split("/").drop(nElems).mkString("/"), axisValues, boundsValues, timeRegular, varNames, coordVarNames )

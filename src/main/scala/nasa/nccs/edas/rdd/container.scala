@@ -1,6 +1,7 @@
 package nasa.nccs.edas.rdd
 
 import java.nio.file.Paths
+import java.util.Date
 
 import nasa.nccs.caching.BatchSpec
 import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, FastMaskedArray, HeapFltArray}
@@ -35,13 +36,15 @@ object ArraySpec {
 }
 
 case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
-  val test = 1
+  if( origin.sum == 0 ) {
+    val test = 1
+  }
   def section( section: CDSection ): ArraySpec = {
     val ma2Array = ma2.Array.factory( ma2.DataType.FLOAT, shape, data )
     val mySection: ma2.Section = getSection
     val newSection: ma2.Section = section.toSection
-    val interSection = newSection.intersect( mySection ).shiftOrigin( mySection )
     try {
+      val interSection = newSection.intersect( mySection ).shiftOrigin( mySection )
       val sectionedArray = ma2Array.section( interSection.getOrigin, interSection.getShape )
       new ArraySpec(missing, interSection.getShape, section.getOrigin, sectionedArray.getStorage.asInstanceOf[Array[Float]])
     } catch {
@@ -172,31 +175,36 @@ case class TimeSliceCollection( slices: Array[CDTimeSlice], metadata: Map[String
 }
 
 object PartitionExtensionGenerator {
-  def apply() = new PartitionExtensionGenerator()
+  def apply(partIndex: Int) = new PartitionExtensionGenerator(partIndex)
 }
 
-class PartitionExtensionGenerator {
+class PartitionExtensionGenerator(val partIndex: Int) extends Serializable {
   private var _optCurrentGenerator: Option[TimeSliceGenerator] = None
-  private def _close = if( _optCurrentGenerator.isDefined ) { _optCurrentGenerator.get.close }
-  private def _updateCache( varId: String, varName: String, section: String, fileInput: FileInput  ) = {
+  private def _close = if( _optCurrentGenerator.isDefined ) { _optCurrentGenerator.get.close; _optCurrentGenerator = None;  }
+  private def _updateCache( varId: String, varName: String, section: String, fileInput: FileInput, optBasePath: Option[String]  ) = {
     if( _optCurrentGenerator.isEmpty || _optCurrentGenerator.get.fileInput.startTime != fileInput.startTime ) {
       _close
-      _optCurrentGenerator = Some( new TimeSliceGenerator(varId, varName, section, fileInput) )
+      _optCurrentGenerator = Some( new TimeSliceGenerator(varId, varName, section, fileInput, optBasePath ) )
+//      println( s"\n --------------------------------------------------------------------------------------- \n -->  P[${partIndex}] Loading file ${fileInput.path}")
     }
   }
-  private def _getGenerator( varId: String, varName: String, section: String, fileInput: FileInput  ): TimeSliceGenerator = {
-    _updateCache( varId, varName, section, fileInput  );
+  private def _getGenerator( varId: String, varName: String, section: String, fileInput: FileInput, optBasePath: Option[String]   ): TimeSliceGenerator = {
+    _updateCache( varId, varName, section, fileInput, optBasePath  );
+//    println( s" P[${partIndex}] Getting generator for varId: ${varId}, varName: ${varName}, section: ${section}, fileInput: ${fileInput}" )
     _optCurrentGenerator.get
   }
 
-  def extendPartition( existingSlices: Iterator[CDTimeSlice], fileBase: FileBase, varId: String, varName: String, section: String ): Iterator[CDTimeSlice] = {
-    val sliceIter = existingSlices map { tSlice =>
+  def extendPartition( existingSlices: Seq[CDTimeSlice], fileBase: FileBase, varId: String, varName: String, section: String, optBasePath: Option[String] ): Seq[CDTimeSlice] = {
+    val sliceIter = existingSlices.sortBy(_.startTime) map { tSlice =>
+      if( partIndex == 1 ) {
+        val test = 1
+      }
       val fileInput: FileInput = fileBase.getFileInput( tSlice.startTime )
-      val generator: TimeSliceGenerator = _getGenerator( varId, varName, section, fileInput )
-      val newSlice: CDTimeSlice = generator.getSlice( tSlice.startTime, tSlice.endTime )
+      val generator: TimeSliceGenerator = _getGenerator( varId, varName, section, fileInput, optBasePath )
+//      println( s" ***  P[${partIndex}] ExtendPartition: StartTime: ${tSlice.startTime}, date: ${new Date(tSlice.startTime).toString}, Filebase start date: ${new Date(fileBase.startTime).toString}, FileInput: ${fileInput.startTime} ${fileInput.startIndex} ${fileInput.nRows} ${fileInput.path}  ")
+      val newSlice: CDTimeSlice = generator.getSlice( tSlice )
       tSlice ++ newSlice
     }
-    _close
     sliceIter
   }
 }
@@ -220,7 +228,8 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
   def parallelize( template: TimeSliceRDD, agg: Aggregation, varId: String, varName: String ): TimeSliceRDD = {
     val variable = agg.findVariable( varName )
     val section = template.getParameter( "section" )
-    val rdd = template.rdd.mapPartitions( tSlices => PartitionExtensionGenerator().extendPartition( tSlices, agg.getFilebase, varId, varName, section ) )
+    val basePath = agg.parms.get("base.path")
+    val rdd = template.rdd.mapPartitionsWithIndex( ( index, tSlices ) => PartitionExtensionGenerator(index).extendPartition( tSlices.toSeq, agg.getFilebase, varId, varName, section, agg.getBasePath ).toIterator )
     val metadata = Map( "section" -> section, varId -> variable.toString )
     TimeSliceRDD( rdd, metadata )
   }
@@ -336,25 +345,32 @@ class DatesBase( val dates: List[CalendarDate] ) extends Loggable with Serializa
 
   private def _getDateIndex( timestamp: Long, indexEstimate: Int ): Int = {
     if( indexEstimate < 0 ) { return 0 }
-    val datesStartTime = dates( indexEstimate ).getMillis
-    if( timestamp < datesStartTime ) { return _getDateIndex(timestamp,indexEstimate-1) }
-    if( indexEstimate >= nDates-1) { return nDates-1 }
-    val datesEndTime = dates( indexEstimate+1 ).getMillis
-    if( timestamp < datesEndTime ) { return  indexEstimate  }
-    return _getDateIndex( timestamp, indexEstimate + 1)
+    try {
+      val datesStartTime = dates(indexEstimate).getMillis
+      if (timestamp < datesStartTime) { return _getDateIndex(timestamp, indexEstimate - 1) }
+      if (indexEstimate >= nDates - 1) { return nDates - 1 }
+      val datesEndTime = dates(indexEstimate + 1).getMillis
+      if (timestamp < datesEndTime) {
+        return indexEstimate
+      }
+      return _getDateIndex(timestamp, indexEstimate + 1)
+    } catch {
+      case ex: Exception =>
+        throw ex
+    }
   }
 }
 
-class TimeSliceGenerator(val varId: String, val varName: String, val section: String, val fileInput: FileInput ) extends Serializable with Loggable {
+class TimeSliceGenerator(val varId: String, val varName: String, val section: String, val fileInput: FileInput, val optBasePath: Option[String] ) extends Serializable with Loggable {
   import ucar.nc2.time.CalendarPeriod.Field._
   val millisPerMin = 1000*60
-  val filePath: String = fileInput.path
+  val filePath: String = optBasePath.fold( fileInput.path )( basePath => Paths.get( basePath, fileInput.path ).toString )
   val optSection: Option[ma2.Section] = CDSection.fromString(section).map(_.toSection)
   val dataset = NetcdfDatasetMgr.aquireFile( filePath, 77.toString )
   val variable: Variable = Option( dataset.findVariable( varName ) ).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${filePath}") }
   val global_shape = variable.getShape()
   val metadata = variable.getAttributes.map(_.toString).mkString(", ")
-  val missing: Float = variable.findAttributeIgnoreCase("fmissing_value").getNumericValue.floatValue()
+  val missing: Float = getMissing( variable )
   val varSection = variable.getShapeAsSection
   val interSect: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
   val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") } ).section( interSect.getRange(0) )
@@ -364,16 +380,20 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
   def close = dataset.close()
   def getSliceIndex( timestamp: Long ): Int = datesBase.getDateIndex( timestamp )
 
-  def getSlice( startTime: Long, endTime: Long ): CDTimeSlice = {
+  def getSlice( template_slice: CDTimeSlice  ): CDTimeSlice = {
     def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = {
       section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) => if( index == 0 ) { new ma2.Range("time",slice_index,slice_index)} else { range } }
     }
-    val data_section = variable.read( getSliceRanges( interSect, getSliceIndex(startTime)) )
+    val data_section = variable.read( getSliceRanges( interSect, getSliceIndex(template_slice.startTime)) )
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
     val data_shape: Array[Int] = data_section.getShape
-    val section = variable.getShapeAsSection
-    val arraySpec = ArraySpec( missing, data_section.getShape, section.getOrigin, data_array )
-    CDTimeSlice( startTime, endTime, Map( varId -> arraySpec ) )  //
+    val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array )
+    CDTimeSlice( template_slice.startTime, template_slice.endTime, Map( varId -> arraySpec ) )  //
+  }
+
+  def getMissing( variable: Variable, default_value: Float = Float.NaN ): Float = {
+    Seq( "missing_value", "fmissing_value", "fill_value").foreach ( attr_name => Option( variable.findAttributeIgnoreCase(attr_name) ).foreach( attr => return attr.getNumericValue.floatValue() ) )
+    default_value
   }
 }
 

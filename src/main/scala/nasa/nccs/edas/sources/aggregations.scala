@@ -3,6 +3,7 @@ package nasa.nccs.edas.sources
 import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.net.URI
 import java.nio.file.{Path, Paths}
+import java.util.Date
 
 import nasa.nccs.edas.sources.netcdf.NCMLWriter
 import nasa.nccs.esgf.process.CDSection
@@ -11,6 +12,7 @@ import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2
 import ucar.nc2.time.CalendarDate
 import ucar.ma2
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -18,6 +20,7 @@ import scala.io.Source
 import scala.util.matching.Regex
 
 case class FileInput( index: Int, startTime: Long, startIndex: Int, nRows: Int, path: String ) {
+  val test = 0
   def getTimeRange: ma2.Range = new ma2.Range( startIndex, startIndex + nRows )
   def intersects( range: ma2.Range ) = getTimeRange.intersects( range )
 }
@@ -316,16 +319,19 @@ object AggregationWriter extends Loggable {
 }
 
 case class Aggregation( dataPath: String, files: List[FileInput], variables: List[Variable], coordinates: List[Coordinate], axes: List[Axis], parms: Map[String,String] ) {
-  val test = 1
   def findVariable( varName: String ): Option[Variable] =
     variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
-  def getFilebase: FileBase = new FileBase( files )
+  def getFilebase: FileBase = new FileBase( files, parms.get("base.path") )
   def toXml: xml.Elem = {
     <aggregation id={id}>
       { variables.map( _.toXml ) }
     </aggregation>
   }
+
+  def getBasePath: Option[String] = parms.get("base.path")
+
+  def getFilePath( fileInput: FileInput ): String = getBasePath.fold( fileInput.path )( basePath => Paths.get( basePath, fileInput.path ).toString )
 
   def getRangeMap(time_index: Int = 0, fileInputs: List[FileInput] = files, rangeMap: List[(ma2.Range,FileInput)] = List.empty[(ma2.Range,FileInput)]  ): List[(ma2.Range,FileInput)] = {
     if( fileInputs.isEmpty ) { rangeMap } else { getRangeMap(time_index + fileInputs.head.nRows + 1, fileInputs.tail,  rangeMap ++ List( new ma2.Range( time_index, time_index + fileInputs.head.nRows ) -> fileInputs.head ) ) }
@@ -335,16 +341,20 @@ case class Aggregation( dataPath: String, files: List[FileInput], variables: Lis
 
 }
 
-class FileBase( files: List[FileInput] ) extends Loggable with Serializable {
+class FileBase( val files: List[FileInput], val optBasePath: Option[String] ) extends Loggable with Serializable {
   val nFiles = files.length
   val dt: Float = ( files.last.startTime - files.head.startTime ) / ( nFiles - 1 ).toFloat
   val startTime = files.head.startTime
   def getIndexEstimate( timestamp: Long ): Int = Math.round( ( timestamp - startTime ) / dt )
   def getFileInput( timestamp: Long ): FileInput = _getFileInput( timestamp, getIndexEstimate(timestamp) )
+  def getFilePath( fileInput: FileInput ): String = optBasePath.fold( fileInput.path )( basePath => Paths.get( basePath, fileInput.path ).toString )
 
   private def _getFileInput( timestamp: Long, indexEstimate: Int ): FileInput = {
     if( indexEstimate < 0 ) { return files(0) }
+    if( indexEstimate >= files.length ) { return files.last }
     val fileStartTime = files( indexEstimate ).startTime
+    val fileStartDate = new Date( fileStartTime ).toString
+    val tsDate = new Date( timestamp ).toString
     if( timestamp < fileStartTime ) { return _getFileInput(timestamp,indexEstimate-1) }
     if( indexEstimate >= nFiles-1) { return files.last }
     val fileEndTime = files( indexEstimate+1 ).startTime
@@ -367,7 +377,9 @@ object Aggregation extends Loggable {
       for (line <- source.getLines; toks = line.split(';').map(_.trim) ) try{ toks(0) match {
         case "F" =>
           val nTS = toks(2).toInt
-          files += FileInput(files.length, toks(1).toLong, timeIndex, nTS, toks(3))
+          val base_path_opt = None // parameters.get("base.path").map( _.toString )
+          val file_path = base_path_opt.fold( toks(3) )( base_path => Paths.get( base_path, toks(3) ).toString  )
+          files += FileInput(files.length, toks(1).toLong, timeIndex, nTS, file_path )
           timeIndex += nTS + 1
         case "P" =>  parameters += toks(1) -> toks(2)
         case "V" => variables += Variable( toks(1), toks(2).split(",").map( _.toInt ), toks(3), toks(4) )
@@ -400,7 +412,7 @@ object Aggregation extends Loggable {
     logger.info("Processing %d files with %d workers".format(fileHeaders.length, nReadProcessors))
     val bw = new BufferedWriter(new FileWriter(aggFile))
     val fileMetadata = FileMetadata( fileHeaders.head.filePath )
-    val dt: Int = Math.round( ( fileHeaders.last.startValue - fileHeaders.head.startValue ) / ( fileHeaders.length - 1 ).toFloat )
+    val dt: Int = Math.round( ( fileHeaders.last.endValue + 1 - fileHeaders.head.startValue ) / fileHeaders.length.toFloat )
     val ( basePath, reducedFileheaders ) = FileHeader.extractSubpath( fileHeaders )
     try {
       bw.write( s"P; time.step; $dt\n")
