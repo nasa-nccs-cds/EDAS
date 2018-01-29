@@ -515,7 +515,20 @@ class DefaultTestSuite extends EDASTestSuite {
     println( "EDAS Reduced Result: " + result_data.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
     assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for Max")
   }
-  
+
+  test("SpaceTimeAve-r1i1p1-agg-weighted") {
+    // ncwa -O -v tas -a time,lat,lon ${datafile_agg} ~/test/out/spacetime_ave_agg.nc
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array(  288.2343 ).map(_.toFloat), Float.MaxValue )
+    val edas_agg_result: CDFloatArray = CDFloatArray( Array( 288.22720 ).map(_.toFloat), Float.MaxValue )
+    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"tyx"}]]"""
+    val result_node = executeTest(datainputs)
+    val result_data = getResultData( result_node )
+    println( "Verified Result:     " + nco_verified_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    println( "EDAS Agg Result:     " + edas_agg_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    println( "EDAS Reduced Result: " + result_data.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for Max")
+  }
+
   test("Subset-Space-GISS-R1i1p1") {
     //  ncks -O -v tas -d lat,25,25 -d lon,20,25 -d time,45,50 ${datafile} ~/test/out/subset.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array(  287.6032, 287.3396, 286.9612, 286.5881, 286.4355, 286.338, 288.5378, 288.4044, 288.3117, 288.2473, 288.2007, 288.1152, 290.7279, 290.5054, 290.1829, 289.9694, 289.7663, 289.5514, 291.8374, 291.6049, 291.5109, 291.3828, 291.2084, 291.0316, 293.5277, 293.2234, 292.9964, 292.8169, 292.631, 292.377, 292.383, 292.2009, 291.9637, 291.7084, 291.666, 291.6153  ).map(_.toFloat), Float.MaxValue )
@@ -855,7 +868,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   val serverConfiguration = Map[String,String]()
   val webProcessManager = new ProcessManager( serverConfiguration )
   val shutdown_after = false
-  val eps = 0.00001
+  val eps = 0.0001
   val service = "cds2"
   val run_args = Map("status" -> "false")
   val printer = new scala.xml.PrettyPrinter(200, 3)
