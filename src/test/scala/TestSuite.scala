@@ -524,7 +524,7 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
   }
 
-  test("SpaceAve-GISS-R1i1p1-window") {
+  test("Subset-GISS-R1i1p1-window") {
     // ncks -O -v tas -d lat,5,7 -d lon,25,25 -d time,75,75 ${datafile} ~/test/out/subset.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array( 223.8638, 230.5135, 238.1273 ).map(_.toFloat), Float.MaxValue )
     val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":7,"system":"indices"},"lon":{"start":25,"end":25,"system":"indices"},"time":{"start":75,"end":75,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.subset","input":"v1","domain":"d0"}]]"""
@@ -534,6 +534,20 @@ class DefaultTestSuite extends EDASTestSuite {
     println( "Verified Result: " + nco_verified_result.getStorageArray.mkString(",") )
     assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
   }
+
+  test("SpaceAve-GISS-R1i1p1-window-weighted") {
+    // ncwa -O -d lat,5,7 -d lon,25,25 -d time,75,75 -a lat,lon  ${datafile} ~/test/out/spatial_average1.nc
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 231.5538 ).map(_.toFloat), Float.MaxValue )
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":7,"system":"indices"},"lon":{"start":25,"end":25,"system":"indices"},"time":{"start":75,"end":75,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","weights":"cosine","axes":"xy"}]]"""
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.getStorageArray.mkString(",") )
+    println( "Verified Result: " + nco_verified_result.getStorageArray.mkString(",") )
+    assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
+  }
+
+
+
 
   test("SpaceAve-GISS-R1i1p1") {
     //  ncwa -O -d lat,5,25 -d lon,5,25 -d time,50,75 -a lat,lon ${datafile} ~/test/out/spatial_average.nc

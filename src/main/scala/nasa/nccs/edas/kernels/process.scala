@@ -204,7 +204,7 @@ object KernelUtilities extends Loggable {
         axisDataMap.get('y') match {
           case Some( ( axisIndex, yAxisData ) ) =>
             val axis_length = yAxisData.getSize
-            val axis_data = CDFloatArray.factory( yAxisData, Float.MaxValue )
+            val axis_data =  CDFloatArray.factory( yAxisData.copy(), Float.MaxValue )
             assert( axis_length == shape(axisIndex), "Y Axis data mismatch, %d vs %d".format(axis_length,shape(axisIndex) ) )
             val cosineWeights: CDFloatArray = axis_data.map( x => Math.cos( Math.toRadians(x) ).toFloat )
             val base_shape: Array[Int] = Array( shape.indices.map(i => if(i==axisIndex) shape(axisIndex) else 1 ): _* )

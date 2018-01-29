@@ -523,6 +523,16 @@ class CDFloatArray( cdIndexMap: CDIndexMap, val floatStorage: FloatBuffer, prote
     }
   }
 
+  def mapSectionData( f: Float => Float ): CDFloatArray =  {
+    val size = getSize
+    if( size == 0 ) {
+      CDFloatArray.empty
+    }  else {
+      val floatData = for ( index <- getIterator ) yield { f( getValue(index) ) }
+      CDFloatArray( getShape, floatData.toArray, invalid )
+    }
+  }
+
   def getValue( index: Int ): Float  = {
     try {
       floatStorage.get(index)
