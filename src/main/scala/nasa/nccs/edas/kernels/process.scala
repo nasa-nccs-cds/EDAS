@@ -323,7 +323,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: TimeSliceRDD): TimeSliceRDD = {
     assert( batchIndex == 0, "reduceBroadcast is not supported over multiple batches")
-    val reducedCollection = reduce( input, context, batchIndex, false )
+    val reducedCollection = reduce( input, context, batchIndex )
     val new_rdd = input.rdd.map ( tslice => tslice.addExtractedSlice( reducedCollection ) )
     new TimeSliceRDD( new_rdd, input.metadata )
   }

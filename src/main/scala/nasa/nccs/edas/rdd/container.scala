@@ -125,6 +125,7 @@ object TimeSliceRDD {
 class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) {
   import TimeSliceRDD._
   def cache() = rdd.cache()
+  def nSlices = rdd.count
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
   def section( section: CDSection ): TimeSliceRDD =
     TimeSliceRDD( rdd.map( _.section(section) ), metadata )
@@ -244,7 +245,6 @@ object TimeSliceMultiIterator {
 class TimeSliceMultiIterator( val varId: String, val varName: String, val section: String, val files: Iterator[FileInput], val basePath: String ) extends Iterator[CDTimeSlice] with Loggable {
   private var _optSliceIterator: Iterator[CDTimeSlice] = if( files.hasNext ) { getSliceIterator( files.next() ) } else { Iterator.empty }
   private def getSliceIterator( fileInput: FileInput ): TimeSliceIterator = TimeSliceIterator( varId, varName, section,  fileInput, basePath )
-  val t0 = System.nanoTime()
 
   def hasNext: Boolean = { !( _optSliceIterator.isEmpty && files.isEmpty ) }
 
@@ -272,6 +272,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
   private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
   val millisPerMin = 1000*60
   val filePath: String = if( basePath.isEmpty ) { fileInput.path } else { Paths.get( basePath, fileInput.path ).toString }
+  logger.info( s"TimeSliceIterator processing file ${filePath}")
   _sliceStack ++= getSlices
 
   def hasNext: Boolean = _sliceStack.nonEmpty
@@ -283,6 +284,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
     val globalTimeRange = globalTimeSection.getRange( 0 )
     val local_start = Math.max( 0, globalTimeRange.first() - timeIndexOffest )
     val local_last = globalTimeRange.last() - timeIndexOffest
+    logger.info(s"%SC% globalTimeSection: ${globalTimeSection.toString}, timeIndexOffest= $timeIndexOffest, local_start=$local_start, local_last=$local_last")
     if( local_last < 0 ) None else Some( mutableSection.replaceRange( 0, new ma2.Range( local_start, local_last ) ) )
   }
 
@@ -327,8 +329,9 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
           val sample_array = slices.head.elements.head._2.data
           val datasize: Int = sample_array.length
           val dataSample = sample_array(datasize / 2)
-          logger.info(s"Executing TimeSliceIterator.getSlices, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toString}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
+          logger.info(s"Executing TimeSliceIterator.getSlices, nSlices = ${slices.length}, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toString}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n\t metadata = $metadata")
         }
+//        logger.info(s"%SC% nSlices = ${slices.length}, nTimesteps = ${nTimesteps}, r0 = ${interSect.getRange(0).toString}, global_shape = [${global_shape.mkString(",")}], global_sect = ${global_sect.toString}, opSect = ${opSect.toString}, fileInput = ${fileInput.path}" )
         slices
     }
   }
@@ -403,6 +406,7 @@ class RDDContainer extends Loggable {
   def releaseBatch = { _vault.foreach(_.clear);  _vault = None }
   private def vault: RDDVault = _vault.getOrElse { throw new Exception( "Unexpected attempt to access an uninitialized RDD Vault")}
   def value: TimeSliceRDD = vault.value
+  def nSlices = _vault.fold( 0L ) ( _.value.nSlices )
   def contents: Iterable[String] = _vault.fold( Iterable.empty[String] ) ( _.contents )
   def section( section: CDSection ): Unit = vault.map( _.section(section) )
   def release( keys: Iterable[String] ): Unit = { vault.release( keys ) }

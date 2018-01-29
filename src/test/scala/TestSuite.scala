@@ -493,12 +493,14 @@ class DefaultTestSuite extends EDASTestSuite {
   test("TimeAve-r1i1p1-agg") {
     // ncwa -O -v tas -d lat,20,23 -d lon,30,33 -a time ${datafile_agg} ~/test/out/time_ave_agg.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array( 281.1322, 281.946, 282.5854, 282.8054, 282.4883, 282.9572, 283.7418, 284.1825, 284.4378, 284.7263, 285.1034, 285.3722, 286.3785, 286.4522, 286.4391, 286.4304 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":20,"end":23,"system":"indices"},"lon":{"start":30,"end":33,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1_agg","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t"}]]"""
+    val edas_agg_result: CDFloatArray = CDFloatArray( Array( 281.13208, 281.94595, 282.58557, 282.80496, 282.48840, 282.95740, 283.74164, 284.18268, 284.43793, 284.72614, 285.10373, 285.37222, 286.37885, 286.45245, 286.43930, 286.43048 ).map(_.toFloat), Float.MaxValue )
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":20,"end":23,"system":"indices"},"lon":{"start":30,"end":33,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = getResultData( result_node )
-    println( "Op Result:       " + result_data.getStorageArray.mkString(",") )
-    println( "Verified Result: " + nco_verified_result.getStorageArray.mkString(",") )
-    assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for Max")
+    println( "Verified Result:     " + nco_verified_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    println( "EDAS Agg Result:     " + edas_agg_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    println( "EDAS Reduced Result: " + result_data.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    assert( result_data.maxScaledDiff( edas_agg_result )  < eps, s" Incorrect value computed for Max")
   }
 
   test("Subset-Space-GISS-R1i1p1") {
@@ -518,10 +520,24 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs = s"""[domain=[{"name":"d0","lat":{"start":25,"end":30,"system":"indices"},"lon":{"start":20,"end":25,"system":"indices"},"time":{"start":45,"end":50,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
-    println( "Op Result:       " + result_data.getStorageArray.mkString(",") )
-    println( "Verified Result: " + nco_verified_result.getStorageArray.mkString(",") )
+    println( "Op Result:       " + result_data.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    println( "Verified Result: " + nco_verified_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
     assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
   }
+
+  test("Ave-Full-Space-GISS-R1i1p1") {
+    // ncwa -O -d time,75,80 -a lat,lon  ${datafile} ~/test/out/spatial_average2.nc
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array(  277.941, 279.8109, 280.9602, 281.2116, 280.7651, 279.4151   ).map(_.toFloat), Float.MaxValue )
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":75,"end":80,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    println( "Verified Result: " + nco_verified_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
+  }
+
+
+
 
   test("SpaceAve-GISS-R1i1p1-weighted") {
     //  ncap2 -O -S cosine_weights.nco ${datafile} /tmp/data_with_weights.nc
