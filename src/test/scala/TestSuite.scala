@@ -842,7 +842,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   val serverConfiguration = Map[String,String]()
   val webProcessManager = new ProcessManager( serverConfiguration )
   val shutdown_after = false
-  val eps = 0.0001
+  val eps = 0.00001
   val service = "cds2"
   val run_args = Map("status" -> "false")
   val printer = new scala.xml.PrettyPrinter(200, 3)
