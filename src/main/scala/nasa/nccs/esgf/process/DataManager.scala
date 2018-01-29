@@ -515,7 +515,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
       if( cval <= endval ) {
         if( startIndex == -1 ) { startIndex = coordIndex }
       } else {
-        return Some( new ma2.Range( startIndex, coordIndex-1 ) )
+        return if(startIndex == -1) { None} else { Some( new ma2.Range( startIndex, coordIndex-1 ) ) }
       }
     }
     if( startIndex == -1 ) { None } else { Some( new ma2.Range( startIndex, axis_size - 1) ) }

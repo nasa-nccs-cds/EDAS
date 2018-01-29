@@ -371,14 +371,14 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
   val global_shape = variable.getShape()
   val metadata = variable.getAttributes.map(_.toString).mkString(", ")
   val missing: Float = getMissing( variable )
-  val varSection = variable.getShapeAsSection
+  val varSection = new ma2.Section( getOrigin( fileInput.startIndex, global_shape.length ), global_shape )
   val interSect: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
-  val timeAxis: CoordinateAxis1DTime = ( NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") } ).section( interSect.getRange(0) )
-  val dates: List[CalendarDate] = timeAxis.getCalendarDates.toList
+  val file_timeAxis: CoordinateAxis1DTime = NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
+  val dates: List[CalendarDate] = file_timeAxis.section( interSect.shiftOrigin(varSection).getRange(0) ).getCalendarDates.toList
   val datesBase: DatesBase = new DatesBase( dates )
-  assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
   def close = dataset.close()
   def getSliceIndex( timestamp: Long ): Int = datesBase.getDateIndex( timestamp )
+  def getOrigin( time_offset: Int, rank : Int ): Array[Int] = ( ( 0 until rank ) map { index => if( index == 0 ) time_offset else 0 } ).toArray
 
   def getSlice( template_slice: CDTimeSlice  ): CDTimeSlice = {
     def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = {
