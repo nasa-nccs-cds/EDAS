@@ -395,7 +395,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[domain=[ {"name":"d0", "time": {"start":"1980-01-01T00:00:00", "end":"1981-01-01T00:00:00", "crs": "timestamps"}} ],
           variable=[ {"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"}],
-          operation=[ {"name":"CDSpark.ave","input":"v0","axes":"t","id":"v0ave"} ] ]""".stripMargin
+          operation=[ {"name":"CDSpark.ave","input":"v0","axes":"t"} ] ]""".stripMargin
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",300) )

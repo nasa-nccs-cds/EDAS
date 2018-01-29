@@ -300,7 +300,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     val nparts = input.getNumPartitions
     EDASExecutionManager.checkIfAlive
     evaluateProductSize( input, context )
-    if( !parallelizable || (nparts==1) ) { input.collect }
+    if( !parallelizable ) { input.collect }
     else {
       val rid = context.operation.rid.toLowerCase
       val reduceElements = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )

@@ -103,9 +103,7 @@ object FileHeader extends Loggable {
   }
 
   def getNumCommonElements( elemList: IndexedSeq[Array[String]] ): Int = {
-    if( elemList.length > 1 ) {
-      elemList.indices.foreach { elemIndex => if (elemList.map(array => array(elemIndex)).toSet.size > 1) return elemIndex }
-    }
+    if( elemList.length > 1 ) { elemList.indices.foreach { elemIndex => if (elemList.map(array => array(elemIndex)).toSet.size > 1) return elemIndex } }
     elemList.head.length - 1
   }
 
