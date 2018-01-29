@@ -103,8 +103,10 @@ object FileHeader extends Loggable {
   }
 
   def getNumCommonElements( elemList: IndexedSeq[Array[String]] ): Int = {
-    elemList.indices.foreach { elemIndex => if( elemList.map( _(elemIndex) ).toSet.size > 1 ) return elemIndex }
-    elemList.length
+    if( elemList.length > 1 ) {
+      elemList.indices.foreach { elemIndex => if (elemList.map(array => array(elemIndex)).toSet.size > 1) return elemIndex }
+    }
+    elemList.head.length - 1
   }
 
   def extractSubpath( headers: IndexedSeq[FileHeader] ): ( String, IndexedSeq[FileHeader] ) = {
@@ -295,10 +297,11 @@ class FileHeaderGenerator(file: String, timeRegular: Boolean ) extends Runnable 
 
 object CDScanTest {
   def main(args: Array[String]) {
-    val collectionId = "MERRA2-daily-test1"
-    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/MERRA/DAILY/2005/JAN"
+    val collectionId = "giss_r1i1p1_agg-test"
+    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1_agg"
     val pathFile = new File(dataPath)
     AggregationWriter.extractAggregations(collectionId, pathFile.toPath )
+    FileHeader.term()
   }
 }
 

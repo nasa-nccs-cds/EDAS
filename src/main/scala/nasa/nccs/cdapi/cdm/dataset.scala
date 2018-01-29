@@ -185,15 +185,15 @@ object CDGrid extends Loggable {
           }
 //          logger.info(s" %G% Writing grid coord variable[${newVar.getFullName}] data from file[${collectionFile}] range: [ ${coordAxis.getMinValue.toString} - ${coordAxis.getMaxValue.toString}  ${coordAxis.getUnitsString} ]")
           if (coordAxis.getAxisType == AxisType.Time) {
-            val (time_values, bounds) = FileHeader.getTimeValues(ncDataset, coordAxis)
+            val (time_values, bounds): ( Array[Long], Array[Array[Long]] ) = FileHeader.getTimeValues(ncDataset, coordAxis)
             newVar.addAttribute(new Attribute(CDM.UNITS, cdsutils.baseTimeUnits))
             gridWriter.write(newVar, ma2.Array.factory(ma2.DataType.LONG, coordAxis.getShape, time_values))
-            boundsVarOpt flatMap newVarsMap.get match {
-              case Some( newVarBnds ) =>
-                val cvarBnds = ncDataset.findVariable( newVarBnds.getFullName )
-                gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, bounds))
-              case None => Unit
-            }
+//            boundsVarOpt flatMap newVarsMap.get match {
+//              case Some( newVarBnds ) =>
+//                val cvarBnds = ncDataset.findVariable( newVarBnds.getFullName )
+//                gridWriter.write(newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, cvarBnds.getShape, bounds.toBuffer ))
+//              case None => Unit
+//            }
           } else {
             gridWriter.write(newVar, coordAxis.read())
             coordAxis match {
