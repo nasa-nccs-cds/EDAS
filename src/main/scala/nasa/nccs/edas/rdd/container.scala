@@ -345,6 +345,7 @@ class DatesBase( val dates: List[CalendarDate] ) extends Loggable with Serializa
 
   private def _getDateIndex( timestamp: Long, indexEstimate: Int ): Int = {
     if( indexEstimate < 0 ) { return 0 }
+    if( indexEstimate >= dates.length ) { return dates.length-1 }
     try {
       val datesStartTime = dates(indexEstimate).getMillis
       if (timestamp < datesStartTime) { return _getDateIndex(timestamp, indexEstimate - 1) }
