@@ -23,6 +23,7 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.collection.mutable
 import scala.collection.immutable.Map
+import scala.util.control.Breaks._
 
 sealed abstract class DataAccessMode
 object DataAccessMode {
@@ -280,64 +281,61 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     CoordinateAxis1DTime.factory( gridDS, coordAxis, new java.util.Formatter() )
   }
 
-  def getTimeCoordIndices( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] =
-    if( enable_range_caching ) getTimeCoordIndicesCached( tvalStart, tvalEnd, strict )
-    else getTimeCoordIndicesNonCached( tvalStart, tvalEnd, strict )
+//  def getTimeCoordIndices( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = getTimeCoordIndices( tvalStart, tvalEnd, strict )
+//    if( enable_range_caching ) getTimeCoordIndicesCached( tvalStart, tvalEnd, strict )
+//    else getTimeCoordIndicesNonCached( tvalStart, tvalEnd, strict )
 
-  def getTimeCoordIndicesCached( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
+//  def getTimeCoordIndicesCached( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
+//    val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
+//    val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
+//    getBoundedCalDate( startDate, BoundsRole.Start, strict ) flatMap ( boundedStartDate =>
+//      getBoundedCalDate( endDate, BoundsRole.End, strict) map ( boundedEndDate => {
+//        val indices = getCachedRange( boundedStartDate, boundedEndDate ) match {
+//          case Some( index_range ) => index_range
+//          case None =>
+//            val index_range = findTimeIndicesFromCalendarDates( boundedStartDate, boundedEndDate )
+//            cacheRange( boundedStartDate, boundedEndDate, index_range )
+//            index_range
+//        }
+//        new ma2.Range( getCFAxisName, indices._1, indices._2 )
+//      })
+//      )
+//  }
+//
+//  def getTimeCoordIndicesNonCached1( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
+//    val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
+//    val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
+//    getBoundedCalDate( startDate, BoundsRole.Start, strict ) flatMap ( boundedStartDate =>
+//      getBoundedCalDate( endDate, BoundsRole.End, strict) map ( boundedEndDate => {
+//        val indices = findTimeIndicesFromCalendarDates(boundedStartDate, boundedEndDate)
+//        new ma2.Range(getCFAxisName, indices._1, indices._2)
+//      }))
+//  }
+
+  def getTimeCoordIndices( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
     val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
     val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
-    getBoundedCalDate( startDate, BoundsRole.Start, strict ) flatMap ( boundedStartDate =>
-      getBoundedCalDate( endDate, BoundsRole.End, strict) map ( boundedEndDate => {
-        val indices = getCachedRange( boundedStartDate, boundedEndDate ) match {
-          case Some( index_range ) => index_range
-          case None =>
-            val index_range = findTimeIndicesFromCalendarDates( boundedStartDate, boundedEndDate )
-            cacheRange( boundedStartDate, boundedEndDate, index_range )
-            index_range
-        }
-        new ma2.Range( getCFAxisName, indices._1, indices._2 )
-      })
-      )
+    findTimeIndicesFromCalendarDates( startDate, endDate ) map { case (start,end) => new ma2.Range( getCFAxisName, start, end ) }
   }
 
-  def getTimeCoordIndicesNonCached( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
-    val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
-    val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
-    getBoundedCalDate( startDate, BoundsRole.Start, strict ) flatMap ( boundedStartDate =>
-      getBoundedCalDate( endDate, BoundsRole.End, strict) map ( boundedEndDate => {
-        val indices = findTimeIndicesFromCalendarDates(boundedStartDate, boundedEndDate)
-        new ma2.Range(getCFAxisName, indices._1, indices._2)
-      }))
-  }
-
-  def findTimeIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): ( Int, Int ) = {
+  def findTimeIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): Option[ ( Int, Int ) ] = {
+    if( (start_date.getMillis > _dates.last.getMillis) || (end_date.getMillis < _dates.head.getMillis) ) { return None }
     var start_index_opt: Option[Int] = None
     var end_index_opt: Option[Int] = None
-    val t0 = System.nanoTime()
     var dateIndex: Int = -1
-    for( date <- _dates ) {
+    breakable { for( date <- _dates ) {
       dateIndex += 1
       start_index_opt match {
         case None =>
-          if( date.getMillis >= start_date.getMillis ) {
-            start_index_opt = Some(dateIndex)
-          }
-          if( date.getMillis >= end_date.getMillis ) {
-            end_index_opt = Some(dateIndex)
-          }
+          if( date.getMillis >= start_date.getMillis ) { start_index_opt = Some(dateIndex) }
+          if( date.getMillis >= end_date.getMillis )   { end_index_opt = Some(dateIndex) }
         case Some( start_index ) => end_index_opt match {
-          case None => if( date.getMillis >= end_date.getMillis ) {
-            end_index_opt = Some(dateIndex-1)
-          }
-          case Some( end_index ) =>
-            val rv = ( start_index_opt.get, end_index_opt.get )
-            val t1 = System.nanoTime()
-            return rv
+          case None => if( date.getMillis >= end_date.getMillis ) { end_index_opt = Some(dateIndex-1) }
+          case Some( end_index ) => break
         }
       }
-    }
-    return ( start_index_opt.getOrElse(_dates.length-1), end_index_opt.getOrElse(_dates.length-1) )
+    }}
+    return Option( ( start_index_opt.getOrElse(_dates.length-1), end_index_opt.getOrElse(_dates.length-1) ) )
   }
 
   //  def getTimeIndexBounds( startval: String, endval: String, strict: Boolean = false) = getTimeCoordIndex( startval, BoundsRole.Start, strict).flatMap(startIndex =>
