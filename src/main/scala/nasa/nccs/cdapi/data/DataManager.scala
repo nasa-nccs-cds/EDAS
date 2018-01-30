@@ -12,7 +12,7 @@ import ucar.nc2.constants.AxisType
 import ucar.ma2
 import java.nio
 import java.util.Formatter
-import scala.collection.Map
+
 import nasa.nccs.cdapi.data.FastMaskedArray.join
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import org.apache.spark.mllib.linalg.DenseVector
@@ -59,7 +59,7 @@ abstract class MetadataCarrier( val metadata: Map[String,String] = Map.empty ) e
   def mergeMetadata( opName: String, other: MetadataCarrier ): Map[String,String] = MetadataOps.mergeMetadata( opName )( metadata, other.metadata )
   def toXml: xml.Elem
   def attr(id:String): String = metadata.getOrElse(id,"")
-  def mdata: java.util.Map[String,String] = metadata
+  def mdata(): java.util.Map[String,String] = metadata
 
   implicit def pimp(elem:xml.Elem) = new {
     def %(attrs:Map[String,String]) = {
@@ -692,8 +692,6 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
   def toVector: DenseVector = new DenseVector( data.map(_.toDouble ) )
   val gridFilePath: String = NetcdfDatasetMgr.cleanPath(gridSpec)
   override def size: Long = shape.foldLeft(1L)(_ * _)
-  override def mdata = metadata ++ Seq( "gridfile" -> gridSpec )
-  def getJavaMetadata: java.util.Map[String,String] = mdata
 
   def section( new_section: ma2.Section ): HeapFltArray = {
     val current_section = new ma2.Section(origin,shape)

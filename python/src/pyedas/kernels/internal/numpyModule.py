@@ -88,7 +88,7 @@ class WeightedAverageKernel(Kernel):
         results = []
         for input_pair in inputs_with_weights:
             input = inputs.get( input_pair[0] )  # npArray
-            if( input is None ): raise Exception( "Can't find input " + input_pair[0] + " in numpyModule.WeightedAverageKernel, available inputs = " + str(inputs.keys) )
+            if( input is None ): raise Exception( "Can't find input " + input_pair[0] + " in numpyModule.WeightedAverageKernel")
             else :
                 weights = inputs.get( input_pair[1] ).array if not (input_pair[1] is None) else None
                 axes = self.getOrderedAxes(task,input)

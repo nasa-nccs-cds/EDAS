@@ -113,7 +113,6 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = task.domainMap
-  def getInputMetadata: Map[ String, Map[String,String] ] = inputs.flatMap { case (key, optDFrag ) => optDFrag.map( dfrag => key -> dfrag.getMetadata() ) }
 
   def getConf( key: String, default: String ) = configuration.getOrElse(key,default)
   def missing_variable(uid: String) = throw new Exception("Can't find Variable '%s' in uids: [ %s ]".format(uid, inputs.keySet.mkString(", ")))
@@ -569,9 +568,6 @@ class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblAr
     case Some(section) => getSpatialAxisData( axis, section );
     case None => getSpatialAxisData( axis ).map { case ( index, array ) => ( index, array.toUcarDoubleArray ) }
   }
-  def getCollection: Collection = Collections.findCollection(collectionId).getOrElse( throw new Exception( s"Can't find collection ${collectionId} for Grid ${uid}"))
-  def getGridFilePath = getCollection.grid.gridFilePath
-
   def coordValuesToIndices( axis: Char, values: Array[Float] ): ( Int, Array[Int]) = {
     if( axis == 't' ) {
       getTimeAxisData match {

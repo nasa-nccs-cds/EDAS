@@ -5,7 +5,6 @@ import java.net.URI
 import java.nio.file.{Path, Paths}
 import java.util.Date
 
-import nasa.nccs.cdapi.cdm.CDGrid
 import nasa.nccs.edas.sources.netcdf.NCMLWriter
 import nasa.nccs.esgf.process.CDSection
 import nasa.nccs.utilities.Loggable
@@ -319,27 +318,27 @@ object AggregationWriter extends Loggable {
     args.map((arg: File) => getNcURIs(arg)).flatten
 }
 
-case class Aggregation( collId: String, dataPath: String, files: List[FileInput], variables: List[Variable], coordinates: List[Coordinate], axes: List[Axis], parms: Map[String,String] ) {
-  lazy val collection = _getCollection
-  private def _getCollection: Collection = Collections.findCollection(collId).getOrElse( throw new Exception( s"Can't find collection ${collId} for Aggregation ${dataPath}"))
-  def getGrid: CDGrid = collection.grid
-  def getGridFilePath: String = getGrid.gridFilePath
-  def getBasePath: Option[String] = parms.get("base.path")
-  def getFilePath( fileInput: FileInput ): String = getBasePath.fold( fileInput.path )( basePath => Paths.get( basePath, fileInput.path ).toString )
-  def findVariable( varName: String ): Option[Variable] = variables.find( _.name.equals(varName) )
+case class Aggregation( dataPath: String, files: List[FileInput], variables: List[Variable], coordinates: List[Coordinate], axes: List[Axis], parms: Map[String,String] ) {
+  def findVariable( varName: String ): Option[Variable] =
+    variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
   def getFilebase: FileBase = new FileBase( files, parms.get("base.path") )
-
   def toXml: xml.Elem = {
     <aggregation id={id}>
       { variables.map( _.toXml ) }
     </aggregation>
   }
 
+  def getBasePath: Option[String] = parms.get("base.path")
+
+  def getFilePath( fileInput: FileInput ): String = getBasePath.fold( fileInput.path )( basePath => Paths.get( basePath, fileInput.path ).toString )
+
   def getRangeMap(time_index: Int = 0, fileInputs: List[FileInput] = files, rangeMap: List[(ma2.Range,FileInput)] = List.empty[(ma2.Range,FileInput)]  ): List[(ma2.Range,FileInput)] = {
     if( fileInputs.isEmpty ) { rangeMap } else { getRangeMap(time_index + fileInputs.head.nRows + 1, fileInputs.tail,  rangeMap ++ List( new ma2.Range( time_index, time_index + fileInputs.head.nRows ) -> fileInputs.head ) ) }
   }
+
   def getIntersectingFiles( sectionString: String ): List[FileInput] = CDSection.fromString(sectionString).map( _.toSection.getRange(0) ).fold( files )( timeRange => files.filter( _.intersects(timeRange) ) )
+
 }
 
 class FileBase( val files: List[FileInput], val optBasePath: Option[String] ) extends Loggable with Serializable {
@@ -366,7 +365,7 @@ class FileBase( val files: List[FileInput], val optBasePath: Option[String] ) ex
 
 object Aggregation extends Loggable {
 
-  def read(collId: String, aggFile: String): Aggregation = {
+  def read(aggFile: String): Aggregation = {
     val source = Source.fromFile(aggFile)
     val files = mutable.ListBuffer.empty[FileInput]
     val variables = mutable.ListBuffer.empty[Variable]
@@ -392,7 +391,7 @@ object Aggregation extends Loggable {
           logger.error( s"Error '${err.getMessage}' processing line in Aggregation file => ${line} " )
       }
     } finally { source.close() }
-    Aggregation( collId, aggFile, files.toList, variables.toList, coordinates.toList, axes.toList, parameters.toMap )
+    Aggregation( aggFile, files.toList, variables.toList, coordinates.toList, axes.toList, parameters.toMap )
   }
 
   def write( aggregationId: String, files: IndexedSeq[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {

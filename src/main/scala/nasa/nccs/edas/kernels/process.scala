@@ -66,11 +66,11 @@ object KernelContext {
       uid -> tgridOpt.map( tg => GridContext(uid,tg))
     }
     val gridMapCols: Map[String,Option[GridContext]] = gridMapVars.flatMap { case ( uid, gcOpt ) => gcOpt.map( gc => ( gc.collectionId, Some(gc) ) ) }
-    new KernelContext( operation, gridMapVars ++ gridMapCols, sectionMap, executor.requestCx.domains, executor.requestCx.getConfiguration, executor.workflowCx.crs, executor.requestCx.getInputMetadata, executor.getRegridSpec, executor.requestCx.profiler )
+    new KernelContext( operation, gridMapVars ++ gridMapCols, sectionMap, executor.requestCx.domains, executor.requestCx.getConfiguration, executor.workflowCx.crs, executor.getRegridSpec, executor.requestCx.profiler )
   }
 }
 
-class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],  _configuration: Map[String,String], val crsOpt: Option[String], val inputMetadata: Map[ String, Map[String,String] ], val regridSpecOpt: Option[RegridSpec], val profiler: ProfilingTool ) extends Loggable with Serializable with ScopeContext {
+class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],  _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec], val profiler: ProfilingTool ) extends Loggable with Serializable with ScopeContext {
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
   val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
@@ -111,6 +111,8 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   private def getCRS: Option[String] = getGridConfiguration("crs")
 
   private def getTRS: Option[String] = getGridConfiguration("trs")
+
+  def conf(params: Map[String, String]): KernelContext = new KernelContext(operation, grids, sectionMap, domains, configuration ++ params, crsOpt, regridSpecOpt, profiler)
 
   def commutativeReduction: Boolean = if (getAxes.includes(0)) { true } else { false }
 
@@ -260,9 +262,10 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val identifier = name
   def matchesSpecs( specs: Array[String] ): Boolean = { (specs.size >= 2) && specs(0).equals(module) && specs(1).equals(operation) }
   val nOutputsPerInput: Int = options.getOrElse("nOutputsPerInput","1").toInt
-  def getInputArrays( inputs: CDTimeSlice, context: KernelContext ): List[ArraySpec] = {
-    context.operation.inputs.map ( iid => inputs.elements.find { case (key,value) => key.equals( iid ) } .getOrElse( throw new Exception( s"Missing input ${iid} in kernel ${this.id}")) ).map( _._2 )
-  }
+  def getInputArrays( inputs: CDTimeSlice, context: KernelContext ): List[ArraySpec] =
+    context.operation.inputs.map( id => inputs.element( id ).getOrElse {
+      throw new Exception(s"Can't find input ${id} for kernel ${identifier}")
+    } )
 
   val mapCombineOp: Option[ReduceOpFlt] = options.get("mapOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
   val mapCombineNOp: Option[ReduceNOpFlt] = None
@@ -813,15 +816,12 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
       val t1 = System.nanoTime
       for (input_id <- context.operation.inputs) inputs.element(input_id) match {
         case Some(input_array) =>
-          val gridFile = context.grid.getGridFilePath
-          val metadata = context.inputMetadata.getOrElse( input_id, throw new Exception(s"Can't find metadata for input ${input_id} in kernel ${this.id}") )
-          worker.sendRequestInput(input_id, input_array.toHeapFltArray( gridFile, metadata ) )
+          worker.sendRequestInput(input_id, input_array.toHeapFltArray)
         case None =>
-          worker.sendUtility(List("input", input_id ).mkString(";"))
+          worker.sendUtility(List("input", input_id).mkString(";"))
       }
       val metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) ++ Map("resultDir" -> Kernel.getResultDir.toString)
-      val input_ids = context.operation.inputs.toArray
-      worker.sendRequest(context.operation.identifier, input_ids, metadata)
+      worker.sendRequest(context.operation.identifier, context.operation.inputs.toArray, metadata)
       val resultItems: Seq[(String, ArraySpec)] = for (iInput <- 0 until (input_arrays.length * nOutputsPerInput)) yield {
         val tvar: TransVar = worker.getResult
         val uid = tvar.getMetaData.get("uid")
