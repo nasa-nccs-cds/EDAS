@@ -139,7 +139,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     //    val dataset = NetcdfDataset.openDataset(dataFile)
 
     val t01 = System.nanoTime()
-    val agg = Aggregation.read( dataFile )
+    val agg = Aggregation.read( "coll1", dataFile )
     val t02 = System.nanoTime()
     val files: List[FileInput] = agg.files
     val t03 = System.nanoTime()

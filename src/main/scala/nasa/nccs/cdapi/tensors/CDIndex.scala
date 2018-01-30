@@ -2,7 +2,7 @@
 
 package nasa.nccs.cdapi.tensors
 import java.util.Formatter
-
+import scala.collection.Map
 import ucar.nc2.time.Calendar
 import ucar.nc2.time.CalendarDate
 import nasa.nccs.cdapi.cdm.CDSVariable

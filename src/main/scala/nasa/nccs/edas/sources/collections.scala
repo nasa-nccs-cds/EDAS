@@ -465,7 +465,7 @@ object Collections extends XmlResource with Loggable {
     try {
       val collection = _datasets.getOrElseUpdate(id, {
         val vars = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head
-        val aggregations: Map[String,Aggregation] = getAggregations(collectionFilePath)
+        val aggregations: Map[String,Aggregation] = getAggregations(id,collectionFilePath)
         new Collection("file", id, collectionFilePath, aggregations, "", "", "Aggregated Collection", vars.toList)
       })
       Some(collection)
@@ -479,10 +479,10 @@ object Collections extends XmlResource with Loggable {
 
   def getCollections: List[String] = getNCMLDirectory.toFile.listFiles.filter(_.isFile).toList.filter { _.getName.endsWith(".csv") } map { _.getName.split('.').dropRight(1).mkString(".") }
 
-  def getAggregations(collectionFilePath: String ): Map[String,Aggregation] = {
+  def getAggregations(collId: String, collectionFilePath: String ): Map[String,Aggregation] = {
     val aggs = mutable.HashMap.empty[String,Aggregation]
     val agFiles: Iterator[(String,String)] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head -> new File( elems.last ).getAbsolutePath
-    val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( file ) ) }
+    val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( collId, file ) ) }
     agMapIter.toMap[String,Aggregation]
   }
 

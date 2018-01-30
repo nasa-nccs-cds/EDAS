@@ -36,9 +36,6 @@ object ArraySpec {
 }
 
 case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
-  if( origin.sum == 0 ) {
-    val test = 1
-  }
   def section( section: CDSection ): ArraySpec = {
     val ma2Array = ma2.Array.factory( ma2.DataType.FLOAT, shape, data )
     val mySection: ma2.Section = getSection
@@ -54,7 +51,7 @@ case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], dat
   }
   def size: Long = shape.product
   def ++( other: ArraySpec ): ArraySpec = concat( other )
-  def toHeapFltArray = new HeapFltArray( shape, origin, data, Option( missing ) )
+  def toHeapFltArray( gridFile: String = "", metadata: Map[String,String] = Map.empty ) = new HeapFltArray( shape, origin, data, Option( missing ), gridFile, metadata )
   def toFastMaskedArray: FastMaskedArray = FastMaskedArray( shape, data, missing )
   def toCDFloatArray: CDFloatArray = CDFloatArray(shape,data,missing)
   def getSection: ma2.Section = new ma2.Section( origin, shape )
@@ -217,22 +214,20 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
     val parallelism = Math.min( agg.files.length, nPartitions )
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( agg.getIntersectingFiles( section ), parallelism )
     val rdd = filesDataset.mapPartitions( TimeSliceMultiIterator( varId, varName, section, agg.parms.getOrElse("base.path","") ) )
-    val variable = agg.findVariable( varName ).getOrElse { throw new Exception(s"Unrecognozed variable ${varName} in aggregation, vars = ${agg.variables.map(_.name).mkString(",")}")}
-    val metadata = Map( "section" -> section, varId -> variable.toString )
+    val variable = agg.findVariable( varName ).getOrElse { throw new Exception(s"Unrecognized variable ${varName} in aggregation, vars = ${agg.variables.map(_.name).mkString(",")}")}
+    val metadata = Map( "section" -> section, varId -> variable.toString, "gridfile" -> agg.getGridFilePath )
     TimeSliceRDD( rdd, metadata ++ agg.parms )
   }
-
-
-
-
 
   def parallelize( template: TimeSliceRDD, agg: Aggregation, varId: String, varName: String ): TimeSliceRDD = {
     val variable = agg.findVariable( varName )
     val section = template.getParameter( "section" )
+    val template_gridfile = template.getParameter( "gridfile" )
+    assert( template_gridfile.equals( agg.getGridFilePath), s"Incommensurate grids in rdd extension: ${template_gridfile} vs ${agg.getGridFilePath}")
     val basePath = agg.parms.get("base.path")
     val rdd = template.rdd.mapPartitionsWithIndex( ( index, tSlices ) => PartitionExtensionGenerator(index).extendPartition( tSlices.toSeq, agg.getFilebase, varId, varName, section, agg.getBasePath ).toIterator )
-    val metadata = Map( "section" -> section, varId -> variable.toString )
-    TimeSliceRDD( rdd, metadata )
+    val new_metadata = Map( varId -> variable.toString )
+    TimeSliceRDD( rdd, template.metadata ++ new_metadata )
   }
 }
 
