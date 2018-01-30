@@ -24,7 +24,7 @@ import ucar.nc2.time.CalendarDate
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.immutable.Map
 import scala.collection.mutable
 
 object ArraySpec {

@@ -143,7 +143,14 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
 
   def getCollectionIds: List[String] = Set( inputs.keys.flatMap( id => getDataFragmentSpec(id)).map ( _.collection.collId ).toSeq: _* ).toList
 
-  def getGridRefInput: Option[OperationDataInput] = inputs.values.find( _.matchesReference( getGridObjectRef ) ).asInstanceOf[Option[OperationDataInput]]
+  def getGridRefInput: Option[OperationDataInput] = {
+    val opGridSpec = inputs.values.find(_.matchesReference(getGridObjectRef)).asInstanceOf[Option[OperationDataInput]]
+    if( opGridSpec.isEmpty ) { getOperationDataInput } else { opGridSpec }
+  }
+  def getOperationDataInput: Option[OperationDataInput] = {
+    inputs.values.foreach { case opInput: OperationDataInput => return Some(opInput); case _ => Unit }
+    None
+  }
   def getTargetGrid: Option[TargetGrid] = getGridRefInput.map(_.getGrid)
 
   def getSubworkflowCRS: Option[String] = {
@@ -188,7 +195,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     val root_node = executor.rootNode
     val kernelCx: KernelContext  = root_node.getKernelContext( executor )
     kernelCx.addTimestamp( s"Executing Kernel for node ${root_node.getNodeId}" )
-    val isIterative = executor.hasBatch(1)
+    val isIterative = false // executor.hasBatch(1)
     var batchIndex = 0
     var aggResult = TimeSliceCollection.empty
     var resultFiles = mutable.ListBuffer.empty[String]
@@ -206,7 +213,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
           throw new Exception( "Must be authorized to execute a request this big- please contact the service administrator for instructions.")
         }
       }
-    } while ( { batchIndex+=1; executor.hasBatch(batchIndex) } )
+    } while ( { batchIndex+=1; false; /* executor.hasBatch(batchIndex) */ } )
 
     val t1 = System.nanoTime()
     if( Try( executor.requestCx.config("unitTest","false").toBoolean ).getOrElse(false)  ) { root_node.kernel.cleanUp(); }

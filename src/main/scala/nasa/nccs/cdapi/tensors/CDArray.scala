@@ -9,7 +9,7 @@ import nasa.nccs.cdapi.tensors.CDArray.{FlatIndex, StorageIndex}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import ucar.ma2
 import ucar.ma2.{ArrayFloat, Index, IndexIterator}
-
+import scala.collection.immutable.Map
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag

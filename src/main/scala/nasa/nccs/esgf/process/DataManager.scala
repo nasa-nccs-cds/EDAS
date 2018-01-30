@@ -15,13 +15,14 @@ import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D, CoordinateAxis1DTime}
-import scala.collection.Map
+import scala.collection.immutable.Map
 import scala.collection.concurrent
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.collection.mutable
+import scala.collection.immutable.Map
 
 sealed abstract class DataAccessMode
 object DataAccessMode {
@@ -34,7 +35,7 @@ object FragmentSelectionCriteria extends Enumeration { val Largest, Smallest = V
 
 trait DataLoader {
   def getExistingFragment( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode]  ): Option[Future[PartitionedFragment]]
-  def cacheFragmentFuture( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode]  ): Future[PartitionedFragment];
+//  def cacheFragmentFuture( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode]  ): Future[PartitionedFragment];
   def deleteFragments( fragIds: Iterable[String] )
   def clearCache: Set[String]
 }
@@ -63,6 +64,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = rootNode.kernel.getReduceOp(context)
   def getTargetGrid: Option[TargetGrid] = workflowCx.getTargetGrid
   def releaseBatch: Unit = _inputsRDD.releaseBatch
+  def getRegridSpec: Option[RegridSpec] = getGridRefInput.map( opInput => RegridSpec( opInput.fragmentSpec ) )
 
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Iterable[String] = {
     for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )
@@ -681,12 +683,12 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
   def getOperationInput( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ): OperationInput = {
     dataLoader.getExistingFragment( fragSpec, partsConfig, Some(workflowNode) ) match {
       case Some( fragFut ) => Await.result( fragFut, Duration.Inf )
-      case None =>
-        if(fragSpec.autoCache) {
-          val fragFut = cacheInputData( fragSpec, partsConfig, Some(workflowNode) )
-          Await.result( fragFut, Duration.Inf )
-        }
-        else { new EDASDirectDataInput( fragSpec, partsConfig, workflowNode ) }
+      case None => new EDASDirectDataInput( fragSpec, partsConfig, workflowNode )
+      //        if(fragSpec.autoCache) {
+//          val fragFut = cacheInputData( fragSpec, partsConfig, Some(workflowNode) )
+//          Await.result( fragFut, Duration.Inf )
+//        }
+//        else { new EDASDirectDataInput( fragSpec, partsConfig, workflowNode ) }
     }
   }
 
@@ -764,13 +766,13 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
     rv
   }
 
-  def cacheInputData( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode] ): Future[PartitionedFragment] = {
-    logger.info( " ****>>>>>>>>>>>>> Cache Input Data: " + fragSpec.getKeyString )
-    dataLoader.getExistingFragment( fragSpec, partsConfig, workflowNodeOpt ) match {
-      case Some(partFut) => partFut
-      case None => dataLoader.cacheFragmentFuture( fragSpec, partsConfig, workflowNodeOpt )
-    }
-  }
+//  def cacheInputData( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode] ): Future[PartitionedFragment] = {
+//    logger.info( " ****>>>>>>>>>>>>> Cache Input Data: " + fragSpec.getKeyString )
+//    dataLoader.getExistingFragment( fragSpec, partsConfig, workflowNodeOpt ) match {
+//      case Some(partFut) => partFut
+//      case None => dataLoader.cacheFragmentFuture( fragSpec, partsConfig, workflowNodeOpt )
+//    }
+//  }
 
   def deleteFragments( fragIds: Iterable[String] ) = {
     dataLoader.deleteFragments( fragIds )
@@ -778,32 +780,32 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
 
   def clearCache: Set[String] = dataLoader.clearCache
 
-  def cacheInputData( dataContainer: DataContainer, partsConfig: Map[String,String], domain_container_opt: Option[DomainContainer], targetGrid: TargetGrid, workflowNodeOpt: Option[WorkflowNode]  ): Option[( DataFragmentKey, Future[PartitionedFragment] )] = {
-    val data_source: DataSource = dataContainer.getSource
-    logger.info( "cacheInputData"  )
-    val variable: CDSVariable = dataContainer.getVariable
-    val maskOpt: Option[String] = domain_container_opt.flatMap( domain_container => domain_container.mask )
-    val optSection: Option[ma2.Section] = data_source.fragIdOpt match {
-      case Some(fragId) => Some(DataFragmentKey(fragId).getRoi);
-      case None => targetGrid.grid.getSection
-    }
-    val optDomainSect: Option[ma2.Section] = domain_container_opt.flatMap( domain_container => targetGrid.grid.getSubSection(domain_container.axes) )
-    val domain_mdata = domain_container_opt.map( _.metadata ).getOrElse(Map.empty)
-    if( optSection == None ) logger.warn( "Attempt to cache empty segment-> No caching will occur: " + dataContainer.toString )
-    optSection map { section =>
-      val fragSpec = new DataFragmentSpec( dataContainer.uid, variable.name, variable.collection, data_source.fragIdOpt, Some(targetGrid), variable.dims.mkString(","),
-        variable.units, variable.getAttributeValue("long_name", variable.fullname), section, optDomainSect, domain_mdata, variable.missing, variable.getAttributeValue("numDataFiles", "1").toInt, maskOpt, data_source.autoCache )
-      logger.info( "cache fragSpec: " + fragSpec.getKey.toString )
-      dataLoader.getExistingFragment(fragSpec, partsConfig, workflowNodeOpt) match {
-        case Some(partFut) =>
-          logger.info( "Found existing cached fragment to match: " + fragSpec.getKey.toString )
-          (fragSpec.getKey -> partFut)
-        case None =>
-          logger.info( "Creating new cached fragment: " + fragSpec.getKey.toString )
-          (fragSpec.getKey -> dataLoader.cacheFragmentFuture(fragSpec, partsConfig, workflowNodeOpt))
-      }
-    }
-  }
+//  def cacheInputData( dataContainer: DataContainer, partsConfig: Map[String,String], domain_container_opt: Option[DomainContainer], targetGrid: TargetGrid, workflowNodeOpt: Option[WorkflowNode]  ): Option[( DataFragmentKey, Future[PartitionedFragment] )] = {
+//    val data_source: DataSource = dataContainer.getSource
+//    logger.info( "cacheInputData"  )
+//    val variable: CDSVariable = dataContainer.getVariable
+//    val maskOpt: Option[String] = domain_container_opt.flatMap( domain_container => domain_container.mask )
+//    val optSection: Option[ma2.Section] = data_source.fragIdOpt match {
+//      case Some(fragId) => Some(DataFragmentKey(fragId).getRoi);
+//      case None => targetGrid.grid.getSection
+//    }
+//    val optDomainSect: Option[ma2.Section] = domain_container_opt.flatMap( domain_container => targetGrid.grid.getSubSection(domain_container.axes) )
+//    val domain_mdata = domain_container_opt.map( _.metadata ).getOrElse(Map.empty)
+//    if( optSection == None ) logger.warn( "Attempt to cache empty segment-> No caching will occur: " + dataContainer.toString )
+//    optSection map { section =>
+//      val fragSpec = new DataFragmentSpec( dataContainer.uid, variable.name, variable.collection, data_source.fragIdOpt, Some(targetGrid), variable.dims.mkString(","),
+//        variable.units, variable.getAttributeValue("long_name", variable.fullname), section, optDomainSect, domain_mdata, variable.missing, variable.getAttributeValue("numDataFiles", "1").toInt, maskOpt, data_source.autoCache )
+//      logger.info( "cache fragSpec: " + fragSpec.getKey.toString )
+//      dataLoader.getExistingFragment(fragSpec, partsConfig, workflowNodeOpt) match {
+//        case Some(partFut) =>
+//          logger.info( "Found existing cached fragment to match: " + fragSpec.getKey.toString )
+//          (fragSpec.getKey -> partFut)
+//        case None =>
+//          logger.info( "Creating new cached fragment: " + fragSpec.getKey.toString )
+//          (fragSpec.getKey -> dataLoader.cacheFragmentFuture(fragSpec, partsConfig, workflowNodeOpt))
+//      }
+//    }
+//  }
 }
 
 

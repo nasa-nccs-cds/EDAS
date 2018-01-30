@@ -23,7 +23,8 @@ import ucar.{ma2, nc2}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.immutable.{Map, SortedMap, TreeMap}
+import scala.collection.immutable.{SortedMap, TreeMap}
+import scala.collection.immutable.Map
 import scala.collection.mutable
 
 object Port {

@@ -19,7 +19,7 @@ import nasa.nccs.caching._
 import nasa.nccs.edas.engine.EDASExecutionManager.logger
 import ucar.{ma2, nc2}
 import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
-
+import scala.collection.immutable.Map
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.engine.spark.CDSparkContext
@@ -327,11 +327,11 @@ class EDASExecutionManager extends WPSServer with Loggable {
     rv
   }
 
-  def cacheInputData(request: TaskRequest, run_args: Map[String, String] ): Iterable[Option[(DataFragmentKey, Future[PartitionedFragment])]] = {
-    val sourceContainers = request.variableMap.values.filter(_.isSource)
-    for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource; domain <- data_container.getSource.getDomain.map(request.getDomain) )
-      yield serverContext.cacheInputData( data_container, run_args, domain, request.getTargetGrid(data_container), None )
-  }
+//  def cacheInputData(request: TaskRequest, run_args: Map[String, String] ): Iterable[Option[(DataFragmentKey, Future[PartitionedFragment])]] = {
+//    val sourceContainers = request.variableMap.values.filter(_.isSource)
+//    for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource; domain <- data_container.getSource.getDomain.map(request.getDomain) )
+//      yield serverContext.cacheInputData( data_container, run_args, domain, request.getTargetGrid(data_container), None )
+//  }
 
   def deleteFragments( fragIds: Iterable[String] ) = {
     logger.info("Deleting frags: " + fragIds.mkString(", ") + "; Current Frags = " + FragmentPersistence.getFragmentIdList.mkString(", "))
@@ -369,10 +369,10 @@ class EDASExecutionManager extends WPSServer with Loggable {
       case "clearCache" =>
         val fragIds = clearCache
         new WPSMergedEventReport( List( new UtilityExecutionResult( "clearCache", <deleted fragments={fragIds.mkString(",")}/> ) ) )
-      case "cache" =>
-        val cached_data: Iterable[(DataFragmentKey,Future[PartitionedFragment])] = cacheInputData(request, run_args).flatten
-        FragmentPersistence.close()
-        new WPSMergedEventReport( cached_data.map( cache_result => new UtilityExecutionResult( cache_result._1.toStrRep, <cache/> ) ).toList )
+//      case "cache" =>
+//        val cached_data: Iterable[(DataFragmentKey,Future[PartitionedFragment])] = cacheInputData(request, run_args).flatten
+//        FragmentPersistence.close()
+//        new WPSMergedEventReport( cached_data.map( cache_result => new UtilityExecutionResult( cache_result._1.toStrRep, <cache/> ) ).toList )
       case "dcol" =>
         val colIds = request.variableMap.values.map( _.getSource.collection.id )
         val deletedCollections = Collections.removeCollections( colIds.toArray )

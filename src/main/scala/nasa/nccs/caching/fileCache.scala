@@ -31,6 +31,7 @@ import ucar.{ma2, nc2}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
+import scala.collection.immutable.Map
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
@@ -893,3 +894,171 @@ class TransientDataCacheMgr extends Loggable {
     result
   }
 }
+
+
+class CollectionDataCacheMgr extends nasa.nccs.esgf.process.DataLoader with FragSpecKeySet {
+  val K = 1000f
+  private val fragmentCache: Cache[String, PartitionedFragment] = new FutureCache[String, PartitionedFragment]( "Store", "fragment" ) {
+    override def evictionNotice(key: String, value: Future[PartitionedFragment]) = {
+      value.onSuccess {
+        case pfrag =>
+          logger.info("Clearing fragment %s".format(key));
+          FragmentPersistence.delete(List(key))
+          pfrag.delete
+      }
+    }
+    override def entrySize(key: String,  value: Future[PartitionedFragment]): Int = {
+      math.max(((DataFragmentKey(key).getSize * 4) / K).round, 1)
+    }
+  }
+  def getExistingFragment( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode]  ): Option[Future[PartitionedFragment]] = None
+
+  private val rddPartitionCache: ConcurrentLinkedHashMap[ String, RDDTransientVariable] =
+    new ConcurrentLinkedHashMap.Builder[String, RDDTransientVariable]
+      .initialCapacity(64)
+      .maximumWeightedCapacity(128)
+      .build()
+  private val execJobCache =
+    new ConcurrentLinkedHashMap.Builder[String, JobRecord]
+      .initialCapacity(64)
+      .maximumWeightedCapacity(128)
+      .build()
+
+  private val maskCache: Cache[MaskKey, CDByteArray] = new FutureCache("Store", "mask" )
+
+  def clearFragmentCache() = fragmentCache.clear
+  def addJob(jrec: JobRecord): String = { execJobCache.put(jrec.id, jrec); jrec.id }
+  def removeJob(jid: String) = execJobCache.remove(jid)
+  def findJob(jid: String): Option[JobRecord] = Option(execJobCache.get(jid))
+
+  def getFragmentList: Array[String] = fragmentCache.getEntries.map {
+    case (key, frag) => "%s, bounds:%s".format(key, frag.toBoundsString)
+  } toArray
+
+  def makeKey(collection: String, varName: String) = collection + ":" + varName
+  def keys: Set[String] = fragmentCache.keys
+  def values: Iterable[Future[PartitionedFragment]] = fragmentCache.values
+
+  def extractFuture[T](key: String, result: Option[Try[T]]): T = result match {
+    case Some(tryVal) =>
+      tryVal match {
+        case Success(x) => x;
+        case Failure(t) => throw t
+      }
+    case None => throw new Exception(s"Error getting cache value $key")
+  }
+
+  def getExistingResult(resultId: String): Option[RDDTransientVariable] = {
+    val result: Option[RDDTransientVariable] = Option(
+      rddPartitionCache.get(resultId))
+    logger.info(
+      ">>>>>>>>>>>>>>>> Get result from cache: search key = " + resultId + ", existing keys = " + rddPartitionCache.keys.toArray
+        .mkString("[", ",", "]") + ", Success = " + result.isDefined.toString)
+    result
+  }
+  def putResult(resultId: String, result: RDDTransientVariable) = rddPartitionCache.put(resultId, result)
+
+  def getResultListXml(): xml.Elem =
+    <results>
+      { rddPartitionCache.map { case (rkey,rval) =>  { <result type="rdd" id={rkey} timestamp={rval.getTimestamp} /> } } }
+    </results>
+
+  def getResultIdList = rddPartitionCache.keys
+
+  def deleteResult(resultId: String): RDDTransientVariable = rddPartitionCache.remove(resultId)
+
+  def getJobListXml(): xml.Elem =
+    <jobs>
+      { for( jrec: JobRecord <- execJobCache.values ) yield jrec.toXml }
+    </jobs>
+
+
+  def produceMask(maskId: String,
+                  bounds: Array[Double],
+                  mask_shape: Array[Int],
+                  spatial_axis_indices: Array[Int]): Option[CDByteArray] = {
+    if (Masks.isMaskId(maskId)) {
+      val maskFuture =
+        getMaskFuture(maskId, bounds, mask_shape, spatial_axis_indices)
+      val result = Await.result(maskFuture, Duration.Inf)
+      logger.info("Loaded mask (%s) data".format(maskId))
+      Some(result)
+    } else {
+      None
+    }
+  }
+
+  private def getMaskFuture(
+                             maskId: String,
+                             bounds: Array[Double],
+                             mask_shape: Array[Int],
+                             spatial_axis_indices: Array[Int]): Future[CDByteArray] = {
+    val fkey = MaskKey(bounds, mask_shape, spatial_axis_indices)
+    val maskFuture = maskCache(fkey) {
+      promiseMask(maskId, bounds, mask_shape, spatial_axis_indices) _
+    }
+    logger.info(
+      ">>>>>>>>>>>>>>>> Put mask in cache: " + fkey.toString + ", keys = " + maskCache.keys
+        .mkString("[", ",", "]"))
+    maskFuture
+  }
+
+  private def promiseMask(
+                           maskId: String,
+                           bounds: Array[Double],
+                           mask_shape: Array[Int],
+                           spatial_axis_indices: Array[Int])(p: Promise[CDByteArray]): Unit =
+    try {
+      Masks.getMask(maskId) match {
+        case Some(mask) =>
+          mask.mtype match {
+            case "shapefile" =>
+              val geotools = new GeoTools()
+              p.success(
+                geotools.produceMask(mask.getPath,
+                  bounds,
+                  mask_shape,
+                  spatial_axis_indices))
+            case x => p.failure(new Exception(s"Unrecognized Mask type: $x"))
+          }
+        case None =>
+          p.failure(
+            new Exception(
+              s"Unrecognized Mask ID: $maskId: options are %s".format(
+                Masks.getMaskIds)))
+      }
+    } catch { case e: Exception => p.failure(e) }
+
+  private def clearRedundantFragments(fragSpec: DataFragmentSpec) =
+    findEnclosedFragSpecs(fragmentCache.keys, fragSpec.getKey).foreach(fragmentCache.remove(_))
+
+  def getExistingMask(fkey: MaskKey): Option[Future[CDByteArray]] = {
+    val rv: Option[Future[CDByteArray]] = maskCache.get(fkey)
+    logger.info(
+      ">>>>>>>>>>>>>>>> Get mask from cache: search key = " + fkey.toString + ", existing keys = " + maskCache.keys
+        .mkString("[", ",", "]") + ", Success = " + rv.isDefined.toString)
+    rv
+  }
+
+  def getFragment(fragKey: String): Option[Future[PartitionedFragment]] =
+    fragmentCache.get(fragKey)
+
+
+
+  def deleteFragments( fragIds: Iterable[String] ) = {
+    for( skey <- fragmentCache.keys; fkey <- fragIds; if skey.startsWith(fkey) ) fragmentCache.remove(skey)
+    logger.info( "Deleting Fragments: %s, Current fragments: %s".format( fragIds.mkString(","), fragmentCache.keys.mkString(",") ) )
+    FragmentPersistence.delete(fragIds)
+  }
+
+  def clearCache: Set[String] = {
+    val fragKeys = fragmentCache.keys
+    fragmentCache.clear()
+    logger.info( "Deleting All Fragments, Current fragments: %s".format( fragmentCache.keys.mkString(",") ) )
+    FragmentPersistence.clearCache()
+    fragKeys
+  }
+
+}
+
+object collectionDataCache extends CollectionDataCacheMgr()
