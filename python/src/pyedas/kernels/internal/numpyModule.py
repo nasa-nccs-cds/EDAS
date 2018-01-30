@@ -97,12 +97,13 @@ class WeightedAverageKernel(Kernel):
                 result = input.array
                 for axis in axes:
                     current_shape = list( result.shape )
-                    self.logger.info(" --> Exec: axis: " + str(axis) + ", shape: " + str(current_shape) )
-#                    ( result, weights ) = ma.average( result, axis, weights, True )
-                    ( result, weights ) = ma.average( result, axis, np.broadcast_to( weights, current_shape ), True )
-                    current_shape[axis] = 1
-                    result = result.reshape( current_shape )
-                    weights = weights.reshape( current_shape )
+                    if( current_shape[axis] > 1 ):
+                        self.logger.info(" %ZP% Exec: axis: " + str(axis) + ", shape: " + str(current_shape) )
+                        wts = None if ( weights == None ) else np.broadcast_to( weights, current_shape )
+                        ( result, weights ) = ma.average( result, axis, wts, True )
+                        current_shape[axis] = 1
+                        result = result.reshape( current_shape )
+                        weights = weights.reshape( current_shape )
 
                 results.append( npArray.createResult( task, input, result.filled( input.array.fill_value ) ) )
                 t1 = time.time()

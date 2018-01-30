@@ -2,23 +2,20 @@ package nasa.nccs.cdapi.cdm
 
 import nasa.nccs.caching._
 import nasa.nccs.cdapi.data._
-import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray, CDIndexMap}
+import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray}
 import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection}
 import nasa.nccs.edas.sources.Collection
-import nasa.nccs.esgf.process.DomainContainer.{filterMap, key_equals}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
-import nasa.nccs.esgf.utilities.wpsNameMatchers
 import ucar.{ma2, nc2, unidata}
 import ucar.nc2.dataset.{CoordinateAxis1D, _}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import ucar.nc2.constants.AxisType
-
+import scala.collection.Map
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.immutable.TreeMap
 import scala.collection.mutable
 import scala.util.matching.Regex
 

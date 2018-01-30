@@ -29,8 +29,8 @@ import scala.collection.mutable
 
 object ArraySpec {
   def apply( tvar: TransVar ) = {
-    val data_array =  tvar.getFloatArray
-    new ArraySpec( data_array.last, tvar.getShape, tvar.getOrigin, data_array )
+    val data_array =  HeapFltArray( tvar )
+    new ArraySpec( data_array.missing.getOrElse(Float.NaN), tvar.getShape, tvar.getOrigin, data_array.data )
   }
   def apply( fma: FastMaskedArray, origin: Array[Int] ): ArraySpec = new ArraySpec( fma.missing, fma.shape, origin,  fma.getData)
 }

@@ -1,9 +1,5 @@
 package nasa.nccs.esgf.process
-import java.util
-
 import nasa.nccs.cdapi.cdm._
-import ucar.nc2.dataset._
-import nasa.nccs.caching._
 import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, HeapDblArray, HeapLongArray}
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
@@ -15,19 +11,16 @@ import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}
-import org.apache.spark.rdd.RDD
-import ucar.ma2.Section
-import ucar.nc2.Dimension
 import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
-
+import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D, CoordinateAxis1DTime}
+import scala.collection.Map
 import scala.collection.concurrent
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
-import scala.collection.immutable.Map
 import scala.collection.mutable
 
 sealed abstract class DataAccessMode
@@ -60,41 +53,16 @@ class RegridSpec( val gridFile: String, val subgrid: String ) extends Serializab
   def test = 0;
 }
 
-//def mapReduceBatch( executor: executor, kernelContext: KernelContext, batchIndex: Int ): Option[ ( RecordKey, CDTimeSlice ) ] = {
-//domainRDDPartition( executor.node, executor, kernelContext, batchIndex)
-//kernelContext.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ executor.node.getNodeId}", true)
-//val result: (RecordKey, CDTimeSlice) =  executor.node.mapReduce (rdd, kernelContext, batchIndex)
-
 class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
-  val optPartitioner: Option[EDASPartitioner] = generatePartitioning
   private var _inputsRDD: RDDContainer = new RDDContainer
   val rootNode = workflowCx.rootNode
   val rootNodeId = rootNode.getNodeId
-  def getRegridSpec: Option[RegridSpec] = optPartitioner.map( _.regridSpec )
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
   def contents: Set[String] = _inputsRDD.contents.toSet
   def getInputs(node: WorkflowNode): List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
   def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = rootNode.kernel.getReduceOp(context)
   def getTargetGrid: Option[TargetGrid] = workflowCx.getTargetGrid
   def releaseBatch: Unit = _inputsRDD.releaseBatch
-  def nPartitions = optPartitioner.fold(1)( _.nPartitions )
-
-//  private def initializeInputsRDD( serverContext: ServerContext, batchIndex: Int ): Unit = if(_optInputsRDD.isEmpty) optPartitioner match {
-//    case None => Unit
-//    case Some(partitioner) =>
-//      val partitions = partitioner.partitions
-//      val tgrid: TargetGrid = requestCx.getTargetGrid(partitioner.uid)
-//      val batch = partitions.getBatch(batchIndex)
-//      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec(partition, tgrid))
-//      if (rddPartSpecs.length > 0) {
-//        logger.info("\n **************************************************************** \n ---> Processing Batch [%d]: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
-//        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
-//        val recordSpecs = rddPartSpecs.flatMap(_.getCDTimeSliceSpecs())
-//        val parallelized_rddspecs: RDD[(RecordKey,DirectCDTimeSliceSpec)] = serverContext.spark.sparkContext parallelize recordSpecs keyBy (_.timeRange) partitionBy rdd_partitioner
-//        val rdd = parallelized_rddspecs mapValues (spec => spec.getRDDPartition(batchIndex))
-//        _optInputsRDD = Some( new RDDContainer(rdd) )
-//      }
-//  }
 
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Iterable[String] = {
     for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )
@@ -116,21 +84,6 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
         _inputsRDD.reduceBroadcast( node.kernel, kernelCx, serverContext, batchIndex )
       }
   }
-
-
-  def hasBatch ( batchIndex: Int ): Boolean = optPartitioner match {
-    case None => false
-    case Some( partitioner ) => partitioner.partitions.hasBatch( batchIndex )
-  }
-
-  //  def getVarSpecs( directInput: EDASDirectDataInput, batchIndex: Int ): Array[DirectRDDPartSpec] = optPartitioner match {
-  //    case None => Array.empty
-  //    case Some(partitioner) =>
-  //      val partitions = partitioner.partitions
-  //      val tgrid: TargetGrid = request.getTargetGrid(partitioner.uid)
-  //      val batch = partitions.getBatch(batchIndex)
-  //      directInput.getRDDVariableSpec(uid, opSection)
-  //    }
 
   def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
     _inputsRDD.addFileInputs( serverContext.spark, kernelCx, vSpecs )
@@ -154,73 +107,6 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     section.foreach( section => _inputsRDD.section( section ) )
   }
 
-  //  partition.getPartitionRecordKey(tgrid)
-  //
-  //  def subworkflowInputsRDD( serverContext: ServerContext, batchIndex: Int ): Option[RDD[CDTimeSlice]] = optPartitioner match {
-  //    case None => None
-  //    case Some( partitioner ) =>
-  //      val partitions = partitioner.partitions
-  //      val tgrid: TargetGrid = request.getTargetGrid(partitioner.uid)
-  //      val batch = partitions.getBatch (batchIndex)
-  //      val varSpecs: Iterable[DirectRDDVariableSpec] = subworkflowInputs flatMap {
-  //        case (uid: String, dataInput: EDASDirectDataInput) =>
-  //          val fragSpec = dataInput.fragmentSpec
-  //          Some( new DirectRDDVariableSpec (uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty (fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath) )
-  //        case _ => None
-  //      }
-  //      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec (partition, tgrid, varSpecs) )
-  //      if (rddPartSpecs.length == 0) { None }
-  //      else {
-  //        logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
-  //        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
-  //        //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getCDTimeSliceSpecs() ).map( _.toString() ).mkString("\n\t"))
-  //        val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getCDTimeSliceSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
-  //        Some(parallelized_rddspecs mapValues (spec => spec.getRDDPartition(request, batchIndex)))
-  //      }
-  //  }
-  //
-  //  def
-  //
-  //  CDTimeSlice.extend( vSpec: DirectRDDVariableSpec )
-
-  //  def inputsRDD( serverContext: ServerContext, uid: String, batchIndex: Int ): Option[RDD[CDTimeSlice]] = optPartitioner match {
-  //    case None => None
-  //    case Some( partitioner ) =>
-  //      val partitions = partitioner.partitions
-  //      val tgrid: TargetGrid = request.getTargetGrid(partitioner.uid)
-  //      val batch = partitions.getBatch (batchIndex)
-  //      val input: Option[DirectRDDVariableSpec] = subworkflowInputs.get(uid) match {
-  //        case None => None
-  //        case Some( dataInput: EDASDirectDataInput )=>
-  //          val fragSpec = dataInput.fragmentSpec
-  //          Some( new DirectRDDVariableSpec (uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty (fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath) )
-  //        case _ => None
-  //      }
-  //      val rddPartSpecs: Array[DirectRDDPartSpec] = batch map (partition => DirectRDDPartSpec (partition, tgrid, varSpecs) )
-  //      if (rddPartSpecs.length == 0) { None }
-  //      else {
-  //        logger.info("\n **************************************************************** \n ---> Processing Batch %d: Creating input RDD with <<%d>> partitions".format(batchIndex, rddPartSpecs.length))
-  //        val rdd_partitioner = RangePartitioner(rddPartSpecs.map(_.timeRange))
-  //        //        logger.info("Creating RDD with records:\n\t" + rddPartSpecs.flatMap( _.getCDTimeSliceSpecs() ).map( _.toString() ).mkString("\n\t"))
-  //        val parallelized_rddspecs = serverContext.spark.sparkContext parallelize rddPartSpecs.flatMap(_.getCDTimeSliceSpecs()) keyBy (_.timeRange) partitionBy rdd_partitioner
-  //        Some(parallelized_rddspecs mapValues (spec => spec.getRDDPartition(request, batchIndex)))
-  //      }
-  //  }
-
-  def generatePartitioning: Option[EDASPartitioner] = {
-    val fragments: Iterable[DataFragmentSpec] = workflowCx.inputs.values.flatMap ( _ match {
-      case directInput: EDASDirectDataInput => Some(directInput.fragmentSpec)
-      case x => None
-    })
-    if( fragments.isEmpty ) { None  }
-    else {
-      val crsOpt = workflowCx.getGridObjectRef
-      val crsFrags = fragments.filter( _.matchesReference(crsOpt) )
-      assert( crsFrags.nonEmpty, "No inputs matching crs: " + workflowCx.crs.toString + " in subworkflow with root node " + workflowCx.rootNode.getNodeId )
-      val largestInput: DataFragmentSpec = crsFrags.foldLeft(crsFrags.head)((x, y) => if(x.getSize > y.getSize) x else y )
-      Some( new EDASPartitioner( largestInput.uid, largestInput.roi, requestCx.getConfiguration, largestInput.getTimeCoordinateAxis, largestInput.numDataFiles, fragments.size, RegridSpec(largestInput) ) )
-    }
-  }
 }
 
 class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String], val executionCallback: Option[ExecutionCallback]=None ) extends ScopeContext with Loggable {
@@ -790,49 +676,6 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
     xrangeOpt.flatMap( xrange => yrangeOpt.map( yrange => Array( xrange(0), xrange(1), yrange(0), yrange(1) )) )
   }
 
-  //  def createFragmentSpec() = new DataFragmentSpec( variable.name, dataset.collection, Some(this) )
-
-  //  def loadPartition( data_variable: CDSVariable, fragmentSpec : DataFragmentSpec, maskOpt: Option[CDByteArray], axisConf: List[OperationSpecs] ): PartitionedFragment = {
-  //    val partition = fragmentSpec.partitions.head
-  //    val sp = new SectionPartitioner(fragmentSpec.roi, partition.nPart)
-  //    sp.getPartition(partition.partIndex, partition.axisIndex ) match {
-  //      case Some(partSection) =>
-  //        val array = data_variable.read(partSection)
-  //        val cdArray: CDFloatArray = CDFloatArray.factory(array, variable.missing )
-  //        new PartitionedFragment( cdArray, maskOpt, fragmentSpec )
-  //      case None =>
-  //        logger.warn("No fragment generated for partition index %s out of %d parts".format(partition.partIndex, partition.nPart))
-  //        new PartitionedFragment()
-  //    }
-  //  }
-
-  //  def loadRoi( data_variable: CDSVariable, fragmentSpec: DataFragmentSpec, maskOpt: Option[CDByteArray], dataAccessMode: DataAccessMode ): PartitionedFragment =
-  //    dataAccessMode match {
-  //      case DataAccessMode.Read => loadRoiDirect( data_variable, fragmentSpec, maskOpt )
-  //      case DataAccessMode.Cache =>  loadRoiViaCache( data_variable, fragmentSpec, maskOpt )
-  //      case DataAccessMode.MetaData =>  throw new Exception( "Attempt to load data in metadata operation")
-  //    }
-
-  //  def loadRoiDirect( data_variable: CDSVariable, fragmentSpec: DataFragmentSpec, maskOpt: Option[CDByteArray] ): PartitionedFragment = {
-  //    val array: ma2.Array = data_variable.read(fragmentSpec.roi)
-  //    val cdArray: CDFloatArray = CDFloatArray.factory(array, data_variable.missing, maskOpt )
-  //    val id = "a" + System.nanoTime.toHexString
-  //    throw new IllegalAccessError( "Direct Read from NecCDF is not currently implemented" )
-  // //   val part = new Partition( )
-  /////    val partitions = new Partitions( id, fragmentSpec.getShape, Array(part) )
-  // //   new PartitionedFragment( partitions, maskOpt, fragmentSpec )
-  //  }
-
-  def loadFileDataIntoCache( fragmentSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], maskOpt: Option[CDByteArray] ): PartitionedFragment = {
-    logger.info( "loadRoiViaCache" )
-    val cacheStream = new FileToCacheStream( fragmentSpec, partsConfig, workflowNodeOpt, maskOpt )
-    val partitions: CachePartitions = cacheStream.cacheFloatData
-    val newFragSpec = fragmentSpec.reshape( partitions.roi )
-    val pfrag = new PartitionedFragment( partitions, maskOpt, newFragSpec )
-    logger.info( "Persisting fragment %s with id %s".format( newFragSpec.getKey, partitions.id ) )
-    FragmentPersistence.put( newFragSpec.getKey, partitions.id )
-    pfrag
-  }
 }
 
 class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  extends ScopeContext with Serializable with Loggable  {

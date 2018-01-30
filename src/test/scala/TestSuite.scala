@@ -33,9 +33,9 @@ class DefaultTestSuite extends EDASTestSuite {
   val use_npana_data = false
   val use_local_data = false
   val test_cache = false
-  val test_python = true
+  val test_python = false
   val test_binning = false
-  val test_regrid = false
+  val test_regrid = true
   val reanalysis_ensemble = false
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
@@ -62,13 +62,14 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("DiffWithRegrid")  { if(test_regrid)  {
     print( s"Running test DiffWithRegrid" )
-    val GISS_mon_variable   = s"""{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/MERRA2/mon/atmos/tas.ncml","name":"tas:v0"}"""
-    val MERRA2_mon_variable = s"""{"uri":"collection:/giss_r1i1p1","name":"tas:v1"}"""
+    val CFSR_mon_variable   = s"""{"uri":"collection:/cip_cfsr_mon_1980-1995","name":"tas:v0"}"""
+    val MERRA_mon_variable = s"""{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v1"}"""
+    val ECMWF_mon_variable = s"""{"uri":"collection:/cip_ecmwf_mon_1980-2015","name":"tas:v2"}"""
     val datainputs =
-      s"""[   variable=[$GISS_mon_variable,$MERRA2_mon_variable],
-              domain=[  {"name":"d0","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"}},
-                        {"name":"d1","time":{"start":"2000-01-01T00:00:00Z","end":"2001-01-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":50,"system":"values"},"lon":{"start":30,"end":40,"system":"values"}} ],
-              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d1","crs":"~giss_r1i1p1"}]]""".stripMargin.replaceAll("\\s", "")
+      s"""[   variable=[$MERRA_mon_variable,$CFSR_mon_variable],
+              domain=[  {"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1991-01-01T00:00:00Z","system":"values"}},
+                        {"name":"d1","time":{"start":"1990-01-01T00:00:00Z","end":"1991-01-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":50,"system":"values"},"lon":{"start":30,"end":40,"system":"values"}} ],
+              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d1","crs":"~cip_merra2_mon_1980-2015"}]]""".stripMargin.replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
     println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
@@ -118,48 +119,6 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
   }}
 
-  //  test("pyWeightedAveTest1") {
-  //    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":8,"end":13,"system":"indices"},"lon":{"start":70,"end":72,"system":"indices"},"time":{"start":5,"end":10,"system":"indices"}}],variable=[{"uri":"file:///dass/nobackup/tpmaxwel/.edas/cache/collections/NCML/CIP_MERRA_mon_pr.ncml","name":"pr:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.avew","input":"v1","domain":"d0","axes":"xy"}]]"""
-  //    val result_node = executeTest(datainputs)
-  //    val result_data = CDFloatArray( getResultData( result_node ) )
-  //    println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
-  //  }
-
-  test("pyTimeAveTestLocal") { if(test_python) {
-    //    datafile=".../MERRA2_200.inst6_3d_ana_Np_T.20000101.nc4"
-    //    ncwa -O -v T -d lat,10,10 -d lon,20,20 -a time ${datafile} ~/test/out/time_ave.nc
-    //    ncdump ~/test/out/time_ave.nc
-    val data_file: URI = Paths.get( test_data_dir.toString, "MERRA2_200.inst6_3d_ana_Np_T.20000101.nc4" ).toUri
-    val nco_result: CDFloatArray = CDFloatArray( Array(  Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN,  262.6826, 261.1128, 259.5385, 257.9672, 256.5204, 254.8353, 253.2784, 251.6964, 247.9638, 243.8583, 239.538, 235.9563, 232.1338, 227.2614, 221.6774, 216.0401 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":20,"end":20,"system":"indices"}}],variable=[{"uri":"%s","name":"T:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.ave","input":"v1","domain":"d0","axes":"t"}]]""".format( data_file.toString )
-    val result_node = executeTest( datainputs, Map("numParts"->"2") )
-    val result_data = CDFloatArray( getResultData( result_node ) )
-    println( " ** CDMS Result:       " + result_data.mkBoundedDataString(", ",21) )
-    println( " ** NCO Result:       " + nco_result.mkDataString(", ") )
-    assert( result_data.sample(21).maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
-  }}
-
-  //  test("timeAveTestLocal") {
-  //    //    datafile=".../MERRA2_200.inst6_3d_ana_Np_T.20000101.nc4"
-  //    //    ncwa -O -v T -d lat,10,10 -d lon,20,20 -a time ${datafile} ~/test/out/time_ave.nc
-  //    //    ncdump ~/test/out/time_ave.nc
-  //    val data_file: URI = Paths.get( test_data_dir.toString, "MERRA2_200.inst6_3d_ana_Np_T.20000101.nc4" ).toUri
-  //    val nco_result: CDFloatArray = CDFloatArray( Array(   9.9999999E14, 9.9999999E14, 9.9999999E14, 9.9999999E14, 9.9999999E14, 262.6826, 261.1128, 259.5385, 257.9672, 256.5204, 254.8353, 253.2784, 251.6964, 247.9638, 243.8583, 239.538, 235.9563, 232.1338, 227.2614, 221.6774, 216.0401 ).map(_.toFloat), Float.MaxValue )
-  //    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":20,"end":20,"system":"indices"}}],variable=[{"uri":"%s","name":"T:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t"}]]""".format( data_file.toString )
-  //    val result_node = executeTest( datainputs, Map("numParts"->"2") )
-  //    val result_data = CDFloatArray( getResultData( result_node ) )
-  //    println( " ** CDMS Result:       " + result_data.mkBoundedDataString(", ",16) )
-  //    println( " ** NCO Result:       " + nco_result.mkDataString(", ") )
-  //    assert( result_data.sample(21).maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
-  //  }
-
-  test("NCML-timeAveTestLocal") { if( use_local_data ) {
-    val data_file = "file:///Users/tpmaxwel/.edas/cache/collections/NCML/MERRA2-6hr-ana_Np.200001.ncml"
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":20,"end":20,"system":"indices"}}],variable=[{"uri":"%s","name":"T:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t"}]]""".format( data_file )
-    val result_node = executeTest( datainputs, Map("numParts"->"2") )
-    val result_data = CDFloatArray( getResultData( result_node ) )
-    println( " ** CDMS Result:       " + result_data.mkBoundedDataString(", ",16) )
-  }}
 
   test("NCML-timeBinAveTestLocal")  { if(test_binning) {
     val data_file = "http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/CFSR/6hr/atmos/ta_2000s.ncml"
@@ -178,15 +137,15 @@ class DefaultTestSuite extends EDASTestSuite {
     //    assert( result_data.maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
   }}
 
-  test("pyTimeAveTest")  { if(test_python) {
-    val nco_result: CDFloatArray = CDFloatArray( Array( 286.2326, 286.5537, 287.2408, 288.1576, 288.9455, 289.5202, 289.6924, 289.5549, 288.8497, 287.8196, 286.8923 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.ave","input":"v1","domain":"d0","axes":"t"}]]"""
-    val result_node = executeTest(datainputs)
-    val result_data = CDFloatArray( getResultData( result_node ) )
-    println( " ** CDMS Result:       " + result_data.mkBoundedDataString(", ",10) )
-    //    println( " ** NCO Result:       " + nco_result.mkDataString(", ") )
-    //    assert( result_data.maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
-  }}
+//  test("pyTimeAveTest")  { if(test_python) {
+//    val nco_result: CDFloatArray = CDFloatArray( Array( 286.2326, 286.5537, 287.2408, 288.1576, 288.9455, 289.5202, 289.6924, 289.5549, 288.8497, 287.8196, 286.8923 ).map(_.toFloat), Float.MaxValue )
+//    val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.ave","input":"v1","domain":"d0","axes":"t"}]]"""
+//    val result_node = executeTest(datainputs)
+//    val result_data = CDFloatArray( getResultData( result_node ) )
+//    println( " ** CDMS Result:       " + result_data.mkBoundedDataString(", ",10) )
+//    //    println( " ** NCO Result:       " + nco_result.mkDataString(", ") )
+//    //    assert( result_data.maxScaledDiff( nco_result )  < eps, s" UVCDAT result (with generated weights) does not match NCO result (with cosine weighting)")
+//  }}
 
   //  test("pyWeightedAveTestExt") {
   //      val nco_result: CDFloatArray = CDFloatArray( Array( 286.2326, 286.5537, 287.2408, 288.1576, 288.9455, 289.5202, 289.6924, 289.5549, 288.8497, 287.8196, 286.8923 ).map(_.toFloat), Float.MaxValue )
@@ -210,7 +169,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }}
 
   test("pyRegridTest1") { if(test_regrid)  {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"},"level":{"start":0,"end":0,"system":"indices"}}],variable=[{"uri":"http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/CFSR/6hr/atmos/ta_2000s.ncml","name":"ta:v1","domain":"d0"}],operation=[{"name":"python.cdmsModule.regrid","input":"v1","domain":"d0","grid":"uniform","res":"4.0,4.0"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"},"level":{"start":0,"end":0,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.cdmsModule.regrid","input":"v1","domain":"d0","grid":"uniform","res":"4.0,4.0"}]]"""
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ) ).sample( 35 )
     println( " ** CDMS Result:       " + result_data.mkDataString( ", " ) )

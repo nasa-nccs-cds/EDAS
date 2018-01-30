@@ -1,12 +1,17 @@
 package nasa.nccs.edas.workers;
 
+import com.sun.prism.PixelFormat;
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr;
+import ucar.ma2.Array;
+import ucar.ma2.ArrayFloat;
+import ucar.ma2.DataType;
 import ucar.nc2.Attribute;
 import ucar.nc2.Variable;
 import ucar.nc2.dataset.NetcdfDataset;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -38,7 +43,10 @@ public class TransVar {
 
     public int[] getOrigin() { return _origin; }
     public int[] getShape() { return _shape; }
-    public float[] getFloatArray() { return getDataBuffer().asFloatBuffer().array(); }
+    public float[] getFloatArray() {
+        ArrayFloat ucarArray = (ArrayFloat) Array.factory( DataType.FLOAT, _shape, getDataBuffer() );
+        return (float[]) ucarArray.getStorage();
+    }
     public String id() { return _id; }
     public ByteBuffer getDataBuffer() { return ByteBuffer.wrap( _data, _offset,_data.length-_offset ); }
     public Map<String, String> getMetaData() { return _metadata; }
