@@ -926,6 +926,7 @@ object DataContainer extends ContainerBase {
         case x => ""
       }
     val fragIdOpt = if (uri.startsWith("fragment")) Some(id) else None
+    logger.info( s"Looking for collection ${colId}, available: [ ${Collections.idSet.mkString(", ")} ]")
     Collections.findCollection(colId) match {
       case Some(collection) =>
         //       if (!path.isEmpty) { assert(absPath(path).equals(absPath(collection.dataPath)), "Collection %s already exists and its path (%s) does not correspond to the specified path (%s)".format(collection.id, collection.dataPath, path)) }
