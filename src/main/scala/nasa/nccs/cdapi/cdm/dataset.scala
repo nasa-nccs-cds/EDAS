@@ -109,14 +109,18 @@ object CDGrid extends Loggable {
     ncmlElems.mkString(".")
   }
 
-  def createGridFile(gridFilePath: String, datfilePath: String) = {
+  def getCollectionFiles( datfilePath: String ): Set[String] = {
     val collectionFiles = new mutable.Stack[String]()
     if( datfilePath.endsWith(".csv") ) {
       val src = Source.fromFile(datfilePath)
       try { src.getLines().foreach( line => collectionFiles.push( sanityCheck( line.split(",").last.trim ) ) ) } finally { src.close() }
     } else { collectionFiles.push( datfilePath ) }
+    collectionFiles.toSet
+  }
+
+  def createGridFile(gridFilePath: String, datfilePath: String) = {
+    val collectionFiles = getCollectionFiles( datfilePath )
     logger.info( s" %G% Creating #grid# file $gridFilePath from collectionFiles: [${collectionFiles.map(_.split('/').last).mkString(", ")}] from collections metafile: $datfilePath" )
-    testNc4()
     val gridWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf4, gridFilePath, null)
 
     val cvarOrigins = mutable.HashMap.empty[String,Seq[nc2.Variable]]
@@ -124,8 +128,8 @@ object CDGrid extends Loggable {
     val dimList = mutable.ListBuffer.empty[String]
     val coordList = mutable.ListBuffer.empty[String]
 
-    while( collectionFiles.nonEmpty ) {
-      val collectionFile = collectionFiles.pop()
+    for( collectionFile <- collectionFiles ) {
+      logger.info( s" Processing collection file ${collectionFile}" )
       val ncDataset: NetcdfDataset = NetcdfDataset.openDataset(collectionFile)
       val groupMap: mutable.HashMap[String,nc2.Group] = mutable.HashMap.empty[String,nc2.Group]
       val localDims = ncDataset.getDimensions.map( d => AggregationWriter.getName(d) )
@@ -216,6 +220,7 @@ object CDGrid extends Loggable {
       }
       ncDataset.close()
     }
+    logger.info( s"Finished Writing Grid File $gridFilePath" )
     gridWriter.close()
   }
 }
