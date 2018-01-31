@@ -1,7 +1,6 @@
 package nasa.nccs.edas.sources
 
 import java.io._
-import java.net.URL
 import java.nio.channels.Channels
 import java.nio.file.{FileSystems, Files, Path, Paths}
 import javax.xml.parsers.{ParserConfigurationException, SAXParserFactory}
@@ -12,23 +11,16 @@ import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
-import collection.JavaConverters._
+import scala.collection.immutable.Map
 import scala.collection.JavaConversions._
 import collection.mutable
 import nasa.nccs.caching.FragmentPersistence
 import nasa.nccs.cdapi.cdm.{CDGrid, CDSVariable, DiskCacheFileMgr}
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
-import nasa.nccs.edas.utilities.appParameters
-import nasa.nccs.esgf.process.DataSource
 import nasa.nccs.utilities.Loggable
-import ucar.nc2.dataset
 import ucar.nc2.dataset.NetcdfDataset
 import ucar.{ma2, nc2}
-
 import scala.collection.concurrent.TrieMap
-import scala.collection.immutable.SortedMap
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
 import scala.io.Source
 import scala.xml.factory.XMLLoader
 import scala.xml.{Node, SAXParser, XML}
@@ -123,18 +115,25 @@ object CollectionLoadServices {
   val fastPoolSize: Int = 4
   val slowPoolSize: Int = 1
   val loaderServicePool = Executors.newFixedThreadPool(1)
-  var loadService: Option[CollectionLoadService] = None
+  private var _optLoadService: Option[CollectionLoadService] = None
 
-  def startService(): Unit = if( loadService.isEmpty && !loaderServicePool.isShutdown ) {
-    loadService = Some( new CollectionLoadService(fastPoolSize, slowPoolSize) );
-    loaderServicePool.submit(loadService.get)
+  def startService(): CollectionLoadService = {
+    assert( !loaderServicePool.isShutdown, "Can't restart CollectionLoadService once it has been shut down")
+    if( _optLoadService.isEmpty  ) {
+      val loadService = new CollectionLoadService(fastPoolSize, slowPoolSize)
+      _optLoadService = Some( loadService );
+      loaderServicePool.submit(loadService)
+    }
+    _optLoadService.get
   }
 
   def term() = {
-    loadService.foreach( _.term )
-    loadService = None
+    _optLoadService.foreach( _.term )
+    _optLoadService = None
     loaderServicePool.shutdown()
   }
+
+  def loadCollection( collId: String ): Boolean = { startService.loadCollection(collId) }
 }
 
 class Collection( val ctype: String, val id: String, val dataPath: String, val aggregations: Map[String,Aggregation], val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List(), optGrid: Option[CDGrid] = None ) extends Serializable with Loggable {
@@ -210,7 +209,7 @@ class Collection( val ctype: String, val id: String, val dataPath: String, val a
   // <variable name={elems.head} axes={elems.last}> {v} </variable> } ) }
 
 //  def createNCML( pathFile: File, collectionId: String  ): String = {
-//    val _ncmlFile = Collections.getCachePath("NCML").resolve(collectionId).toFile
+//    val _ncmlFile = Collections.getAggregationPath.resolve(collectionId).toFile
 //    val recreate = appParameters.bool("ncml.recreate", false)
 //    if (!_ncmlFile.exists || recreate) {
 //      logger.info( s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
@@ -270,11 +269,23 @@ class Collection( val ctype: String, val id: String, val dataPath: String, val a
 
 
 class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 1 ) extends Runnable {
-  val collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "NCML" )
+  val collPath= Paths.get( DiskCacheFileMgr.getDiskCachePath("collections").toString, "agg" )
   val fastPool: ExecutorService = Executors.newFixedThreadPool(fastPoolSize)
   val slowPool: ExecutorService = Executors.newFixedThreadPool(slowPoolSize)
   val ncmlExtensions = List( ".csv" )
   private var _active = true;
+
+  def loadCollection( requested_collId: String ): Boolean = {
+    val collectionFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
+    for ( collectionFile <- collectionFiles;  fileName = collectionFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase; if collId.equalsIgnoreCase(requested_collId) ) {
+      if( ! Collections.hasCollection(collId) ) {
+        val loader = new CollectionLoader(collId,collectionFile)
+        loader.run()
+        true
+      }
+    }
+    false
+  }
 
   def run() {
     try {
@@ -358,6 +369,9 @@ object Collections extends XmlResource with Loggable {
   def getCachePath(subdir: String): Path = {
     FileSystems.getDefault.getPath(getCacheDir, subdir)
   }
+
+  def getAggregationPath: Path = getCachePath("agg")
+
   //  def refreshCollectionList = {
   //    var collPath: Path = null
   //    try {
@@ -414,7 +428,7 @@ object Collections extends XmlResource with Loggable {
 
   def getVariableString( variable: nc2.Variable ): String = variable.getShortName + ":" + variable.getDimensionsString.replace(" ",",") + ":" + variable.getDescription+ ":" + variable.getUnitsString
   def getCacheFilePath( fileName: String ): String = DiskCacheFileMgr.getDiskCacheFilePath( "collections", fileName)
-  def getNCMLDirectory: Path = DiskCacheFileMgr.getCacheDirectory( "collections", "NCML")
+  def getNCMLDirectory: Path = DiskCacheFileMgr.getCacheDirectory( "collections", "agg")
 
   def getVariableListXml(vids: Array[String]): xml.Elem = {
     <collections>
@@ -585,7 +599,8 @@ object Collections extends XmlResource with Loggable {
 
   def hasCollection( collectionId: String ): Boolean = _datasets.containsKey( collectionId.toLowerCase )
 
-  def findCollection( collectionId: String ): Option[Collection] = _datasets.get( collectionId.toLowerCase )
+  def findCollection( collectionId: String ): Option[Collection] =
+    _datasets.get( collectionId.toLowerCase )
 
   def getCollectionXml( collectionId: String ): xml.Elem = {
     _datasets.get( collectionId.toLowerCase ) match {

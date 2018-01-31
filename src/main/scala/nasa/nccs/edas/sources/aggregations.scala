@@ -115,7 +115,7 @@ object AggregationWriter extends Loggable {
       //      logger.info(s" %X% extract Aggregations($collectionId)-> group_key=$group_key, aggregatoinId=$aggregatoinId, files=${files.mkString(";")}" )
       val fileHeaders = Aggregation.write(aggregationId, files.map(fp => dataLocation.resolve(fp).toString), agFormat )
       val writer = new NCMLWriter( fileHeaders )
-      val varNames = writer.writeNCML( Collections.getCachePath("NCML").resolve(aggregationId + ".ncml").toFile )
+      val varNames = writer.writeNCML( Collections.getAggregationPath.resolve(aggregationId + ".ncml").toFile )
       varNames.map(vname => vname -> aggregationId)
     }
     //    logger.info(s" %C% extract Aggregations varMap: " + varMap.map(_.toString()).mkString("; ") )
@@ -263,11 +263,11 @@ object AggregationWriter extends Loggable {
 
 
   def addAggregations(collectionId: String, variableMap: Map[String,String], agFormat: String ): Unit = {
-    val dirFile = Collections.getCachePath("NCML").resolve(collectionId + ".csv").toFile
+    val dirFile = Collections.getAggregationPath.resolve(collectionId + ".csv").toFile
     logger.info( s"Generating Collection ${dirFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
     val pw = new PrintWriter( dirFile )
     variableMap foreach { case ( varName, aggregation ) =>
-      val agFile = Collections.getCachePath("NCML").resolve( aggregation + "." + agFormat ).toString
+      val agFile = Collections.getAggregationPath.resolve( aggregation + "." + agFormat ).toString
       pw.write(s"$varName, ${agFile}\n")
     }
     pw.close
@@ -397,7 +397,7 @@ object Aggregation extends Loggable {
   def write( aggregationId: String, files: IndexedSeq[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {
     try {
       val fileHeaders = FileHeader.getFileHeaders( files, false )
-      if( !format.isEmpty ) { writeAggregation(  Collections.getCachePath("NCML").resolve(aggregationId + "." + format).toFile, fileHeaders, format ) }
+      if( !format.isEmpty ) { writeAggregation(  Collections.getAggregationPath.resolve(aggregationId + "." + format).toFile, fileHeaders, format ) }
       fileHeaders
     } catch {
       case err: Exception =>

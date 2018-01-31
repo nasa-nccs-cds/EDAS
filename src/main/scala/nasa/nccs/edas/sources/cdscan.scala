@@ -236,7 +236,7 @@ object CDMultiScan extends Loggable {
     EDASLogManager.isMaster
     val collectionsMetaFile = new File(args(0))    // cols:  depth, template, collectionID, collectionRootPath
     if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
-    val ncmlDir = Collections.getCachePath("NCML").toFile
+    val ncmlDir = Collections.getAggregationPath.toFile
     ncmlDir.mkdirs
     AggregationWriter.generateAggregations( collectionsMetaFile )
     FileHeader.term()

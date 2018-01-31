@@ -132,7 +132,7 @@ trait Loggable extends Serializable {
 
 object cdsutils {
 
-  val baseTimeUnits = "seconds since 1970-01-01T00:00:00Z"
+  val baseTimeUnits = "milliseconds since 1970-01-01T00:00:00Z"
 
   def getOrElse[T]( map: Map[String,T], key: String, errMsg: String ): T = map.get(key) match { case Some(x) => x; case None => throw new Exception(errMsg) }
 

@@ -263,7 +263,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
         case None =>          _dates
         case Some(range) =>   _dates.subList( range.first(), range.last()+1 ).toList
       }
-      timeCalValues.map( _.getMillis/1000.0 ).toArray
+      timeCalValues.map( _.getMillis.toDouble ).toArray
     case x =>_optRange match {
       case Some(range) => CDDoubleArray.factory( coordAxis.read(List(range)) ).getArrayData()
       case None =>        CDDoubleArray.factory( coordAxis.read() ).getArrayData()
@@ -274,7 +274,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   //    _data.find
   //  }
 
-  def getUnits: String =  coordAxis.getUnitsString // coordAxis.getAxisType match { case AxisType.Time => cdsutils.baseTimeUnits case x => coordAxis.getUnitsString }
+  def getUnits: String =  coordAxis.getAxisType match { case AxisType.Time => cdsutils.baseTimeUnits case x => coordAxis.getUnitsString }
 
   def getTimeAxis: CoordinateAxis1DTime = {
     val gridDS = NetcdfDatasetMgr.aquireFile( grid.gridFilePath, 17.toString )
@@ -482,8 +482,10 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
   def getSection: Option[ma2.Section] = {
     val ranges = for( axis <- axes ) yield
       axis.getIndexRange match {
-        case Some( range ) => range;
-        case None => return None
+        case Some( range ) =>
+          range;
+        case None =>
+          return None
       }
     Some( new ma2.Section( ranges: _* ) )
   }

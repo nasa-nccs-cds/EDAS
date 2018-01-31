@@ -13,7 +13,7 @@ import nasa.nccs.cdapi.data.RDDVariableSpec
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.kernels.AxisIndices
-import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
+import nasa.nccs.edas.sources.{Aggregation, Collection, CollectionLoadServices, Collections}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.OperationContext.OpResultType
 import nasa.nccs.esgf.process.UID.ndigits
@@ -919,12 +919,14 @@ object DataContainer extends ContainerBase {
       }
     val fragIdOpt = if (uri.startsWith("fragment")) Some(id) else None
     Collections.findCollection(colId) match {
-      case Some(collection) =>
-        //       if (!path.isEmpty) { assert(absPath(path).equals(absPath(collection.dataPath)), "Collection %s already exists and its path (%s) does not correspond to the specified path (%s)".format(collection.id, collection.dataPath, path)) }
-        (Some(collection), fragIdOpt)
+      case Some(collection) =>  (Some(collection), fragIdOpt)
       case None =>
-       logger.warn( s" The collection ${colId} is not yet available." )
-        (None, fragIdOpt)
+        if( CollectionLoadServices.loadCollection( colId ) ) {
+          Collections.findCollection(colId) match {
+            case Some(collection) =>  (Some(collection), fragIdOpt)
+            case None => (None, fragIdOpt)
+          }
+        } else { (None, fragIdOpt) }
     }
   }
 

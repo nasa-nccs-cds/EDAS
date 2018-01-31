@@ -392,7 +392,7 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
     val data_shape: Array[Int] = data_section.getShape
     val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array )
-    CDTimeSlice( template_slice.startTime, template_slice.endTime, Map( varId -> arraySpec ) )  //
+    CDTimeSlice( template_slice.startTime, template_slice.endTime, Map( varId -> arraySpec ) )
   }
 
   def getMissing( variable: Variable, default_value: Float = Float.NaN ): Float = {

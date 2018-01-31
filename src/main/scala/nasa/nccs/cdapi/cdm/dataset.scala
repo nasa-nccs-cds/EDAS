@@ -42,7 +42,7 @@ import scala.xml.Node
 
 object CDGrid extends Loggable {
   def apply(name: String, datfilePath: String): CDGrid = {
-    val gridFilePath: String = Collections.getCachePath("NCML").resolve(Collections.idToFile(name, ".nc")).toString
+    val gridFilePath: String = Collections.getAggregationPath.resolve(Collections.idToFile(name, ".nc")).toString
     if( !Files.exists( Paths.get(gridFilePath) ) ) { createGridFile(gridFilePath, datfilePath) }
     CDGrid.create(name, gridFilePath)
   }
@@ -777,7 +777,7 @@ class ncReadTest extends Loggable {
   import java.nio.file.StandardOpenOption._
   import TestType._
 
-  val url = "file:///att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/NCML/merra_daily_2005.xml"
+  val url = "file:///att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/agg/merra_daily_2005.xml"
 //  val outputFile = "/Users/tpmaxwel/.edas/cache/test/testBinaryFile.out"
   val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/test/testBinaryFile.out"
 //  val outputNcFile = "/Users/tpmaxwel/.edas/cache/test/testFile.nc"
@@ -917,8 +917,8 @@ class MetaCollectionFile( val path: String ) {
 //  import java.nio.file.StandardOpenOption._
 //  val testType = TestType.Buffer
 //
-////  val url = "file:/Users/tpmaxwel/.edas/cache/NCML/merra_daily.xml"
-//  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/NCML/merra_daily_2005.xml"
+////  val url = "file:/Users/tpmaxwel/.edas/cache/agg/merra_daily.xml"
+//  val url = "file:/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/agg/merra_daily_2005.xml"
 ////  val outputFile = "/Users/tpmaxwel/.edas/cache/test/testBinaryFile.out"
 //  val outputFile = "/att/gpfsfs/ffs2004/ppl/tpmaxwel/.edas/cache/test/testBinaryFile.out"
 ////  val outputNcFile = "/Users/tpmaxwel/.edas/cache/test/testFile.nc"
