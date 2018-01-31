@@ -134,6 +134,8 @@ object FileHeader extends Loggable {
     val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
     val timeCalValues: List[CalendarDate] = timeAxis.getCalendarDates.toList
     val bounds: Array[Array[Long]] = ((0 until timeAxis.getShape(0)) map (index => timeAxis.getCoordBoundsDate(index) map ( _.getMillis ))).toArray
+    val datesSample = timeCalValues.subList(0,5)
+    logger.info( s" Writing Time values, dates: [ ${datesSample.map(_.toString).mkString(", ")} ], millis: [ ${datesSample.map(_.getMillis.toString).mkString(", ")} ] ")
     ( timeCalValues.map(_.getMillis ).toArray, bounds )
   }
 
