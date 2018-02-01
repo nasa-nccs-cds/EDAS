@@ -11,6 +11,7 @@ import ucar.nc2.time.CalendarDate
 import java.nio.file.{Files, Path}
 import java.text.SimpleDateFormat
 import java.util.Calendar
+
 import nasa.nccs.esgf.process.UID
 
 import scala.collection.JavaConversions._
@@ -132,7 +133,11 @@ trait Loggable extends Serializable {
 
 object cdsutils {
 
-  val baseTimeUnits = "milliseconds since 1970-01-01T00:00:00Z"
+  val baseTimeUnits = "hours since 1970-01-01T00:00:00Z"
+  val millisPerHour = 1000 * 60 * 60f
+
+  def toValue( date: CalendarDate ): Float = date.getMillis / millisPerHour
+  def toDate( value: Float ): CalendarDate = CalendarDate.of( ( value * millisPerHour).toLong )
 
   def getOrElse[T]( map: Map[String,T], key: String, errMsg: String ): T = map.get(key) match { case Some(x) => x; case None => throw new Exception(errMsg) }
 

@@ -49,8 +49,8 @@ class DatasetFileHeaders(val aggDim: String, val aggFileMap: Seq[FileHeader]) {
     assert( aggFileMap.nonEmpty, "Error, aggregated dataset has no files!")
     aggFileMap.head.nElem
   }
-  def getAggAxisValues: Array[Long] =
-    aggFileMap.foldLeft(Array[Long]()) { _ ++ _.axisValues }
+  def getAggAxisValues: Array[Float] =
+    aggFileMap.foldLeft(Array[Float]()) { _ ++ _.axisValues }
 }
 
 
@@ -130,17 +130,19 @@ object FileHeader extends Loggable {
     }
   }
 
-  def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): ( Array[Long], Array[Array[Long]] ) = {
+  def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): ( Array[Float], Array[Array[Float]] ) = {
     val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
     val timeCalValues: List[CalendarDate] = timeAxis.getCalendarDates.toList
-    val bounds: Array[Array[Long]] = ((0 until timeAxis.getShape(0)) map (index => timeAxis.getCoordBoundsDate(index) map ( _.getMillis ))).toArray
+    val bounds: Array[Array[Float]] = ((0 until timeAxis.getShape(0)) map (index => timeAxis.getCoordBoundsDate(index) map ( cdsutils.toValue ))).toArray
+    val timeValues = timeCalValues.map( cdsutils.toValue ).toArray
     val datesSample = timeCalValues.subList(0,5)
-    logger.info( s" Writing Time values, dates: [ ${datesSample.map(_.toString).mkString(", ")} ], millis: [ ${datesSample.map(_.getMillis.toString).mkString(", ")} ] ")
-    ( timeCalValues.map(_.getMillis ).toArray, bounds )
+    val timeValuesSample = timeValues.slice(0,5)
+    logger.info( s" Writing Time values, dates: [ ${datesSample.map(_.toString).mkString(", ")} ], hours: [ ${timeValuesSample.map(_.toString).mkString(", ")} ] ")
+    ( timeValues, bounds )
   }
 
 
-  def getTimeCoordValues(ncDataset: NetcdfDataset): ( Array[Long], Array[Array[Long]] ) = {
+  def getTimeCoordValues(ncDataset: NetcdfDataset): ( Array[Float], Array[Array[Float]] ) = {
     val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
       case Some(timeAxis) => getTimeValues(ncDataset, timeAxis)
       case None => throw new Exception( "ncDataset does not have a time axis: " + ncDataset.getReferencedFile.getLocation )
@@ -150,17 +152,17 @@ object FileHeader extends Loggable {
 }
 
 class FileHeader(val filePath: String,
-                 val axisValues: Array[Long],
-                 val boundsValues: Array[Array[Long]],
+                 val axisValues: Array[Float],
+                 val boundsValues: Array[Array[Float]],
                  val timeRegular: Boolean,
                  val varNames: List[String],
                  val coordVarNames: List[String]
                 ) {
   def nElem: Int = axisValues.length
-  def startValue: Long = boundsValues.head(0)
-  def endValue: Long = boundsValues.last(1)
+  def startValue: Float = boundsValues.head(0)
+  def endValue: Float = boundsValues.last(1)
   def dt = ( endValue + 1 - startValue ) / boundsValues.length
-  def startDate: String = CalendarDate.of(startValue).toString
+  def startDate: String = cdsutils.toDate(startValue).toString
   override def toString: String = " *** FileHeader { path='%s', nElem=%d, startValue=%d startDate=%s} ".format(filePath, nElem, startValue, startDate)
   def dropPrefix( nElems: Int ): FileHeader = new FileHeader( filePath.split("/").drop(nElems).mkString("/"), axisValues, boundsValues, timeRegular, varNames, coordVarNames )
 }
