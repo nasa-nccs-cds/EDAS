@@ -94,10 +94,11 @@ class NCMLWriter(fileHeaders: IndexedSeq[FileHeader], val maxCores: Int = 8)  ex
         <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString}/>
     else
         <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} coordValue={fileHeader.axisValues.map( x => "%d".format(x)).mkString(", ")}/>
+  def getDataType( axisType: AxisType ): String = if( axisType == AxisType.Time ) { "long"} else { "float" }
 
   def getVariable(fileMetadata: FileMetadata, variable: nc2.Variable,  timeRegularSpecs: Option[(Double, Double)]): xml.Node = {
     val axisType = fileMetadata.getAxisType(variable)
-    <variable name={getName(variable)} shape={getDims(fileMetadata,variable)} type={variable.getDataType.toString}> {
+    <variable name={getName(variable)} shape={getDims(fileMetadata,variable)} type={getDataType(axisType)}> {
         if( axisType == AxisType.Time )  <attribute name="_CoordinateAxisType" value="Time"/>  <attribute name="units" value={if(overwriteTime) cdsutils.baseTimeUnits else variable.getUnitsString}/>
         else for (attribute <- variable.getAttributes; if !isIgnored( attribute ) ) yield getAttribute(attribute)
     }

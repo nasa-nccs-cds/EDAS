@@ -329,7 +329,9 @@ class CollectionGridFileLoader( val collId: String, val collectionFile: File ) e
     logger.info( s" ---> Loading collection $collId" )
     val optCollection = Collections.addCollection( collId, Some( collectionFile.toString ) )
     optCollection foreach { collection =>
-      logger.info(s"Creating grid file ${collection.grid.gridFilePath} for collection ${collId}")
+      if( ! new File(collection.grid.gridFilePath).exists ) {
+        logger.info(s"Creating grid file ${collection.grid.gridFilePath} for collection ${collId}")
+      }
     }
   }
 }
