@@ -133,11 +133,11 @@ trait Loggable extends Serializable {
 
 object cdsutils {
 
-  val baseTimeUnits = "hours since 1970-01-01T00:00:00Z"
-  val millisPerHour = 1000 * 60 * 60f
+  val baseTimeUnits = "minutes since 1970-01-01T00:00:00Z"
+  val millisPerMinute = 1000 * 60f
 
-  def toValue( date: CalendarDate ): Float = date.getMillis / millisPerHour
-  def toDate( value: Float ): CalendarDate = CalendarDate.of( ( value * millisPerHour).toLong )
+  def toValue( date: CalendarDate ): Int = Math.round( date.getMillis / millisPerMinute )
+  def toDate( value: Int ): CalendarDate = CalendarDate.of( ( value * millisPerMinute ).toLong )
 
   def getOrElse[T]( map: Map[String,T], key: String, errMsg: String ): T = map.get(key) match { case Some(x) => x; case None => throw new Exception(errMsg) }
 

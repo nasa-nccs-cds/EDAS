@@ -189,9 +189,9 @@ object CDGrid extends Loggable {
           }
 //          logger.info(s" %G% Writing grid coord variable[${newVar.getFullName}] data from file[${collectionFile}] range: [ ${coordAxis.getMinValue.toString} - ${coordAxis.getMaxValue.toString}  ${coordAxis.getUnitsString} ]")
           if (coordAxis.getAxisType == AxisType.Time) {
-            val (time_values, bounds): ( Array[Float], Array[Array[Float]] ) = FileHeader.getTimeValues(ncDataset, coordAxis)
+            val (time_values, bounds): ( Array[Int], Array[Array[Int]] ) = FileHeader.getTimeValues(ncDataset, coordAxis)
             newVar.addAttribute(new Attribute(CDM.UNITS, cdsutils.baseTimeUnits))
-            gridWriter.write(newVar, ma2.Array.factory(ma2.DataType.FLOAT, coordAxis.getShape, time_values))
+            gridWriter.write(newVar, ma2.Array.factory(ma2.DataType.INT, coordAxis.getShape, time_values))
 //            boundsVarOpt flatMap newVarsMap.get match {
 //              case Some( newVarBnds ) =>
 //                val cvarBnds = ncDataset.findVariable( newVarBnds.getFullName )
