@@ -137,7 +137,7 @@ object FileHeader extends Loggable {
     val timeValues = timeCalValues.map( cdsutils.toValue ).toArray
     val datesSample = timeCalValues.subList(0,5)
     val timeValuesSample = timeValues.slice(0,5)
-    logger.info( s" Writing Time values, dates: [ ${datesSample.map(_.toString).mkString(", ")} ], hours: [ ${timeValuesSample.map(_.toString).mkString(", ")} ] ")
+    logger.info( s" Writing Time values, dates: [ ${datesSample.map(_.toString).mkString(", ")} ], ${cdsutils.baseTimeUnits}: [ ${timeValuesSample.map(_.toString).mkString(", ")} ] ")
     ( timeValues, bounds )
   }
 
