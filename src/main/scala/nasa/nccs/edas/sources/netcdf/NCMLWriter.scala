@@ -21,7 +21,7 @@ class NCMLWriter(fileHeaders: IndexedSeq[FileHeader], val maxCores: Int = 8)  ex
   private val nReadProcessors = Math.min( Runtime.getRuntime.availableProcessors, maxCores )
   private val nFiles = fileHeaders.length
   val outerDimensionSize: Int = fileHeaders.foldLeft(0)(_ + _.nElem)
-  val ignored_attributes = List("comments")
+  val ignored_attributes = List("comments","time_increment")
   val overwriteTime = fileHeaders.length > 1
 
   def uriToString( uri: URI ): String = {
