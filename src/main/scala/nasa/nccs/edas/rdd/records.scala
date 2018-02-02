@@ -145,10 +145,10 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val parallelism = Math.min( files.length, nPartitions )
     logger.info( s"Running util tests, mode: '${mode}', nfiles = ${files.length}, nPartitions=${nPartitions}, nNodes=${nNodes}, usedCoresPerNode=${usedCoresPerNode}")
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
-    filesDataset.count()
+//    filesDataset.count()
     val t1 = System.nanoTime()
     val timesliceRDD: RDD[CDTimeSlice1] = filesDataset.mapPartitions( TimeSliceMultiIterator1( varId1, varName1, section, tslice, basePath ) )
-    timesliceRDD.count()
+//    timesliceRDD.count()
     val t2 = System.nanoTime()
     if( mode.equals("ave") ) {
       val (vsum,n,tsum) = timesliceRDD.map( _.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
