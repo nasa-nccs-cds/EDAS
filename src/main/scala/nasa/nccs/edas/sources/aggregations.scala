@@ -379,7 +379,7 @@ object Aggregation extends Loggable {
           val nTS = toks(2).toInt
           val base_path_opt = None // parameters.get("base.path").map( _.toString )
           val file_path = base_path_opt.fold( toks(3) )( base_path => Paths.get( base_path, toks(3) ).toString  )
-          files += FileInput(files.length, toks(1).toLong, timeIndex, nTS, file_path )
+          files += FileInput(files.length, EDTime.toMillis(toks(1).toDouble), timeIndex, nTS, file_path )
           timeIndex += nTS
         case "P" =>  parameters += toks(1) -> toks(2)
         case "V" => variables += Variable( toks(1), toks(2).split(",").map( _.toInt ), toks(3), toks(4) )
@@ -426,7 +426,7 @@ object Aggregation extends Loggable {
       for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} \n" ) }
       for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName};  ${variable.getShape.mkString(",")};  ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
       for (fileHeader <- reducedFileheaders) {
-        bw.write( s"F; ${fileHeader.startValue}; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
+        bw.write( s"F; ${EDTime.toString(fileHeader.startValue)}; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
       }
     } finally {
       fileMetadata.close
