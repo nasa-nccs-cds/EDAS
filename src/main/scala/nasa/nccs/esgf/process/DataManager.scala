@@ -433,7 +433,7 @@ object GridSection extends Loggable {
     val t3 = System.nanoTime
     val rv = new GridSection( grid, coordSpecs.flatten )
     val t4 = System.nanoTime
-    logger.info( " %GS%: GridSection: , %.4f %.4f %.4f, %.4f, T = %.4f ".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, (t4-t3)/1.0E9, (t4-t0)/1.0E9 ) )
+    logger.info( " @GS@ GridSection: %.4f %.4f %.4f, %.4f, T = %.4f ".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, (t4-t3)/1.0E9, (t4-t0)/1.0E9 ) )
     rv
   }
 
