@@ -123,8 +123,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val nNodes = 18
     val usedCoresPerNode = 8
     val t00 = System.nanoTime()
-    //    val dataFile = "/dass/adm/edas/cache/collections/NCML/merra2_inst1_2d_asm_Nx-MERRA2.inst1.2d.asm.Nx.nc4.ncml"
-    val dataFile = "/dass/adm/edas/cache/collections/agg/merrra2_m2i1nxint-MERRA2.inst1.2d.int.Nx.nc4.ncml"
+    val dataFile = "/dass/adm/edas/cache/collections/agg/merrra2_m2i1nxint-MERRA2.inst1.2d.int.Nx.nc4.ag1"
     val varName1 = "KE"
     val varId1 = "v1"
     val varName2 = "THV"
@@ -152,6 +151,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val t04 = System.nanoTime()
     val prepTimes = Seq( (t04-t03), (t03-t02), (t02-t01), (t01-t00) ).map( _ / 1.0E9 )
     val parallelism = Math.min( files.length, nPartitions )
+    logger.info( s"Running util tests, nfiles = ${files.length}, nPartitions=${nPartitions}")
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
     filesDataset.count()
     val t1 = System.nanoTime()
