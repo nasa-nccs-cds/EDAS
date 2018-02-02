@@ -307,7 +307,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val reduceElements = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
       val axes = context.getAxes
       val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
-        reduceElements.reduce( getReduceOp(context), ordered )
+        reduceElements.reduce( getReduceOp(context), None, ordered )
       } else {
         reduceElements.collect
       }
