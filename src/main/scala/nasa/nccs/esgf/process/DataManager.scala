@@ -418,8 +418,11 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
 
 object GridSection extends Loggable {
   def apply( variable: CDSVariable, roiOpt: Option[List[DomainAxis]] ): GridSection = {
+    val t0 = System.nanoTime
     val grid = variable.collection.grid
+    val t1 = System.nanoTime
     val axes = variable.getCoordinateAxesList
+    val t2 = System.nanoTime
     val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = variable.getCoordinateAxis(dim)) yield coord_axis_opt match {
       case Some( coord_axis ) =>
         val domainAxisOpt: Option[DomainAxis] = roiOpt.flatMap(axes => axes.find(da => da.matches( coord_axis.getAxisType )))
@@ -427,8 +430,15 @@ object GridSection extends Loggable {
       case None =>
         logger.warn( "Unrecognized coordinate axis: %s, axes = ( %s )".format( dim, grid.getCoordinateAxes.map( axis => axis.getFullName ).mkString(", ") )); None
     }
-    new GridSection( grid, coordSpecs.flatten )
+    val t3 = System.nanoTime
+    val rv = new GridSection( grid, coordSpecs.flatten )
+    val t4 = System.nanoTime
+    logger.info( " %GS%: GridSection: , %.4f %.4f %.4f, %.4f, T = %.4f ".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, (t4-t3)/1.0E9, (t4-t0)/1.0E9 ) )
+    rv
   }
+
+
+
 
   def apply( variable: CDSVariable, section: ma2.Section ): GridSection = {
     val grid_axes = section.getRanges.map( r => new DomainAxis( DomainAxis.fromCFAxisName(r.getName), r.first, r.last, "indices" ) )
@@ -747,9 +757,11 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
     val t0 = System.nanoTime
     val data_source: DataSource = dataContainer.getSource
     logger.info( s"Data Source, fragIdOpt: ${data_source.fragIdOpt.toString}" )
-    val variable: CDSVariable = dataContainer.getVariable
-    val targetGrid = request.getTargetGrid( dataContainer )
     val t1 = System.nanoTime
+    val variable: CDSVariable = dataContainer.getVariable
+    val t2 = System.nanoTime
+    val targetGrid = request.getTargetGrid( dataContainer )
+    val t3 = System.nanoTime
     val maskOpt: Option[String] = domain_container_opt.flatMap( domain_container => domain_container.mask )
     val fragRoiOpt = data_source.fragIdOpt.map( fragId => DataFragmentKey(fragId).getRoi )
     val domain_mdata = domain_container_opt.map( _.metadata ).getOrElse(Map.empty)
@@ -759,9 +771,7 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
       new DataFragmentSpec( dataContainer.uid, variable.name, variable.collection, data_source.fragIdOpt, Some(targetGrid), variable.dims.mkString(","),
         variable.units, variable.getAttributeValue("long_name", variable.fullname), section, optDomainSect, domain_mdata, variable.missing, variable.getAttributeValue("numDataFiles", "1").toInt, maskOpt, data_source.autoCache )
     }
-    val t2 = System.nanoTime
     val rv = dataContainer.uid -> fragSpec
-    val t3 = System.nanoTime
     logger.info( " LoadVariableDataT: section=%s, domainSect=%s, fragId=%s, fragRoi=%s, %.4f %.4f %.4f, T = %.4f ".format(
       optSection.getOrElse("null").toString, optDomainSect.getOrElse("null").toString, data_source.fragIdOpt.getOrElse("null").toString, fragRoiOpt.getOrElse("null").toString, (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, (t3-t0)/1.0E9 ) )
     rv
