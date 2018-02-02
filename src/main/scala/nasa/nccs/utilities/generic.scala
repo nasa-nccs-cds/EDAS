@@ -13,6 +13,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 
 import nasa.nccs.esgf.process.UID
+import ucar.ma2
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -131,13 +132,22 @@ trait Loggable extends Serializable {
   def printMarker( index: Int ): Unit = print( s"\n@@@@ ${index.toString} @@@@\n")
 }
 
+object EDTime {
+  val units = "minutes since 1970-01-01T00:00:00Z"
+  val millisPerMinute = 1000 * 60.0
+  val datatype = "double"
+  val ucarDatatype = ma2.DataType.DOUBLE
+
+  def toValue( date: CalendarDate ): Double = date.getMillis / millisPerMinute
+  def toDate( value: Double ): CalendarDate = CalendarDate.of( ( value * millisPerMinute ).toLong )
+  def toMillis( value: Double ): Long = ( value * millisPerMinute ).toLong
+  def toString( value: Double ): String = "%f".format( value )
+
+}
+
 object cdsutils {
 
-  val baseTimeUnits = "minutes since 1970-01-01T00:00:00Z"
-  val millisPerMinute = 1000 * 60f
 
-  def toValue( date: CalendarDate ): Int = Math.round( date.getMillis / millisPerMinute )
-  def toDate( value: Int ): CalendarDate = CalendarDate.of( ( value * millisPerMinute ).toLong )
 
   def getOrElse[T]( map: Map[String,T], key: String, errMsg: String ): T = map.get(key) match { case Some(x) => x; case None => throw new Exception(errMsg) }
 

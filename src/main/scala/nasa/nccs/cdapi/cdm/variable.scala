@@ -11,8 +11,9 @@ import nasa.nccs.edas.sources.Collection
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
 import ucar.{ma2, nc2, unidata}
 import ucar.nc2.dataset.{CoordinateAxis1D, _}
-import nasa.nccs.utilities.{Loggable, cdsutils}
+import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 import ucar.nc2.constants.AxisType
+
 import scala.collection.immutable.Map
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -24,7 +25,7 @@ object BoundsRole extends Enumeration { val Start, End = Value }
 object CDSVariable extends Loggable {
   def toCoordAxis1D(coordAxis: CoordinateAxis): CoordinateAxis1D = coordAxis match {
     case coordAxis1D: CoordinateAxis1D =>
-     //  if( coordAxis1D.getShortName.equalsIgnoreCase("time") ){coordAxis1D.setUnitsString( cdsutils.baseTimeUnits ) }
+     //  if( coordAxis1D.getShortName.equalsIgnoreCase("time") ){coordAxis1D.setUnitsString( EDTime.units ) }
       coordAxis1D
     case _ => throw new IllegalStateException("CDSVariable: 2D Coord axes not yet supported: " + coordAxis.getClass.getName)
   }
@@ -65,7 +66,7 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
       { for( dim: nc2.Dimension <- collection.grid.dimensions; name=dim.getFullName; dlen=dim.getLength ) yield getCoordinateAxis( name ) match {
           case None=> <dimension name={name} length={dlen.toString}/>
           case Some(axis)=>
-              val units = axis.getAxisType match { case AxisType.Time =>{cdsutils.baseTimeUnits} case x => axis.getUnitsString }
+              val units = axis.getAxisType match { case AxisType.Time =>{EDTime.units} case x => axis.getUnitsString }
               <dimension name={name} length={dlen.toString} start={axis.getStart.toString} units={units} step={axis.getIncrement.toString} cfname={axis.getAxisType.getCFAxisName}/>
         }
       }

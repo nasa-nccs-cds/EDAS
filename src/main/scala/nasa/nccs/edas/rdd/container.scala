@@ -15,7 +15,7 @@ import nasa.nccs.edas.sources.{Aggregation, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.esgf.process.{CDSection, ServerContext}
-import nasa.nccs.utilities.{Loggable, cdsutils}
+import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 import org.apache.spark.rdd.RDD
 import ucar.ma2
 import ucar.nc2.Variable
@@ -84,14 +84,14 @@ object CDTimeSlice {
   def empty = new CDTimeSlice( -1, 0, Map.empty[String,ArraySpec] )
 }
 
-case class CDTimeSlice(startTime: Int, endTime: Int, elements: Map[String,ArraySpec] ) {
+case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String,ArraySpec] ) {
   def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( startTime, endTime, elements ++ other.elements ) }
   def <+( other: CDTimeSlice ): CDTimeSlice = append( other )
   def clear: CDTimeSlice = { new CDTimeSlice( startTime, endTime, Map.empty[String,ArraySpec] ) }
-  def midpoint: Int = startTime + endTime/2
-  def endpoint: Int = startTime + endTime
-  def mergeStart( other: CDTimeSlice ): Int = Math.min( startTime, other.startTime )
-  def mergeEnd( other: CDTimeSlice ): Int = Math.max( endTime, other.endTime )
+  def midpoint: Long = startTime + endTime/2
+  def endpoint: Long = startTime + endTime
+  def mergeStart( other: CDTimeSlice ): Long = Math.min( startTime, other.startTime )
+  def mergeEnd( other: CDTimeSlice ): Long = Math.max( endTime, other.endTime )
   def section( section: CDSection ): CDTimeSlice = {  new CDTimeSlice( startTime, endTime, elements.mapValues( _.section(section) ) ) }
   def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice( startTime, endTime, elements.filterKeys(key => !keys.contains(key) ) ) }
   def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice( startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ) )
@@ -100,7 +100,7 @@ case class CDTimeSlice(startTime: Int, endTime: Int, elements: Map[String,ArrayS
   def element( id: String ): Option[ArraySpec] = elements.get( id )
   def isEmpty = elements.isEmpty
   def findElements( id: String ): Iterable[ArraySpec] = ( elements filter { case (key,array) => key.split(':').last.equals(id) } ) values
-  def contains( other_startTime: Int ): Boolean = { ( other_startTime >= startTime ) && ( other_startTime <= endTime ) }
+  def contains( other_startTime: Long ): Boolean = { ( other_startTime >= startTime ) && ( other_startTime <= endTime ) }
   def contains( other: CDTimeSlice ): Boolean = { contains( other.startTime ) }
   def ~( other: CDTimeSlice ) =  { assert( (endTime == other.endTime) && (startTime == other.startTime) , s"Mismatched Time slices: { $startTime $endTime } vs { ${other.startTime} ${other.endTime} }" ) }
   def precedes( other: CDTimeSlice ) = {assert(  startTime < other.startTime, s"Disordered Time slices: { $startTime $endTime -> ${startTime+endTime} } vs { ${other.startTime} ${other.endTime} }" ) }
@@ -315,14 +315,14 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
         //    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
         val t1 = System.nanoTime()
         val nTimesteps = timeAxis.getShape(0)
-        val slices = for (slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map( cdsutils.toValue ) ) yield {
+        val slices = for (slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map( _.getMillis ) ) yield {
           val sliceRanges = getSliceRanges(interSect, slice_index)
           val data_section = variable.read(sliceRanges)
           val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
           val data_shape: Array[Int] = data_section.getShape
           val section = variable.getShapeAsSection
           val arraySpec = ArraySpec( missing, data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.startIndex ), data_array)
-          CDTimeSlice(time_bounds(0), time_bounds(1), Map(varId -> arraySpec))
+          CDTimeSlice( time_bounds(0), time_bounds(1), Map(varId -> arraySpec))
         }
         dataset.close()
         if (fileInput.index % 500 == 0) {

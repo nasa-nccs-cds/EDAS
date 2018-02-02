@@ -7,7 +7,7 @@ import java.util.Date
 
 import nasa.nccs.edas.sources.netcdf.NCMLWriter
 import nasa.nccs.esgf.process.CDSection
-import nasa.nccs.utilities.Loggable
+import nasa.nccs.utilities.{EDTime, Loggable}
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2
 import ucar.nc2.time.CalendarDate
@@ -412,7 +412,7 @@ object Aggregation extends Loggable {
     logger.info("Processing %d files with %d workers".format(fileHeaders.length, nReadProcessors))
     val bw = new BufferedWriter(new FileWriter(aggFile))
     val fileMetadata = FileMetadata( fileHeaders.head.filePath )
-    val dt: Int = Math.round( ( fileHeaders.last.endValue + 1 - fileHeaders.head.startValue ) / fileHeaders.length.toFloat )
+    val dt: Long = EDTime.toMillis( fileHeaders.last.endValue - fileHeaders.head.startValue )  / fileHeaders.length
     val ( basePath, reducedFileheaders ) = FileHeader.extractSubpath( fileHeaders )
     try {
       bw.write( s"P; time.step; $dt\n")

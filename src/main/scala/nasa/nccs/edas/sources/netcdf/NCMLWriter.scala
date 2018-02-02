@@ -2,10 +2,11 @@ package nasa.nccs.edas.sources.netcdf
 
 import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.net.URI
+
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import ucar.{ma2, nc2}
 import nasa.nccs.edas.sources.{FileHeader, FileMetadata}
-import nasa.nccs.utilities.{Loggable, XMLParser, cdsutils}
+import nasa.nccs.utilities.{EDTime, Loggable, XMLParser, cdsutils}
 import ucar.nc2.Group
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D}
@@ -93,13 +94,13 @@ class NCMLWriter(fileHeaders: IndexedSeq[FileHeader], val maxCores: Int = 8)  ex
     if (timeRegular || !overwriteTime)
         <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString}/>
     else
-        <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} coordValue={fileHeader.axisValues.map( x => "%d".format(x)).mkString(", ")}/>
-  def getDataType( axisType: AxisType ): String = if( axisType == AxisType.Time ) { "int" } else { "float" }
+        <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} coordValue={fileHeader.axisValues.map( EDTime.toString ).mkString(", ")}/>
+  def getDataType( axisType: AxisType ): String = if( axisType == AxisType.Time ) { EDTime.datatype } else { "float" }
 
   def getVariable(fileMetadata: FileMetadata, variable: nc2.Variable,  timeRegularSpecs: Option[(Double, Double)]): xml.Node = {
     val axisType = fileMetadata.getAxisType(variable)
     <variable name={getName(variable)} shape={getDims(fileMetadata,variable)} type={getDataType(axisType)}> {
-        if( axisType == AxisType.Time )  <attribute name="_CoordinateAxisType" value="Time"/>  <attribute name="units" value={if(overwriteTime) cdsutils.baseTimeUnits else variable.getUnitsString}/>
+        if( axisType == AxisType.Time )  <attribute name="_CoordinateAxisType" value="Time"/>  <attribute name="units" value={if(overwriteTime) EDTime.units else variable.getUnitsString}/>
         else for (attribute <- variable.getAttributes; if !isIgnored( attribute ) ) yield getAttribute(attribute)
     }
     {
@@ -184,7 +185,7 @@ class NCMLWriter(fileHeaders: IndexedSeq[FileHeader], val maxCores: Int = 8)  ex
 
 //  def defineNewTimeVariable: xml.Node =
 //    <variable name={getTimeVarName}>
-//      <attribute name="units" value={cdsutils.baseTimeUnits}/>
+//      <attribute name="units" value={EDTime.units}/>
 //      <attribute name="_CoordinateAxisType" value="Time" />
 //    </variable>
 

@@ -10,11 +10,12 @@ import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
-import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}
+import nasa.nccs.utilities.{EDTime, Loggable, ProfilingTool, cdsutils}
 import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D, CoordinateAxis1DTime}
+
 import scala.collection.immutable.Map
 import scala.collection.concurrent
 import scala.collection.JavaConversions._
@@ -274,7 +275,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   //    _data.find
   //  }
 
-  def getUnits: String =  coordAxis.getAxisType match { case AxisType.Time => cdsutils.baseTimeUnits case x => coordAxis.getUnitsString }
+  def getUnits: String =  coordAxis.getAxisType match { case AxisType.Time => EDTime.units case x => coordAxis.getUnitsString }
 
   def getTimeAxis: CoordinateAxis1DTime = {
     val gridDS = NetcdfDatasetMgr.aquireFile( grid.gridFilePath, 17.toString )

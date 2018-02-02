@@ -16,7 +16,7 @@ import nasa.nccs.edas.rdd.CDTimeSlice
 import nasa.nccs.edas.sources.{Variable => _, _}
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
-import nasa.nccs.utilities.{Loggable, cdsutils}
+import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{CoordinateAxis, _}
 import ucar.ma2
@@ -140,15 +140,12 @@ object CDGrid extends Loggable {
 
       val varTups = for (cvar <- ncDataset.getVariables; varName = AggregationWriter.getName(cvar); if !newVarsMap.contains( varName ) ) yield {
         val dataType = cvar match {
-          case coordAxis: CoordinateAxis =>
-            if (coordAxis.getAxisType == AxisType.Time) ma2.DataType.LONG
-            else cvar.getDataType
+          case coordAxis: CoordinateAxis => if (coordAxis.getAxisType == AxisType.Time) { EDTime.ucarDatatype } else { cvar.getDataType }
           case x => cvar.getDataType
         }
         val oldGroup = cvar.getGroup
         val newGroup = getNewGroup(groupMap, oldGroup, gridWriter)
         val newVar: nc2.Variable = gridWriter.addVariable(newGroup, varName, dataType, getDimensionNames( cvar.getDimensionsString.split(' '), localDims ).mkString(" "))
-        //      val newVar = gridWriter.addVariable( newGroup, AggregationWriter.getName(cvar), dataType, cvar.getDimensionsString  )
         if( cvar.isCoordinateVariable && (cvar.getRank == 1) ) {
           cvarOrigins += (collectionFile -> (cvarOrigins.getOrElse(collectionFile, Seq.empty[nc2.Variable]) ++ Seq(newVar)))
         }
@@ -159,7 +156,7 @@ object CDGrid extends Loggable {
       for ((cvar, newVar) <- varMap.values; attr <- cvar.getAttributes) cvar match {
         case coordAxis: CoordinateAxis =>
           if ((coordAxis.getAxisType == AxisType.Time) && attr.getShortName.equalsIgnoreCase(CDM.UNITS)) {
-            gridWriter.addVariableAttribute(newVar, new Attribute(CDM.UNITS, cdsutils.baseTimeUnits))
+            gridWriter.addVariableAttribute(newVar, new Attribute(CDM.UNITS, EDTime.units))
           } else {
             gridWriter.addVariableAttribute(newVar, attr)
           }
@@ -187,17 +184,10 @@ object CDGrid extends Loggable {
                 None
             }
           }
-//          logger.info(s" %G% Writing grid coord variable[${newVar.getFullName}] data from file[${collectionFile}] range: [ ${coordAxis.getMinValue.toString} - ${coordAxis.getMaxValue.toString}  ${coordAxis.getUnitsString} ]")
           if (coordAxis.getAxisType == AxisType.Time) {
-            val (time_values, bounds): ( Array[Int], Array[Array[Int]] ) = FileHeader.getTimeValues(ncDataset, coordAxis)
-            newVar.addAttribute(new Attribute(CDM.UNITS, cdsutils.baseTimeUnits))
-            gridWriter.write(newVar, ma2.Array.factory(ma2.DataType.INT, coordAxis.getShape, time_values))
-//            boundsVarOpt flatMap newVarsMap.get match {
-//              case Some( newVarBnds ) =>
-//                val cvarBnds = ncDataset.findVariable( newVarBnds.getFullName )
-//                gridWriter.write(newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, cvarBnds.getShape, bounds.toBuffer ))
-//              case None => Unit
-//            }
+            val (time_values, bounds): ( Array[Double], Array[Array[Double]] ) = FileHeader.getTimeValues(ncDataset, coordAxis)
+            newVar.addAttribute(new Attribute(CDM.UNITS, EDTime.units))
+            gridWriter.write(newVar, ma2.Array.factory( EDTime.ucarDatatype, coordAxis.getShape, time_values))
           } else {
             gridWriter.write(newVar, coordAxis.read())
             coordAxis match {
@@ -224,27 +214,6 @@ object CDGrid extends Loggable {
     gridWriter.close()
   }
 }
-
-//    for ( ( bndsvar, cvar ) <- boundsSpecs.flatten )  varMap.get(bndsvar) match {
-//      case Some((bvar, newVar)) =>
-//        cvar match  {
-//          case coordAxis: CoordinateAxis => if( coordAxis.getAxisType == AxisType.Time ) {
-//            bvar match  {
-//              case dsvar: VariableDS =>
-//                val time_values = dsvar.read()
-//                val units = dsvar.getUnitsString()
-//                newVar.addAttribute( new Attribute( CDM.UNITS, cdsutils.baseTimeUnits ) )
-//                gridWriter.write( newVar, ma2.Array.factory( ma2.DataType.DOUBLE, dsvar.getShape, time_values ) )
-//              case x =>
-//                gridWriter.write(newVar, bvar.read())
-//            }
-//          } else {
-//            gridWriter.write(newVar, bvar.read())
-//          }
-//          case x => gridWriter.write(newVar, bvar.read())
-//        }
-//      case None => Unit
-//    }
 
 class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[CoordinateAxis], val coordSystems: List[CoordinateSystem], val dimensions: List[Dimension], val resolution: Map[String,Float], val attributes: List[nc2.Attribute] ) extends Loggable {
   val precache = false
