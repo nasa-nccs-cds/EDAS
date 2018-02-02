@@ -427,7 +427,6 @@ class EDASExecutionManager extends WPSServer with Loggable {
       val requestContext = createRequestContext ( jobId, request, run_args )
       val results = executeWorkflows ( requestContext )
       val response = results.toXml( ResponseSyntax.Generic )
-      requestContext.logTimingReport("Executed task request " + request.name)
       executionCallback.foreach( _.success( response ) )
       collectionDataCache.removeJob( jobId )
       results
