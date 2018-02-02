@@ -9,7 +9,7 @@ import nasa.nccs.cdapi.data.{HeapFltArray, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.{ReduceNOpFlt, ReduceOpFlt, ReduceWNOpFlt}
 import nasa.nccs.cdapi.tensors.{CDArray, CDCoordMap, CDFloatArray, CDTimeCoordMap}
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow, WorkflowNode}
-import nasa.nccs.edas.rdd.{ArraySpec, CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
+import nasa.nccs.edas.rdd._
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -307,7 +307,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val reduceElements = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
       val axes = context.getAxes
       val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
-        reduceElements.reduce( getReduceOp(context), None, ordered )
+        val optGroup = context.config("groupBy") map TSGroup.getGroup
+        reduceElements.reduce( getReduceOp(context), optGroup, ordered )
       } else {
         reduceElements.collect
       }
