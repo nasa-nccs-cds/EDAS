@@ -118,7 +118,6 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     import sc.session.implicits._
     val nNodes = 18
     val usedCoresPerNode = 8
-    val t00 = System.nanoTime()
     val dataFile = "/dass/adm/edas/cache/collections/agg/merrra2_m2i1nxint-MERRA2.inst1.2d.int.Nx.nc4.ag1"
     val varName1 = "KE"
     val varId1 = "v1"
@@ -133,11 +132,9 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val section = ""
     //    val dataset = NetcdfDataset.openDataset(dataFile)
 
-    val t01 = System.nanoTime()
+    val t0 = System.nanoTime()
     val agg = Aggregation.read( dataFile )
-    val t02 = System.nanoTime()
     val files: List[FileInput] = agg.files
-    val t03 = System.nanoTime()
     val config = optRequest.fold(Map.empty[String,String])( _.operations.head.getConfiguration )
     val basePath = agg.getBasePath.getOrElse("")
     val domains = optRequest.fold(Map.empty[String,DomainContainer])( _.domainMap )
@@ -145,16 +142,15 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val mode = config.getOrElse( "mode", "rdd" )
     val missing = Float.NaN
     val tslice = config.getOrElse( "tslice", "prefetch" )
-    val t04 = System.nanoTime()
-    val prepTimes = Seq( (t04-t03), (t03-t02), (t02-t01), (t01-t00) ).map( _ / 1.0E9 )
     val parallelism = Math.min( files.length, nPartitions )
     logger.info( s"Running util tests, mode: '${mode}', nfiles = ${files.length}, nPartitions=${nPartitions}, nNodes=${nNodes}, usedCoresPerNode=${usedCoresPerNode}")
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
     filesDataset.count()
     val t1 = System.nanoTime()
     val timesliceRDD: RDD[CDTimeSlice1] = filesDataset.mapPartitions( TimeSliceMultiIterator1( varId1, varName1, section, tslice, basePath ) )
-    if( mode.equals("count") ) { timesliceRDD.count() }
-    else if( mode.equals("ave") ) {
+    timesliceRDD.count()
+    val t2 = System.nanoTime()
+    if( mode.equals("ave") ) {
       val (vsum,n,tsum) = timesliceRDD.map( _.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
       logger.info(s"\n ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
     } else if( mode.equals("double")  ) {
@@ -165,22 +161,12 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
       val timesliceRDD1: RDD[CDTimeSlice1] = filesDataset.mapPartitions( TimeSliceMultiIterator1( varId2, varName2, section, tslice, basePath ) )
       timesliceRDD.keyBy( _.timestamp.getNanos ).cache().count()
       timesliceRDD1.keyBy( _.timestamp.getNanos ).cache().count()
-    } else if( mode.equals("merge")  ) {
-      val timesliceRDD1: RDD[CDTimeSlice1] = filesDataset.mapPartitions( TimeSliceMultiIterator1( varId2, varName2, section, tslice, basePath ) )
-      val tm0 = System.nanoTime()
-      timesliceRDD.keyBy( _.timestamp.getNanos ).cache().count()
-      timesliceRDD1.keyBy( _.timestamp.getNanos ).cache().count()
-      val tm1 = System.nanoTime()
-      val mergedRDD = timesliceRDD.keyBy( _.timestamp.getNanos ).cogroup( timesliceRDD1.keyBy( _.timestamp.getNanos ) )
-      mergedRDD.count()
-      val tm2 = System.nanoTime()
-      logger.info(s"\n\nCompleted MERGE test, read time = ${(tm1 - tm0) / 1.0E9} sec, merge time = ${(tm2 - tm1) / 1.0E9} sec, total time = ${(tm2 - tm0) / 1.0E9} sec\n")
     } else {
       throw new Exception( "Unrecognized mode: " + mode )
     }
-    val t2 = System.nanoTime()
+    val t3 = System.nanoTime()
     val nParts = timesliceRDD.getNumPartitions
-    logger.info(s"\n\nCompleted test, nFiles = ${files.length}, prep times = [${prepTimes.mkString(", ")}], parallization time = ${(t1 - t04) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, total time = ${(t2 - t00) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
+    logger.info(s"\n\nCompleted test, nFiles = ${files.length}, parallization time = ${(t1 - t0) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, compute time = ${(t3 - t2) / 1.0E9} sec, total time = ${(t3 - t0) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
 
     new WPSMergedEventReport( Seq.empty )
   }
