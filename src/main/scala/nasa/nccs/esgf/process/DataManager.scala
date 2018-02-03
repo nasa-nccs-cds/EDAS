@@ -11,6 +11,7 @@ import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.utilities.{EDTime, Loggable, ProfilingTool, cdsutils}
+import org.joda.time.DateTime
 import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
@@ -152,12 +153,12 @@ object RangeCacheMaker {
   def create: mutable.Map[String, (Int,Int)] = { new mutable.HashMap[String, (Int,Int)] with mutable.SynchronizedMap[String, (Int,Int)] {} }
 }
 
-class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: CoordinateAxis1D, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {
+class GridCoordSpec( val index: Int, variable: CDSVariable, val coordAxis: CoordinateAxis1D, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {
   val t0 = System.nanoTime()
+  val grid: CDGrid = variable.collection.grid
   private val _optRange: Option[ma2.Range] = getAxisRange( coordAxis, domainAxisOpt )
-  private lazy val ( _dates, _dateRangeOpt ) = getCalendarDates
   val t1 = System.nanoTime()
-  private val _data: Array[Double] = getCoordinateValues
+  private val ( _data, _dateRangeOpt ) = getCoordinateValues( variable )
   val t2 = System.nanoTime()
   private val _rangeCache: concurrent.TrieMap[String, (Int,Int)] = concurrent.TrieMap.empty[String, (Int,Int)]
   val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
@@ -259,18 +260,23 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     case x =>  ( List.empty[CalendarDate], None )
   }
 
-  def getCoordinateValues: Array[Double] = coordAxis.getAxisType match {
-    case AxisType.Time =>
-      val timeCalValues: List[CalendarDate] = _optRange match {
-        case None =>          _dates
-        case Some(range) =>   _dates.subList( range.first(), range.last()+1 ).toList
-      }
-      timeCalValues.map( _.getMillis.toDouble ).toArray
-    case x =>_optRange match {
-      case Some(range) => CDDoubleArray.factory( coordAxis.read(List(range)) ).getArrayData()
-      case None =>        CDDoubleArray.factory( coordAxis.read() ).getArrayData()
-    }
+  def getCoordinateValues( variable: CDSVariable ): ( Array[Double],  Option[CalendarDateRange] ) = coordAxis.getAxisType match {
+    case AxisType.Time => getTimeCoordinateValues( variable.getTimeValues )
+    case _ => ( getSpaceCoordinateValues, None )
   }
+
+  def getTimeCoordinateValues( tvals: List[Long] ): ( Array[Double],  Option[CalendarDateRange] ) = {
+    val tvalsSection: Array[Long] = _optRange.fold (tvals.toArray) ( range => tvals.subList( range.first, range.last+1 ).toList.toArray[Long] )
+    val start_date: CalendarDate = CalendarDate.of( tvalsSection.head )
+    val duration: Long = tvalsSection.last - tvalsSection.head
+    ( tvalsSection.map (_.toDouble), Some( new CalendarDateRange( start_date, duration ) ) )
+  }
+
+  def getSpaceCoordinateValues: Array[Double] =  _optRange match {
+    case Some(range) => CDDoubleArray.factory( coordAxis.read(List(range)) ).getArrayData()
+    case None =>        CDDoubleArray.factory( coordAxis.read() ).getArrayData()
+  }
+
 
   //  def getDateIndex( date: CalendarDate): Int = {
   //    _data.find
@@ -321,23 +327,23 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   }
 
   def findTimeIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): Option[ ( Int, Int ) ] = {
-    if( (start_date.getMillis > _dates.last.getMillis) || (end_date.getMillis < _dates.head.getMillis) ) { return None }
+    if( (start_date.getMillis > _data.last ) || (end_date.getMillis < _data.head ) ) { return None }
     var start_index_opt: Option[Int] = None
     var end_index_opt: Option[Int] = None
     var dateIndex: Int = -1
-    breakable { for( date <- _dates ) {
+    breakable { for( date <- _data ) {
       dateIndex += 1
       start_index_opt match {
         case None =>
-          if( date.getMillis >= start_date.getMillis ) { start_index_opt = Some(dateIndex) }
-          if( date.getMillis >= end_date.getMillis )   { end_index_opt = Some(dateIndex) }
+          if( date >= start_date.getMillis ) { start_index_opt = Some(dateIndex) }
+          if( date >= end_date.getMillis )   { end_index_opt = Some(dateIndex) }
         case Some( start_index ) => end_index_opt match {
-          case None => if( date.getMillis >= end_date.getMillis ) { end_index_opt = Some(dateIndex-1) }
+          case None => if( date >= end_date.getMillis ) { end_index_opt = Some(dateIndex-1) }
           case Some( end_index ) => break
         }
       }
     }}
-    return Option( ( start_index_opt.getOrElse(_dates.length-1), end_index_opt.getOrElse(_dates.length-1) ) )
+    return Option( ( start_index_opt.getOrElse(_data.length-1), end_index_opt.getOrElse(_data.length-1) ) )
   }
 
   //  def getTimeIndexBounds( startval: String, endval: String, strict: Boolean = false) = getTimeCoordIndex( startval, BoundsRole.Start, strict).flatMap(startIndex =>
@@ -427,7 +433,7 @@ object GridSection extends Loggable {
     val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = variable.getCoordinateAxis(dim)) yield coord_axis_opt match {
       case Some( coord_axis ) =>
         val domainAxisOpt: Option[DomainAxis] = roiOpt.flatMap(axes => axes.find(da => da.matches( coord_axis.getAxisType )))
-        Some( new GridCoordSpec(idim, grid, coord_axis, domainAxisOpt) )
+        Some( new GridCoordSpec(idim, variable, coord_axis, domainAxisOpt) )
       case None =>
         logger.warn( "Unrecognized coordinate axis: %s, axes = ( %s )".format( dim, grid.getCoordinateAxes.map( axis => axis.getFullName ).mkString(", ") )); None
     }

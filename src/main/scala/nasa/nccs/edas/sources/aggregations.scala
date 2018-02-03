@@ -20,9 +20,9 @@ import scala.io.Source
 import scala.util.matching.Regex
 
 case class FileInput( index: Int, startTime: Long, startIndex: Int, nRows: Int, path: String ) {
-  val test = 0
   def getTimeRange: ma2.Range = new ma2.Range( startIndex, startIndex + nRows )
   def intersects( range: ma2.Range ) = getTimeRange.intersects( range )
+  def getTimeValues( dt: Long ): IndexedSeq[Long] = ( 0 until nRows ) map ( index => startTime + index * dt )
 }
 
 case class Variable( name: String, shape: Array[Int], dims: String, units: String ) {
@@ -327,6 +327,11 @@ case class Aggregation( dataPath: String, files: List[FileInput], variables: Lis
     <aggregation id={id}>
       { variables.map( _.toXml ) }
     </aggregation>
+  }
+
+  def getTimeValues: List[Long] = {
+    val dt: Long = parms.getOrElse("time.step", throw new Exception(s"Missing 'time.step' in Aggregation for ${dataPath}")).toLong
+    files.flatMap( _.getTimeValues(dt) )
   }
 
   def getBasePath: Option[String] = parms.get("base.path")

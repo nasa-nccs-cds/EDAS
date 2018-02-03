@@ -50,6 +50,7 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
       logger.info( "Found missing attribute value: " + s )
       s.toFloat
   }
+  def getTimeValues: List[Long] = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") ).getTimeValues
   def getAttributeValue( key: String, default_value: String  ) =  attributes.get( key ) match { case Some( attr_val ) => attr_val.toString.split('=').last.replace('"',' ').trim; case None => default_value }
   val description = getAttributeValue( "description", "" )
   val units = getAttributeValue( "units", "" )
