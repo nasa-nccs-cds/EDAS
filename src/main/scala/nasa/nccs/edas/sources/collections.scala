@@ -136,13 +136,13 @@ object CollectionLoadServices {
   def loadCollection( collId: String ): Boolean = { startService.loadCollection(collId) }
 }
 
-class Collection( val ctype: String, val id: String, val dataPath: String, val aggregations: Map[String,Aggregation], val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List(), optGrid: Option[CDGrid] = None ) extends Serializable with Loggable {
+class Collection( val ctype: String, val id: String, val dataPath: String, val aggregations: Map[String,Aggregation], val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List() ) extends Serializable with Loggable {
   val collId = id // Collections.idToFile(id)
   private val variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()
   override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
   def isEmpty = dataPath.isEmpty
   lazy val varNames = vars.map( varStr => varStr.split(Array(':', '|')).head )
-  lazy val grid = optGrid.getOrElse( CDGrid(id, dataPath) )
+  lazy val grid = CDGrid( id, dataPath )
   def getAggregation( varName: String ): Option[Aggregation] = aggregations.get(varName)
 
   def isMeta: Boolean = dataPath.endsWith(".csv")

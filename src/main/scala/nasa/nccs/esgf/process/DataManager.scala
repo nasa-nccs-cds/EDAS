@@ -6,7 +6,7 @@ import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, Work
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
 import nasa.nccs.edas.rdd._
-import nasa.nccs.edas.sources.{Collection, Collections}
+import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
@@ -153,12 +153,11 @@ object RangeCacheMaker {
   def create: mutable.Map[String, (Int,Int)] = { new mutable.HashMap[String, (Int,Int)] with mutable.SynchronizedMap[String, (Int,Int)] {} }
 }
 
-class GridCoordSpec( val index: Int, variable: CDSVariable, val coordAxis: CoordinateAxis1D, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {
+class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val coordAxis: CoordinateAxis1D, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {
   val t0 = System.nanoTime()
-  val grid: CDGrid = variable.collection.grid
-  private val _optRange: Option[ma2.Range] = getAxisRange( coordAxis, domainAxisOpt )
+  private val _optRange: Option[ma2.Range] = getAxisRange
   val t1 = System.nanoTime()
-  private val ( _data, _dateRangeOpt ) = getCoordinateValues( variable )
+  private val ( _data, _dateRangeOpt ) = getCoordinateValues
   val t2 = System.nanoTime()
   private val _rangeCache: concurrent.TrieMap[String, (Int,Int)] = concurrent.TrieMap.empty[String, (Int,Int)]
   val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
@@ -191,7 +190,7 @@ class GridCoordSpec( val index: Int, variable: CDSVariable, val coordAxis: Coord
   override def toString: String = "GridCoordSpec{id=%s units=%s cfName=%s type=%s start=%f end=%f length=%d}".format(getAxisName,getUnits,getCFAxisName,getAxisType.toString,getStartValue,getEndValue,getLength)
   def getMetadata: Map[String,String] = Map( "id"->getAxisName, "units"->getUnits, "name"->getCFAxisName, "type"->getAxisType.toString, "start"->getStartValue.toString, "end"->getEndValue.toString, "length"->getLength.toString )
 
-  private def getAxisRange( coordAxis: CoordinateAxis, domainAxisOpt: Option[DomainAxis]): Option[ma2.Range] = {
+  private def getAxisRange: Option[ma2.Range] = {
     val axis_len = coordAxis.getShape(0)
     domainAxisOpt match {
       case Some( domainAxis ) =>  domainAxis.system match {
@@ -260,8 +259,8 @@ class GridCoordSpec( val index: Int, variable: CDSVariable, val coordAxis: Coord
     case x =>  ( List.empty[CalendarDate], None )
   }
 
-  def getCoordinateValues( variable: CDSVariable ): ( Array[Double],  Option[CalendarDateRange] ) = coordAxis.getAxisType match {
-    case AxisType.Time => getTimeCoordinateValues( variable.getTimeValues )
+  def getCoordinateValues: ( Array[Double],  Option[CalendarDateRange] ) = coordAxis.getAxisType match {
+    case AxisType.Time => getTimeCoordinateValues( agg.timeValues )
     case _ => ( getSpaceCoordinateValues, None )
   }
 
@@ -327,11 +326,12 @@ class GridCoordSpec( val index: Int, variable: CDSVariable, val coordAxis: Coord
   }
 
   def findTimeIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): Option[ ( Int, Int ) ] = {
-    if( (start_date.getMillis > _data.last ) || (end_date.getMillis < _data.head ) ) { return None }
+    val dates = agg.timeValues
+    if( (start_date.getMillis > dates.last ) || (end_date.getMillis < dates.head ) ) { return None }
     var start_index_opt: Option[Int] = None
     var end_index_opt: Option[Int] = None
     var dateIndex: Int = -1
-    breakable { for( date <- _data ) {
+    breakable { for( date <- dates ) {
       dateIndex += 1
       start_index_opt match {
         case None =>
@@ -343,7 +343,7 @@ class GridCoordSpec( val index: Int, variable: CDSVariable, val coordAxis: Coord
         }
       }
     }}
-    return Option( ( start_index_opt.getOrElse(_data.length-1), end_index_opt.getOrElse(_data.length-1) ) )
+    return Option( ( start_index_opt.getOrElse(dates.length-1), end_index_opt.getOrElse(dates.length-1) ) )
   }
 
   //  def getTimeIndexBounds( startval: String, endval: String, strict: Boolean = false) = getTimeCoordIndex( startval, BoundsRole.Start, strict).flatMap(startIndex =>
@@ -433,7 +433,7 @@ object GridSection extends Loggable {
     val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = variable.getCoordinateAxis(dim)) yield coord_axis_opt match {
       case Some( coord_axis ) =>
         val domainAxisOpt: Option[DomainAxis] = roiOpt.flatMap(axes => axes.find(da => da.matches( coord_axis.getAxisType )))
-        Some( new GridCoordSpec(idim, variable, coord_axis, domainAxisOpt) )
+        Some( new GridCoordSpec(idim, variable.collection.grid, variable.getAggregation, coord_axis, domainAxisOpt) )
       case None =>
         logger.warn( "Unrecognized coordinate axis: %s, axes = ( %s )".format( dim, grid.getCoordinateAxes.map( axis => axis.getFullName ).mkString(", ") )); None
     }
@@ -773,7 +773,7 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
     val fragRoiOpt = data_source.fragIdOpt.map( fragId => DataFragmentKey(fragId).getRoi )
     val domain_mdata = domain_container_opt.map( _.metadata ).getOrElse(Map.empty)
     val optSection: Option[ma2.Section] = fragRoiOpt match { case Some(roi) => Some(roi); case None => targetGrid.grid.getSection }
-    val optDomainSect: Option[ma2.Section] = domain_container_opt.flatMap( domain_container => targetGrid.grid.getSubSection(domain_container.axes) )
+    val optDomainSect: Option[ma2.Section] = domain_container_opt.flatMap( domain_container => targetGrid.grid.getSubSection( domain_container.axes ) )
     val fragSpec: Option[DataFragmentSpec] = optSection map { section =>
       new DataFragmentSpec( dataContainer.uid, variable.name, variable.collection, data_source.fragIdOpt, Some(targetGrid), variable.dims.mkString(","),
         variable.units, variable.getAttributeValue("long_name", variable.fullname), section, optDomainSect, domain_mdata, variable.missing, variable.getAttributeValue("numDataFiles", "1").toInt, maskOpt, data_source.autoCache )

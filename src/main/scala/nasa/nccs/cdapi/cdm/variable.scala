@@ -7,7 +7,7 @@ import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection}
-import nasa.nccs.edas.sources.Collection
+import nasa.nccs.edas.sources.{Aggregation, Collection}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
 import ucar.{ma2, nc2, unidata}
 import ucar.nc2.dataset.{CoordinateAxis1D, _}
@@ -50,7 +50,8 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
       logger.info( "Found missing attribute value: " + s )
       s.toFloat
   }
-  def getTimeValues: List[Long] = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") ).getTimeValues
+  def getAggregation: Aggregation = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") )
+  def getTimeValues: List[Long] = getAggregation.timeValues
   def getAttributeValue( key: String, default_value: String  ) =  attributes.get( key ) match { case Some( attr_val ) => attr_val.toString.split('=').last.replace('"',' ').trim; case None => default_value }
   val description = getAttributeValue( "description", "" )
   val units = getAttributeValue( "units", "" )

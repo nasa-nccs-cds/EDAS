@@ -19,18 +19,18 @@ import scala.collection.mutable
 import scala.io.Source
 import scala.util.matching.Regex
 
-case class FileInput( index: Int, startTime: Long, startIndex: Int, nRows: Int, path: String ) {
+case class FileInput( index: Int, startTime: Long, startIndex: Int, nRows: Int, path: String ) extends Serializable {
   def getTimeRange: ma2.Range = new ma2.Range( startIndex, startIndex + nRows )
   def intersects( range: ma2.Range ) = getTimeRange.intersects( range )
   def getTimeValues( dt: Long ): IndexedSeq[Long] = ( 0 until nRows ) map ( index => startTime + index * dt )
 }
 
-case class Variable( name: String, shape: Array[Int], dims: String, units: String ) {
+case class Variable( name: String, shape: Array[Int], dims: String, units: String ) extends Serializable {
   def toXml: xml.Elem = { <variable name={name} shape={shape.mkString(",")} dims={dims} units={units} /> }
   override def toString: String = s"name:${name};shape:${shape.mkString(",")};dims:${dims};units:${units}"
 }
-case class Coordinate( name: String, shape: Array[Int], dims: String="", units: String="" )
-case class Axis( name: String, ctype: String, shape: Array[Int], units: String, minval: Float, maxval: Float )
+case class Coordinate( name: String, shape: Array[Int], dims: String="", units: String="" ) extends Serializable
+case class Axis( name: String, ctype: String, shape: Array[Int], units: String, minval: Float, maxval: Float ) extends Serializable
 
 object AggregationWriter extends Loggable {
   val ncExtensions = Seq( "nc", "nc4")
@@ -319,6 +319,7 @@ object AggregationWriter extends Loggable {
 }
 
 case class Aggregation( dataPath: String, files: List[FileInput], variables: List[Variable], coordinates: List[Coordinate], axes: List[Axis], parms: Map[String,String] ) {
+  lazy val timeValues: List[Long] = _getTimeValues
   def findVariable( varName: String ): Option[Variable] =
     variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
@@ -329,7 +330,7 @@ case class Aggregation( dataPath: String, files: List[FileInput], variables: Lis
     </aggregation>
   }
 
-  def getTimeValues: List[Long] = {
+  private def _getTimeValues: List[Long] = {
     val dt: Long = parms.getOrElse("time.step", throw new Exception(s"Missing 'time.step' in Aggregation for ${dataPath}")).toLong
     files.flatMap( _.getTimeValues(dt) )
   }

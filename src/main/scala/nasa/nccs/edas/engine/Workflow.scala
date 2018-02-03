@@ -5,6 +5,7 @@ import nasa.nccs.cdapi.cdm.{EDASDirectDataInput, OperationInput, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.kernels._
 import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
+import nasa.nccs.edas.sources.Aggregation
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
 import nasa.nccs.utilities.{DAGNode, Loggable, ProfilingTool}
@@ -505,9 +506,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       case Some(domainIds) => domainIds.split(",").flatMap( request.getDomain(_) ).toIndexedSeq
       case None => return Some( IndexedSeq.empty[ma2.Section] )
     }
-    //    logger.info( "OPT DOMAIN Arg: " + optargs.getOrElse( "domain", "None" ) )
-    //    logger.info( "OPT Domains: " + domains.map(_.toString).mkString( ", " ) )
-    Some( domains.map(dc => targetGrid.grid.getSubSection(dc.axes) match {
+    Some( domains.map(dc => targetGrid.grid.getSubSection( dc.axes ) match {
       case Some(section) => section
       case None => return None
     }))
@@ -523,7 +522,6 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
         else  None
       }
   }
-  def getOpCDSectionIntersection(targetGrid: TargetGrid, node: WorkflowNode): Option[ CDSection ] = getOpSectionIntersection(targetGrid, node).map( CDSection( _ ) )
 }
 
 
