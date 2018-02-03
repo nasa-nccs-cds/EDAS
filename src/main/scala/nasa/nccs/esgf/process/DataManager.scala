@@ -153,11 +153,16 @@ object RangeCacheMaker {
 }
 
 class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: CoordinateAxis1D, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {
+  val t0 = System.nanoTime()
   private val _optRange: Option[ma2.Range] = getAxisRange( coordAxis, domainAxisOpt )
   private lazy val ( _dates, _dateRangeOpt ) = getCalendarDates
   private val _data: Array[Double] = getCoordinateValues
   private val _rangeCache: concurrent.TrieMap[String, (Int,Int)] = concurrent.TrieMap.empty[String, (Int,Int)]
   val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
+  val enable_range_caching = true;
+  logger.info( s" Created GridCoordSpec ${coordAxis.getFullName}, time = ${(System.nanoTime() - t0) / 1.0E9} sec" )
+
+
   def getData: Array[Double] = _data
   def getAxisType: AxisType = coordAxis.getAxisType
 
@@ -166,7 +171,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
     case None => logger.warn( "Using %s for CFAxisName".format(coordAxis.getShortName) ); coordAxis.getShortName
   }
 
-  val enable_range_caching = true;
+
   def cacheRange( startDate: CalendarDate, endDate: CalendarDate, range: (Int,Int) ): Unit = _cacheRange( _rangeKey(startDate,endDate), range )
   def getCachedRange( startDate: CalendarDate, endDate: CalendarDate ): Option[(Int,Int)] = _getCachedRange( _rangeKey(startDate,endDate) )
   private def _getCachedRange( key: String ): Option[(Int,Int)] = _rangeCache.get(key)
@@ -243,8 +248,11 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
 
   def getCalendarDates: ( List[CalendarDate], Option[CalendarDateRange] ) = coordAxis.getAxisType match {
     case AxisType.Time =>
+      val t0 = System.nanoTime()
       val timeAxis = getTimeAxis
-      ( timeAxis.getCalendarDates.toList, Some( timeAxis.getCalendarDateRange ) )
+      val rv = ( timeAxis.getCalendarDates.toList, Some( timeAxis.getCalendarDateRange ) )
+      logger.info(s" %GC% GetCalendarDates: ${(System.nanoTime() - t0) / 1.0E9} sec" )
+      rv
     case x =>  ( List.empty[CalendarDate], None )
   }
 
