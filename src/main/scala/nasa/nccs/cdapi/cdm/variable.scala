@@ -87,8 +87,11 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
   }
   def getCoordinateAxis( axisType: AxisType ): Option[CoordinateAxis1D] = collection.grid.findCoordinateAxis(axisType).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) )
   def getCoordinateAxis( name: String ): Option[CoordinateAxis1D] = {
+    val t0 = System.nanoTime()
     val caxis = collection.grid.findCoordinateAxis(name)
-    caxis.map( CDSVariable.toCoordAxis1D(_) )
+    val axis = caxis.map( CDSVariable.toCoordAxis1D(_) )
+    logger.info( s"getCoordinateAxis: ${name}, time: ${(System.nanoTime()-t0)/1.0E9}")
+    axis
   }
   def getCoordinateAxesList = collection.grid.getCoordinateAxes
 }
@@ -96,8 +99,7 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
 class InputConsumer( val operation: OperationContext ) {
   private var _satiated = false;
   val id: String = operation.identifier
-  def satiate(): Unit =
-    _satiated = true;
+  def satiate(): Unit = _satiated = true;
   def satiated: Boolean = _satiated
 }
 

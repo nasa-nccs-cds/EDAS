@@ -133,16 +133,6 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
     case None =>inputs.head._2 map { _.roi }
   }
 
-
-
-  def getTargetGridSpec( kernelCx: KernelContext ) : String = {
-    if( kernelCx.crsOpt.getOrElse("").indexOf('~') > 0 ) { "gspec:" + kernelCx.crsOpt.get }
-    else {
-      val targetGrid: TargetGrid = getTargetGridOpt(kernelCx.grid.uid).getOrElse (throw new Exception ("Undefined Grid in domain partition for kernel " + kernelCx.operation.identifier) )
-      targetGrid.getGridFile
-    }
-  }
-
   def getTimingReport(label: String): String = profiler.toString
   def logTimingReport(label: String): Unit = logger.info(getTimingReport(label))
 

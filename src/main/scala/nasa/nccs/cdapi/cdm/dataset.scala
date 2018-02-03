@@ -253,6 +253,8 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
         logger.error("Can't find Coordinate Axis " + name + " in gridFile " + gridFilePath + " , error = " + err.toString);
         logger.error(err.getStackTrace.mkString("\n"))
         None
+    } finally {
+      gridDS.close
     }
   }
 
@@ -278,6 +280,8 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
         logger.error("Can't create time Coordinate Axis for collection " + name + " in gridFile " + gridFilePath + ", error = " + err.toString);
         logger.error(err.getStackTrace.mkString("\n"))
         None
+    } finally {
+      gridDS.close
     }
   }
 
@@ -296,6 +300,8 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
         logger.error("Can't find Coordinate Axis with type: " + atype.toString + " in gridFile " + gridFilePath + ", error = " + err.toString);
         logger.error(err.getStackTrace.mkString("\n"))
         None
+    } finally {
+      gridDS.close
     }
   }
 
@@ -307,6 +313,7 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
     if (result.isEmpty) {
       logger.error("Can't find variable %s in collection %s (%s), variable names = [ %s ] ".format(varShortName, name, gridFilePath, variables.map(_.getShortName).mkString(", ")))
     }
+    ncDataset.close
     result
   }
 

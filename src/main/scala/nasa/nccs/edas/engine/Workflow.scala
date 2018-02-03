@@ -251,7 +251,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       generateProduct( executor )
     }
     val t1 =  System.nanoTime()
-    requestCx.logTimingReport("Executed task request " + request.name)
+//    requestCx.logTimingReport("Executed task request " + request.name)
     println(s"\n\n  ****** Executed request ${requestCx.jobId}, elapsed time = ${(t1 - t0) / 1.0E9} sec  ****** \n\n")
     productNodeOpts.flatten
   }
