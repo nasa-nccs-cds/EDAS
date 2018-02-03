@@ -156,11 +156,14 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val coordAxis: Coordinate
   val t0 = System.nanoTime()
   private val _optRange: Option[ma2.Range] = getAxisRange( coordAxis, domainAxisOpt )
   private lazy val ( _dates, _dateRangeOpt ) = getCalendarDates
+  val t1 = System.nanoTime()
   private val _data: Array[Double] = getCoordinateValues
+  val t2 = System.nanoTime()
   private val _rangeCache: concurrent.TrieMap[String, (Int,Int)] = concurrent.TrieMap.empty[String, (Int,Int)]
   val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
+  val t3 = System.nanoTime()
   val enable_range_caching = true;
-  logger.info( s" Created GridCoordSpec ${coordAxis.getFullName}, time = ${(System.nanoTime() - t0) / 1.0E9} sec" )
+  logger.info( s" Created GridCoordSpec ${coordAxis.getFullName}, times = ${(t1-t0)/1.0E9} ${(t2-t1)/1.0E9} ${(t3-t2)/1.0E9} sec" )
 
 
   def getData: Array[Double] = _data
