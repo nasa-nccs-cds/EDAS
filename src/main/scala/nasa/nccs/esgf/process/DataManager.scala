@@ -157,16 +157,13 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   val t0 = System.nanoTime()
   private val _optRange: Option[ma2.Range] = getAxisRange
   val t1 = System.nanoTime()
-  private val ( _data, _dateRangeOpt ) = getCoordinateValues
+  val _data = getCoordinateValues
   val t2 = System.nanoTime()
   private val _rangeCache: concurrent.TrieMap[String, (Int,Int)] = concurrent.TrieMap.empty[String, (Int,Int)]
   val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
   val t3 = System.nanoTime()
   val enable_range_caching = true;
   logger.info( s" Created GridCoordSpec ${coordAxis.getFullName}, times = ${(t1-t0)/1.0E9} ${(t2-t1)/1.0E9} ${(t3-t2)/1.0E9} sec" )
-
-
-  def getData: Array[Double] = _data
   def getAxisType: AxisType = coordAxis.getAxisType
 
   def getCFAxisName: String = Option(coordAxis.getAxisType) match  {
@@ -183,7 +180,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
 
   def getAxisName: String = coordAxis.getFullName
   def getIndexRange: Option[ma2.Range] = _optRange
-  def getLength: Int = _data.length
+  def getLength: Int = _optRange.fold( 0 )( _.length )
   def getStartValue: Double = bounds(0)
   def getEndValue: Double = bounds(1)
   def toXml: xml.Elem = <axis id={getAxisName} units={getUnits} cfName={getCFAxisName} type={getAxisType.toString} start={getStartValue.toString} end={getEndValue.toString} length={getLength.toString} > </axis>
@@ -217,69 +214,29 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
 
   def getBounds( range: ma2.Range ): Array[Double] = Array( _data(range.first), _data(range.last ) )
 
-  def getBoundedCalDate( caldate: CalendarDate, role: BoundsRole.Value, strict: Boolean = false): Option[CalendarDate] = _dateRangeOpt match {
-    case None => Some(caldate)
-    case Some(date_range) => {
-      if (!date_range.includes(caldate)) {
-        if (strict) throw new IllegalStateException("CDS2-CDSVariable: Time value %s outside of time bounds %s".format(caldate.toString, date_range.toString))
-        else {
-          if (role == BoundsRole.Start) {
-            if (caldate.isAfter(date_range.getEnd)) {
-              logger.error("Start time value %s > time range %s".format(caldate.toString, date_range.toString))
-              None
-            } else {
-              val startDate: CalendarDate = date_range.getStart
-              logger.warn("Time value %s outside of time bounds %s, resetting value to range start date %s".format(caldate.toString, date_range.toString, startDate.toString))
-              Some(startDate)
-            }
-          } else {
-            if (caldate.isBefore(date_range.getStart)) {
-              logger.error("End time value %s < time range %s".format(caldate.toString, date_range.toString))
-              None
-            } else {
-              val endDate: CalendarDate = date_range.getEnd
-              logger.warn("Time value %s outside of time bounds %s, resetting value to range end date %s".format(caldate.toString, date_range.toString, endDate.toString))
-              Some(endDate)
-            }
-          }
-        }
-      } else {
-        Some(caldate)
-      }
-    }
+//  def getCalendarDates: ( List[CalendarDate], Option[CalendarDateRange] ) = coordAxis.getAxisType match {
+//    case AxisType.Time =>
+//      val t0 = System.nanoTime()
+//      val timeAxis = getTimeAxis
+//      val rv = ( timeAxis.getCalendarDates.toList, Some( timeAxis.getCalendarDateRange ) )
+//      logger.info(s" %GC% GetCalendarDates: ${(System.nanoTime() - t0) / 1.0E9} sec" )
+//      rv
+//    case x =>  ( List.empty[CalendarDate], None )
+//  }
+
+  def getCoordinateValues: Array[Double] = coordAxis.getAxisType match {
+    case AxisType.Time => getTimeCoordinateValues
+    case _ => getSpaceCoordinateValues
   }
 
-  def getCalendarDates: ( List[CalendarDate], Option[CalendarDateRange] ) = coordAxis.getAxisType match {
-    case AxisType.Time =>
-      val t0 = System.nanoTime()
-      val timeAxis = getTimeAxis
-      val rv = ( timeAxis.getCalendarDates.toList, Some( timeAxis.getCalendarDateRange ) )
-      logger.info(s" %GC% GetCalendarDates: ${(System.nanoTime() - t0) / 1.0E9} sec" )
-      rv
-    case x =>  ( List.empty[CalendarDate], None )
-  }
 
-  def getCoordinateValues: ( Array[Double],  Option[CalendarDateRange] ) = coordAxis.getAxisType match {
-    case AxisType.Time => getTimeCoordinateValues( agg.timeValues )
-    case _ => ( getSpaceCoordinateValues, None )
-  }
 
-  def getTimeCoordinateValues( tvals: List[Long] ): ( Array[Double],  Option[CalendarDateRange] ) = {
-    val tvalsSection: Array[Long] = _optRange.fold (tvals.toArray) ( range => tvals.subList( range.first, range.last+1 ).toList.toArray[Long] )
-    val start_date: CalendarDate = CalendarDate.of( tvalsSection.head )
-    val duration: Long = tvalsSection.last - tvalsSection.head
-    ( tvalsSection.map (_.toDouble), Some( new CalendarDateRange( start_date, duration ) ) )
-  }
+  def getTimeCoordinateValues: Array[Double] = _optRange.fold (agg.timeValues) ( range => agg.timeValues.subList( range.first, range.last+1 ).toList ).map( _.toDouble ).toArray
 
   def getSpaceCoordinateValues: Array[Double] =  _optRange match {
     case Some(range) => CDDoubleArray.factory( coordAxis.read(List(range)) ).getArrayData()
     case None =>        CDDoubleArray.factory( coordAxis.read() ).getArrayData()
   }
-
-
-  //  def getDateIndex( date: CalendarDate): Int = {
-  //    _data.find
-  //  }
 
   def getUnits: String =  coordAxis.getAxisType match { case AxisType.Time => EDTime.units case x => coordAxis.getUnitsString }
 
