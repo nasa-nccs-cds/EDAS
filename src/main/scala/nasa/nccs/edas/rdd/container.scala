@@ -329,7 +329,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
       section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) =>
         if (index == 0) { new ma2.Range("time", range.first + slice_index, range.first + slice_index) } else { range } }
     }
-    CDSection.fromString(section).map(_.toSection).flatMap( global_sect => getLocalTimeSection( global_sect, fileInput.startIndex ) ) match {
+    CDSection.fromString(section).map(_.toSection).flatMap( global_sect => getLocalTimeSection( global_sect, fileInput.firstRowIndex ) ) match {
       case None => IndexedSeq.empty[CDTimeSlice]
       case Some(opSect) =>
         val t0 = System.nanoTime()
@@ -354,11 +354,11 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
           val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
           val data_shape: Array[Int] = data_section.getShape
           val section = variable.getShapeAsSection
-          val arraySpec = ArraySpec( missing, data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.startIndex ), data_array)
+          val arraySpec = ArraySpec( missing, data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array)
           CDTimeSlice( time_bounds(0), time_bounds(1), Map(varId -> arraySpec))
         }
         dataset.close()
-        if (fileInput.index % 500 == 0) {
+        if (fileInput.fileIndex % 500 == 0) {
           val sample_array = slices.head.elements.head._2.data
           val datasize: Int = sample_array.length
           val dataSample = sample_array(datasize / 2)
@@ -408,7 +408,7 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
   val global_shape = variable.getShape()
   val metadata = variable.getAttributes.map(_.toString).mkString(", ")
   val missing: Float = getMissing( variable )
-  val varSection = new ma2.Section( getOrigin( fileInput.startIndex, global_shape.length ), global_shape )
+  val varSection = new ma2.Section( getOrigin( fileInput.firstRowIndex, global_shape.length ), global_shape )
   val interSect: ma2.Section = optSection.fold( varSection )( _.intersect(varSection) )
   val file_timeAxis: CoordinateAxis1DTime = NetcdfDatasetMgr.getTimeAxis( dataset ) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
   val dates: List[CalendarDate] = file_timeAxis.section( interSect.shiftOrigin(varSection).getRange(0) ).getCalendarDates.toList

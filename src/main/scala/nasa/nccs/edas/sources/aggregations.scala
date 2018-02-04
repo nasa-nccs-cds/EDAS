@@ -19,10 +19,10 @@ import scala.collection.mutable
 import scala.io.Source
 import scala.util.matching.Regex
 
-case class FileInput( index: Int, startTime: Long, startIndex: Int, nRows: Int, path: String ) extends Serializable {
-  def getTimeRange: ma2.Range = new ma2.Range( startIndex, startIndex + nRows )
-  def intersects( range: ma2.Range ) = getTimeRange.intersects( range )
-  def getTimeValues( dt: Long ): IndexedSeq[Long] = ( 0 until nRows ) map ( index => startTime + index * dt )
+case class FileInput(fileIndex: Int, startTime: Long, firstRowIndex: Int, nRows: Int, path: String ) extends Serializable {
+  def lastRowIndex = firstRowIndex + nRows - 1
+  def getRowIndexRange: ma2.Range = new ma2.Range( firstRowIndex, firstRowIndex + nRows )
+  def intersects( row_index_range: ma2.Range ) = getRowIndexRange.intersects( row_index_range )
 }
 
 case class Variable( name: String, shape: Array[Int], dims: String, units: String ) extends Serializable {
@@ -318,10 +318,42 @@ object AggregationWriter extends Loggable {
     args.map((arg: File) => getNcURIs(arg)).flatten
 }
 
-case class Aggregation( dataPath: String, files: List[FileInput], variables: List[Variable], coordinates: List[Coordinate], axes: List[Axis], parms: Map[String,String] ) {
-  lazy val timeValues: List[Long] = _getTimeValues
-  def findVariable( varName: String ): Option[Variable] =
-    variables.find( _.name.equals(varName) )
+object BoundedIndex {
+  val InRange = 0
+  val AboveRange = 1
+  val BelowRange = -1
+}
+case class BoundedIndex( index: Long, boundsStatus: Int ) {
+  def isBelowRange: Boolean = boundsStatus ==  BoundedIndex.BelowRange
+  def isAboveRange: Boolean = boundsStatus ==  BoundedIndex.AboveRange
+}
+
+case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: Int, boundsStatus: Int ) {
+  val time_duration = lastValue - firstValue
+  def dt = time_duration / nRows
+  def toRowIndex( time_value: Long ): BoundedIndex = boundsStatus match {
+    case BoundedIndex.InRange => BoundedIndex((time_value - firstValue) / dt, boundsStatus)
+    case BoundedIndex.AboveRange => BoundedIndex( firstRow, boundsStatus)
+    case BoundedIndex.BelowRange => BoundedIndex( 0, boundsStatus )
+  }
+
+  def toTimeValue( row_index: Int ): BoundedIndex = boundsStatus match {
+    case BoundedIndex.InRange => BoundedIndex(firstValue + (row_index - firstRow) * dt, boundsStatus)
+    case BoundedIndex.AboveRange => BoundedIndex( lastValue, boundsStatus)
+    case BoundedIndex.BelowRange => BoundedIndex( firstValue, boundsStatus )
+  }
+
+}
+
+case class Aggregation( dataPath: String, files: Array[FileInput], variables: List[Variable], coordinates: List[Coordinate], axes: List[Axis], parms: Map[String,String] ) {
+  val time_start: Long = parms.getOrElse("time.start", throw new Exception("Aggregation file format error; missing 'time.start' parameter")).toLong
+  val time_end: Long = parms.getOrElse("time.end", throw new Exception("Aggregation file format error; missing 'time.end' parameter")).toLong
+  val time_nrows: Int = parms.getOrElse("time.nrows", throw new Exception("Aggregation file format error; missing 'time.nrows' parameter")).toInt
+  val time_duration = time_end - time_start
+  val dt: Long = time_duration/time_nrows
+  val ave_file_dt: Long = time_duration/files.length
+  val ave_file_nrows: Long = time_nrows/files.length
+  def findVariable( varName: String ): Option[Variable] = variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
   def getFilebase: FileBase = new FileBase( files, parms.get("base.path") )
   def toXml: xml.Elem = {
@@ -330,24 +362,64 @@ case class Aggregation( dataPath: String, files: List[FileInput], variables: Lis
     </aggregation>
   }
 
-  private def _getTimeValues: List[Long] = {
-    val dt: Long = parms.getOrElse("time.step", throw new Exception(s"Missing 'time.step' in Aggregation for ${dataPath}")).toLong
-    files.flatMap( _.getTimeValues(dt) )
+  private def _estimate_file_index_from_time_value( time_value: Long ): Int = ( ( time_value - time_start ) / ave_file_dt ).toInt
+  private def _estimate_file_index_from_row_index( row_index: Int ): Int = ( row_index / ave_file_nrows ).toInt
+
+  private def _fileInputsFromTimeValue( time_value: Long, estimated_file_index: Int ): TimeRange = {
+    if( time_value < time_start ) { return  TimeRange( time_start, time_start, 0, 0, BoundedIndex.BelowRange )  }
+    if( time_value >= time_end ) { return TimeRange( time_end, time_end, time_nrows-1, 0, BoundedIndex.AboveRange ) }
+    val file0 = files( estimated_file_index )
+    if (time_value < file0.startTime) { return _fileInputsFromTimeValue(time_value, estimated_file_index - 1) }
+    if( estimated_file_index == ( files.length - 1 ) ) {
+      TimeRange(file0.startTime, time_end, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange )
+    } else {
+      val file1 = files(estimated_file_index + 1)
+      if (time_value >= file1.startTime) { return _fileInputsFromTimeValue(time_value, estimated_file_index + 1) }
+      TimeRange(file0.startTime, file1.startTime, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange)
+    }
+  }
+
+  private def _fileInputsFromRowIndex( row_index: Int, estimated_file_index: Int ): TimeRange = {
+    if( row_index < 0 ) { return  TimeRange( time_start, time_start, 0, 0, BoundedIndex.BelowRange )  }
+    if( row_index >= time_nrows ) { return TimeRange( time_end, time_end, time_nrows-1, 0, BoundedIndex.AboveRange  ) }
+    val file0 = files( estimated_file_index )
+    if (row_index < file0.firstRowIndex) { return _fileInputsFromRowIndex(row_index, estimated_file_index - 1) }
+    if( estimated_file_index == ( files.length - 1 ) ) {
+      TimeRange(file0.startTime, time_end, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange)
+    } else {
+      val file1 = files(estimated_file_index + 1)
+      if (row_index >= file1.firstRowIndex ) { return _fileInputsFromRowIndex(row_index, estimated_file_index + 1) }
+      TimeRange(file0.startTime, file1.startTime, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange)
+    }
+  }
+
+  def fileInputsFromTimeValue( time_value: Long ): TimeRange = _fileInputsFromTimeValue( time_value, _estimate_file_index_from_time_value(time_value) )
+  def fileInputsFromRowIndex( row_index: Int ): TimeRange = _fileInputsFromRowIndex( row_index, _estimate_file_index_from_row_index(row_index) )
+
+  def toRowIndex( time_value: Long ): BoundedIndex = fileInputsFromTimeValue( time_value ).toRowIndex( time_value )
+  def toTimeValue( row_index: Int ): BoundedIndex = fileInputsFromRowIndex( row_index ).toTimeValue( row_index )
+
+  def findRowIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): Option[ ( Int, Int ) ] = {
+    val ( t0, t1 ) = ( start_date.getMillis, end_date.getMillis )
+    val startIndex: BoundedIndex = fileInputsFromTimeValue( t0 ).toRowIndex( t0 )
+    val endIndex: BoundedIndex = fileInputsFromTimeValue( t1 ).toRowIndex( t1 )
+    if( endIndex.isBelowRange || startIndex.isAboveRange ) { None }
+    else { Some((startIndex.index.toInt, endIndex.index.toInt )) }
   }
 
   def getBasePath: Option[String] = parms.get("base.path")
 
   def getFilePath( fileInput: FileInput ): String = getBasePath.fold( fileInput.path )( basePath => Paths.get( basePath, fileInput.path ).toString )
 
-  def getRangeMap(time_index: Int = 0, fileInputs: List[FileInput] = files, rangeMap: List[(ma2.Range,FileInput)] = List.empty[(ma2.Range,FileInput)]  ): List[(ma2.Range,FileInput)] = {
+  def getRangeMap(time_index: Int = 0, fileInputs: Array[FileInput] = files, rangeMap: List[(ma2.Range,FileInput)] = List.empty[(ma2.Range,FileInput)]  ): List[(ma2.Range,FileInput)] = {
     if( fileInputs.isEmpty ) { rangeMap } else { getRangeMap(time_index + fileInputs.head.nRows + 1, fileInputs.tail,  rangeMap ++ List( new ma2.Range( time_index, time_index + fileInputs.head.nRows ) -> fileInputs.head ) ) }
   }
 
-  def getIntersectingFiles( sectionString: String ): List[FileInput] = CDSection.fromString(sectionString).map( _.toSection.getRange(0) ).fold( files )( timeRange => files.filter( _.intersects(timeRange) ) )
+  def getIntersectingFiles( sectionString: String ): Array[FileInput] = CDSection.fromString(sectionString).map( _.toSection.getRange(0) ).fold( files )( timeRange => files.filter( _.intersects(timeRange) ) )
 
 }
 
-class FileBase( val files: List[FileInput], val optBasePath: Option[String] ) extends Loggable with Serializable {
+class FileBase( val files: Array[FileInput], val optBasePath: Option[String] ) extends Loggable with Serializable {
   val nFiles = files.length
   val dt: Float = ( files.last.startTime - files.head.startTime ) / ( nFiles - 1 ).toFloat
   val startTime = files.head.startTime
@@ -373,7 +445,7 @@ object Aggregation extends Loggable {
 
   def read(aggFile: String): Aggregation = {
     val source = Source.fromFile(aggFile)
-    val files = mutable.ListBuffer.empty[FileInput]
+    var files: mutable.ArrayBuffer[FileInput] = null
     val variables = mutable.ListBuffer.empty[Variable]
     val coordinates = mutable.ListBuffer.empty[Coordinate]
     val axes = mutable.ListBuffer.empty[Axis]
@@ -382,12 +454,13 @@ object Aggregation extends Loggable {
     try {
       for (line <- source.getLines; toks = line.split(';').map(_.trim) ) try{ toks(0) match {
         case "F" =>
+          assert( files != null, s"Missing or misordered 'num.files' parameter in Aggregation file: ${aggFile}")
           val nTS = toks(2).toInt
-          val base_path_opt = None // parameters.get("base.path").map( _.toString )
-          val file_path = base_path_opt.fold( toks(3) )( base_path => Paths.get( base_path, toks(3) ).toString  )
-          files += FileInput(files.length, EDTime.toMillis(toks(1).toDouble), timeIndex, nTS, file_path )
+          files += FileInput(files.length, EDTime.toMillis(toks(1).toDouble), timeIndex, nTS, toks(3) )
           timeIndex += nTS
-        case "P" =>  parameters += toks(1) -> toks(2)
+        case "P" =>
+          parameters += toks(1) -> toks(2)
+          if( toks(1).equals("num.files") ) { files = new mutable.ArrayBuffer[FileInput]( toks(2).toInt ) }
         case "V" => variables += Variable( toks(1), toks(2).split(",").map( _.toInt ), toks(3), toks(4) )
         case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( _.toInt ) )
         case "A" => axes += Axis( toks(1), toks(2), toks(3).split(",").map( _.toInt ), toks(4), toks(5).toFloat, toks(6).toFloat )
@@ -397,7 +470,7 @@ object Aggregation extends Loggable {
           logger.error( s"Error '${err.getMessage}' processing line in Aggregation file => ${line} " )
       }
     } finally { source.close() }
-    Aggregation( aggFile, files.toList, variables.toList, coordinates.toList, axes.toList, parameters.toMap )
+    Aggregation( aggFile, files.toArray, variables.toList, coordinates.toList, axes.toList, parameters.toMap )
   }
 
   def write( aggregationId: String, files: IndexedSeq[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {
@@ -418,10 +491,11 @@ object Aggregation extends Loggable {
     logger.info("Processing %d files with %d workers".format(fileHeaders.length, nReadProcessors))
     val bw = new BufferedWriter(new FileWriter(aggFile))
     val fileMetadata = FileMetadata( fileHeaders.head.filePath )
-    val dt: Long = EDTime.toMillis( fileHeaders.last.endValue - fileHeaders.head.startValue )  / fileHeaders.length
     val ( basePath, reducedFileheaders ) = FileHeader.extractSubpath( fileHeaders )
     try {
-      bw.write( s"P; time.step; $dt\n")
+      bw.write( s"P; time.nrows; ${fileHeaders.length}\n")
+      bw.write( s"P; time.start; ${fileHeaders.head.startValue}\n")
+      bw.write( s"P; time.end; ${fileHeaders.last.endValue}\n")
       bw.write( s"P; base.path; $basePath\n")
       bw.write( s"P; num.files; ${reducedFileheaders.length}\n")
       for (attr <- fileMetadata.attributes ) { bw.write( s"P; ${attr.getFullName}; ${attr.getStringValue} \n") }

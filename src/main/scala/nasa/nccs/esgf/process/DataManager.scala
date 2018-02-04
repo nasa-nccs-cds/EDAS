@@ -157,10 +157,9 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   val t0 = System.nanoTime()
   private val _optRange: Option[ma2.Range] = getAxisRange
   val t1 = System.nanoTime()
-  val _data = getCoordinateValues
+  lazy val _spatialCoordValues = getSpaceCoordinateValues
   val t2 = System.nanoTime()
   private val _rangeCache: concurrent.TrieMap[String, (Int,Int)] = concurrent.TrieMap.empty[String, (Int,Int)]
-  val bounds: Array[Double] = getAxisBounds( coordAxis, domainAxisOpt)
   val t3 = System.nanoTime()
   val enable_range_caching = true;
   logger.info( s" Created GridCoordSpec ${coordAxis.getFullName}, times = ${(t1-t0)/1.0E9} ${(t2-t1)/1.0E9} ${(t3-t2)/1.0E9} sec" )
@@ -181,8 +180,8 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   def getAxisName: String = coordAxis.getFullName
   def getIndexRange: Option[ma2.Range] = _optRange
   def getLength: Int = _optRange.fold( 0 )( _.length )
-  def getStartValue: Double = bounds(0)
-  def getEndValue: Double = bounds(1)
+  def getStartValue: Double = if( coordAxis.getAxisType == AxisType.Time ) { agg.time_start } else { _spatialCoordValues.head }
+  def getEndValue: Double = if( coordAxis.getAxisType == AxisType.Time ) { agg.time_end } else { _spatialCoordValues.last }
   def toXml: xml.Elem = <axis id={getAxisName} units={getUnits} cfName={getCFAxisName} type={getAxisType.toString} start={getStartValue.toString} end={getEndValue.toString} length={getLength.toString} > </axis>
   override def toString: String = "GridCoordSpec{id=%s units=%s cfName=%s type=%s start=%f end=%f length=%d}".format(getAxisName,getUnits,getCFAxisName,getAxisType.toString,getStartValue,getEndValue,getLength)
   def getMetadata: Map[String,String] = Map( "id"->getAxisName, "units"->getUnits, "name"->getCFAxisName, "type"->getAxisType.toString, "start"->getStartValue.toString, "end"->getEndValue.toString, "length"->getLength.toString )
@@ -202,36 +201,11 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
       case None => Some( new ma2.Range( getCFAxisName, 0, axis_len-1, 1 ) )
     }
   }
-  private def getAxisBounds( coordAxis: CoordinateAxis, domainAxisOpt: Option[DomainAxis]): Array[Double] = domainAxisOpt match {
-    case Some( domainAxis ) =>  domainAxis.system match {
-      case asys if asys.startsWith("val")|| asys.startsWith("time") =>
-        Array( _data(0), _data(_data.length-1) )
-      case asys if asys.startsWith("ind") => Array( domainAxis.start.toDouble, domainAxis.end.toDouble, 1 )
-      case _ => throw new IllegalStateException("CDSVariable: Illegal system value in axis bounds: " + domainAxis.system)
-    }
-    case None => Array( coordAxis.getMinValue, coordAxis.getMaxValue )
+
+  def getBounds( range: ma2.Range ): Array[Double]  = coordAxis.getAxisType match {
+    case AxisType.Time => Array(agg.toTimeValue(range.first).index, agg.toTimeValue(range.last).index)
+    case x => Array( _spatialCoordValues(range.first), _spatialCoordValues(range.last) )
   }
-
-  def getBounds( range: ma2.Range ): Array[Double] = Array( _data(range.first), _data(range.last ) )
-
-//  def getCalendarDates: ( List[CalendarDate], Option[CalendarDateRange] ) = coordAxis.getAxisType match {
-//    case AxisType.Time =>
-//      val t0 = System.nanoTime()
-//      val timeAxis = getTimeAxis
-//      val rv = ( timeAxis.getCalendarDates.toList, Some( timeAxis.getCalendarDateRange ) )
-//      logger.info(s" %GC% GetCalendarDates: ${(System.nanoTime() - t0) / 1.0E9} sec" )
-//      rv
-//    case x =>  ( List.empty[CalendarDate], None )
-//  }
-
-  def getCoordinateValues: Array[Double] = coordAxis.getAxisType match {
-    case AxisType.Time => getTimeCoordinateValues
-    case _ => getSpaceCoordinateValues
-  }
-
-
-
-  def getTimeCoordinateValues: Array[Double] = _optRange.fold (agg.timeValues) ( range => agg.timeValues.subList( range.first, range.last+1 ).toList ).map( _.toDouble ).toArray
 
   def getSpaceCoordinateValues: Array[Double] =  _optRange match {
     case Some(range) => CDDoubleArray.factory( coordAxis.read(List(range)) ).getArrayData()
@@ -282,26 +256,8 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
     findTimeIndicesFromCalendarDates( startDate, endDate ) map { case (start,end) => new ma2.Range( getCFAxisName, start, end ) }
   }
 
-  def findTimeIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): Option[ ( Int, Int ) ] = {
-    val dates = agg.timeValues
-    if( (start_date.getMillis > dates.last ) || (end_date.getMillis < dates.head ) ) { return None }
-    var start_index_opt: Option[Int] = None
-    var end_index_opt: Option[Int] = None
-    var dateIndex: Int = -1
-    breakable { for( date <- dates ) {
-      dateIndex += 1
-      start_index_opt match {
-        case None =>
-          if( date >= start_date.getMillis ) { start_index_opt = Some(dateIndex) }
-          if( date >= end_date.getMillis )   { end_index_opt = Some(dateIndex) }
-        case Some( start_index ) => end_index_opt match {
-          case None => if( date >= end_date.getMillis ) { end_index_opt = Some(dateIndex-1) }
-          case Some( end_index ) => break
-        }
-      }
-    }}
-    return Option( ( start_index_opt.getOrElse(dates.length-1), end_index_opt.getOrElse(dates.length-1) ) )
-  }
+  def findTimeIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): Option[ ( Int, Int ) ] = agg.findRowIndicesFromCalendarDates( start_date, end_date )
+
 
   //  def getTimeIndexBounds( startval: String, endval: String, strict: Boolean = false) = getTimeCoordIndex( startval, BoundsRole.Start, strict).flatMap(startIndex =>
   //    getTimeCoordIndex( endval, BoundsRole.End, strict ).map( endIndex =>
@@ -419,7 +375,6 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
     axes.find( axis => axis.getCFAxisName.toLowerCase.equals(cfAxisName.toLowerCase) )
   }
   def getRank = axes.length
-  def getBounds: Option[Array[Double]] = getAxisSpec("x").flatMap( xaxis => getAxisSpec("y").map( yaxis => Array( xaxis.bounds(0), yaxis.bounds(0), xaxis.bounds(1), yaxis.bounds(1) )) )
   def toXml: xml.Elem = <grid> { axes.map(_.toXml) } </grid>
   def getGridSpec: String  = grid.getGridSpec
   def getGridFile: String  = grid.getGridFile

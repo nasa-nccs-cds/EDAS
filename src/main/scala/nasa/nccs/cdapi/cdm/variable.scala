@@ -51,7 +51,6 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
       s.toFloat
   }
   def getAggregation: Aggregation = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") )
-  def getTimeValues: List[Long] = getAggregation.timeValues
   def getAttributeValue( key: String, default_value: String  ) =  attributes.get( key ) match { case Some( attr_val ) => attr_val.toString.split('=').last.replace('"',' ').trim; case None => default_value }
   val description = getAttributeValue( "description", "" )
   val units = getAttributeValue( "units", "" )
