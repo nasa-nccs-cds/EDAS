@@ -332,7 +332,7 @@ case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: I
   val time_duration = lastValue - firstValue
   def dt = time_duration / nRows
   def toRowIndex( time_value: Long ): BoundedIndex = boundsStatus match {
-    case BoundedIndex.InRange => BoundedIndex((time_value - firstValue) / dt, boundsStatus)
+    case BoundedIndex.InRange => BoundedIndex( firstRow + (time_value - firstValue) / dt, boundsStatus)
     case BoundedIndex.AboveRange => BoundedIndex( firstRow, boundsStatus)
     case BoundedIndex.BelowRange => BoundedIndex( 0, boundsStatus )
   }
@@ -375,7 +375,7 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     } else {
       val file1 = files(estimated_file_index + 1)
       if (time_value >= file1.startTime) { return _fileInputsFromTimeValue(time_value, estimated_file_index + 1) }
-      logger.info( s" MappingTimeValue: estimated_file_index=${estimated_file_index} startTime=${file0.startTime} row=${file0.firstRowIndex} date=${CalendarDate.of(file1.startTime).toString}")
+      logger.info( s" MappingTimeValue: estimated_file_index=${estimated_file_index} startTime=${file0.startTime} timeRange=[${time_start},${time_end}], row=${file0.firstRowIndex} date=${CalendarDate.of(file1.startTime).toString}")
       TimeRange(file0.startTime, file1.startTime, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange)
     }
   }
