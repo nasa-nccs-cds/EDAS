@@ -276,7 +276,8 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
   private var _active = true;
 
   def loadCollection( requested_collId: String ): Boolean = {
-    val collectionFiles: List[File] = collPath.toFile.listFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
+    val colFiles: Array[File] =  Option( collPath.toFile.listFiles ).getOrElse( Array.empty[File] )
+    val collectionFiles: List[File] = colFiles.filter(_.isFile).toList.filter { file => ncmlExtensions.exists(file.getName.toLowerCase.endsWith(_)) }
     for ( collectionFile <- collectionFiles;  fileName = collectionFile.getName;  collId = fileName.substring(0, fileName.lastIndexOf('.')).toLowerCase; if collId.equalsIgnoreCase(requested_collId) ) {
       if( ! Collections.hasCollection(collId) ) {
         val loader = new CollectionLoader(collId,collectionFile)
