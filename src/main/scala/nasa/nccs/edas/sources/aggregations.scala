@@ -346,8 +346,8 @@ case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: I
 }
 
 case class Aggregation( dataPath: String, files: Array[FileInput], variables: List[Variable], coordinates: List[Coordinate], axes: List[Axis], parms: Map[String,String] ) {
-  val time_start: Long = parms.getOrElse("time.start", throw new Exception("Aggregation file format error; missing 'time.start' parameter")).toLong
-  val time_end: Long = parms.getOrElse("time.end", throw new Exception("Aggregation file format error; missing 'time.end' parameter")).toLong
+  val time_start: Long = EDTime.toMillis( parms.getOrElse("time.start", throw new Exception("Aggregation file format error; missing 'time.start' parameter")).toDouble )
+  val time_end: Long = EDTime.toMillis( parms.getOrElse("time.end", throw new Exception("Aggregation file format error; missing 'time.end' parameter")).toDouble )
   val time_nrows: Int = parms.getOrElse("time.nrows", throw new Exception("Aggregation file format error; missing 'time.nrows' parameter")).toInt
   val time_duration = time_end - time_start
   val dt: Long = time_duration/time_nrows
