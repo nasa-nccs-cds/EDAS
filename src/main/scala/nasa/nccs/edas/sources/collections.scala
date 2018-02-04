@@ -487,8 +487,8 @@ object Collections extends XmlResource with Loggable {
       Some(collection)
     } catch {
       case err: Exception =>
-        val msg = err.getMessage
-        logger.error(s"Error reading collection ${id} from ncml ${collectionFilePath}: ${msg}")
+        logger.error(s"Error reading collection ${id} from ncml ${collectionFilePath}: ${err.toString}, cause: ${Option(err.getCause).fold("")(_.toString)}")
+        logger.error( Option(err.getCause).getOrElse(err).getStackTrace.map( _.toString ).mkString( "\n\t") )
         None
     }
   }
