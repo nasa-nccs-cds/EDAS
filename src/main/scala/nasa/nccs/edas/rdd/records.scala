@@ -157,7 +157,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val t3 = System.nanoTime()
     val (vsum,n,tsum) = mapResult.treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
     logger.info(s" @UT@  ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
-    val t4 = System.nanoTime()/ 1.0E9
+    val t4 = System.nanoTime()
     val nParts = timesliceRDD.getNumPartitions
     logger.info(f" @UT@ Completed test, nFiles = ${files.length}, parallization time = ${(t1 - t0)/1.0E9} sec, input time = ${(t2 - t1)/1.0E9} sec, compute time = ${(t3 - t2)/1.0E9} sec, reduce time = ${(t4 - t3)/1.0E9} sec, total time = ${(t4 - t0)/1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
     new WPSMergedEventReport( Seq.empty )

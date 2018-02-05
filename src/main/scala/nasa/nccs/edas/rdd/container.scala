@@ -450,7 +450,7 @@ class RDDContainer extends Loggable {
 
   class RDDVault( init_value: TimeSliceRDD ) {
     private var _rdd = init_value; _rdd.cache()
-    def update( new_rdd: TimeSliceRDD ): Unit = { _rdd.unpersist(false); _rdd = new_rdd; _rdd.cache }
+    def update( new_rdd: TimeSliceRDD ): Unit = { _rdd = new_rdd; _rdd.cache }
     def map( f: (TimeSliceRDD) => TimeSliceRDD ): Unit = update( f(_rdd) )
     def value = _rdd
     def clear: Unit = _rdd.unpersist(false)
