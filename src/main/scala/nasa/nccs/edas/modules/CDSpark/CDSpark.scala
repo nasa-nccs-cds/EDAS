@@ -223,7 +223,7 @@ class ave extends SingularRDDKernel(Map.empty) {
   val description = "REDUCTION OPERATION: Computes (weighted) means of element values from input variable data over specified axes and roi"
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
-    val t0 = System.nanoTime
+    val t0 = System.nanoTime/ 1.0E9
     val axes = context.config("axes","")
     val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId) match {
@@ -239,7 +239,8 @@ class ave extends SingularRDDKernel(Map.empty) {
               context.operation.rid + "_WEIGHTS_" -> ArraySpec(weights_sum_masked.missing, weights_sum_masked.shape, input_data.origin, weights_sum_masked.getData ))
       case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
     })
-    logger.info("Executed Kernel %s map op, input = %s, time = %.4f s".format(name,  id, (System.nanoTime - t0) / 1.0E9))
+    val t1 = System.nanoTime/ 1.0E9
+    logger.info("T[%.2f] Executed Kernel %s map op, input = %s, time = %.4f s".format(t0, name,  id, (t1 - t0) ))
     context.addTimestamp( "Map Op complete" )
     val rv = CDTimeSlice( inputs.startTime, inputs.endTime, inputs.elements ++ elems )
     logger.info("Returning result value")

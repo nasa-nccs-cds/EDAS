@@ -25,10 +25,10 @@ import scala.io.Source
 // case class ArraySpecs( arrays: scala.collection.Map[String,ArraySpec]  )
 
 case class ArraySpec1(missing: Float, shape: Array[Int], data: Array[Float] )
-case class CDTimeSlice1( timestamp: java.sql.Timestamp, arrays: scala.collection.Map[String,ArraySpec1] ) {
+case class CDTimeSlice1( timestamp: java.sql.Timestamp, arrays: scala.collection.Map[String,ArraySpec1] ) extends Loggable {
 
   def ave: (Float, Int, Float) = {
-    val t0 = System.nanoTime()
+    val t0 = System.nanoTime()/1.0E9f
     val arraySpec = arrays.head._2
     val fltArray = arraySpec.data
     val ma2Array =  ma2.Array.factory( ma2.DataType.FLOAT, Array( fltArray.length ), fltArray )
@@ -44,8 +44,9 @@ case class CDTimeSlice1( timestamp: java.sql.Timestamp, arrays: scala.collection
         count = count + 1
       }
     }
-    val t1 = System.nanoTime()
-    ( result, count, (t1-t0)/1.0E9f )
+    val dt = System.nanoTime()/1.0E9f - t0
+    logger.info( f"T[$t0%.2f]: AVE(${ma2Array.getSize}): dt=$dt%.2f")
+    ( result, count, dt )
   }
 }
 
@@ -126,13 +127,14 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     //    val dataFile = "/dass/adm/edas/cache/collections/NCML/cip_merra_mth-tas.ncml"
     //    val varName = "tas"
     val inputVar: DataContainer = optRequest.map( _.variableMap.head._2 ).getOrElse( throw new Exception("Missing input"))
-    logger.info( "Starting read test")
+
     //    val dataFile = "/Users/tpmaxwel/.edas/cache/collections/NCML/merra_daily.ncml"
 
     val section = ""
     //    val dataset = NetcdfDataset.openDataset(dataFile)
 
-    val t0 = System.nanoTime()
+    val t0 = System.nanoTime()/ 1.0E9
+    logger.info( s"Starting read test, t0 = $t0%.2f")
     val agg = Aggregation.read( dataFile )
     val files: Array[FileInput] = agg.files
     val config = optRequest.fold(Map.empty[String,String])( _.operations.head.getConfiguration )
@@ -146,10 +148,10 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     logger.info( s"Running util tests, mode: '${mode}', nfiles = ${files.length}, nPartitions=${nPartitions}, nNodes=${nNodes}, usedCoresPerNode=${usedCoresPerNode}")
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
 //    filesDataset.count()
-    val t1 = System.nanoTime()
+    val t1 = System.nanoTime()/ 1.0E9
     val timesliceRDD: RDD[CDTimeSlice1] = filesDataset.mapPartitions( TimeSliceMultiIterator1( varId1, varName1, section, tslice, basePath ) )
 //    timesliceRDD.count()
-    val t2 = System.nanoTime()
+    val t2 = System.nanoTime()/ 1.0E9
     if( mode.equals("ave") ) {
       val (vsum,n,tsum) = timesliceRDD.map( _.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
       logger.info(s"\n ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
@@ -164,9 +166,9 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     } else {
       throw new Exception( "Unrecognized mode: " + mode )
     }
-    val t3 = System.nanoTime()
+    val t3 = System.nanoTime()/ 1.0E9
     val nParts = timesliceRDD.getNumPartitions
-    logger.info(s"\n\nCompleted test, nFiles = ${files.length}, parallization time = ${(t1 - t0) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, compute time = ${(t3 - t2) / 1.0E9} sec, total time = ${(t3 - t0) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
+    logger.info(f"\n\nCompleted test, nFiles = ${files.length}, parallization time = ${(t1 - t0)}%.2f sec, input time = ${(t2 - t1)}%.2f sec, compute time = ${(t3 - t2)}%.2f sec, total time = ${(t3 - t0)}%.2f sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
 
     new WPSMergedEventReport( Seq.empty )
   }

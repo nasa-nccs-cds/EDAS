@@ -192,10 +192,10 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   }
 
   def executeKernel(executor: WorkflowExecutor ):  KernelExecutionResult = {
-    val t0 = System.nanoTime()
+    val t0 = System.nanoTime()/1.0E9
     val root_node = executor.rootNode
     val kernelCx: KernelContext  = root_node.getKernelContext( executor )
-    kernelCx.addTimestamp( s"Executing Kernel for node ${root_node.getNodeId}" )
+    kernelCx.addTimestamp( f" T[$t0%.2f] Executing Kernel for node ${root_node.getNodeId}" )
     val isIterative = false // executor.hasBatch(1)
     var batchIndex = 0
     var aggResult = TimeSliceCollection.empty
@@ -216,10 +216,10 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       }
     } while ( { batchIndex+=1; false; /* executor.hasBatch(batchIndex) */ } )
 
-    val t1 = System.nanoTime()
+    val t1 = System.nanoTime()/1.0E9
     if( Try( executor.requestCx.config("unitTest","false").toBoolean ).getOrElse(false)  ) { root_node.kernel.cleanUp(); }
-    val t2 = System.nanoTime()
-    logger.info(s"********** Completed Execution of Kernel[%s(%s)]: %s , total time = %.3f sec, cleanUp time = %.3f sec   ********** \n".format(root_node.kernel.name,root_node.kernel.id, root_node.operation.identifier, (t2 - t0) / 1.0E9, (t2 - t1) / 1.0E9))
+    val t2 = System.nanoTime()/1.0E9
+    logger.info(s"********** Completed Execution of Kernel[%s(%s)]: %s , total time = %.3f sec, cleanUp time = %.3f sec   ********** \n".format(root_node.kernel.name,root_node.kernel.id, root_node.operation.identifier, (t2 - t0) , (t2 - t1) ))
     KernelExecutionResult( aggResult, resultFiles.toList )
   }
 
