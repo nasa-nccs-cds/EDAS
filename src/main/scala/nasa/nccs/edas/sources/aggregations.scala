@@ -471,7 +471,8 @@ object Aggregation extends Loggable {
         case _ => Unit
       } } catch {
         case err: Exception =>
-          logger.error( s"Error '${err.getMessage}' processing line in Aggregation file => ${line} " )
+          logger.error( s"Error '${err.toString}' processing line in Aggregation file => ${line} " )
+          logger.error( err.getStackTrace.map( _.toString ).mkString("\n\t") )
       }
     } finally { source.close() }
     Aggregation( aggFile, files.toArray, variables.toList, coordinates.toList, axes.toList, parameters.toMap )
