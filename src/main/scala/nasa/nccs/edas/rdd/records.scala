@@ -45,7 +45,7 @@ case class CDTimeSlice1( timestamp: java.sql.Timestamp, arrays: scala.collection
       }
     }
     val dt = System.nanoTime()/1.0E9f - t0
-    logger.info( f" %UT% T[$t0%.2f]: AVE(${ma2Array.getSize}): dt=$dt%.2f")
+    logger.info( f" @UT@ T[$t0%.2f]: AVE(${ma2Array.getSize}): dt=$dt%.2f")
     ( result, count, dt )
   }
 }
@@ -134,7 +134,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     //    val dataset = NetcdfDataset.openDataset(dataFile)
 
     val t0 = System.nanoTime()/ 1.0E9
-    logger.info( s" %UT% Starting read test, t0 = $t0%.2f")
+    logger.info( s" @UT@ Starting read test, t0 = $t0%.2f")
     val agg = Aggregation.read( dataFile )
     val files: Array[FileInput] = agg.files
     val config = optRequest.fold(Map.empty[String,String])( _.operations.head.getConfiguration )
@@ -145,7 +145,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val missing = Float.NaN
     val tslice = config.getOrElse( "tslice", "prefetch" )
     val parallelism = Math.min( files.length, nPartitions )
-    logger.info( s"Running util tests, mode: '${mode}', nfiles = ${files.length}, nPartitions=${nPartitions}, nNodes=${nNodes}, usedCoresPerNode=${usedCoresPerNode}")
+    logger.info( s" @UT@ Running util tests, mode: '${mode}', nfiles = ${files.length}, nPartitions=${nPartitions}, nNodes=${nNodes}, usedCoresPerNode=${usedCoresPerNode}")
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
 //    filesDataset.count()
     val t1 = System.nanoTime()/ 1.0E9
@@ -154,7 +154,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val t2 = System.nanoTime()/ 1.0E9
     if( mode.equals("ave") ) {
       val (vsum,n,tsum) = timesliceRDD.map( _.ave ).treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
-      logger.info(s" %UT%  ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
+      logger.info(s" @UT@  ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
     } else if( mode.equals("double")  ) {
       val timesliceRDD1: RDD[CDTimeSlice1] = filesDataset.mapPartitions( TimeSliceMultiIterator1( varId2, varName2, section, tslice, basePath ) )
       timesliceRDD.cache().count()
@@ -168,7 +168,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     }
     val t3 = System.nanoTime()/ 1.0E9
     val nParts = timesliceRDD.getNumPartitions
-    logger.info(f" %UT% Completed test, nFiles = ${files.length}, parallization time = ${(t1 - t0)}%.2f sec, input time = ${(t2 - t1)}%.2f sec, compute time = ${(t3 - t2)}%.2f sec, total time = ${(t3 - t0)}%.2f sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
+    logger.info(f" @UT@ Completed test, nFiles = ${files.length}, parallization time = ${(t1 - t0)}%.2f sec, input time = ${(t2 - t1)}%.2f sec, compute time = ${(t3 - t2)}%.2f sec, total time = ${(t3 - t0)}%.2f sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
 
     new WPSMergedEventReport( Seq.empty )
   }
