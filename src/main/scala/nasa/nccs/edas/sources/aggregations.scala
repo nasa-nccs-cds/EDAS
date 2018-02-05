@@ -465,9 +465,9 @@ object Aggregation extends Loggable {
         case "P" =>
           parameters += toks(1) -> toks(2)
           if( toks(1).equals("num.files") ) { files = new mutable.ArrayBuffer[FileInput]( toks(2).toInt ) }
-        case "V" => variables += Variable( toks(1), toks(2).split(",").map( _.toInt ), toks(3), toks(4) )
-        case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( _.toInt ) )
-        case "A" => axes += Axis( toks(1), toks(2), toks(3).split(",").map( _.toInt ), toks(4), toks(5).toFloat, toks(6).toFloat )
+        case "V" => variables += Variable( toks(1), toks(2).split(",").map( toInt ), toks(3), toks(4) )
+        case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( toInt ) )
+        case "A" => axes += Axis( toks(1), toks(2), toks(3).split(",").map( toInt ), toks(4), toFloat(toks(5)), toFloat(toks(6)) )
         case _ => Unit
       } } catch {
         case err: Exception =>
@@ -477,6 +477,9 @@ object Aggregation extends Loggable {
     } finally { source.close() }
     Aggregation( aggFile, files.toArray, variables.toList, coordinates.toList, axes.toList, parameters.toMap )
   }
+
+  def toInt( tok: String ): Int = if( tok.isEmpty ) { 0 } else { tok.toInt }
+  def toFloat( tok: String ): Float = if( tok.isEmpty ) { 0 } else { tok.toFloat }
 
   def write( aggregationId: String, files: IndexedSeq[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {
     try {
