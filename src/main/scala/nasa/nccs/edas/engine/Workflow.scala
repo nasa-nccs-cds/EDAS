@@ -273,10 +273,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 
   def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  TimeSliceCollection  = {
     processInputs( executor.rootNode, executor, kernelCx, batchIndex)
-    kernelCx.addTimestamp (s"Executing Map Op, Batch ${batchIndex.toString} for node ${ executor.rootNode.getNodeId}", true)
-    val result: TimeSliceCollection =  executor.execute( this, kernelCx, batchIndex )
-    logger.info("\n\n ----------------------- END mapReduce: NODE %s, operation: %s, batch id: %d, contents = [ %s ]  -------\n".format( executor.rootNode.getNodeId, kernelCx.operation.identifier, batchIndex, executor.contents.mkString(", ") ) )
-    result
+    executor.execute( this, kernelCx, batchIndex )
   }
 
 //  def streamMapReduceBatchRecursive( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[CDTimeSlice]] =
@@ -437,11 +434,9 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 //  }
 
   def processInputs(node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
-    kernelContext.addTimestamp( "Generating RDD for inputs: " + executor.workflowCx.inputs.keys.mkString(", "), true )
     executor.getInputs(node).foreach { case (uid, opinput) =>
       opinput.processInput( uid, this, node, executor, kernelContext, batchIndex)
     }
-    logger.info("\n\n ----------------------- Completed RDD input map[%d], thread: %s -------\n".format(batchIndex, Thread.currentThread().getId ))
   }
 
 //  def getTimeReferenceRdd(rddMap: Map[String,RDD[CDTimeSlice]], kernelContext: KernelContext ): Option[RDD[CDTimeSlice]] = kernelContext.trsOpt map { trs =>

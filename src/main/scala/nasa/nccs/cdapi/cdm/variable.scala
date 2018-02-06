@@ -229,9 +229,7 @@ class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,St
     val gridRefInput: OperationDataInput =  executor.getGridRefInput.getOrElse( throw new Exception("No grid ref input found for domainRDDPartition") )
     val varSpec = getRDDVariableSpec(uid)
     val opSection: Option[CDSection] = workflow.getOpSectionIntersection( gridRefInput.getGrid, node ).map( CDSection(_) )
-    logger.info("\n\n ----------------------- BEGIN addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]   -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(executor), executor.contents.mkString(", ") ) )
     executor.addFileInputs( workflow.executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex )
-    logger.info("\n\n ----------------------- END addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]  -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(executor), executor.contents.mkString(", ") ) )
   }
 }
 
