@@ -1,12 +1,13 @@
 package nasa.nccs.utilities
 
 import java.lang.management.ManagementFactory
-import org.apache.spark._
 
-import scala.collection.mutable
+import org.apache.spark._
+import org.apache.spark.util.CollectionAccumulator
+import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 object TimeStamp {
-  def apply( startTime: Long, label: String ): TimeStamp = { new TimeStamp( (System.currentTimeMillis()-startTime)/1.0E3f, label ) }
 
   def getWorkerSignature: String = {
     val thread: Thread = Thread.currentThread()
@@ -16,39 +17,20 @@ object TimeStamp {
   }
 }
 
-class TimeStamp( val elapasedJobTime: Float, val label: String ) extends Serializable with Ordered [TimeStamp] with Loggable {
+case class TimeStamp( elapasedJobTime: Float, duration: Float, label: String ) extends Serializable with Ordered [TimeStamp] with Loggable {
   import TimeStamp._
   val tid = s"TimeStamp[${getWorkerSignature}]"
-  val sval = s"TIME[${getWorkerSignature}] { ${elapasedJobTime.toString} => $label }"
+  val sval = s"TIME[${getWorkerSignature}] { ${elapasedJobTime.toString} ( ${duration.toString} )  => $label }"
   override def toString(): String = { sval }
   def compare (that: TimeStamp) = { elapasedJobTime.compareTo( that.elapasedJobTime ) }
 }
 
-object Duration {
-  def apply( elapsedTime: Long, label: String): TimeStamp = {
-    new Duration( elapsedTime / 1.0E3f, label )
-  }
-}
-
-
-class Duration( elapasedJobTime: Float, label: String ) extends TimeStamp( elapasedJobTime, label ) {
-  import TimeStamp._
-  override val sval = s"DURATION,${getWorkerSignature},$label,${elapasedJobTime.toString}"
-}
-
 object ProfilingTool extends Loggable {
-
-  implicit def listAccum[TimeStamp]: AccumulableParam[mutable.ListBuffer[TimeStamp], TimeStamp] =
-    new AccumulableParam[mutable.ListBuffer[TimeStamp], TimeStamp] {
-      def addInPlace(t1: mutable.ListBuffer[TimeStamp], t2: mutable.ListBuffer[TimeStamp]) : mutable.ListBuffer[TimeStamp] = { t1 ++= t2; t1 }
-      def addAccumulator(t1: mutable.ListBuffer[TimeStamp], t2: TimeStamp) : mutable.ListBuffer[TimeStamp] = { t1 += t2; t1 }
-      def zero(t: mutable.ListBuffer[TimeStamp]) : mutable.ListBuffer[TimeStamp] = { new mutable.ListBuffer[TimeStamp]() }
-    }
 
   def apply( sparkContext: SparkContext ): ProfilingTool = {
     val startTimeMS: Long = System.currentTimeMillis()
-    val starting_timestamp = new TimeStamp( 0f, "Job Start")
-    val timestamps: Accumulable[mutable.ListBuffer[TimeStamp], TimeStamp] = sparkContext.accumulable(new mutable.ListBuffer[TimeStamp]())
+    val starting_timestamp = new TimeStamp( 0f, 0f, "Job Start")
+    val timestamps: CollectionAccumulator[TimeStamp] = new CollectionAccumulator[TimeStamp]()
     val profiler = new ProfilingTool( startTimeMS, timestamps )
     logger.info( s"Starting profiler in sparkContext '${sparkContext.applicationId}' with master '${sparkContext.master}' ")
     profiler.timestamp("Startup")
@@ -56,16 +38,19 @@ object ProfilingTool extends Loggable {
   }
 }
 
-class ProfilingTool( val startTime: Long, timestamps: Accumulable[mutable.ListBuffer[TimeStamp], TimeStamp] ) extends Serializable with Loggable {
+class ProfilingTool( val startTime: Long, timestamps: CollectionAccumulator[TimeStamp] ) extends Serializable with Loggable {
+  private var _lastTime = startTime
+
   def timestamp( label: String, log: Boolean = false ): Unit = {
-    timestamps += TimeStamp( startTime, label )
-    if( log ) { logger.info(label) }
-  }
-  def duration( label: String, elapsedTime: Long, log: Boolean = false ): Unit = {
-    timestamps += Duration( elapsedTime, label )
+    val current = System.currentTimeMillis()
+    val elapasedJobTime = (current-startTime)/1.0E3f
+    val duration = (current-_lastTime)/1.0E3f
+    timestamps.add( TimeStamp( startTime, duration, label ) )
+    _lastTime = current
     if( log ) { logger.info(label) }
   }
 
-  def getTimestamps: List[TimeStamp] = timestamps.value.sorted.toList
+
+  def getTimestamps: List[TimeStamp] = timestamps.value.toList.sortBy( _.elapasedJobTime )
   override def toString = " *** TIMESTAMPS: ***\n\n\t" + getTimestamps.map( _.toString() ).mkString("\n\t") + "\n\n"
 }

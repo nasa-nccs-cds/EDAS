@@ -349,10 +349,9 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
   }
 
   def reduce(op: FastMaskedArray.ReduceOp, axes: Array[Int], initVal: Float = 0f ): FastMaskedArray = {
-    val t0 = System.nanoTime()
     val rank = array.getRank
     val iter: IndexIterator = array.getIndexIterator()
-    val rv = if( axes.length == rank ) {
+    if( axes.length == rank ) {
       var result = initVal
       var result_shape = Array.fill[Int](rank)(1)
       while ( iter.hasNext ) {
@@ -375,10 +374,6 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
       }
       target_array
     }
-    val dt = (System.nanoTime()-t0)/1.0E9f
-    FastMaskedArray.profileTime += dt
-    logger.info( s" @P@ FastMaskedArray.Reduce Time: %.4f, total: %.4f".format(dt,FastMaskedArray.profileTime) )
-    rv
   }
 
   def compareShapes( other_shape: Array[Int] ): ( Int, Option[Array[Int]] ) = {

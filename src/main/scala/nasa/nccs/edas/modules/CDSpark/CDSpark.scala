@@ -155,7 +155,6 @@ class eAve extends Kernel(Map.empty) {
   override val doesAxisReduction: Boolean = false
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
-    val t0 = System.nanoTime
     val axes: String = context.config("axes","")
     val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
@@ -164,8 +163,6 @@ class eAve extends Kernel(Map.empty) {
     logger.info(" -----> Executing Kernel %s, inputs = %s, input shapes = [ %s ]".format(name, context.operation.inputs.mkString(","), input_arrays.map( _.shape.mkString("(",",",")")).mkString(", ") ) )
     val input_array = input_arrays.head
     val ( resultArray, weightArray ) = FastMaskedArray.weightedSum( input_fastArrays )
-    logger.info("&MAP: Finished Kernel %s, output = %s, time = %.4f s".format(name, context.operation.rid, (System.nanoTime - t0)/1.0E9) )
-    context.addTimestamp( "Map Op complete" )
     val elems: Map[String,ArraySpec] = Seq(
       context.operation.rid -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, resultArray.getData ),
       context.operation.rid + "_WEIGHTS_" -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, weightArray.getData )
