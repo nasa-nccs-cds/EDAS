@@ -289,7 +289,6 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = {
     if (reduceCombineOp.exists(_ == CDFloatArray.customOp)) {
-      logger.info( " @P@ CUSTOM ")
       customReduceRDD(context)
     } else { reduceRDDOp(context) }
   }
@@ -532,7 +531,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
 
   def customReduceRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = if(Kernel.isEmpty(a0)) {a1} else if(Kernel.isEmpty(a1)) {a0} else {
-    logger.warn( s"No reducer defined for parallel op '$name', executing simple merge." )
+    logger.warn( s" @P@ CUSTOM:  No reducer defined for parallel op '$name', executing simple merge." )
     collectRDDOp(context)( a0, a1 )
   }
 
