@@ -376,8 +376,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
   
   def combineRDD(context: KernelContext)(rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = {
-    if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else {
-      val t0 = System.nanoTime()
+    val t0 = System.nanoTime()
+    val rv = if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else {
       val axes = context.getAxes
       val keys = rec0.elements.keys
       val new_elements: Iterator[(String, ArraySpec)] = rec0.elements.iterator flatMap { case (key0, array0) => rec1.elements.get(key0) match {
@@ -389,12 +389,12 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         }
         case None => None
       }}
-      val rv = CDTimeSlice( rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*) )
-      val dt: Float = (System.nanoTime()-t0)/1.0E9f
-      Kernel.profileTime = Kernel.profileTime + dt
-      logger.info( s" @P@ Kernel.combineRDD Time: %.4f, total: %.4f".format(dt,Kernel.profileTime) )
-      rv
+      CDTimeSlice( rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*) )
     }
+    val dt: Float = (System.nanoTime()-t0)/1.0E9f
+    Kernel.profileTime = Kernel.profileTime + dt
+    logger.info( s" @P@ Kernel.combineRDD Time: %.4f, total: %.4f".format(dt,Kernel.profileTime) )
+    rv
   }
 
   def combineElements( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =

@@ -171,11 +171,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
     }
     else optGroupBy match {
       case None =>
-        exe
-        val t0 = System.nanoTime()
         val rv = rdd.treeReduce(op)
-        val t1 = System.nanoTime()
-        logger.info(f"\n\n ----------------->>>> Completed rdd.treeReduce(op), time = ${(t1 - t0) / 1.0E9} sec \n\n" )
         TimeSliceCollection( rv, metadata )
       case Some( groupBy ) => TimeSliceCollection( rdd.groupBy( groupBy.group ).mapValues( TSGroup.merge(op) ).map( _._2 ).collect.sortBy( _.startTime ), metadata )
     }
