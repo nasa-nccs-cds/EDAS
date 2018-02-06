@@ -295,9 +295,6 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def reduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
-    logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
-    runtime.printMemoryUsage
-    val t0 = System.nanoTime()
     val nparts = input.getNumPartitions
     EDASExecutionManager.checkIfAlive
     evaluateProductSize( input, context )
@@ -312,15 +309,19 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       } else {
         reduceElements.collect
       }
-      logger.debug("\n\n ----------------------- FINISHED reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
-      context.addTimestamp( "FINISHED reduce Operation" )
       finalize( result, context )
     }
   }
 
   def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
+    val t0 = System.nanoTime()
     val mapresult: TimeSliceRDD = mapRDD( input, context )
-    reduce( mapresult, context, batchIndex, merge )
+    mapresult.exe
+    val t1 = System.nanoTime()
+    val rv = reduce( mapresult, context, batchIndex, merge )
+    val t2 = System.nanoTime()
+    logger.debug("\n\n ----------------------- FINISHED mapReduce Operation: map time = %.3f sec, reduce time = %.3f sec ----------------------- ".format( (t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9 ) )
+    rv
   }
 
   def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: TimeSliceRDD): TimeSliceRDD = {

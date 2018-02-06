@@ -152,6 +152,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
   import TimeSliceRDD._
   def cache() = rdd.cache()
   def nSlices = rdd.count
+  def exe = rdd.count
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
   def section( section: CDSection ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.section(section) ), metadata )
   def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
