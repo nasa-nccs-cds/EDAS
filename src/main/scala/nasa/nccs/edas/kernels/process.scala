@@ -288,8 +288,10 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def filterInputs ( input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = { input }
 
   def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = {
-    if ( reduceCombineOp.exists( _ == CDFloatArray.customOp ) ) { customReduceRDD(context) }
-    else { reduceRDDOp(context) }
+    if (reduceCombineOp.exists(_ == CDFloatArray.customOp)) {
+      logger.info( " @P@ CUSTOM ")
+      customReduceRDD(context)
+    } else { reduceRDDOp(context) }
   }
 
   def execute( workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
@@ -391,7 +393,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val rv = CDTimeSlice( rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*) )
       val dt: Float = (System.nanoTime()-t0)/1.0E9f
       Kernel.profileTime = Kernel.profileTime + dt
-      logger.info( s"Kernel.combineRDD Time: %.4f, total: %.4f".format(dt,Kernel.profileTime) )
+      logger.info( s" @P@ Kernel.combineRDD Time: %.4f, total: %.4f".format(dt,Kernel.profileTime) )
       rv
     }
   }

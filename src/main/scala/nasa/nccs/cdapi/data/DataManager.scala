@@ -377,7 +377,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     }
     val dt = (System.nanoTime()-t0)/1.0E9f
     FastMaskedArray.profileTime += dt
-    logger.info( s"FastMaskedArray.Reduce Time: %.4f, total: %.4f".format(dt,FastMaskedArray.profileTime) )
+    logger.info( s" @P@ FastMaskedArray.Reduce Time: %.4f, total: %.4f".format(dt,FastMaskedArray.profileTime) )
     rv
   }
 
