@@ -53,7 +53,7 @@ class EmptyFloatIterator extends Iterator[Float] {
   def next(): Float = { throw new Exception( "Next on empty float iterator") }
 }
 
-class AxisIndices( private val axisIds: Set[Int] = Set.empty ) {
+class AxisIndices( private val axisIds: Set[Int] = Set.empty ) extends Serializable {
   def getAxes: Seq[Int] = axisIds.toSeq
   def args = axisIds.toArray
   def includes( axisIndex: Int ): Boolean = axisIds.contains( axisIndex )
