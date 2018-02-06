@@ -467,7 +467,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     val wtsIterOpt = wtsOpt.map( _.array.getIndexIterator )
     val ( shape_comparison, broadcast_axes ) = wtsOpt match {
       case Some( wts ) =>   compareShapes( wts.array.getShape )
-      case None =>          ( 0, Array.emptyIntArray )
+      case None =>          ( 0, None )
     }
     val rank = array.getRank
     val iter: IndexIterator = array.getIndexIterator()
@@ -526,7 +526,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
           val current_index = getReducedFlatIndex( targ_index, op_axes, iter )
           wtsIndexOpt match {
             case Some(wtsIndex) =>
-              val reduced_flat_index: Int = getReducedFlatIndex( wtsIndex, broadcast_axes, iter )
+              val reduced_flat_index: Int = getReducedFlatIndex( wtsIndex, broadcast_axes.get, iter )
               val wtval: Float = wts.getFloat( reduced_flat_index )
               target_array.array.setFloat(current_index, target_array.array.getFloat(current_index) + fval*wtval )
               weights_array.array.setFloat(current_index, weights_array.array.getFloat(current_index) + wtval )
