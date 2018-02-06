@@ -192,7 +192,6 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   }
 
   def executeKernel(executor: WorkflowExecutor ):  KernelExecutionResult = {
-    val t0 = System.nanoTime()
     val root_node = executor.rootNode
     val kernelCx: KernelContext  = root_node.getKernelContext( executor )
     kernelCx.addTimestamp( f" @CDS@ Executing Kernel for node ${root_node.getNodeId}" )
@@ -220,10 +219,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       logger.info(s" @CDS@ BATCH mapReduce time = %.3f sec, agg time = %.3f sec, total processing time = %.3f sec   ********** \n".format( (ts1 - ts0)/1.0E9 , (ts2 - ts1)/1.0E9, (ts2 - ts0)/1.0E9 ) )
     } while ( { batchIndex+=1; false; /* executor.hasBatch(batchIndex) */ } )
 
-    val t1 = System.nanoTime()
     if( Try( executor.requestCx.config("unitTest","false").toBoolean ).getOrElse(false)  ) { root_node.kernel.cleanUp(); }
-    val t2 = System.nanoTime()
-    logger.info(s"********** @CDS@ Completed Execution of Kernel[%s(%s)]: %s , total time = %.3f sec, cleanUp time = %.3f sec   ********** \n".format(root_node.kernel.name,root_node.kernel.id, root_node.operation.identifier, (t2 - t0)/1.0E9 , (t2 - t1)/1.0E9 ))
     KernelExecutionResult( aggResult, resultFiles.toList )
   }
 
@@ -251,13 +247,10 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     val subworkflow_root_nodes: Seq[WorkflowNode] = pruneProductNodeList( product_nodes, requestCx ).map( _.markAsMergedSubworkflowRoot )
     val productNodeOpts = for( subworkflow_root_node <- subworkflow_root_nodes ) yield {
       val workflowCx = new WorkflowContext( getSubworkflowInputs( requestCx, subworkflow_root_node, true ), subworkflow_root_node )
-      logger.info( "\n\n ----------------------- Execute PRODUCT Node: %s -------\n".format( subworkflow_root_node.getNodeId ))
       val executor = new WorkflowExecutor( requestCx, safety_check( workflowCx ) )
       generateProduct( executor )
     }
     val t1 =  System.nanoTime()
-//    requestCx.logTimingReport("Executed task request " + request.name)
-    println(s"\n\n  ****** Executed request ${requestCx.jobId}, elapsed time = ${(t1 - t0) / 1.0E9} sec  ****** \n\n")
     productNodeOpts.flatten
   }
 

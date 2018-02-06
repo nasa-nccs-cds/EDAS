@@ -320,7 +320,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     val t1 = System.nanoTime()
     val rv = reduce( mapresult, context, batchIndex, merge )
     val t2 = System.nanoTime()
-    logger.info("\n\n ----------------------- FINISHED mapReduce Operation: map time = %.3f sec, reduce time = %.3f sec ----------------------- ".format( (t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9 ) )
+    logger.info("\n\n ----------------------- FINISHED mapReduce Operation: map time = %.3f sec, reduce time = %.3f sec ----------------------- \n\n".format( (t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9 ) )
     rv
   }
 
