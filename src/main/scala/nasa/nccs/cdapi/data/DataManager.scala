@@ -11,6 +11,7 @@ import org.apache.spark.rdd.RDD
 import ucar.nc2.constants.AxisType
 import ucar.ma2
 import java.nio
+import java.nio.FloatBuffer
 import java.util.Formatter
 
 import nasa.nccs.cdapi.data.FastMaskedArray.join
@@ -32,7 +33,7 @@ import scala.collection.immutable.Map
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.{SortedMap, TreeMap}
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.reflect.ClassTag
 
 // Developer API for integrating various data management and IO frameworks such as SIA-IO and EDAS-Cache.
@@ -374,34 +375,29 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     }
   }
 
-  def compareShapes( other_shape: Array[Int] ): ( Int, Array[Int] ) = {
-    val p0 = array.getShape.foldLeft(1L)(_ * _)
-    val p1 = other_shape.foldLeft(1L)(_ * _)
-    if( p0 == p1 ) ( 0, Array.emptyIntArray )
+  def compareShapes( other_shape: Array[Int] ): ( Int, Option[Array[Int]] ) = {
+    val p0 = array.getShape.product
+    val p1 = other_shape.product
+    if( p0 == p1 ) ( 0, None )
     else if( p0 > p1 )  {
       val axes = getReductionAxes( array.getShape, other_shape )
-      ( 1, axes )
+      ( 1, Some(axes) )
     } else {
       val axes = getReductionAxes( other_shape, array.getShape )
-      ( -1, axes )
+      ( -1, Some(axes) )
     }
   }
 
   def merge(other: FastMaskedArray, op: FastMaskedArray.ReduceOp ): FastMaskedArray = {
     val ( shape_comparison, axes ) = compareShapes( other.array.getShape )
     if( shape_comparison == 0 ) {
-      val vTot = new ma2.ArrayFloat(array.getShape)
-      (0 until array.getSize.toInt) foreach (index => {
-        val uv0: Float = array.getFloat(index)
-        val uv1: Float = other.array.getFloat(index)
-        if ((uv0 == missing) || uv0.isNaN || (uv1 == other.missing) || uv1.isNaN) {
-          missing
-        }
-        else {
-          vTot.setFloat(index, op(uv0, uv1))
-        }
+      val vTot: Array[Float] = new Array(array.getSize.toInt)
+      ( 0 until vTot.size ) foreach (index => {
+        val uv0 = array.getFloat(index)
+        val uv1 = other.array.getFloat(index)
+        vTot( index ) = if( (uv0 == missing) || uv0.isNaN || (uv1 == other.missing) || uv1.isNaN ) { missing } else {  op( uv0, uv1 ) }
       })
-      FastMaskedArray(vTot, missing)
+      FastMaskedArray( shape, vTot, missing )
     } else {
       val base_array = if( shape_comparison > 0 ) { array } else { other.array }
       val reduced_array = if( shape_comparison > 0 ) { other.array } else { array }
@@ -412,7 +408,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
       while ( base_iter.hasNext ) {
         val v0: Float = base_iter.getFloatNext
         if( ( v0 != missing ) && !v0.isNaN ) {
-          val reduced_flat_index: Int = getReducedFlatIndex( reduced_index, axes, base_iter )
+          val reduced_flat_index: Int = getReducedFlatIndex( reduced_index, axes.get, base_iter )
           val v1: Float = reduced_array.getFloat( reduced_flat_index )
           if( ( v1 != missing ) && !v1.isNaN ) {
             result_iter.setFloatNext( op(v0, v1) )
@@ -749,11 +745,11 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
     HeapFltArray.bb.putFloat( 0, mval )
     toUcarFloatArray.getDataAsByteBuffer().array() ++ HeapFltArray.bb.array()
   }
-  def combine( combineOp: CDArray.ReduceOp[Float], other: HeapFltArray ): HeapFltArray = {
-    verifyGrids( other )
-    val result = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp )
-    HeapFltArray( result.toCDFloatArray, origin, gridSpec, mergeMetadata("merge",other), toCDWeightsArray.map( _.append( other.toCDWeightsArray.get ) ) )
-  }
+//  def combine( combineOp: CDArray.ReduceOp[Float], other: HeapFltArray ): HeapFltArray = {
+//    verifyGrids( other )
+//    val result = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp )
+//    HeapFltArray( result.toCDFloatArray, origin, gridSpec, mergeMetadata("merge",other), toCDWeightsArray.map( _.append( other.toCDWeightsArray.get ) ) )
+//  }
   def findValue( value: Float, match_required: Boolean=true, eps: Float = 0.0001f ): Option[Int] = { val seps = eps*value; data.indexWhere( x => Math.abs(x-value) < seps ) }  match {
     case -1 => if(match_required) throw new Exception(s"Failed to find a match in array for value ${value}, array values = ${data.map(_.toString).mkString(",")}"); None
     case x => Some(x)

@@ -373,7 +373,6 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
   
   def combineRDD(context: KernelContext)(rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = {
-    val t0 = System.nanoTime
     val axes = context.getAxes
     if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else {
       val keys = rec0.elements.keys
@@ -386,8 +385,6 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         }
         case None => None
       }}
-      //    logger.debug("&COMBINE: %s, time = %.4f s".format( context.operation.name, (System.nanoTime - t0) / 1.0E9 ) )
-      context.addTimestamp("combineRDD complete")
       CDTimeSlice( rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*) )
     }
   }
@@ -595,8 +592,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def collectRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = { a0 ++ a1 }
 
 
-  def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =
-    if(Kernel.isEmpty(a0)) {a1} else if(Kernel.isEmpty(a1)) {a0} else { combineRDD(context)( a0, a1 ) }
+  def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = combineRDD(context)( a0, a1 )
 
   def getDataSample(result: CDFloatArray, sample_size: Int = 20): Array[Float] = {
     val result_array = result.floatStorage.array
