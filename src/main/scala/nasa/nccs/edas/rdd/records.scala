@@ -133,7 +133,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val section = ""
     //    val dataset = NetcdfDataset.openDataset(dataFile)
 
-    val t0 = System.nanoTime()
+
     logger.info( s" @UT@ Starting read test")
     val agg = Aggregation.read( dataFile )
     val files: Array[FileInput] = agg.files
@@ -146,20 +146,34 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val tslice = config.getOrElse( "tslice", "prefetch" )
     val parallelism = Math.min( files.length, nPartitions )
     logger.info( s" @UT@ Running util tests, mode: '${mode}', nfiles = ${files.length}, nPartitions=${nPartitions}, nNodes=${nNodes}, usedCoresPerNode=${usedCoresPerNode}")
-    val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
-    filesDataset.cache(); filesDataset.count()
-    val t1 = System.nanoTime()
-    val timesliceRDD: RDD[CDTimeSlice1] = filesDataset.mapPartitions( TimeSliceMultiIterator1( varId1, varName1, section, tslice, basePath ) )
-    timesliceRDD.cache(); timesliceRDD.count()
-    val t2 = System.nanoTime()
-    val mapResult = timesliceRDD.map( _.ave )
-    mapResult.cache(); mapResult.count()
-    val t3 = System.nanoTime()
-    val (vsum,n,tsum) = mapResult.treeReduce( ( x0, x1 ) => ( (x0._1 + x1._1), (x0._2 + x1._2),  (x0._3 + x1._3)) )
-    logger.info(s" @UT@  ****** Ave = ${vsum/n}, ctime = ${tsum/n} \n\n" )
-    val t4 = System.nanoTime()
-    val nParts = timesliceRDD.getNumPartitions
-    logger.info(f" @UT@ Completed test, nFiles = ${files.length}, parallization time = ${(t1 - t0)/1.0E9} sec, input time = ${(t2 - t1)/1.0E9} sec, compute time = ${(t3 - t2)/1.0E9} sec, reduce time = ${(t4 - t3)/1.0E9} sec, total time = ${(t4 - t0)/1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
+    if( mode.equals("read") ) {
+      val t0 = System.nanoTime()
+      val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize(files, parallelism)
+      val timesliceRDD: RDD[CDTimeSlice1] = filesDataset.mapPartitions(TimeSliceMultiIterator1(varId1, varName1, section, tslice, basePath))
+      timesliceRDD.count()
+      val t1 = System.nanoTime()
+      val nParts = timesliceRDD.getNumPartitions
+      logger.info(f" @UT@ Completed READ test,  read time = ${(t1 - t0) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
+    } else {
+      val t0 = System.nanoTime()
+      val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize(files, parallelism)
+      filesDataset.cache();
+      filesDataset.count()
+      val t1 = System.nanoTime()
+      val timesliceRDD: RDD[CDTimeSlice1] = filesDataset.mapPartitions(TimeSliceMultiIterator1(varId1, varName1, section, tslice, basePath))
+      timesliceRDD.cache();
+      timesliceRDD.count()
+      val t2 = System.nanoTime()
+      val mapResult = timesliceRDD.map(_.ave)
+      mapResult.cache();
+      mapResult.count()
+      val t3 = System.nanoTime()
+      val (vsum, n, tsum) = mapResult.treeReduce((x0, x1) => ((x0._1 + x1._1), (x0._2 + x1._2), (x0._3 + x1._3)))
+      logger.info(s" @UT@  ****** Ave = ${vsum / n}, ctime = ${tsum / n} \n\n")
+      val t4 = System.nanoTime()
+      val nParts = timesliceRDD.getNumPartitions
+      logger.info(f" @UT@ Completed test, parallization time = ${(t1 - t0) / 1.0E9} sec, input time = ${(t2 - t1) / 1.0E9} sec, compute time = ${(t3 - t2) / 1.0E9} sec, reduce time = ${(t4 - t3) / 1.0E9} sec, total time = ${(t4 - t0) / 1.0E9} sec, nParts = ${nParts}, filesPerPart = ${files.length / nParts.toFloat}\n\n")
+    }
     new WPSMergedEventReport( Seq.empty )
   }
 }
