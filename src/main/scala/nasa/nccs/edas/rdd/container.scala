@@ -305,7 +305,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
   private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
   val millisPerMin = 1000*60
   val filePath: String = if( basePath.isEmpty ) { fileInput.path } else { Paths.get( basePath, fileInput.path ).toString }
-  logger.info( s"TimeSliceIterator processing file ${filePath}")
+//  logger.info( s"TimeSliceIterator processing file ${filePath}")
   _sliceStack ++= getSlices
 
   def hasNext: Boolean = _sliceStack.nonEmpty
@@ -317,7 +317,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
     val globalTimeRange = globalTimeSection.getRange( 0 )
     val local_start = Math.max( 0, globalTimeRange.first() - timeIndexOffest )
     val local_last = globalTimeRange.last() - timeIndexOffest
-    logger.info(s"%SC% globalTimeSection: ${globalTimeSection.toString}, timeIndexOffest= $timeIndexOffest, local_start=$local_start, local_last=$local_last")
+//    logger.info(s"%SC% globalTimeSection: ${globalTimeSection.toString}, timeIndexOffest= $timeIndexOffest, local_start=$local_start, local_last=$local_last")
     if( local_last < 0 ) None else Some( mutableSection.replaceRange( 0, new ma2.Range( local_start, local_last ) ) )
   }
 

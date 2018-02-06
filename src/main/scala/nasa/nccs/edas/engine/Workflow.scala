@@ -217,7 +217,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
         }
       }
       val ts2 = System.nanoTime()
-      logger.info(s" @CDS@ BATCH mapReduce time = %.3f sec, agg time = %.3f sec   ********** \n".format( (ts1 - ts0)/1.0E9 , (ts2 - ts1)/1.0E9 ) )
+      logger.info(s" @CDS@ BATCH mapReduce time = %.3f sec, agg time = %.3f sec, total processing time = %.3f sec   ********** \n".format( (ts1 - ts0)/1.0E9 , (ts2 - ts1)/1.0E9, (ts2 - ts0)/1.0E9 ) )
     } while ( { batchIndex+=1; false; /* executor.hasBatch(batchIndex) */ } )
 
     val t1 = System.nanoTime()
