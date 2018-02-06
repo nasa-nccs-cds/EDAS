@@ -148,7 +148,7 @@ class TSGroup( val calOp: (Calendar) => Long  ) {
 
 }
 
-class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) {
+class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) with Loggable {
   import TimeSliceRDD._
   def cache() = rdd.cache()
   def nSlices = rdd.count
@@ -170,7 +170,13 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
         TimeSliceCollection( rdd.groupBy( groupBy.group ).mapValues( TSGroup.sortedMerge(op) ).map( _._2 ).collect.sortBy( _.startTime ), metadata )
     }
     else optGroupBy match {
-      case None => TimeSliceCollection(rdd.treeReduce(op), metadata)
+      case None =>
+        exe
+        val t0 = System.nanoTime()
+        val rv = rdd.treeReduce(op)
+        val t1 = System.nanoTime()
+        logger.info(f"\n\n ----------------->>>> Completed rdd.treeReduce(op), time = ${(t1 - t0) / 1.0E9} sec \n\n" )
+        TimeSliceCollection( rv, metadata )
       case Some( groupBy ) => TimeSliceCollection( rdd.groupBy( groupBy.group ).mapValues( TSGroup.merge(op) ).map( _._2 ).collect.sortBy( _.startTime ), metadata )
     }
   }

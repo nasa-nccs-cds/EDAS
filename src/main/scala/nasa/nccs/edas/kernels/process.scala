@@ -301,7 +301,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     if( !parallelizable ) { input.collect }
     else {
       val rid = context.operation.rid.toLowerCase
-      val reduceElements = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
+      val reduceElements: TimeSliceRDD = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
       val axes = context.getAxes
       val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
         val optGroup = context.config("groupBy") map TSGroup.getGroup
@@ -314,14 +314,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
-    val t0 = System.nanoTime()
     val mapresult: TimeSliceRDD = mapRDD( input, context )
-    mapresult.exe
-    val t1 = System.nanoTime()
-    val rv = reduce( mapresult, context, batchIndex, merge )
-    val t2 = System.nanoTime()
-    logger.info("\n\n ----------------------- FINISHED mapReduce Operation: map time = %.3f sec, reduce time = %.3f sec ----------------------- \n\n".format( (t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9 ) )
-    rv
+    reduce( mapresult, context, batchIndex, merge )
   }
 
   def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: TimeSliceRDD): TimeSliceRDD = {
