@@ -31,6 +31,7 @@ object ProfilingTool extends Loggable {
     val startTimeMS: Long = System.currentTimeMillis()
     val starting_timestamp = new TimeStamp( 0f, 0f, "Job Start")
     val timestamps: CollectionAccumulator[TimeStamp] = new CollectionAccumulator[TimeStamp]()
+    sparkContext.register( timestamps )
     val profiler = new ProfilingTool( startTimeMS, timestamps )
     logger.info( s"Starting profiler in sparkContext '${sparkContext.applicationId}' with master '${sparkContext.master}' ")
     profiler.timestamp("Startup")
