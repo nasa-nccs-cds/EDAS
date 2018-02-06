@@ -76,6 +76,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
   val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
   val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
+  lazy val axes: AxisIndices = grid.getAxisIndices(config("axes", ""))
 
   lazy val grid: GridContext = getTargetGridContext
 
@@ -88,9 +89,9 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
     getAxes.getAxes.map( axisIndex => section.getShape( axisIndex ) ).product
   }
 
-  def getAxes: AxisIndices = grid.getAxisIndices(config("axes", ""))
+  def getAxes: AxisIndices = axes
 
-  def doesTimeOperations = getAxes.includes( 0 )
+  def doesTimeOperations = axes.includes( 0 )
 
   def getContextStr: String = getConfiguration map { case (key, value) => key + ":" + value } mkString ";"
 
@@ -144,6 +145,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
 case class ResultManifest( val name: String, val dataset: String, val description: String, val units: String ) {}
 
 object Kernel extends Loggable {
+  var profileTime: Float = 0f
   val customKernels = List[Kernel]( ) // new CDMSRegridKernel() )
   def isEmpty( kvp: CDTimeSlice ) = kvp.elements.isEmpty
 
@@ -373,8 +375,9 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
   
   def combineRDD(context: KernelContext)(rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = {
-    val axes = context.getAxes
     if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else {
+      val t0 = System.nanoTime()
+      val axes = context.getAxes
       val keys = rec0.elements.keys
       val new_elements: Iterator[(String, ArraySpec)] = rec0.elements.iterator flatMap { case (key0, array0) => rec1.elements.get(key0) match {
         case Some(array1) => reduceCombineOp match {
@@ -385,7 +388,11 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         }
         case None => None
       }}
-      CDTimeSlice( rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*) )
+      val rv = CDTimeSlice( rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*) )
+      val dt: Float = (System.nanoTime()-t0)/1.0E9f
+      Kernel.profileTime = Kernel.profileTime + dt
+      logger.info( s"Kernel.combineRDD Time: %.4f, total: %.4f".format(dt,Kernel.profileTime) )
+      rv
     }
   }
 

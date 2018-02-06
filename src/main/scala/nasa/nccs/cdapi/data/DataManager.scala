@@ -220,6 +220,7 @@ class AnomalySorter(val input_data: HeapFltArray, val axesParm: String, grid: Gr
 }
 
 object FastMaskedArray {
+  var profileTime = 0f
   type ReduceOp = (Float,Float)=>Float
   def apply( array: ma2.Array, missing: Float ): FastMaskedArray = new FastMaskedArray( array, missing )
   def apply( shape: Array[Int], data:  Array[Float], missing: Float ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, shape, data ), missing )
@@ -348,9 +349,10 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
   }
 
   def reduce(op: FastMaskedArray.ReduceOp, axes: Array[Int], initVal: Float = 0f ): FastMaskedArray = {
+    val t0 = System.nanoTime()
     val rank = array.getRank
     val iter: IndexIterator = array.getIndexIterator()
-    if( axes.length == rank ) {
+    val rv = if( axes.length == rank ) {
       var result = initVal
       var result_shape = Array.fill[Int](rank)(1)
       while ( iter.hasNext ) {
@@ -373,6 +375,10 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
       }
       target_array
     }
+    val dt = (System.nanoTime()-t0)/1.0E9f
+    FastMaskedArray.profileTime += dt
+    logger.info( s"FastMaskedArray.Reduce Time: %.4f, total: %.4f".format(dt,FastMaskedArray.profileTime) )
+    rv
   }
 
   def compareShapes( other_shape: Array[Int] ): ( Int, Option[Array[Int]] ) = {

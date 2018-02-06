@@ -548,8 +548,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
       case Some(opContext) => opContext.moduleName match {
         case "util" =>  new WPSMergedEventReport( task.operations.map( utilityExecution( _, requestCx )))
         case x =>
-          logger.info( "---------->>> Execute Workflows: " + task.operations.mkString(",") )
-
+          logger.info( "Execute Workflow: " + task.operations.mkString(",") )
           val responses = task.workflow.executeRequest( requestCx )
           new MergedWPSExecuteResponse( requestCx.jobId, responses )
       }
