@@ -240,7 +240,7 @@ class ave extends SingularRDDKernel(Map.empty) {
       case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
     })
     val t1 = System.nanoTime/ 1.0E9
-//    logger.info("T[%.2f] @CDS@ Executed Kernel %s map op, input = %s, time = %.4f s".format(t0, name,  id, (t1 - t0) ))
+    logger.info("T[%.2f] @P@ Executed Kernel %s map op, input = %s, time = %.4f s".format(t0, name,  id, (t1 - t0) ))
 //    context.addTimestamp( "Map Op complete" )
     val rv = CDTimeSlice( inputs.startTime, inputs.endTime, inputs.elements ++ elems )
 //    logger.info("Returning result value")

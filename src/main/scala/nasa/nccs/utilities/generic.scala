@@ -50,7 +50,7 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   def timestamp = Calendar.getInstance().getTime
   def timeStr = s"(${timeFormatter.format(timestamp)})"
 
-  val writer = {
+  lazy val writer = {
     val printer = if(Files.exists(logFilePath)) {
       new PrintWriter(logFilePath.toString)
     } else {
@@ -77,9 +77,9 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
     if( newline && !newline_state) { output = "\n" + output }
     if(newline) { writer.println( output ) } else { writer.print( output ) }
     writer.flush()
-    if(!test) { println( output ) }
+    if( !test && master ) { println( output ) }
     newline_state = newline
-  } catch { case ex: Exception =>  println( "Logging exception: " + ex.toString ) }
+  } catch { case ex: Exception =>  if( master) { println( "Logging exception: " + ex.toString ) } }
 
   def close() { writer.close(); }
   def info( msg: String ) = { log( "info", msg, true ) }
