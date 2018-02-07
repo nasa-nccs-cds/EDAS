@@ -322,6 +322,8 @@ object BoundedIndex {
   val InRange = 0
   val AboveRange = 1
   val BelowRange = -1
+  val RangeStart = 2
+  val RangeEnd = 3
 }
 case class BoundedIndex( index: Long, boundsStatus: Int ) {
   def isBelowRange: Boolean = boundsStatus ==  BoundedIndex.BelowRange
@@ -329,16 +331,36 @@ case class BoundedIndex( index: Long, boundsStatus: Int ) {
 }
 
 case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: Int, boundsStatus: Int ) {
+  import BoundedIndex._
   val time_duration = lastValue - firstValue
-  def dt = time_duration / nRows
-  def toRowIndex( time_value: Long ): BoundedIndex = boundsStatus match {
-    case BoundedIndex.InRange => BoundedIndex( firstRow + (time_value - firstValue) / dt, boundsStatus)
-    case BoundedIndex.AboveRange => BoundedIndex( firstRow, boundsStatus)
-    case BoundedIndex.BelowRange => BoundedIndex( 0, boundsStatus )
+  def dt = time_duration / nRows.toFloat
+
+  def toRowIndex( time_value: Long, range_position: Int ): BoundedIndex = boundsStatus match {
+    case BoundedIndex.InRange =>
+      val r0 = (time_value - firstValue)/dt
+      val rval = if( range_position == RangeStart ) { r0 + 0.5 } else { r0 - 0.5 }
+      BoundedIndex( firstRow + rval.toLong, boundsStatus )
+    case BoundedIndex.AboveRange =>
+      BoundedIndex( firstRow, boundsStatus)
+    case BoundedIndex.BelowRange =>
+      BoundedIndex( 0, boundsStatus )
   }
 
+//  def toRowIndex( time_value: Long ): BoundedIndex = boundsStatus match {
+//    case BoundedIndex.InRange =>
+//      val tv = time_value - firstValue
+//      val frow = tv/dt
+//      val rowv = Math.floor(frow).toInt
+//      val ( tm, t0, tp ) = (  (rowv-0.5)*dt,  (rowv)*dt,  (rowv+0.5)*dt )
+//      BoundedIndex( (firstRow+rowv).toLong, boundsStatus)
+//    case BoundedIndex.AboveRange =>
+//      BoundedIndex( firstRow, boundsStatus)
+//    case BoundedIndex.BelowRange =>
+//      BoundedIndex( 0, boundsStatus )
+//  }
+
   def toTimeValue( row_index: Int ): BoundedIndex = boundsStatus match {
-    case BoundedIndex.InRange => BoundedIndex(firstValue + (row_index - firstRow) * dt, boundsStatus)
+    case BoundedIndex.InRange => BoundedIndex( (firstValue + (row_index - firstRow + 0.5) * dt).toLong, boundsStatus)
     case BoundedIndex.AboveRange => BoundedIndex( lastValue, boundsStatus)
     case BoundedIndex.BelowRange => BoundedIndex( firstValue, boundsStatus )
   }
@@ -396,14 +418,12 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
 
   def fileInputsFromTimeValue( time_value: Long ): TimeRange = _fileInputsFromTimeValue( time_value, _estimate_file_index_from_time_value(time_value) )
   def fileInputsFromRowIndex( row_index: Int ): TimeRange = _fileInputsFromRowIndex( row_index, _estimate_file_index_from_row_index(row_index) )
-
-  def toRowIndex( time_value: Long ): BoundedIndex = fileInputsFromTimeValue( time_value ).toRowIndex( time_value )
   def toTimeValue( row_index: Int ): BoundedIndex = fileInputsFromRowIndex( row_index ).toTimeValue( row_index )
 
   def findRowIndicesFromCalendarDates( start_date: CalendarDate, end_date: CalendarDate): Option[ ( Int, Int ) ] = {
     val ( t0, t1 ) = ( start_date.getMillis, end_date.getMillis )
-    val startIndex: BoundedIndex = fileInputsFromTimeValue( t0 ).toRowIndex( t0 )
-    val endIndex: BoundedIndex = fileInputsFromTimeValue( t1 ).toRowIndex( t1 )
+    val startIndex: BoundedIndex = fileInputsFromTimeValue( t0 ).toRowIndex( t0, BoundedIndex.RangeStart )
+    val endIndex: BoundedIndex = fileInputsFromTimeValue( t1 ).toRowIndex( t1, BoundedIndex.RangeEnd )
     if( endIndex.isBelowRange || startIndex.isAboveRange ) { None }
     else {
       logger.info( s" @@@ FindRowIndicesFromCalendarDates: startRow=${startIndex.index.toInt} endRow=${endIndex.index.toInt}")

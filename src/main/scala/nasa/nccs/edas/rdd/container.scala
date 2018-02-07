@@ -251,7 +251,9 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
 
   def parallelize( agg: Aggregation, varId: String, varName: String, section: String ): TimeSliceRDD = {
     val parallelism = Math.min( agg.files.length, nPartitions )
-    val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( agg.getIntersectingFiles( section ), parallelism )
+    val files = agg.getIntersectingFiles( section )
+    printf(s" @P@ parallelize ${files.length} files" )
+    val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
     val rdd = filesDataset.mapPartitions( TimeSliceMultiIterator( varId, varName, section, agg.parms.getOrElse("base.path","") ) )
     val variable = agg.findVariable( varName ).getOrElse { throw new Exception(s"Unrecognozed variable ${varName} in aggregation, vars = ${agg.variables.map(_.name).mkString(",")}")}
     val metadata = Map( "section" -> section, varId -> variable.toString )
@@ -272,7 +274,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
   }
 }
 
-object TimeSliceMultiIterator {
+object TimeSliceMultiIterator extends Loggable {
   def apply( varId: String, varName: String, section: String, basePath: String ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
     new TimeSliceMultiIterator( varId, varName, section, files, basePath )
   }
@@ -485,7 +487,7 @@ class RDDContainer extends Loggable {
     val newVSpecs = vSpecs.filter( vspec => ! contents.contains(vspec.uid) )
     if( newVSpecs.nonEmpty ) {
       val generator = new RDDGenerator( sparkContext, BatchSpec.nParts )
-      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ]" )
+      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}" )
       val remainingVspecs = if( _vault.isEmpty ) {
         val tvspec = vSpecs.head
         val baseRdd: TimeSliceRDD = generator.parallelize(tvspec.getAggregation(), tvspec.uid, tvspec.varShortName, tvspec.section.toString)

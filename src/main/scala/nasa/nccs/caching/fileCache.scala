@@ -61,17 +61,14 @@ class CacheChunk(val offset: Int,
 
 object BatchSpec extends Loggable {
   lazy val serverContext = edasServiceProvider.cds2ExecutionManager.serverContext
-  lazy val executors: Seq[String] = currentActiveExecutors
+  lazy val nExec = getNumExecutors
   lazy val nCores = appParameters( "parts.per.node" ).fold( Runtime.getRuntime.availableProcessors )(_.toInt)
-  lazy val nNodes = appParameters( "num.cluster.nodes" ).fold( executors.length )(_.toInt)
+  lazy val nNodes = appParameters( "num.cluster.nodes" ).fold( nExec )(_.toInt)
   lazy val nParts = appParameters( "num.partitions" ).fold( nCores * nNodes * 2 )( _.toInt )
   def apply( index: Int ): BatchSpec = { new BatchSpec( index*nParts, nParts ) }
 
-  def currentActiveExecutors: Seq[String] = {
-    val allExecutors = serverContext.spark.sparkContext.getExecutorMemoryStatus.map(_._1)
-    val driverHost: String = serverContext.spark.sparkContext.getConf.get("spark.driver.host")
-    allExecutors.filter(! _.split(":")(0).equals(driverHost)).toList
-  }
+  def getNumExecutors: Int = { Math.max( serverContext.spark.sparkContext.getExecutorMemoryStatus.size-1, 1 )  }
+  override def toString = s"[ nCores=${nCores}, nNodes=${nNodes}, nParts=${nParts}, nExecutors={ ${nExec} } ]"
 }
 
 case class BatchSpec( iStartPart: Int, nParts: Int ) {
