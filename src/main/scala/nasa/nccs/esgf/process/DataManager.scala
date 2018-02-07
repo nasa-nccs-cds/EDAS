@@ -10,7 +10,7 @@ import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
-import nasa.nccs.utilities.{EDTime, Loggable, ProfilingTool, cdsutils}
+import nasa.nccs.utilities._
 import org.joda.time.DateTime
 import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
@@ -114,7 +114,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
 
 }
 
-class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, val profiler: ProfilingTool, private val configuration: Map[String,String], val executionCallback: Option[ExecutionCallback]=None ) extends ScopeContext with Loggable {
+class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, val profiler: EventAccumulator, private val configuration: Map[String,String], val executionCallback: Option[ExecutionCallback]=None ) extends ScopeContext with Loggable {
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = task.domainMap

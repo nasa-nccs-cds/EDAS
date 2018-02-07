@@ -68,7 +68,9 @@ object BatchSpec extends Loggable {
   def apply( index: Int ): BatchSpec = { new BatchSpec( index*nParts, nParts ) }
 
   def getNumExecutors: Int = { Math.max( serverContext.spark.sparkContext.getExecutorMemoryStatus.size-1, 1 )  }
-  override def toString = s"[ nCores=${nCores}, nNodes=${nNodes}, nParts=${nParts}, nExecutors={ ${nExec} } ]"
+  def getDefaultParallelism: Int = { serverContext.spark.sparkContext.defaultParallelism }
+
+  override def toString = s"[ nCores=${nCores}, nNodes=${nNodes}, nParts=${nParts}, nExecutors={ ${nExec} }, nCores={ ${getDefaultParallelism} }  ]"
 }
 
 case class BatchSpec( iStartPart: Int, nParts: Int ) {

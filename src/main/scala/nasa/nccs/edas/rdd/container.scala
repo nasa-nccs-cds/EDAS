@@ -252,7 +252,6 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
   def parallelize( agg: Aggregation, varId: String, varName: String, section: String ): TimeSliceRDD = {
     val parallelism = Math.min( agg.files.length, nPartitions )
     val files = agg.getIntersectingFiles( section )
-    printf(s" @P@ parallelize ${files.length} files" )
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
     val rdd = filesDataset.mapPartitions( TimeSliceMultiIterator( varId, varName, section, agg.parms.getOrElse("base.path","") ) )
     val variable = agg.findVariable( varName ).getOrElse { throw new Exception(s"Unrecognozed variable ${varName} in aggregation, vars = ${agg.variables.map(_.name).mkString(",")}")}

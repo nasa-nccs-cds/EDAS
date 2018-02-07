@@ -7,14 +7,14 @@ import nasa.nccs.caching.EDASPartitioner
 import nasa.nccs.cdapi.cdm._
 import nasa.nccs.cdapi.data.{HeapFltArray, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.{ReduceNOpFlt, ReduceOpFlt, ReduceWNOpFlt}
-import nasa.nccs.cdapi.tensors.{CDArray, CDCoordMap, CDFloatArray, CDTimeCoordMap}
+import nasa.nccs.cdapi.tensors.{CDArray, CDFloatArray}
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow, WorkflowNode}
 import nasa.nccs.edas.rdd._
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
-import nasa.nccs.edas.utilities.{appParameters, runtime}
+import nasa.nccs.edas.utilities.{appParameters}
 import nasa.nccs.esgf.process._
-import nasa.nccs.utilities.{Loggable, ProfilingTool}
+import nasa.nccs.utilities.{EventAccumulator, Loggable}
 import nasa.nccs.wps.{WPSProcess, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import ucar.ma2.IndexIterator
@@ -71,7 +71,7 @@ object KernelContext {
   }
 }
 
-class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],  _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec], val profiler: ProfilingTool ) extends Loggable with Serializable with ScopeContext {
+class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],  _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec], val profiler: EventAccumulator ) extends Loggable with Serializable with ScopeContext {
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
   val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
@@ -119,13 +119,6 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   def commutativeReduction: Boolean = if (getAxes.includes(0)) { true } else { false }
 
   def doesTimeReduction: Boolean = getAxes.includes(0)
-
-  def addTimestamp(label: String, log: Boolean = false): Unit = {
-    profiler.timestamp(label)
-    if (log) {
-      logger.info(label)
-    }
-  }
 
   private def getTargetGridContext: GridContext = crsOpt match {
     case Some(crs) =>
@@ -307,8 +300,10 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val reduceElements: TimeSliceRDD = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
       val axes = context.getAxes
       val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
-        val optGroup = context.config("groupBy") map TSGroup.getGroup
-        reduceElements.reduce( getReduceOp(context), optGroup, ordered )
+        context.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
+          val optGroup = context.config("groupBy") map TSGroup.getGroup
+          reduceElements.reduce(getReduceOp(context), optGroup, ordered)
+        })
       } else {
         reduceElements.collect
       }
@@ -376,8 +371,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
   
   def combineRDD(context: KernelContext)(rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = {
-    context.addTimestamp( "Start CombineRDD")
-    val rv = if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else {
+    if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else context.profiler.profile[CDTimeSlice]( "Kernel.combineRDD" ) ( () => {
       val axes = context.getAxes
       val keys = rec0.elements.keys
       val new_elements: Iterator[(String, ArraySpec)] = rec0.elements.iterator flatMap { case (key0, array0) => rec1.elements.get(key0) match {
@@ -390,9 +384,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         case None => None
       }}
       CDTimeSlice( rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*) )
-    }
-    context.addTimestamp( "Finish CombineRDD")
-    rv
+    })
   }
 
   def combineElements( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
