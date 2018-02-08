@@ -9,7 +9,7 @@ import nasa.nccs.esgf.process._
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
-import nasa.nccs.utilities.{Loggable, ProfilingTool, cdsutils}
+import nasa.nccs.utilities.{EventAccumulator, Loggable, cdsutils}
 import nasa.nccs.edas.kernels.{Kernel, KernelMgr, KernelModule}
 import java.util.concurrent.atomic.AtomicReference
 
@@ -19,6 +19,7 @@ import nasa.nccs.caching._
 import nasa.nccs.edas.engine.EDASExecutionManager.logger
 import ucar.{ma2, nc2}
 import nasa.nccs.edas.utilities.{GeoTools, appParameters, runtime}
+
 import scala.collection.immutable.Map
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -311,20 +312,15 @@ class EDASExecutionManager extends WPSServer with Loggable {
 //  }
 
   def createRequestContext( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): RequestContext = {
-    val t0 = System.nanoTime
-    val profiler = ProfilingTool( serverContext.spark.sparkContext )
+    val profiler = new EventAccumulator
+    serverContext.spark.sparkContext.register( profiler, "EDAS_EventAccumulator" )
     val sourceContainers = request.variableMap.values.filter(_.isSource)
-    val t1 = System.nanoTime
     val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource ) yield {
       val domainOpt: Option[DomainContainer] = data_container.getSource.getDomain.flatMap(request.getDomain)
       serverContext.createInputSpec( data_container, domainOpt, request )
     }
-    val t2 = System.nanoTime
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
-    val rv = new RequestContext ( jobId, sourceMap, request, profiler, run_args, executionCallback )
-    val t3 = System.nanoTime
-    profiler.timestamp( " LoadInputDataT: %.4f %.4f %.4f, MAXINT: %.2f G".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, Int.MaxValue/1.0E9 ), true )
-    rv
+    new RequestContext ( jobId, sourceMap, request, profiler, run_args, executionCallback )
   }
 
 //  def cacheInputData(request: TaskRequest, run_args: Map[String, String] ): Iterable[Option[(DataFragmentKey, Future[PartitionedFragment])]] = {
@@ -429,6 +425,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
       val response = results.toXml( ResponseSyntax.Generic )
       executionCallback.foreach( _.success( response ) )
       collectionDataCache.removeJob( jobId )
+      logger.info( "\n\n PROFILING RESULTS: \n ** " + requestContext.profiler.value.mkString( "\n ** ") )
       results
     }
   }

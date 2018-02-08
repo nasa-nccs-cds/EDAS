@@ -1,18 +1,14 @@
 package nasa.nccs.edas.engine
 
 import nasa.nccs.caching.{BatchSpec, RDDTransientVariable, collectionDataCache}
-import nasa.nccs.cdapi.cdm.{EDASDirectDataInput, OperationInput, _}
-import nasa.nccs.cdapi.tensors.CDFloatArray
+import nasa.nccs.cdapi.cdm.{OperationInput, _}
 import nasa.nccs.edas.kernels._
-import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
-import nasa.nccs.edas.sources.Aggregation
-import nasa.nccs.edas.utilities.runtime
+import nasa.nccs.edas.rdd.TimeSliceCollection
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
-import nasa.nccs.utilities.{DAGNode, Loggable, ProfilingTool}
+import nasa.nccs.utilities.{DAGNode, Loggable}
 import nasa.nccs.wps.{RDDExecutionResult, RefExecutionResult, WPSProcessExecuteResponse}
-import org.apache.spark.rdd.RDD
 import ucar.{ma2, nc2}
-import ucar.nc2.dataset.CoordinateAxis1DTime
+
 
 import scala.collection.mutable
 import scala.util.Try
@@ -194,7 +190,6 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def executeKernel(executor: WorkflowExecutor ):  KernelExecutionResult = {
     val root_node = executor.rootNode
     val kernelCx: KernelContext  = root_node.getKernelContext( executor )
-    kernelCx.addTimestamp( f" @CDS@ Executing Kernel for node ${root_node.getNodeId}" )
     val isIterative = false // executor.hasBatch(1)
     var batchIndex = 0
     var aggResult = TimeSliceCollection.empty

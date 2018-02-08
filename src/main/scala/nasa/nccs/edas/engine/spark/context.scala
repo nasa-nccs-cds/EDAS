@@ -10,7 +10,7 @@ import nasa.nccs.edas.engine.WorkflowNode
 import nasa.nccs.edas.kernels.{Kernel, KernelContext}
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process._
-import nasa.nccs.utilities.Loggable
+import nasa.nccs.utilities.{Loggable}
 import org.apache.spark.rdd.RDD
 import nasa.nccs.edas.utilities
 import org.apache.spark.{Partitioner, SparkConf, SparkContext, SparkEnv}
