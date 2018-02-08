@@ -5,7 +5,7 @@ import nasa.nccs.cdapi.tensors.{CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
-import nasa.nccs.edas.rdd._
+import nasa.nccs.edas.rdd.{VariableRecord, _}
 import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
@@ -68,6 +68,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def getTargetGrid: Option[TargetGrid] = workflowCx.getTargetGrid
   def releaseBatch: Unit = _inputsRDD.releaseBatch
   def getRegridSpec: Option[RegridSpec] = getGridRefInput.map( opInput => RegridSpec( opInput.fragmentSpec ) )
+  def variableRecs: Map[String,VariableRecord] = _inputsRDD.variableRecs
 
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Iterable[String] = {
     for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )
@@ -95,11 +96,15 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     section.foreach( section => _inputsRDD.section(section) )
   }
 
+  def regrid( kernelCx: KernelContext ): Unit = {
+    _inputsRDD.regrid( kernelCx )
+  }
+
   def extendRDD( generator: RDDGenerator, rdd: TimeSliceRDD, vSpecs: List[DirectRDDVariableSpec]  ): TimeSliceRDD = {
     if( vSpecs.isEmpty ) { rdd }
     else {
       val vspec = vSpecs.head
-      val extendedRdd = generator.parallelize(rdd, vspec.getAggregation(), vspec.uid, vspec.varShortName )
+      val extendedRdd = generator.parallelize(rdd, vspec )
       extendRDD( generator, extendedRdd, vSpecs.tail )
     }
   }
@@ -483,11 +488,11 @@ object GridContext extends Loggable {
     val timeAxis: Option[ HeapLongArray ] = targetGrid.getTimeAxisData
     val cfAxisNames: Array[String] = ( 0 until targetGrid.getRank ).map( dim_index => targetGrid.getCFAxisName( dim_index ) ).toArray
     val axisIndexMap: Map[String,Int] = Map( cfAxisNames.map( cfAxisName => cfAxisName.toLowerCase -> targetGrid.getAxisIndex(cfAxisName) ):_* )
-    new GridContext( uid, axisMap, timeAxis, cfAxisNames,axisIndexMap, targetGrid.collection.id )
+    new GridContext( uid, axisMap, timeAxis, cfAxisNames,axisIndexMap, targetGrid.collection.id, targetGrid.getGridFile )
   }
 }
 
-class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblArray )]], val timeAxis: Option[ HeapLongArray ], val cfAxisNames: Array[String], val axisIndexMap: Map[String,Int], val collectionId: String ) extends Serializable {
+class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblArray )]], val timeAxis: Option[ HeapLongArray ], val cfAxisNames: Array[String], val axisIndexMap: Map[String,Int], val collectionId: String, val gridFile: String ) extends Serializable {
   def getAxisIndices( axisConf: String ): AxisIndices = new AxisIndices( axisIds=axisConf.map( ch => getAxisIndex( ch.toString.toLowerCase ) ).toSet )
   def getAxisIndex( cfAxisName: String ): Int = axisIndexMap.getOrElse( cfAxisName, throw new Exception( "Unrecognized axis name ( should be 'x', 'y', 'z', or 't' ): " + cfAxisName ) )
   def getCFAxisName( dimension_index: Int ): String = cfAxisNames(dimension_index)

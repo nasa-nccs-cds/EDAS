@@ -861,18 +861,18 @@ class ncReadTest extends Loggable {
   }
 }
 
-case class VariableMetadata( nameAndDimensions: String, units: String, missing: Float, metadata: String, shape: Array[Int] )
-case class VariableRecord( timestamp: String, missing: Float, data: Array[Float] ) {
-  def length: Int = data.length
-}
-object VariableRecord {
-  def apply( rec: CDTimeSlice, varId: String ): VariableRecord = {
-    val element = rec.element( varId ).getOrElse( missingVar(rec,varId) )
-    new VariableRecord( new Date(rec.startTime).toString, element.missing, element.data )
-  }
-  def missingVar( rec: CDTimeSlice, varId: String ) = throw new Exception( s"Cant find variable ${varId} in CDTimeSlice, ids: ${rec.elements.keys.mkString(",")}")
-
-}
+//case class VariableMetadata( nameAndDimensions: String, units: String, missing: Float, metadata: String, shape: Array[Int] )
+//case class VariableRecord( timestamp: String, missing: Float, data: Array[Float] ) {
+//  def length: Int = data.length
+//}
+//object VariableRecord {
+//  def apply( rec: CDTimeSlice, varId: String ): VariableRecord = {
+//    val element = rec.element( varId ).getOrElse( missingVar(rec,varId) )
+//    new VariableRecord( new Date(rec.startTime).toString, element.missing, element.data )
+//  }
+//  def missingVar( rec: CDTimeSlice, varId: String ) = throw new Exception( s"Cant find variable ${varId} in CDTimeSlice, ids: ${rec.elements.keys.mkString(",")}")
+//
+//}
 
 
 

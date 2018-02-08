@@ -115,16 +115,16 @@ trait OperationInput {
   def disposable: Boolean = transient && satiated
   private def unknown( operation: OperationContext ) = throw new Exception(s"Unrecognized operation ${operation.identifier} in opInput ${getKeyString}")
   def consume( op: OperationContext ): Unit = _consumers.getOrElse( op.identifier, unknown(op) ).satiate()
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int )
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int )
 }
 class EmptyOperationInput() extends OperationInput {
   def getKeyString: String = "";
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {;}
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {;}
 }
 
 class DependencyOperationInput( val inputNode: WorkflowNode, val opNode: WorkflowNode ) extends OperationInput with Loggable {
   def getKeyString: String =  inputNode.getNodeId + "->" + opNode.getNodeId
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = inputNode.getProduct match {
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = inputNode.getProduct match {
     case None =>
       logger.info("\n\n ----------------------- NODE %s => BEGIN Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ") ) )
       workflow.stream(inputNode, executor, batchIndex)
@@ -142,7 +142,7 @@ class OperationTransientInput( val variable: RDDTransientVariable ) extends Oper
     case Some( dataFrag )=> dataFrag.getKeyString
     case None => variable.operation.inputs.mkString(":")
   }
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
 
   }
 }
@@ -171,7 +171,7 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
 
   def delete: Unit = Unit
 
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
 
   }
 
@@ -225,17 +225,16 @@ class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,St
     CDFloatArray.empty
   }
 
-  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
-    val gridRefInput: OperationDataInput =  executor.getGridRefInput.getOrElse( throw new Exception("No grid ref input found for domainRDDPartition") )
-    val varSpec = getRDDVariableSpec(uid)
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
     val opSection: Option[CDSection] = workflow.getOpSectionIntersection( gridRefInput.getGrid, node ).map( CDSection(_) )
+    val varSpec = getRDDVariableSpec(uid)
     executor.addFileInputs( workflow.executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex )
   }
 }
 
 class ExternalDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {
   override def data(partIndex: Int ): CDFloatArray = CDFloatArray.empty
-  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
     throw new Exception(" ExternalDataInput is not currently supported as a Kernel input ")
   }
 }
@@ -247,7 +246,7 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
 
   def data(partIndex: Int ): CDFloatArray = partitions.getPartData(partIndex, fragmentSpec.missing_value )
 
-  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
     throw new Exception(" PartitionedFragment is not currently supported as a Kernel input ")
   }
 

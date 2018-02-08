@@ -3,9 +3,7 @@ package nasa.nccs.edas.sources.netcdf
 import java.util.{Formatter, Locale}
 
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
-import nasa.nccs.cdapi.cdm.{CDSVariable, MetaCollectionFile, VariableMetadata, VariableRecord}
-import nasa.nccs.cdapi.data.HeapFltArray
-import nasa.nccs.cdapi.tensors.CDFloatArray
+import nasa.nccs.cdapi.cdm.{CDSVariable, MetaCollectionFile}
 import nasa.nccs.esgf.process.ContainerOps
 import nasa.nccs.utilities.Loggable
 import ucar.nc2.constants.AxisType
@@ -68,59 +66,59 @@ object NetcdfDatasetMgr extends Loggable with ContainerOps  {
         ma2array
     }
 
-  def createVariableMetadataRecord( varShortName: String, dataPath: String ): VariableMetadata = {
-    val ncDataset: NetcdfDataset = openCollection( varShortName, dataPath )
-    try {
-      ncDataset.getVariables.toList.find(v => v.getShortName equals varShortName) match {
-        case Some(variable) =>
-          try {
-            val attributes = Map(variable.getAttributes.toList.map(attr => attr.getShortName -> attr): _*)
-            val missing = getMissingValue(attributes)
-            val metadata = attributes.mapValues(_.getStringValue).mkString(";")
-            new VariableMetadata(variable.getNameAndDimensions, variable.getUnitsString, missing, metadata, variable.getShape)
-          } catch {
-            case err: Exception =>
-              logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));
-              logger.error(err.getStackTrace.map(_.toString).mkString("\n"))
-              throw err
-          }
-        case None => throw new Exception(s"Can't find variable $varShortName in dataset $dataPath ")
-      }
-    } finally { ncDataset.close() }
-  }
+//  def createVariableMetadataRecord( varShortName: String, dataPath: String ): VariableMetadata = {
+//    val ncDataset: NetcdfDataset = openCollection( varShortName, dataPath )
+//    try {
+//      ncDataset.getVariables.toList.find(v => v.getShortName equals varShortName) match {
+//        case Some(variable) =>
+//          try {
+//            val attributes = Map(variable.getAttributes.toList.map(attr => attr.getShortName -> attr): _*)
+//            val missing = getMissingValue(attributes)
+//            val metadata = attributes.mapValues(_.getStringValue).mkString(";")
+//            new VariableMetadata(variable.getNameAndDimensions, variable.getUnitsString, missing, metadata, variable.getShape)
+//          } catch {
+//            case err: Exception =>
+//              logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));
+//              logger.error(err.getStackTrace.map(_.toString).mkString("\n"))
+//              throw err
+//          }
+//        case None => throw new Exception(s"Can't find variable $varShortName in dataset $dataPath ")
+//      }
+//    } finally { ncDataset.close() }
+//  }
 
-  def createVariableDataRecord(varShortName: String, dataPath: String, section: ma2.Section): VariableRecord = {
-    val ncDataset: NetcdfDataset = openCollection( varShortName, dataPath )
-    try {
-      ncDataset.getVariables.toList.find(v => v.getShortName equals varShortName) match {
-        case Some(variable) =>
-          try {
-            val t0 = System.nanoTime()
-            val ma2array = variable.read(section)
-            val axes = ncDataset.getCoordinateAxes
-            val coordAxis = Option(ncDataset.findCoordinateAxis(AxisType.Time)).getOrElse(throw new Exception("Can't find time axis in dataset: " + dataPath))
-            val timeAxis = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
-            val timeIndex = section.getRange(0).first
-            val date = timeAxis.getCalendarDate(timeIndex)
-            val sample_data = (0 until Math.min(16, ma2array.getSize).toInt) map ma2array.getFloat
-            val attributes = Map(variable.getAttributes.toList.map(attr => attr.getShortName -> attr): _*)
-            val missing = getMissingValue(attributes)
-            val fltData: CDFloatArray = CDFloatArray.factory(ma2array, missing)
-            val dataArray = HeapFltArray(fltData, section.getOrigin, attributes.mapValues(_.toString), None)
-            logger.info("[T%d] Reading variable %s from path %s, section shape: (%s), section origin: (%s), variable shape: (%s), size = %.2f M, read time = %.4f sec, sample data = [ %s ]".format(
-              Thread.currentThread().getId(), varShortName, dataPath, section.getShape.mkString(","), section.getOrigin.mkString(","), variable.getShape.mkString(","), (section.computeSize * 4.0) / MB, (System.nanoTime() - t0) / 1.0E9, sample_data.mkString(", ")))
-            new VariableRecord(date.toString, dataArray.missing.getOrElse(Float.NaN), dataArray.data)
-          } catch {
-            case err: Exception =>
-              logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));
-              logger.error("Variable shape: (%s),  section: { o:(%s) s:(%s) }".format(variable.getShape.mkString(","), section.getOrigin.mkString(","), section.getShape.mkString(",")));
-              logger.error(err.getStackTrace.map(_.toString).mkString("\n"))
-              throw err
-          }
-        case None => throw new Exception(s"Can't find variable $varShortName in dataset $dataPath ")
-      }
-    } finally { ncDataset.close() }
-  }
+//  def createVariableDataRecord(varShortName: String, dataPath: String, section: ma2.Section): VariableRecord = {
+//    val ncDataset: NetcdfDataset = openCollection( varShortName, dataPath )
+//    try {
+//      ncDataset.getVariables.toList.find(v => v.getShortName equals varShortName) match {
+//        case Some(variable) =>
+//          try {
+//            val t0 = System.nanoTime()
+//            val ma2array = variable.read(section)
+//            val axes = ncDataset.getCoordinateAxes
+//            val coordAxis = Option(ncDataset.findCoordinateAxis(AxisType.Time)).getOrElse(throw new Exception("Can't find time axis in dataset: " + dataPath))
+//            val timeAxis = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
+//            val timeIndex = section.getRange(0).first
+//            val date = timeAxis.getCalendarDate(timeIndex)
+//            val sample_data = (0 until Math.min(16, ma2array.getSize).toInt) map ma2array.getFloat
+//            val attributes = Map(variable.getAttributes.toList.map(attr => attr.getShortName -> attr): _*)
+//            val missing = getMissingValue(attributes)
+//            val fltData: CDFloatArray = CDFloatArray.factory(ma2array, missing)
+//            val dataArray = HeapFltArray(fltData, section.getOrigin, attributes.mapValues(_.toString), None)
+//            logger.info("[T%d] Reading variable %s from path %s, section shape: (%s), section origin: (%s), variable shape: (%s), size = %.2f M, read time = %.4f sec, sample data = [ %s ]".format(
+//              Thread.currentThread().getId(), varShortName, dataPath, section.getShape.mkString(","), section.getOrigin.mkString(","), variable.getShape.mkString(","), (section.computeSize * 4.0) / MB, (System.nanoTime() - t0) / 1.0E9, sample_data.mkString(", ")))
+//            new VariableRecord(date.toString, dataArray.missing.getOrElse(Float.NaN), dataArray.data)
+//          } catch {
+//            case err: Exception =>
+//              logger.error("Can't read data for variable %s in dataset %s due to error: %s".format(varShortName, ncDataset.getLocation, err.toString));
+//              logger.error("Variable shape: (%s),  section: { o:(%s) s:(%s) }".format(variable.getShape.mkString(","), section.getOrigin.mkString(","), section.getShape.mkString(",")));
+//              logger.error(err.getStackTrace.map(_.toString).mkString("\n"))
+//              throw err
+//          }
+//        case None => throw new Exception(s"Can't find variable $varShortName in dataset $dataPath ")
+//      }
+//    } finally { ncDataset.close() }
+//  }
 
   def keys: Set[String] = datasetCache.keySet().toSet
   def values: Iterable[NetcdfDataset] = datasetCache.values()

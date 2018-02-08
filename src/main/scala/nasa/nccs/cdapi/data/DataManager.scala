@@ -1050,11 +1050,8 @@ class DirectCDTimeSliceSpec(val partition: Partition, iRecord: Int, val timeRang
 //}
 
 class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, section: CDSection, val varShortName: String, val collectionId: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
-
-  def getAggregation(): Aggregation = {
-    val collection: Collection = Collections.findCollection(collectionId) getOrElse { throw new Exception( s"Can't find collection ${collectionId}") }
-    collection.getAggregation(varShortName) getOrElse { throw new Exception( s"Can't find aggregation for variable ${varShortName} in collection ${collectionId}" ) }
-  }
+  def getCollection: Collection =  Collections.findCollection(collectionId) getOrElse { throw new Exception( s"Can't find collection ${collectionId}") }
+  def getAggregation(): Aggregation = getCollection.getAggregation(varShortName) getOrElse { throw new Exception( s"Can't find aggregation for variable ${varShortName} in collection ${collectionId}" ) }
 }
 
 class RDDVariableSpec( val uid: String, val metadata: Map[String,String], val missing: Float, val section: CDSection  ) extends Serializable with Loggable {

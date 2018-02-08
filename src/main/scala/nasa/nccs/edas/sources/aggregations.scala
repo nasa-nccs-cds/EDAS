@@ -28,6 +28,7 @@ case class FileInput(fileIndex: Int, startTime: Long, firstRowIndex: Int, nRows:
 case class Variable( name: String, shape: Array[Int], dims: String, units: String ) extends Serializable {
   def toXml: xml.Elem = { <variable name={name} shape={shape.mkString(",")} dims={dims} units={units} /> }
   override def toString: String = s"name:${name};shape:${shape.mkString(",")};dims:${dims};units:${units}"
+  def toMap: Map[String,String] = Seq( "name"->name, "shape"->shape.mkString(","), "dims"->dims, "units"->units ).toMap
 }
 case class Coordinate( name: String, shape: Array[Int], dims: String="", units: String="" ) extends Serializable
 case class Axis( name: String, ctype: String, shape: Array[Int], units: String, minval: Float, maxval: Float ) extends Serializable

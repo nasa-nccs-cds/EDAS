@@ -4,14 +4,15 @@ import java.nio.file.Paths
 import java.util.{Calendar, Date}
 
 import nasa.nccs.caching.BatchSpec
+import nasa.nccs.cdapi.cdm.{CDGrid, OperationDataInput}
 import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, FastMaskedArray, HeapFltArray}
 import org.apache.commons.lang.ArrayUtils
 import nasa.nccs.cdapi.tensors.{CDArray, CDFloatArray}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RecordKey}
-import nasa.nccs.edas.kernels.{Kernel, KernelContext}
-import nasa.nccs.edas.sources.{Aggregation, FileBase, FileInput}
+import nasa.nccs.edas.kernels.{CDMSRegridKernel, Kernel, KernelContext}
+import nasa.nccs.edas.sources.{Aggregation, Collection, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.esgf.process.{CDSection, ServerContext}
@@ -123,7 +124,7 @@ class DataCollection( val metadata: Map[String,String] ) extends Serializable {
 }
 
 object TimeSliceRDD {
-  def apply( rdd: RDD[CDTimeSlice], metadata: Map[String,String] ): TimeSliceRDD = new TimeSliceRDD( rdd, metadata)
+  def apply( rdd: RDD[CDTimeSlice], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ): TimeSliceRDD = new TimeSliceRDD( rdd, metadata, variableRecords )
   def merge( slices: Array[CDTimeSlice], op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): CDTimeSlice = { slices.toSeq.sortBy( _.startTime ).fold(CDTimeSlice.empty)(op) }
 }
 
@@ -148,18 +149,18 @@ class TSGroup( val calOp: (Calendar) => Long  ) {
 
 }
 
-class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) extends DataCollection(metadata) with Loggable {
+class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val variableRecords: Map[String,VariableRecord] ) extends DataCollection(metadata) with Loggable {
   import TimeSliceRDD._
   def cache() = rdd.cache()
   def nSlices = rdd.count
   def exe = { rdd.cache; rdd.count }
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
-  def section( section: CDSection ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.section(section) ), metadata )
-  def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata )
-  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = TimeSliceRDD( rdd.map( ts => op(ts) ), metadata )
+  def section( section: CDSection ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.section(section) ), metadata, variableRecords )
+  def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata, variableRecords )
+  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = TimeSliceRDD( rdd.map( ts => op(ts) ), metadata, variableRecords )
   def getNumPartitions = rdd.getNumPartitions
   def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
-  def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata )
+  def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata, variableRecords )
 
   def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice, optGroupBy: Option[TSGroup], ordered: Boolean = false ): TimeSliceCollection = {
     if (ordered) optGroupBy match {
@@ -177,8 +178,8 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String] ) ex
     }
   }
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
-  def selectElement( elemId: String ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElement( elemId ) ), metadata )
-  def selectElements(  op: String => Boolean  ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElements( op ) ), metadata )
+  def selectElement( elemId: String ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElement( elemId ) ), metadata, variableRecords )
+  def selectElements(  op: String => Boolean  ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElements( op ) ), metadata, variableRecords )
 }
 
 object TimeSliceCollection {
@@ -246,30 +247,32 @@ class PartitionExtensionGenerator(val partIndex: Int) extends Serializable {
   }
 }
 
+case class VariableRecord( varName: String, gridFilePath: String, metadata: Map[String,String] )
+
 class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
 
-
-  def parallelize( agg: Aggregation, varId: String, varName: String, section: String ): TimeSliceRDD = {
+  def parallelize( vspec: DirectRDDVariableSpec ): TimeSliceRDD = {
+    val section = vspec.section.toString
+    val collection: Collection = vspec.getCollection
+    val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
     val parallelism = Math.min( agg.files.length, nPartitions )
     val files = agg.getIntersectingFiles( section )
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
-    val rdd = filesDataset.mapPartitions( TimeSliceMultiIterator( varId, varName, section, agg.parms.getOrElse("base.path","") ) )
-    val variable = agg.findVariable( varName ).getOrElse { throw new Exception(s"Unrecognozed variable ${varName} in aggregation, vars = ${agg.variables.map(_.name).mkString(",")}")}
-    val metadata = Map( "section" -> section, varId -> variable.toString )
-    TimeSliceRDD( rdd, metadata ++ agg.parms )
+    val rdd = filesDataset.mapPartitions( TimeSliceMultiIterator( vspec.uid, vspec.varShortName, section, agg.parms.getOrElse("base.path","") ) )
+    val optVar = agg.findVariable( vspec.varShortName )
+    val metadata = optVar.fold(vspec.metadata)( _.toMap ++ vspec.metadata )
+    TimeSliceRDD( rdd, agg.parms, Map( vspec.uid -> new VariableRecord( vspec.varShortName, collection.grid.gridFilePath, metadata) ) )
   }
 
-
-
-
-
-  def parallelize( template: TimeSliceRDD, agg: Aggregation, varId: String, varName: String ): TimeSliceRDD = {
-    val variable = agg.findVariable( varName )
+  def parallelize( template: TimeSliceRDD, vspec: DirectRDDVariableSpec ): TimeSliceRDD = {
+    val collection: Collection = vspec.getCollection
+    val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
+    val optVar = agg.findVariable( vspec.varShortName )
     val section = template.getParameter( "section" )
     val basePath = agg.parms.get("base.path")
-    val rdd = template.rdd.mapPartitionsWithIndex( ( index, tSlices ) => PartitionExtensionGenerator(index).extendPartition( tSlices.toSeq, agg.getFilebase, varId, varName, section, agg.getBasePath ).toIterator )
-    val metadata = Map( "section" -> section, varId -> variable.toString )
-    TimeSliceRDD( rdd, metadata )
+    val rdd = template.rdd.mapPartitionsWithIndex( ( index, tSlices ) => PartitionExtensionGenerator(index).extendPartition( tSlices.toSeq, agg.getFilebase, vspec.uid, vspec.varShortName, section, agg.getBasePath ).toIterator )
+    val metadata = optVar.fold(vspec.metadata)( _.toMap ++ vspec.metadata )
+    TimeSliceRDD( rdd, metadata, template.variableRecords ++ Seq( vspec.uid -> new VariableRecord( vspec.varShortName, collection.grid.gridFilePath, metadata) ) )
   }
 }
 
@@ -440,6 +443,7 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
 
 class RDDContainer extends Loggable {
   private var _vault: Option[RDDVault] = None
+  val regridKernel = new CDMSRegridKernel()
   def releaseBatch = { _vault.foreach(_.clear);  _vault = None }
   private def vault: RDDVault = _vault.getOrElse { throw new Exception( "Unexpected attempt to access an uninitialized RDD Vault")}
   def value: TimeSliceRDD = vault.value
@@ -447,6 +451,7 @@ class RDDContainer extends Loggable {
   def contents: Iterable[String] = _vault.fold( Iterable.empty[String] ) ( _.contents )
   def section( section: CDSection ): Unit = vault.map( _.section(section) )
   def release( keys: Iterable[String] ): Unit = { vault.release( keys ) }
+  def variableRecs: Map[String,VariableRecord] = value.variableRecords
 
   private def initialize( init_value: TimeSliceRDD, contents: List[String] ) = {
     _vault = Some( new RDDVault( init_value ) )
@@ -467,7 +472,9 @@ class RDDContainer extends Loggable {
     }
   }
   def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
-
+  def regrid( context: KernelContext ): Unit = {
+    vault.update( regridKernel.mapRDD( vault.value, context ) )
+  }
   def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
   def reduceBroadcast( node: Kernel, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ) )
 
@@ -475,7 +482,7 @@ class RDDContainer extends Loggable {
     if( vSpecs.isEmpty ) { rdd }
     else {
       val vspec = vSpecs.head
-      val extendedRdd = generator.parallelize(rdd, vspec.getAggregation(), vspec.uid, vspec.varShortName )
+      val extendedRdd = generator.parallelize(rdd, vspec )
       _extendRDD( generator, extendedRdd, vSpecs.tail )
     }
   }
@@ -489,7 +496,7 @@ class RDDContainer extends Loggable {
       logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}" )
       val remainingVspecs = if( _vault.isEmpty ) {
         val tvspec = vSpecs.head
-        val baseRdd: TimeSliceRDD = generator.parallelize(tvspec.getAggregation(), tvspec.uid, tvspec.varShortName, tvspec.section.toString)
+        val baseRdd: TimeSliceRDD = generator.parallelize( tvspec )
         initialize( baseRdd, List(tvspec.uid) )
         vSpecs.tail
       } else { vSpecs }

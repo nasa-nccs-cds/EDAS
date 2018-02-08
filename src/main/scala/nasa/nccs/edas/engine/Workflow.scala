@@ -3,18 +3,17 @@ package nasa.nccs.edas.engine
 import nasa.nccs.caching.{BatchSpec, RDDTransientVariable, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{OperationInput, _}
 import nasa.nccs.edas.kernels._
-import nasa.nccs.edas.rdd.TimeSliceCollection
+import nasa.nccs.edas.rdd.{TimeSliceCollection, VariableRecord}
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
 import nasa.nccs.utilities.{DAGNode, Loggable}
 import nasa.nccs.wps.{RDDExecutionResult, RefExecutionResult, WPSProcessExecuteResponse}
 import ucar.{ma2, nc2}
 
-
+import scala.collection.immutable.Map
 import scala.collection.mutable
 import scala.util.Try
 
 object WorkflowNode {
-//  val regridKernel = new CDMSRegridKernel()
   private val _nodeProducts = new mutable.HashMap[String,TimeSliceCollection]
   def apply( operation: OperationContext, kernel: Kernel  ): WorkflowNode = { new WorkflowNode( operation, kernel ) }
   def apply( node: DAGNode ) : WorkflowNode = promote( node )
@@ -420,9 +419,11 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 //  }
 
   def processInputs(node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+    val gridRefInput: OperationDataInput =  executor.getGridRefInput.getOrElse( throw new Exception("No grid ref input found for domainRDDPartition") )
     executor.getInputs(node).foreach { case (uid, opinput) =>
-      opinput.processInput( uid, this, node, executor, kernelContext, batchIndex)
+      opinput.processInput( uid, this, node, executor, kernelContext, gridRefInput, batchIndex)
     }
+    executor.regrid( kernelContext.addVariableRecords( executor.variableRecs ) )
   }
 
 //  def getTimeReferenceRdd(rddMap: Map[String,RDD[CDTimeSlice]], kernelContext: KernelContext ): Option[RDD[CDTimeSlice]] = kernelContext.trsOpt map { trs =>
