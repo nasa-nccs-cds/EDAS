@@ -1,18 +1,16 @@
 package nasa.nccs.cdapi.cdm
 
 import java.io._
-import java.nio.channels.{FileChannel, NonReadableChannelException, ReadableByteChannel}
+import java.nio.channels.FileChannel
 
 import ucar.{ma2, nc2}
 import java.nio.file.{Files, Path, Paths}
 import java.net.URI
 import java.nio._
-import java.util.{Date, Formatter, Locale}
+import java.util.{Date, Formatter}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import nasa.nccs.cdapi.tensors.{CDDoubleArray, CDFloatArray, CDLongArray}
-import nasa.nccs.edas.engine.spark.RecordKey
-import nasa.nccs.edas.rdd.CDTimeSlice
+import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.sources.{Variable => _, _}
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.edas.utilities.{appParameters, runtime}
@@ -25,19 +23,12 @@ import ucar.nc2.constants.CDM
 import scala.collection.{concurrent, mutable}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.reflect.ClassTag
-import nasa.nccs.edas.workers.TransVar
-import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
-import nasa.nccs.esgf.process.{CDSection, ContainerBase, ContainerOps, DataSource}
 import nasa.nccs.esgf.wps.ProcessManager
 import ucar.nc2._
 import ucar.nc2.write.Nc4Chunking
-import ucar.nc2.time.CalendarPeriod
 
-import scala.util.matching.Regex
-import scala.collection.immutable.SortedMap
 import scala.io.Source
-import scala.xml.Node
+
 
 
 object CDGrid extends Loggable {
@@ -226,6 +217,8 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
   } catch {
     case err: Exception => false
   }
+
+  def getProjection: String = { coordSystems.headOption.fold("")( _.getProjection.getProjectionTypeLabel ) }
 
   def deleteAggregation = if (gridFileExists) new File(gridFilePath).delete()
 

@@ -49,13 +49,15 @@ trait ScopeContext {
   def config( key: String, default: String ): String = __configuration__.getOrElse(key,default)
   def config( key: String ): Option[String] = __configuration__.get(key)
 }
+case class EDASCoordSystem( resolution: String, projection: String ) extends Serializable {
+  def ==( other: EDASCoordSystem ): Boolean = resolution.equals( other.resolution ) && projection.equals( other.projection )
+}
 
 object RegridSpec {
-  def apply( target_input: DataFragmentSpec  ): RegridSpec = new RegridSpec( target_input.collection.getGridFilePath, target_input.cdsection.toSection.toString  )
+  def apply( target_input: DataFragmentSpec  ): RegridSpec = new RegridSpec( target_input.collection.getGridFilePath, target_input.collection.getResolution, target_input.collection.grid.getProjection, target_input.cdsection.toSection.toString  )
 }
-class RegridSpec( val gridFile: String, val subgrid: String ) extends Serializable {
-  def test = 0;
-}
+
+class RegridSpec( val gridFile: String, resolution: String, projection: String, val subgrid: String ) extends EDASCoordSystem( resolution, projection ) { }
 
 class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
   private var _inputsRDD: RDDContainer = new RDDContainer
@@ -93,7 +95,8 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
 
   def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
     _inputsRDD.addFileInputs( serverContext.spark, kernelCx, vSpecs )
-    section.foreach( section => _inputsRDD.section(section) )
+    printf( s"addFileInputs, kernel = ${kernelCx.operation.identifier}, vSpecs = [ ${vSpecs.map(_.uid).mkString(", ")} ] ")
+//    section.foreach( section => _inputsRDD.section(section) )
   }
 
   def regrid( kernelCx: KernelContext ): Unit = {
@@ -114,7 +117,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
 
   def addOperationInput(serverContext: ServerContext, inputs: TimeSliceCollection, section: Option[CDSection], batchIndex: Int ): Unit  = {
     addOperationInput( serverContext, inputs, batchIndex )
-    section.foreach( section => _inputsRDD.section( section ) )
+//    section.foreach( section => _inputsRDD.section( section ) )
   }
 
 }
@@ -327,7 +330,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
       if( cval <= endval ) {
         if( startIndex == -1 ) { startIndex = coordIndex }
       } else {
-        return if(startIndex == -1) { None} else { Some( new ma2.Range( startIndex, coordIndex-1 ) ) }
+        return if(startIndex == -1) { Some( new ma2.Range( coordIndex, coordIndex ) ) } else { Some( new ma2.Range( startIndex, coordIndex-1 ) ) }
       }
     }
     if( startIndex == -1 ) { None } else { Some( new ma2.Range( startIndex, axis_size - 1) ) }
@@ -524,6 +527,7 @@ class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblAr
 
 class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None ) extends CDSVariable( variable.name, variable.collection ) {
   val grid = GridSection( variable, roiOpt )
+  val dbg = 1
   def toBoundsString = roiOpt.map( _.map( _.toBoundsString ).mkString( "{ ", ", ", " }") ).getOrElse("")
   def getRank = grid.getRank
   def getGridSpec: String  = grid.getGridSpec

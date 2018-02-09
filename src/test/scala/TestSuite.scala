@@ -34,7 +34,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val use_local_data = false
   val test_cache = false
   val test_python = false
-  val test_binning = false
+  val test_binning = true
   val test_regrid = true
   val reanalysis_ensemble = false
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
@@ -121,11 +121,14 @@ class DefaultTestSuite extends EDASTestSuite {
 
 
   test("NCML-timeBinAveTestLocal")  { if(test_binning) {
-    val data_file = "http://dataserver.nccs.nasa.gov/thredds/dodsC/bypass/CREATE-IP/reanalysis/CFSR/6hr/atmos/ta_2000s.ncml"
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":180,"end":180,"system":"indices"},"lon":{"start":20,"end":20,"system":"indices"},"level":{"start":20,"end":20,"system":"indices"}}],variable=[{"uri":"%s","name":"ta:v1","domain":"d0"}],operation=[{"name":"CDSpark.binAve","input":"v1","domain":"d0","cycle":"diurnal","bin":"month","axes":"t"}]]""".format( data_file )
-    val result_node = executeTest( datainputs, Map( "numParts" -> "4" ) )
-    val result_data = getResultDataArraySeq( result_node )
-    println( " ** CDMS Results:       \n\t" + result_data.map( tup => tup._1.toString + " ---> " + tup._2.mkBoundedDataString(", ",16) ).mkString("\n\t") )
+    val data_file = "collection:/giss_r1i1p1"
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":10,"end":10,"system":"indices"},"lon":{"start":20,"end":20,"system":"indices"}}],variable=[{"uri":"%s","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","groupBy":"monthofyear","axes":"t"}]]""".format( data_file )
+    val result_node = executeTest( datainputs )
+    val result_data = CDFloatArray( getResultData( result_node ) )
+    println( " ** CDMS Result:       " + result_data.mkDataString(", ") )
+
+ //   val result_data = getResultDataArraySeq( result_node )
+ //   println( " ** CDMS Results:       \n\t" + result_data.map( tup => tup._1.toString + " ---> " + tup._2.mkBoundedDataString(", ",16) ).mkString("\n\t") )
   }}
 
   test("pyMaxTestLocal")  { if(test_python) {
@@ -323,7 +326,7 @@ class DefaultTestSuite extends EDASTestSuite {
 
 
   test("anomaly")  { if(test_binning) {
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":40,"end":50,"system":"values"},"lon":{"start":10,"end":10,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.binAve","input":"v1","domain":"d0","axes":"yt","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":40,"end":60,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","groupBy":"monthofyear","axes":"xt","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
@@ -360,23 +363,23 @@ class DefaultTestSuite extends EDASTestSuite {
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",300) )
   }
 
-  test("time-ave-domains-diff")  {  if( test_binning ) {
-    val datainputs =
-      s"""[domain=[
-              {"name":"d0", "time": {"start":"1980-01-01T00:00:00", "end":"1981-01-01T00:00:00", "crs": "timestamps"}},
-              {"name":"d1", "time": {"start":"2000-01-01T00:00:00", "end":"2001-01-01T00:00:00", "crs": "timestamps"}}],
-          variable=[
-              {"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"},
-              {"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d1"}],
-          operation=[
-              {"name":"CDSpark.ave","input":"v0","axes":"t","id":"v0ave"},
-              {"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave"},
-              {"name":"CDSpark.eDiff","input":"v0ave,v1ave"}]
-          ]""".stripMargin
-    val result_node = executeTest( datainputs )
-    val result_data = getResultData( result_node )
-    println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
-  }}
+//  test("time-ave-domains-diff")  {  if( test_binning ) {
+//    val datainputs =
+//      s"""[domain=[
+//              {"name":"d0", "time": {"start":"1980-01-01T00:00:00", "end":"1981-01-01T00:00:00", "crs": "timestamps"}},
+//              {"name":"d1", "time": {"start":"2000-01-01T00:00:00", "end":"2001-01-01T00:00:00", "crs": "timestamps"}}],
+//          variable=[
+//              {"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"},
+//              {"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d1"}],
+//          operation=[
+//              {"name":"CDSpark.ave","input":"v0","axes":"t","id":"v0ave"},
+//              {"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave"},
+//              {"name":"CDSpark.eDiff","input":"v0ave,v1ave"}]
+//          ]""".stripMargin
+//    val result_node = executeTest( datainputs )
+//    val result_data = getResultData( result_node )
+//    println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
+//  }}
 
   test("pyMaximum-cache")  { if(test_python && test_cache ) {
     val nco_verified_result = 309.7112

@@ -191,7 +191,7 @@ class Collection( val ctype: String, val id: String, val dataPath: String, val a
 //  }
 
   def getResolution: String = try {
-    grid.resolution.map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")
+    grid.resolution.toSeq.sortBy( _._1 ).map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")
   } catch {
     case ex: Exception =>
       print( s"Exception in Collection.getResolution: ${ex.getMessage}" )
