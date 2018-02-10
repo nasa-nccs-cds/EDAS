@@ -304,7 +304,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val axes = context.getAxes
       val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
         context.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
-          val optGroup = context.config("groupBy") map TSGroup.getGroup
+          val optGroup = context.operation.config("groupBy") map TSGroup.getGroup
           reduceElements.reduce(getReduceOp(context), optGroup, ordered)
         })
       } else {
@@ -592,7 +592,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def collectRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = { a0 ++ a1 }
 
 
-  def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = combineRDD(context)( a0, a1 )
+  def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =
+    if( a0.isEmpty ) { a1 } else  if( a1.isEmpty ) { a0 } else { combineRDD(context)( a0, a1 ) }
 
   def getDataSample(result: CDFloatArray, sample_size: Int = 20): Array[Float] = {
     val result_array = result.floatStorage.array

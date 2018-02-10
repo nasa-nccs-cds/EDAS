@@ -139,7 +139,7 @@ object TimeSliceRDD {
 
 object TSGroup {
   def sortedMerge(  op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice )(slices: Iterable[CDTimeSlice]): CDTimeSlice = { slices.toSeq.sortBy( _.startTime ).fold(CDTimeSlice.empty)(op) }
-  def merge(  op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice )(slices: Iterable[CDTimeSlice]): CDTimeSlice = { slices.toSeq.fold(CDTimeSlice.empty)(op) }
+  def merge(  op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice )(slices: Iterable[CDTimeSlice]): CDTimeSlice = { slices.toSeq.reduce(op) }
   def season( month: Int ): Int = ( month % 12 )/3
   def getGroup( groupBy: String ): TSGroup = {
     if( groupBy.equalsIgnoreCase("monthofyear") ) { new TSGroup ( cal => cal.get( Calendar.MONTH ) ) }
@@ -152,8 +152,8 @@ object TSGroup {
   }
 }
 
-class TSGroup( val calOp: (Calendar) => Long  ) {
-  val calendar = Calendar.getInstance()
+class TSGroup( val calOp: (Calendar) => Long  ) extends Serializable {
+  lazy val calendar = Calendar.getInstance()
   def group( slice: CDTimeSlice ): Long = { calendar.setTimeInMillis(slice.midpoint); calOp( calendar ) }
 
 }
@@ -183,7 +183,10 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
       case None =>
         val rv = rdd.treeReduce(op)
         TimeSliceCollection( rv, metadata )
-      case Some( groupBy ) => TimeSliceCollection( rdd.groupBy( groupBy.group ).mapValues( TSGroup.merge(op) ).map( _._2 ).collect.sortBy( _.startTime ), metadata )
+      case Some( groupBy ) =>
+        val groupedRdd: RDD[(Long,CDTimeSlice)] = rdd.groupBy( groupBy.group ).mapValues( TSGroup.merge(op) )
+        val ns = groupedRdd.count
+        TimeSliceCollection( groupedRdd.map( _._2 ).collect.sortBy( _.startTime ), metadata )
     }
   }
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )

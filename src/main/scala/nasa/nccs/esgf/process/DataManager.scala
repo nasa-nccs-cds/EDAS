@@ -46,8 +46,8 @@ trait DataLoader {
 trait ScopeContext {
   private lazy val __configuration__ = getConfiguration
   def getConfiguration: Map[String,String]
-  def config( key: String, default: String ): String = __configuration__.getOrElse(key,default)
-  def config( key: String ): Option[String] = __configuration__.get(key)
+  def config( key: String, default: String ): String = __configuration__.getOrElse(key.toLowerCase,default)
+  def config( key: String ): Option[String] = __configuration__.get(key.toLowerCase)
 }
 case class EDASCoordSystem( resolution: String, projection: String ) extends Serializable {
   def ==( other: EDASCoordSystem ): Boolean = resolution.equals( other.resolution ) && projection.equals( other.projection )
