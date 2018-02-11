@@ -743,7 +743,8 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val worker: PythonWorker = workerManager.getPythonWorker
 
       for ((uid, input_array) <- acceptable_array_map) {
-        worker.sendArrayMetadata(uid, input_array.toHeapFltArray(""))
+        val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
+        worker.sendArrayMetadata(uid, input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions))))
       }
       for ((uid, input_array) <- regrid_array_map) {
         logger.info(s"Sending Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]")
