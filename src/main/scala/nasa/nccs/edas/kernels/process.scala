@@ -743,11 +743,13 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val worker: PythonWorker = workerManager.getPythonWorker
 
       for ((uid, input_array) <- acceptable_array_map) {
-        worker.sendArrayMetadata(uid, input_array.toHeapFltArray)
+        worker.sendArrayMetadata(uid, input_array.toHeapFltArray(""))
       }
       for ((uid, input_array) <- regrid_array_map) {
         logger.info(s"Sending Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]")
-        worker.sendRequestInput(uid, input_array.toHeapFltArray)
+        val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
+        val data_array = input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+        worker.sendRequestInput( uid, data_array )
       }
 
       logger.info("Gateway: Executing operation %s".format(context.operation.identifier))
@@ -785,6 +787,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
   override def cleanUp(): Unit = PythonWorkerPortal.getInstance.shutdown()
 
   override def map(context: KernelContext)(inputs: CDTimeSlice): CDTimeSlice = {
+    val targetGrid: GridContext = context.grid
     val workerManager: PythonWorkerPortal = PythonWorkerPortal.getInstance()
     val worker: PythonWorker = workerManager.getPythonWorker
     try {
@@ -792,7 +795,9 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
       val t1 = System.nanoTime
       for (input_id <- context.operation.inputs) inputs.element(input_id) match {
         case Some(input_array) =>
-          worker.sendRequestInput(input_id, input_array.toHeapFltArray)
+          val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(input_id)
+          val data_array = input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+          worker.sendRequestInput( input_id, data_array )
         case None =>
           worker.sendUtility(List("input", input_id).mkString(";"))
       }

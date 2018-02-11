@@ -93,7 +93,8 @@ class npArray(CDArray):
     @classmethod
     def createInput(self, header, data):
         """  :rtype: npArray """
-        print(" ***->> Creating Input, header = {0}".format( header ) )
+        logger = logging.getLogger("worker")
+        logger.info(" ***->> Creating Input, header = {0}".format( header ) )
         header_toks = header.split('|')
         id = header_toks[1]
         origin = mParse.s2it(header_toks[2])
@@ -101,14 +102,14 @@ class npArray(CDArray):
         metadata = mParse.s2m(header_toks[4])
         if data:
             try:
-                print(" ***>> Creating Input, id = {0}, data size = {1}, shape = {2}".format( id, len(data), str(shape) ) )
+                logger.info(" ***>> Creating Input, id = {0}, data size = {1}, shape = {2}".format( id, len(data), str(shape) ) )
                 raw_data = np.frombuffer( data, dtype=IO_DType ).astype(np.float32)
                 undef_value = raw_data[-1]
-                print(" *** buffer len = {0}, undef = {1}, head = {2}".format( str(len(raw_data)), str(undef_value), str(raw_data[0]) ) )
+                logger.info(" *** buffer len = {0}, undef = {1}, head = {2}".format( str(len(raw_data)), str(undef_value), str(raw_data[0]) ) )
                 data_array = ma.masked_invalid( raw_data[0:-1].reshape(shape) )
                 nparray =  ma.masked_equal(data_array,undef_value) if ( undef_value != 1.0 ) else data_array
             except Exception as err:
-                print " !!!!! Error creating input array: " + str(err)
+                logger.info( " !!!!! Error creating input array: " + str(err) )
                 nparray = None
                 undef_value = float('inf')
         else:
@@ -143,7 +144,7 @@ class npArray(CDArray):
         self.gridFile = self.metadata["gridfile"]
         self.name = self.metadata.get("name","")
         self.collection = self.metadata.get("collection","")
-        self.dimensions = self.metadata.get("dimensions","").split(",")
+        self.dimensions = self.metadata["dimensions"].split(",")    # Ordered list of coordinate axis names
         self.array = _ndarray
         self.undef = _undef
         self.variable = None

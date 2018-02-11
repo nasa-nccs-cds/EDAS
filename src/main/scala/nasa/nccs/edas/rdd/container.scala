@@ -39,7 +39,7 @@ object ArraySpec {
 case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
   def size: Long = shape.product
   def ++( other: ArraySpec ): ArraySpec = concat( other )
-  def toHeapFltArray = new HeapFltArray( shape, origin, data, Option( missing ) )
+  def toHeapFltArray( gridSpec: String, metadata: Map[String,String] = Map.empty) = new HeapFltArray( shape, origin, data, Option( missing ), gridSpec, metadata + ( "gridfile" -> gridSpec ) )
   def toFastMaskedArray: FastMaskedArray = FastMaskedArray( shape, data, missing )
   def toCDFloatArray: CDFloatArray = CDFloatArray(shape,data,missing)
   def getSection: ma2.Section = new ma2.Section( origin, shape )
@@ -258,10 +258,10 @@ class PartitionExtensionGenerator(val partIndex: Int) extends Serializable {
 
 object VariableRecord {
   def apply( vspec: DirectRDDVariableSpec, collection: Collection, metadata: Map[String,String]  ): VariableRecord =
-    new VariableRecord( vspec.varShortName, collection.grid.gridFilePath, collection.getResolution, collection.grid.getProjection, vspec.metadata ++ metadata )
+    new VariableRecord( vspec.varShortName, collection.grid.gridFilePath, collection.getResolution, collection.grid.getProjection, vspec.getParameter("dimensions",""), vspec.metadata ++ metadata )
 }
 
-class VariableRecord( val varName: String, val gridFilePath: String, resolution: String, projection: String, val metadata: Map[String,String] ) extends EDASCoordSystem( resolution, projection ) {
+class VariableRecord( val varName: String, val gridFilePath: String, resolution: String, projection: String, val dimensions: String, val metadata: Map[String,String] ) extends EDASCoordSystem( resolution, projection ) {
 }
 
 class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {

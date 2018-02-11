@@ -33,7 +33,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val use_npana_data = false
   val use_local_data = false
   val test_cache = false
-  val test_python = false
+  val test_python = true
   val test_binning = true
   val test_regrid = true
   val reanalysis_ensemble = false
