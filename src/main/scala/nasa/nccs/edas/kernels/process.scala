@@ -5,25 +5,25 @@ import java.nio.{ByteBuffer, ByteOrder, FloatBuffer}
 
 import nasa.nccs.caching.EDASPartitioner
 import nasa.nccs.cdapi.cdm._
-import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.data.{HeapFltArray, _}
 import nasa.nccs.cdapi.tensors.CDFloatArray.{ReduceNOpFlt, ReduceOpFlt, ReduceWNOpFlt}
-import nasa.nccs.cdapi.tensors.{CDArray, CDCoordMap, CDFloatArray, CDTimeCoordMap}
+import nasa.nccs.cdapi.tensors.{CDArray, CDFloatArray}
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow, WorkflowNode}
-import nasa.nccs.edas.engine.WorkflowNode.regridKernel
-import nasa.nccs.edas.engine.spark.RecordKey
+import nasa.nccs.edas.rdd._
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.edas.workers.python.{PythonWorker, PythonWorkerPortal}
-import nasa.nccs.edas.utilities.{appParameters, runtime}
-import nasa.nccs.esgf.process.{RegridSpec, _}
-import nasa.nccs.utilities.{Loggable, ProfilingTool}
+import nasa.nccs.edas.utilities.appParameters
+import nasa.nccs.esgf.process._
+import nasa.nccs.utilities.{EventAccumulator, Loggable}
 import nasa.nccs.wps.{WPSProcess, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
+import ucar.ma2.IndexIterator
 import ucar.nc2.Attribute
 import ucar.{ma2, nc2}
 
 import scala.collection.JavaConversions._
-import scala.collection.immutable.{SortedMap, TreeMap}
+import scala.collection.JavaConverters._
+import scala.collection.immutable.{Map, SortedMap, TreeMap}
 import scala.collection.mutable
 
 object Port {
@@ -43,6 +43,22 @@ class Port( val name: String, val cardinality: String, val description: String, 
   }
 }
 
+object EmptyFloatIterator {
+  def apply(): Iterator[Float] = new EmptyFloatIterator
+}
+
+class EmptyFloatIterator extends Iterator[Float] {
+  def hasNext: Boolean = false
+  def next(): Float = { throw new Exception( "Next on empty float iterator") }
+}
+
+class AxisIndices( private val axisIds: Set[Int] = Set.empty ) extends Serializable {
+  def getAxes: Seq[Int] = axisIds.toSeq
+  def args = axisIds.toArray
+  def includes( axisIndex: Int ): Boolean = axisIds.contains( axisIndex )
+  override def toString = axisIds.mkString(",")
+}
+
 object KernelContext {
   def apply( operation: OperationContext, executor: WorkflowExecutor ): KernelContext = {
     val sectionMap: Map[String, Option[CDSection]] = executor.requestCx.inputs.mapValues(_.map(_.cdsection)).map(identity)
@@ -54,93 +70,80 @@ object KernelContext {
   }
 }
 
-class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],  _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec], val profiler: ProfilingTool ) extends Loggable with Serializable with ScopeContext {
+class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],
+                     _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec],  val profiler: EventAccumulator ) extends Loggable with Serializable with ScopeContext {
   val trsOpt = getTRS
-  val timings: mutable.SortedSet[(Float,String)] = mutable.SortedSet.empty
-  val configuration = crsOpt.map( crs => _configuration + ("crs" -> crs ) ) getOrElse _configuration
+  val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
+  val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
   val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
+  lazy val axes: AxisIndices = grid.getAxisIndices(config("axes", ""))
+  private var _variableRecs: Map[String,VariableRecord] = Map.empty[String,VariableRecord]
 
-  def addRddElements( vSpecs: List[DirectRDDVariableSpec] )( rddRec: RDDRecord ): RDDRecord = regridKernel.map( this )( vSpecs.foldLeft(rddRec)( _.extend(_) ) )
-//  def addRddElements( vSpecs: List[DirectRDDVariableSpec] )( rddRec: RDDRecord ): RDDRecord = vSpecs.foldLeft(rddRec)( _.extend(_) )
   lazy val grid: GridContext = getTargetGridContext
-  def findGrid( gridRef: String ): Option[GridContext] = grids.find( item => ( item._1.equalsIgnoreCase(gridRef) || item._1.split('-')(0).equalsIgnoreCase(gridRef) ) ).flatMap( _._2 )
-  def getConfiguration: Map[String,String] = configuration ++ operation.getConfiguration
-  def getAxes: AxisIndices = grid.getAxisIndices( config("axes", "") )
-  def getContextStr: String = getConfiguration map { case ( key, value ) => key + ":" + value } mkString ";"
-  def getDomainMetadata(domId: String): Map[String,String] = domains.get(domId) match { case Some(dc) => dc.metadata; case None => Map.empty }
+  def addVariableRecords( varRecs: Map[String,VariableRecord] ): KernelContext = { _variableRecs = _variableRecs ++ varRecs; this }
+  def getInputVariableRecord(vid: String): Option[VariableRecord] = _variableRecs.get(vid)
+
+  def findGrid(gridRef: String): Option[GridContext] = grids.find(item => (item._1.equalsIgnoreCase(gridRef) || item._1.split('-')(0).equalsIgnoreCase(gridRef))).flatMap(_._2)
+
+  def getConfiguration: Map[String, String] = configuration ++ operation.getConfiguration
+
+  def getReductionSize: Int = {
+    val section: CDSection = sectionMap.head._2.getOrElse( throw new Exception(s"Can't find section for inputs of operation ${operation.identifier}") )
+    getAxes.getAxes.map( axisIndex => section.getShape( axisIndex ) ).product
+  }
+
+  def getAxes: AxisIndices = axes
+
+  def doesTimeOperations = axes.includes( 0 )
+
+  def getContextStr: String = getConfiguration map { case (key, value) => key + ":" + value } mkString ";"
+
+  def getDomainMetadata(domId: String): Map[String, String] = domains.get(domId) match {
+    case Some(dc) => dc.metadata;
+    case None => Map.empty
+  }
+
   def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
-  def getGridConfiguration( key: String ): Option[String] = _configuration.get( "crs" ).orElse( getDomains.flatMap ( _.metadata.get("crs") ).headOption )
+
+  def getGridConfiguration(key: String): Option[String] = _configuration.get("crs").orElse(getDomains.flatMap(_.metadata.get("crs")).headOption)
+
   def getWeightMode: Option[String] = _weightsOpt
 
   def getDomains: List[DomainContainer] = operation.getDomains flatMap domains.get
-  def getDomainSections: List[CDSection] = operation.getDomains.flatMap( sectionMap.get ).flatten
-  private def getCRS: Option[String] = getGridConfiguration( "crs" )
-  private def getTRS: Option[String] = getGridConfiguration( "trs" )
 
-  def conf( params: Map[String,String] ): KernelContext = new KernelContext( operation, grids, sectionMap, domains, configuration ++ params, crsOpt, regridSpecOpt, profiler )
-  def commutativeReduction: Boolean = if( getAxes.includes(0) ) { true } else { false }
+  def getDomainSections: List[CDSection] = operation.getDomains.flatMap(sectionMap.get).flatten
+
+  private def getCRS: Option[String] = getGridConfiguration("crs")
+
+  private def getTRS: Option[String] = getGridConfiguration("trs")
+
+//  def conf(params: Map[String, String]): KernelContext = new KernelContext(operation, grids, sectionMap, domains, configuration ++ params, crsOpt, regridSpecOpt, profiler)
+
+  def commutativeReduction: Boolean = if (getAxes.includes(0)) { true } else { false }
+
   def doesTimeReduction: Boolean = getAxes.includes(0)
-  def addTimestamp( label: String, log: Boolean = false ): Unit = {
-    profiler.timestamp(label)
-    if( log ) { logger.info(label) }
-  }
 
   private def getTargetGridContext: GridContext = crsOpt match {
-    case Some( crs ) =>
-      if( crs.startsWith("~") ) { findGrid( crs.substring(1) ).getOrElse( throw new Exception(s"Unsupported grid specification '$crs' in KernelContext for op '$operation'" ) ) }
-      else if( crs.contains('~') ) { findAnyGrid }
-      else { throw new Exception( "Currently unsupported crs specification") }
+    case Some(crs) =>
+      if (crs.startsWith("~")) {
+        findGrid(crs.substring(1)).getOrElse(throw new Exception(s"Unsupported grid specification '$crs' in KernelContext for op '$operation'"))
+      }
+      else if (crs.contains('~')) {
+        findAnyGrid
+      }
+      else {
+        throw new Exception("Currently unsupported crs specification")
+      }
     case None => findAnyGrid
   }
-
-  //  def getGridSection( inputId: String ): Option[GridSection] = sectionMap.getOrElse(None).map( section => GridSection())
 }
 
-//class EDASExecutionContext( val operation: OperationContext, val request: RequestContext, val server: ServerContext ) extends Loggable  {
-//  val targetGrids = request.getTargetGrids
-//
-//  def getOpSections(uid: String): Option[ IndexedSeq[ma2.Section] ] = {
-//    val optargs: Map[String, String] = operation.getConfiguration
-//    val domains: IndexedSeq[DomainContainer] = optargs.get("domain") match {
-//      case Some(domainIds) => domainIds.split(",").map(request.getDomain(_))
-//      case None => return Some( IndexedSeq.empty[ma2.Section] )
-//    }
-////    logger.info( "OPT DOMAIN Arg: " + optargs.getOrElse( "domain", "None" ) )
-////    logger.info( "OPT Domains: " + domains.map(_.toString).mkString( ", " ) )
-//    targetGrids.get(uid).flatMap( _.map ( targetGrid => domains.map( dc => targetGrid.grid.getSubSection(dc.axes).getOrElse(new ma2.Section(List.empty)) ) ) )
-//  }
-//
-//  def toKernelContext: KernelContext = {
-//    val sectionMap: Map[String,Option[CDSection]] = request.inputs.mapValues( _.map( _.cdsection ) ).map(identity)
-//    new KernelContext( operation, targetGrids.mapValues(_.map(GridContext(_))), sectionMap, request.getConfiguration )
-//  }
-//
-//  def getOpSectionIntersection(uid: String): Option[ ma2.Section ] = getOpSections(uid) match {
-//    case None => return None
-//    case Some( sections ) =>
-//      if( sections.isEmpty ) None
-//      else {
-//        val result = sections.foldLeft(sections.head)( _.intersect(_) )
-//        if (result.computeSize() > 0) { Some(result) }
-//        else return None
-//      }
-//  }
-//  def getOpCDSectionIntersection: Option[ CDSection ] = getOpSectionIntersection().map( CDSection( _ ) )
-//}
-
-case class ResultManifest( val name: String, val dataset: String, val description: String, val units: String )
-
-class AxisIndices( private val axisIds: Set[Int] = Set.empty ) {
-  def getAxes: Seq[Int] = axisIds.toSeq
-  def args = axisIds.toArray
-  def includes( axisIndex: Int ): Boolean = axisIds.contains( axisIndex )
-  override def toString = axisIds.mkString(",")
-}
+case class ResultManifest( val name: String, val dataset: String, val description: String, val units: String ) {}
 
 object Kernel extends Loggable {
-  val customKernels = List[Kernel]( new CDMSRegridKernel() )
-  type RDDKeyValPair = ( RecordKey, RDDRecord )
-  def isEmpty( kvp: RDDKeyValPair ) = kvp._2.elements.isEmpty
+  var profileTime: Float = 0f
+  val customKernels = List[Kernel](  ) // new CDMSRegridKernel()
+  def isEmpty( kvp: CDTimeSlice ) = kvp.elements.isEmpty
 
   def getResultFile( resultId: String, deleteExisting: Boolean = false ): File = {
     val resultsDir = getResultDir
@@ -154,33 +157,6 @@ object Kernel extends Loggable {
     val resultsDirPath = rawResultsDirPath.replace( "~",  System.getProperty("user.home") ).replaceAll("[()]","-").replace("=","~")
     val resultsDir = new File(resultsDirPath); resultsDir.mkdirs()
     resultsDir
-  }
-
-  def mergeRDD(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair = {
-    val ( rdd0, rdd1 ) = ( a0._2, a1._2 )
-    val ( k0, k1 ) = ( a0._1, a1._1 )
-    val t0 = System.nanoTime
-    logger.info("&MERGE: start (%s <-> %s), sample rdd0 = %s, rdd1 = %s".format( k0.toString, k1.toString, rdd0.head._2.getSampleDataStr(10,0), rdd1.head._2.getSampleDataStr(10,0)  ) )
-    val new_key = k0 + k1
-    val new_elements = rdd0.elements.flatMap {
-      case (elkey, element0) =>  rdd1.elements.get(elkey).map( element1 => elkey -> { if( k0.start <= k1.start ) { element0.append(element1) } else { element1.append(element0) } } )
-    }
-    val dt = (System.nanoTime - t0) / 1.0E9
-    logger.info("&MERGE: complete in time = %.4f s, result sample = %s".format( dt, new_elements.head._2.getSampleDataStr(10,0) ) )
-    context.addTimestamp("&MERGE: complete, time = %.4f s, key = ".format( dt, new_key.toString ) )
-    new_key -> RDDRecord( new_elements, rdd0.mergeMetadata("merge", rdd1), rdd0.partition )
-  }
-
-  def orderedMergeRDD(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair = {
-    val ( rdd0, rdd1 ) = ( a0._2, a1._2 )
-    val ( k0, k1 ) = ( a0._1, a1._1 )
-    val t0 = System.nanoTime
-    val new_key = k0 + k1
-    logger.info("orderedMergeRDD: %s + %s -> %s".format( k0.toString, k1.toString, new_key.toString ))
-    val new_elements = rdd0.elements.map { case (key, array) => (key+"%"+k0.elemStart, array) } ++ rdd1.elements.map { case (key, array) => (key+"%"+k1.elemStart, array) }
-    val dt = (System.nanoTime - t0) / 1.0E9
-    context.addTimestamp("&MERGE: complete, time = %.4f s, key = ".format( dt, new_key.toString ) )
-    new_key -> RDDRecord( new_elements, rdd0.mergeMetadata("merge", rdd1), rdd0.partition )
   }
 
   def apply(module: String, kernelSpec: String, api: String): Kernel = {
@@ -227,7 +203,7 @@ object KernelUtilities extends Loggable {
         axisDataMap.get('y') match {
           case Some( ( axisIndex, yAxisData ) ) =>
             val axis_length = yAxisData.getSize
-            val axis_data = CDFloatArray.factory( yAxisData, Float.MaxValue )
+            val axis_data =  CDFloatArray.factory( yAxisData.copy(), Float.MaxValue )
             assert( axis_length == shape(axisIndex), "Y Axis data mismatch, %d vs %d".format(axis_length,shape(axisIndex) ) )
             val cosineWeights: CDFloatArray = axis_data.map( x => Math.cos( Math.toRadians(x) ).toFloat )
             val base_shape: Array[Int] = Array( shape.indices.map(i => if(i==axisIndex) shape(axisIndex) else 1 ): _* )
@@ -263,55 +239,19 @@ object KernelStatus {
   }
 }
 
-class RDDContainer( init_value: RDD[(RecordKey,RDDRecord)] ) extends Loggable {
-  private val _contents = mutable.HashSet.empty[String]
-  private var _vault = new RDDVault(init_value)
-  def releaseBatch = { _vault.clear; _contents.clear() }
-
-  class RDDVault( init_value: RDD[(RecordKey,RDDRecord)] ) {
-    private var _rdd = init_value; _rdd.cache()
-    def update( new_rdd: RDD[(RecordKey,RDDRecord)] ): Unit = { _rdd.unpersist(false); _rdd = new_rdd; _rdd.cache }
-    def map( f: (RDD[(RecordKey,RDDRecord)]) => RDD[(RecordKey,RDDRecord)] ): Unit = update( f(_rdd) )
-    def updateValues( f: (RDDRecord) => RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ f(rec) ) )
-    def mapValues( f: (RDDRecord) => RDDRecord ): Unit = update( _rdd.mapValues( rec => f(rec) ) )
-    def +=( record: RDDRecord ): Unit = update( _rdd.mapValues( rec => rec ++ record ) )
-    def value = _rdd
-    def fetchContents: Set[String] = _rdd.map { case (key,rec) => rec.elements.keySet }.first
-    def release( keys: Iterable[String] ): Unit = mapValues( _.release(keys) )
-    def clear: Unit = mapValues( _.clear )
-  }
-  def map( kernel: Kernel, context: KernelContext ): Unit = {
-    _vault.updateValues( rec => kernel.postRDDOp( kernel.map(context)(rec), context ) )
-    _contents ++= _vault.fetchContents
-  }
-  def mapReduce( node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = node.mapReduce( value, context, batchIndex )
-  def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = node.execute( workflow, value, context, batchIndex )
-  def value: RDD[(RecordKey,RDDRecord)] = _vault.value
-  def contents: Set[String] = _contents.toSet
-  def section( section: Option[CDSection] ): Unit = _vault.mapValues( _.section(section) )
-  def fetchContents: Set[String] = _vault.fetchContents
-  def release( keys: Iterable[String] ): Unit = { _vault.release( keys ); _contents --= keys.toSet }
-
-  def addFileInputs( kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
-    logger.info("\n\n RDDContainer ###-> BEGIN addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
-    val newVSpecs = vSpecs.filter( vspec => !_contents.contains(vspec.uid) )
-    if( newVSpecs.nonEmpty ) {
-      _vault.mapValues( kernelContext.addRddElements(newVSpecs) )
-      _contents ++= newVSpecs.map(_.uid).toSet
-    }
-    logger.info("\n\n RDDContainer ###-> END addFileInputs: operation %s, VarSpecs: [ %s ], contents = [ %s ] --> expected: [ %s ]   -------\n".format( kernelContext.operation.name, vSpecs.map( _.uid ).mkString(", "), _vault.fetchContents.mkString(", "), contents.mkString(", ") ) )
-  }
-  def addOperationInput( record: RDDRecord ): Unit = {
-    _vault += record
-    _contents ++= record.elements.keySet
-  }
+object PostOpOperations {
+  val normw = 0
+  val sqrt = 2
+  val rms = 3
+  val keyMap = Map( "normw" -> normw, "sqrt" -> sqrt, "rms" -> rms )
+  def get( key: String ): Int = keyMap.getOrElse( key.toLowerCase, throw new Exception(s"Unrecognized PostOp operation key: ${key}"))
 }
 
 abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Loggable with Serializable with WPSProcess {
   import Kernel._
   val identifiers = this.getClass.getName.split('$').flatMap(_.split('.'))
   val status = KernelStatus.developmental
-  val doesAxisElimination: Boolean
+  val doesAxisReduction: Boolean
   def operation: String = identifiers.last.toLowerCase
   def module: String = identifiers.dropRight(1).mkString(".")
   def id = identifiers.mkString(".")
@@ -321,50 +261,79 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val identifier = name
   def matchesSpecs( specs: Array[String] ): Boolean = { (specs.size >= 2) && specs(0).equals(module) && specs(1).equals(operation) }
   val nOutputsPerInput: Int = options.getOrElse("nOutputsPerInput","1").toInt
+  def getInputArrays( inputs: CDTimeSlice, context: KernelContext ): List[ArraySpec] =
+    context.operation.inputs.map( id => inputs.element( id ).getOrElse {
+      throw new Exception(s"Can't find input ${id} for kernel ${identifier}")
+    } )
 
   val mapCombineOp: Option[ReduceOpFlt] = options.get("mapOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
   val mapCombineNOp: Option[ReduceNOpFlt] = None
   val mapCombineWNOp: Option[ReduceWNOpFlt] = None
   val reduceCombineOp: Option[ReduceOpFlt] = options.get("reduceOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
+  def hasReduceOp: Boolean = reduceCombineOp.isDefined
   val initValue: Float = 0f
   def cleanUp() = {}
 
-  def mapRDD(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): RDD[(RecordKey,RDDRecord)] = {
+  def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
-    logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier + ", input size = " + input.count )
-    input.mapValues( map(context) )
+    logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier  )
+    val result = input.map( map(context) )
+    result
   }
 
-  def execute( workflow: Workflow, input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
+  def filterInputs ( input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = { input }
+
+  def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = {
+    if (reduceCombineOp.exists(_ == CDFloatArray.customOp)) {
+      customReduceRDD(context)
+    } else { reduceRDDOp(context) }
+  }
+
+  def execute( workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
     mapReduce(input, context, batchIndex )
   }
 
-  def mapReduce(input: RDD[(RecordKey,RDDRecord)], context: KernelContext, batchIndex: Int ): (RecordKey,RDDRecord) = {
-    val mapresult = mapRDD( input, context )
-    logger.debug( "\n\n ----------------------- BEGIN reduce[%d] Operation: %s (%s): thread(%s) ----------------------- \n".format( batchIndex, context.operation.identifier, context.operation.rid, Thread.currentThread().getId ) )
-    runtime.printMemoryUsage
-    val t0 = System.nanoTime()
-    val nparts = mapresult.getNumPartitions
+  def reduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
+    val nparts = input.getNumPartitions
     EDASExecutionManager.checkIfAlive
-    evaluateProductSize( mapresult, context )
-    if( !parallelizable || (nparts==1) ) { mapresult.collect()(0) }
+    evaluateProductSize( input, context )
+    if( !parallelizable ) { input.collect }
     else {
-      val result = mapresult treeReduce getReduceOp(context)
-      logger.debug("\n\n ----------------------- FINISHED reduce Operation: %s (%s), time = %.3f sec ----------------------- ".format(context.operation.identifier, context.operation.rid, (System.nanoTime() - t0) / 1.0E9))
-      context.addTimestamp( "FINISHED reduce Operation" )
-      result
+      val rid = context.operation.rid.toLowerCase
+      val reduceElements: TimeSliceRDD = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
+      val axes = context.getAxes
+      val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
+        context.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
+          val optGroup = context.operation.config("groupBy") map TSGroup.getGroup
+          reduceElements.reduce(getReduceOp(context), optGroup, ordered)
+        })
+      } else {
+        reduceElements.collect
+      }
+      finalize( result, context )
     }
   }
 
-  def evaluateProductSize(input: RDD[(RecordKey,RDDRecord)], context: KernelContext ): Unit =  if ( !context.doesTimeReduction ) {
-    val result_size: Long = input.values.map( _.size ).reduce ( _ + _ )
+  def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
+    val mapresult: TimeSliceRDD = mapRDD( input, context )
+    reduce( mapresult, context, batchIndex, merge )
+  }
+
+  def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: TimeSliceRDD): TimeSliceRDD = {
+    assert( batchIndex == 0, "reduceBroadcast is not supported over multiple batches")
+    val reducedCollection = reduce( input, context, batchIndex )
+    val new_rdd = input.rdd.map ( tslice => tslice.addExtractedSlice( reducedCollection ) )
+    new TimeSliceRDD( new_rdd, input.metadata, input.variableRecords )
+  }
+
+  def evaluateProductSize(input: TimeSliceRDD, context: KernelContext ): Unit =  if ( !context.doesTimeReduction ) {
+    val result_size: Long = input.dataSize
     logger.info( s" %E% Evaluating: Product size: ${result_size/1.0e9f} G, max product size: ${EDASPartitioner.maxProductSize/1.0e9f} G" )
     if( result_size > EDASPartitioner.maxProductSize ) { throw new Exception(s"The product of this request is too large: ${result_size/1e9} G, max product size:  ${EDASPartitioner.maxProductSize/1e9} G") }
   }
 
-  def finalize( mapReduceResult: (RecordKey,RDDRecord), context: KernelContext ): (RecordKey,RDDRecord) = {
-    val result = postRDDOp( orderElements( mapReduceResult._2, context ), context  )
-    mapReduceResult._1 -> result
+  def finalize( mapReduceResult: TimeSliceCollection, context: KernelContext ): TimeSliceCollection = {
+    postRDDOp( mapReduceResult, context  )
   }
 
   def addWeights( context: KernelContext ): Boolean = {
@@ -374,43 +343,19 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         if( weights == "cosine" ) { axes.indexOf( "y" ) > -1 }
         else throw new Exception( "Unrecognized weights type: " + weights )
       case None => false
-
     }
   }
 
-  def getReduceOp(context: KernelContext): (RDDKeyValPair,RDDKeyValPair)=>RDDKeyValPair =
-    if (context.doesTimeReduction) {
-      reduceCombineOp match {
-        case Some(redOp) => redOp match {
-          case CDFloatArray.customOp => customReduceRDD(context)
-          case op => reduceRDDOp(context)
-        }
-        case None => reduceRDDOp(context)
-      }
-    } else {
-      orderedMergeRDD(context)
-    }
 
   def getOpName(context: KernelContext): String = "%s(%s)".format(name, context.operation.inputs.mkString(","))
-  def map(partIndex: Int, inputs: List[Option[DataFragment]], context: KernelContext): Option[DataFragment] = inputs.head
-  def map(context: KernelContext )( rdd: RDDRecord ): RDDRecord
-  def aggregate(context: KernelContext )( rdd0: RDDRecord, rdd1: RDDRecord ): RDDRecord = { rdd0 }
-
-  def keyMapper( partIndex: Int, agg_inputs: Iterator[(RecordKey,RDDRecord)] ): Iterator[(RecordKey,RDDRecord)] = {
-    val result = agg_inputs.flatMap { case ( agg_key, agg_record ) => ( 0 until agg_record.getShape(0) ) map ( tindex => ( agg_key.singleElementKey(tindex), agg_record.slice(tindex,1) ) ) }
-    logger.info( s"KeyMapper for part ${partIndex}, size = " + result.length )
-    result
-  }
+  def map(context: KernelContext )( rec: CDTimeSlice ): CDTimeSlice
+  def aggregate(context: KernelContext )( rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = { rec0 }
 
   def combine(context: KernelContext)(a0: DataFragment, a1: DataFragment, axes: AxisIndices): DataFragment = reduceCombineOp match {
     case Some(combineOp) =>
       if (axes.includes(0)) DataFragment(a0.spec, CDFloatArray.combine(combineOp, a0.data, a1.data))
-      else {
-        a0 ++ a1
-      }
-    case None => {
-      a0 ++ a1
-    }
+      else { a0 ++ a1 }
+    case None => { a0 ++ a1 }
   }
 
   def getParamValue( binnedArrayData: List[Map[Int,HeapFltArray]], paramId: String ): String = {
@@ -423,99 +368,26 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     pvals.head
   }
 
-  def mergeBinnedArrays( binnedArrayData: List[Map[Int,HeapFltArray]], context: KernelContext, reduceOp: ReduceOpFlt, startIndex: Int ): HeapFltArray = {
-    if( binnedArrayData.length != 2 ) { throw new Exception( "Unsupported number of data inputs to mergeBinnedArrays: " + binnedArrayData.length.toString )}
-    var input_data: HeapFltArray = HeapFltArray.empty(0)
-    val cycle = getParamValue( binnedArrayData, "cycle" )
-    val varyingAxisIndex = getParamValue( binnedArrayData, "varAxis" ).toInt
-    val result_array: FastMaskedArray = binnedArrayData.find( _.size == 1 ) match {
-      case Some( dataMap ) =>
-        input_data = dataMap.head._2
-        binnedArrayData.find( _.size > 1 ) match {
-          case Some( binnedArrayMap ) =>
-            val sorter = cycle match {
-              case x if !x.isEmpty  =>
-                val bin = getParamValue( binnedArrayData, "bin" )
-                new TimeCycleSorter( input_data, cycle, bin, startIndex )
-              case x  =>
-                val axes = getParamValue( binnedArrayData, "axes" )
-                new AnomalySorter( input_data, axes, context.grid, startIndex )
-            }
-            input_data.toFastMaskedArray.binMerge( sorter, binnedArrayMap.mapValues(_.toFastMaskedArray), varyingAxisIndex, reduceOp )
-
-          case None => throw new Exception( "Can't find base data array in merge" )
-        }
-      case None => throw new Exception( "Can't find base data array in merge" )
-    }
-    HeapFltArray( result_array.toCDFloatArray, input_data.origin, input_data.gridSpec, input_data.metadata, None )
-  }
-
   def getCombinedGridfile( inputs: Map[String,ArrayBase[Float]] ): String = {
     for ( ( id, array ) <- inputs ) array.metadata.get("gridfile") match { case Some(gridfile) => return gridfile; case None => Unit }
     throw new Exception( " Missing gridfile in kernel inputs: " + name )
   }
-
-
-  def combineRDDLegacy(context: KernelContext)(rdd0: RDDRecord, rdd1: RDDRecord ): RDDRecord = {
-    val t0 = System.nanoTime
-    val axes = context.getAxes
-    val key_group_prefixes: Set[String] = rdd0.elements.keys.map( key => key.split("~").head ).toSet
-    val key_groups: Set[(String,IndexedSeq[String])] = key_group_prefixes map ( key_prefix =>  key_prefix -> rdd0.elements.keys.filter( _.split("~").head.equals( key_prefix ) ).toIndexedSeq )
-    val new_elements: IndexedSeq[(String,HeapFltArray)] = key_groups.toIndexedSeq.flatMap { case ( group_key, key_group ) =>
-      val elements0: IndexedSeq[(String,HeapFltArray)] = key_group flatMap ( key => rdd0.elements.filter { case (k,v) => if(key.contains("_WEIGHTS_")) k.equals(key) else k.startsWith(key) } )
-      val elements1: IndexedSeq[(String,HeapFltArray)] = key_group flatMap ( key => rdd1.elements.filter { case (k,v) => if(key.contains("_WEIGHTS_")) k.equals(key) else k.startsWith(key) } )
-      if( elements0.size != elements1.size ) {
-        throw new Exception( s"Mismatched rdds in reduction for kernel ${context.operation.identifier}: ${elements0.size} != ${elements1.size}" )
-      }
-      if( elements0.size != nOutputsPerInput ) {
-        throw new Exception( s"Wrong number of elements in reduction rdds for kernel ${context.operation.identifier}: ${elements0.size} != ${nOutputsPerInput}, element keys = [${elements0.map(_._1).mkString(",")}]" ) }
-      if( elements0.size != elements1.size ) {
-        throw new Exception( s"Mismatched rdds in reduction for kernel ${context.operation.identifier}: ${elements0.size} != ${elements1.size}" )
-      }
-      if( elements0.size == 1 ) {
-        reduceCombineOp match {
-          case Some(combineOp) =>
-            if (axes.includes(0)) IndexedSeq(group_key -> elements0(0)._2.combine(combineOp, elements1(0)._2))
-            else IndexedSeq(group_key -> elements0(0)._2.append(elements1(0)._2))
-          case None => IndexedSeq(group_key -> elements0(0)._2.append(elements1(0)._2))
-        }
-      } else {
-        reduceCombineOp match {
-          case Some(combineOp) =>
-            if (axes.includes(0)) combineElements( group_key, Map(elements0:_*), Map(elements1:_*) )
-            else appendElements( group_key, Map(elements0:_*), Map(elements1:_*) )
-          case None => appendElements( group_key, Map(elements0:_*), Map(elements1:_*) )
-        }
-      }
-    }
-//    logger.debug("&COMBINE: %s, time = %.4f s".format( context.operation.name, (System.nanoTime - t0) / 1.0E9 ) )
-    context.addTimestamp( "combineRDD complete" )
-    RDDRecord( TreeMap(new_elements:_*), rdd0.mergeMetadata(context.operation.name, rdd1), rdd0.partition )
-  }
-
-  def combineRDD(context: KernelContext)(rdd0: RDDRecord, rdd1: RDDRecord ): RDDRecord = {
-    val t0 = System.nanoTime
-    val axes = context.getAxes
-    val elements0: IndexedSeq[(String,HeapFltArray)] = rdd0.elements.toIndexedSeq
-    if( elements0.isEmpty ) { rdd1 } else if (rdd1.elements.isEmpty) { rdd0 } else {
-      val keys = rdd0.elements.keys
-      if (keys.size != nOutputsPerInput) {
-        throw new Exception(s"Wrong number of elements in reduction rdds for kernel ${context.operation.identifier}: ${keys.size} != ${nOutputsPerInput}, element keys = [${keys.mkString(",")}]")
-      }
-      val new_elements: IndexedSeq[(String, HeapFltArray)] = elements0 flatMap { case (key0, array0) => rdd1.elements.get(key0) match {
+  
+  def combineRDD(context: KernelContext)(rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = {
+    if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else context.profiler.profile[CDTimeSlice]( "Kernel.combineRDD" ) ( () => {
+      val axes = context.getAxes
+      val keys = rec0.elements.keys
+      val new_elements: Iterator[(String, ArraySpec)] = rec0.elements.iterator flatMap { case (key0, array0) => rec1.elements.get(key0) match {
         case Some(array1) => reduceCombineOp match {
           case Some(combineOp) =>
-            if (axes.includes(0)) Some(key0 -> array0.combine(combineOp, array1))
-            else Some(key0 -> array0.append(array1))
-          case None => Some(key0 -> array0.append(array1))
+            if (axes.includes(0)) Some( key0 -> array0.combine( combineOp, array1 ) )
+            else Some( key0 -> (array0 ++ array1) )
+          case None => Some( key0 -> (array0 ++ array1) )
         }
         case None => None
-      }
-      }
-      //    logger.debug("&COMBINE: %s, time = %.4f s".format( context.operation.name, (System.nanoTime - t0) / 1.0E9 ) )
-      context.addTimestamp("combineRDD complete")
-      RDDRecord(TreeMap(new_elements: _*), rdd0.mergeMetadata(context.operation.name, rdd1), rdd0.partition)
-    }
+      }}
+      CDTimeSlice( rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*) )
+    })
   }
 
   def combineElements( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
@@ -651,95 +523,50 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       elements0 flatMap { case (key,fltArray) => elements1.get(key) map ( fltArray1 => key -> fltArray.append(fltArray1) ) } toIndexedSeq
     }
 
-  def customReduceRDD(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair = if(Kernel.isEmpty(a0)) {a1} else if(Kernel.isEmpty(a1)) {a0} else {
-    logger.warn( s"No reducer defined for parallel op '$name', executing simple merge." )
-    mergeRDD(context)( a0, a1 )
+  def customReduceRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = if(Kernel.isEmpty(a0)) {a1} else if(Kernel.isEmpty(a1)) {a0} else {
+    collectRDDOp(context)( a0, a1 )
   }
 
   def postOp(result: DataFragment, context: KernelContext): DataFragment = result
 
-  def orderElements( op_result: RDDRecord, context: KernelContext ): RDDRecord = if ( context.doesTimeReduction ) { op_result } else {
-    val sorted_keys = op_result.elements.keys.toIndexedSeq.sortBy( key => key.split('%')(1).toInt )
-    val resultMap = mutable.HashMap.empty[String,HeapFltArray]
-    sorted_keys.foreach( key => op_result.elements.get(key) match {
-      case Some( array ) =>
-        val base_key = key.split('%').head
-        resultMap.get( base_key ) match {
-          case Some( existing_array ) => resultMap.put( base_key, existing_array.append(array) )
-          case None => resultMap.put( base_key, array )
-        }
-      case None => Unit
-    })
-    new RDDRecord( TreeMap( resultMap.toIndexedSeq:_* ), op_result.metadata, op_result.partition )
-  }
-
-  def postRDDOp( pre_result: RDDRecord, context: KernelContext ): RDDRecord = {
-    options.get("postOp") match {
-      case Some( postOp ) =>
-        if( postOp == "normw") {
-          val key_lists = pre_result.elements.keys.partition( _.endsWith("_WEIGHTS_") )
-          val weights_key = key_lists._1.headOption.getOrElse( throw new Exception( s"Can't find weignts key in postRDDOp for Kernel ${identifier}, keys: " + pre_result.elements.keys.mkString(",") ) )
-          val values_key  = key_lists._2.headOption.getOrElse( throw new Exception( s"Can't find values key in postRDDOp for Kernel ${identifier}, keys: " + pre_result.elements.keys.mkString(",") ) )
-          val weights = pre_result.elements.getOrElse( weights_key, missing_element(weights_key) )
-          val values = pre_result.elements.getOrElse( values_key, missing_element(values_key) )
-          val averageValues = FloatBuffer.allocate(  values.data.length )
-          values.missing match {
-            case Some( undef ) =>
-              for( index <- values.data.indices; value = values.data(index) ) {
-                if( value == undef || value.isNaN  ) { undef }
-                else {
-                  val wval =  weights.data(index)
-                  averageValues.put( value / wval )
-                }
+  def postRDDOp( result: TimeSliceCollection, context: KernelContext ): TimeSliceCollection = {
+    val pre_result = result.sort.concatSlices
+    pre_result.slices.headOption match {
+      case None => result
+      case Some(slice) =>
+        val elements: Map[String, ArraySpec] = pre_result.slices.headOption.fold(Map.empty[String, ArraySpec])(_.elements.toMap)
+        options.get("postOp") match {
+          case Some(postOp) =>
+            val postOpKey = PostOpOperations.get(postOp)
+            val key_lists = elements.keys.partition(_.endsWith("_WEIGHTS_"))
+            val weights_key_opt: Option[String] = key_lists._1.headOption
+            val values_key: String = key_lists._2.headOption.getOrElse(throw new Exception(s"Can't find values key in postRDDOp for Kernel $identifier, keys: " + elements.keys.mkString(",")))
+            val weights_opt: Option[ArraySpec] = weights_key_opt.flatMap( weights_key => elements.get(weights_key) )
+            val values: ArraySpec = elements.getOrElse(values_key, missing_element(values_key))
+            val values_iter: Iterator[Float] = values.data.iterator
+            val weights_iter: Iterator[Float] = weights_opt.fold( EmptyFloatIterator() )( _.data.iterator )
+            val undef: Float = values.missing
+            val resultValues = FloatBuffer.allocate(values.data.length )
+            while (values_iter.hasNext) {
+              val value = values_iter.next()
+              if (value == undef || value.isNaN) { undef }
+              else postOpKey match {
+                case PostOpOperations.normw =>
+                  val wval = weights_iter.next()
+                  resultValues.put(value / wval)
+                case PostOpOperations.sqrt =>
+                  resultValues.put(Math.sqrt(value).toFloat)
+                case PostOpOperations.rms =>
+                  val norm = context.getReductionSize
+                  resultValues.put(Math.sqrt( value / norm ).toFloat)
+                case x => Unit // Never reached.
               }
-            case None =>
-              for( index <- values.data.indices ) { averageValues.put( values.data(index) / weights.data(index) ) }
-          }
-          val valuesArray =  HeapFltArray( CDFloatArray( values.shape,  averageValues.array,  values.missing.getOrElse(Float.MaxValue) ),  values.origin,  values.metadata,  values.weights  )
-          context.addTimestamp( "postRDDOp complete" )
-          new RDDRecord( TreeMap( values_key -> valuesArray ), pre_result.metadata, pre_result.partition )
-        } else if( (postOp == "sqrt") || (postOp == "rms") ) {
-          val new_elements = pre_result.elements map { case (values_key, values) =>
-            val averageValues = FloatBuffer.allocate(values.data.length)
-            values.missing match {
-              case Some(undef) =>
-                if( postOp == "sqrt" ) {
-                  for (index <- values.data.indices; value = values.data(index)) {
-                    if (value == undef || value.isNaN  ) { undef }
-                    else { averageValues.put(Math.sqrt(value).toFloat) }
-                  }
-                } else if( postOp == "rms" ) {
-                  val axes = context.config("axes", "").toUpperCase // values.metadata.getOrElse("axes","")
-                  val roi: ma2.Section = CDSection.deserialize( values.metadata.getOrElse("roi","") )
-                  val reduce_ranges = axes.flatMap( axis => CDSection.getRange( roi, axis.toString ) )
-                  val norm_factor = reduce_ranges.map( _.length() ).fold(1)(_ * _) - 1
-                  if( norm_factor == 0 ) { throw new Exception( "Missing or unrecognized 'axes' parameter in rms reduce op")}
-                  for (index <- values.data.indices; value = values.data(index)) {
-                    if (value == undef || value.isNaN  ) { undef }
-                    else { averageValues.put(Math.sqrt(value/norm_factor).toFloat  ) }
-                  }
-                }
-              case None =>
-                if( postOp == "sqrt" ) {
-                  for (index <- values.data.indices) {
-                    averageValues.put(Math.sqrt(values.data(index)).toFloat)
-                  }
-                } else if( postOp == "rms" ) {
-                  val norm_factor = values.metadata.getOrElse("N", "1").toInt - 1
-                  if( norm_factor == 1 ) { logger.error( "Missing norm factor in rms") }
-                  for (index <- values.data.indices) {
-                    averageValues.put( Math.sqrt(values.data(index)/norm_factor).toFloat  )
-                  }
-                }
             }
-            val newValuesArray = HeapFltArray(CDFloatArray(values.shape, averageValues.array, values.missing.getOrElse(Float.MaxValue)), values.origin, values.metadata, values.weights)
-            ( values_key -> newValuesArray )
-          }
-          context.addTimestamp( "postRDDOp complete" )
-          new RDDRecord( new_elements, pre_result.metadata, pre_result.partition )
+            val new_elems: Map[String, ArraySpec] = Seq( values_key -> ArraySpec( values.missing, values.shape, values.origin, resultValues.array() ) ).toMap
+            val new_slice: CDTimeSlice = CDTimeSlice( slice.startTime, slice.endTime, new_elems )
+            TimeSliceCollection( Array( new_slice ), result.metadata )
+          case None => pre_result
         }
-        else { throw new Exception( "Unrecognized postOp configuration: " + postOp ) }
-      case None => pre_result
     }
   }
 
@@ -762,8 +589,11 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     rv
   }
 
-  def reduceRDDOp(context: KernelContext)(a0: RDDKeyValPair, a1: RDDKeyValPair ): RDDKeyValPair =
-    if(Kernel.isEmpty(a0)) {a1} else if(Kernel.isEmpty(a1)) {a0} else { (a0._1 + a1._1) -> combineRDD(context)( a0._2, a1._2 ) }
+  def collectRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = { a0 ++ a1 }
+
+
+  def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =
+    if( a0.isEmpty ) { a1 } else  if( a1.isEmpty ) { a0 } else { combineRDD(context)( a0, a1 ) }
 
   def getDataSample(result: CDFloatArray, sample_size: Int = 20): Array[Float] = {
     val result_array = result.floatStorage.array
@@ -814,454 +644,177 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
-  //  def weightedValueSumCombiner(context: KernelContext)(a0: DataFragment, a1: DataFragment, axes: AxisIndices): DataFragment = {
-  //    if (axes.includes(0)) {
-  //      val vTot: CDFloatArray = a0.data + a1.data
-  //      val wTotOpt: Option[CDFloatArray] = a0.weights.map(w => w + a1.weights.get)
-  //      val dataMap = wTotOpt match {
-  //        case Some(wTot) => Map("value" -> vTot, "weights" -> wTot)
-  //        case None => Map("value" -> vTot)
-  //      }
-  //      logger.info("weightedValueSumCombiner, values shape = %s, result spec = %s".format(vTot.getShape.mkString(","), a0.spec.toString))
-  //      new DataFragment(a0.spec, dataMap, DataFragment.combineCoordMaps(a0, a1))
-  //    }
-  //    else {
-  //      a0 ++ a1
-  //    }
-  //  }
-  //
-  //  def weightedValueSumPostOp(result: DataFragment, context: KernelContext): DataFragment = result.weights match {
-  //    case Some(weights_sum) =>
-  //      logger.info("weightedValueSumPostOp, values shape = %s, weights shape = %s, result spec = %s".format(result.data.getShape.mkString(","), weights_sum.getShape.mkString(","), result.spec.toString))
-  //      new DataFragment(result.spec, Map("value" -> result.data / weights_sum, "weights" -> weights_sum), result.optCoordMap)
-  //    case None =>
-  //      result
-  //  }
-
-  def fltArray(a0: RDDRecord, elem: String): ( CDFloatArray, Float ) = a0.element(elem) match {
-    case Some(data) => ( data.toCDFloatArray, data.getMissing() );
-    case None => throw new Exception("Error missing array element: " + elem)
-  }
-  def toFastMaskedArray(a0: RDDRecord, elem: String): FastMaskedArray = a0.element(elem) match {
-    case Some(data) => data.toFastMaskedArray
-    case None => throw new Exception("Error missing array element: " + elem)
-  }
-
-  def optFltArray(a0: RDDRecord, elem: String): Option[CDFloatArray] = a0.element(elem).map(_.toCDFloatArray)
-
-  def wtArray(a0: RDDRecord, elem: String): Option[CDFloatArray] = a0.element(elem).flatMap( _.toCDWeightsArray )
-  def wtFastMaskedArray(a0: RDDRecord, elem: String): Option[FastMaskedArray] = a0.element(elem).flatMap( _.toMa2WeightsArray )
-
-  def originArray(a0: RDDRecord, elem: String): Array[Int]  = a0.element(elem) match {
-    case Some(data) => data.origin;
-    case None => throw new Exception("Error missing array element: " + elem)
-  }
-
-  def arrayMdata(a0: RDDRecord, elem: String): Map[String, String] = a0.element(elem) match {
-    case Some(data) => data.metadata;
-    case None => Map.empty
-  }
-
-  def weightedValueSumRDDCombiner( context: KernelContext)(a0: RDDRecord, a1: RDDRecord ): RDDRecord = {
+  def weightedValueSumRDDCombiner( context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = {
     val axes = context.getAxes
-    if (axes.includes(0)) {
-      val t0 = System.nanoTime
-      val elems = a0.elements flatMap { case (key, data0) =>
-        a1.elements.get( key ) match {
-          case Some( data1 ) =>
-//            logger.info(s"weightedValueSumRDDCombiner: element ${key}, shape0: ${data0.shape.mkString(",")}, shape1: ${data1.shape.mkString(",")}" )
-            val vTot: FastMaskedArray = data0.toFastMaskedArray + data1.toFastMaskedArray
-            val t1 = System.nanoTime
-            val wTotOpt: Option[Array[Float]] = data0.toMa2WeightsArray flatMap { wtsArray0 => data1.toMa2WeightsArray map { wtsArray1 => (wtsArray0 + wtsArray1).toFloatArray } }
-            val t2 = System.nanoTime
-            val array_mdata = MetadataOps.mergeMetadata (context.operation.name) (data0.metadata, data1.metadata )
-            Some( key -> HeapFltArray (vTot.toCDFloatArray, data0.origin, array_mdata, wTotOpt) )
-          case None => logger.warn("Missing elemint in Record combine: " + key); None
-        }
-      }
-      val part_mdata = MetadataOps.mergeMetadata( context.operation.name )( a0.metadata, a1.metadata )
-      val t3 = System.nanoTime
-      context.addTimestamp( "weightedValueSumCombiner complete" )
-      new RDDRecord( elems, part_mdata, a0.partition )
-    }
-    else {
-      a0 ++ a1
-    }
-  }
-
-//  def weightedValueSumRDDPostOpLegacy(result: RDDRecord, context: KernelContext): RDDRecord = {
-//    val rid = context.operation.rid
-//    wtFastMaskedArray( result, rid ) match {
-//      case Some(w0) =>
-//        val v0 = toFastMaskedArray(result, rid)
-//        val vOrigin: Array[Int] = originArray(result, rid)
-//        logger.info("weightedValueSumPostOp, values shape = %s, weights shape = %s, result spec = %s, values sample = [ %s ], weights sample = [ %s ]".format(v0.array.getShape.mkString(","), w0.array.getShape.mkString(","), result.metadata.toString, v0.toCDFloatArray.mkBoundedDataString(", ",16), w0.toCDFloatArray.mkBoundedDataString(", ",16)))
-//        context.addTimestamp( "weightedValueSumPostOp complete" )
-//        new RDDRecord( Map(rid -> HeapFltArray( (v0 / w0).toCDFloatArray, vOrigin, arrayMdata(result, "value"), Some( w0.toCDFloatArray.getArrayData() ) ) ), result.metadata )
-//      case None =>
-//        logger.info("weightedValueSumPostOp: NO WEIGHTS!, Elems:")
-//        result.elements.foreach { case (key, heapFltArray) => logger.info(" ** key: %s, values sample = [ %s ]".format( key, heapFltArray.toCDFloatArray.mkBoundedDataString(", ",16)) ) }
-//        result
-//    }
-//  }
-
-  def weightedValueSumRDDPostOp(result: RDDRecord, context: KernelContext): RDDRecord = {
-    val new_elements = result.elements map { case (key, fltArray ) =>
-      fltArray.toMa2WeightsArray match {
-        case Some( wtsArray ) => (key, HeapFltArray( ( fltArray.toFastMaskedArray / wtsArray ).toCDFloatArray, fltArray.origin, fltArray.metadata, None ) )
-        case None => (key, fltArray )
-      }
-    }
-//    logger.info( "weightedValueSumPostOp:, Elems:" )
-//    new_elements.foreach { case (key, heapFltArray) => logger.info(" ** key: %s, values sample = [ %s ]".format( key, heapFltArray.toCDFloatArray.mkBoundedDataString(", ",16)) ) }
-    new RDDRecord( new_elements, result.metadata, result.partition )
-  }
-
-  def getMontlyBinMap(id: String, context: KernelContext): CDCoordMap = {
-    context.sectionMap.get(id).flatten.map( _.toSection ) match  {
-      case Some( section ) =>
-        val cdTimeCoordMap: CDTimeCoordMap = new CDTimeCoordMap( context.grid, section )
-        cdTimeCoordMap.getMontlyBinMap( section )
-      case None => throw new Exception( "Error, can't get section for input " + id )
-    }
-  }
-
-}
-
-
-//abstract class MultiKernel  extends Kernel {
-//  val kernels: List[Kernel]
-//
-//  def execute( context: EDASExecutionContext, nprocs: Int  ): WPSResponse = {
-//    val inputs: List[PartitionedFragment] = inputVars( context )
-//    for( kernel: Kernel <- kernels ) {
-//      val result = kernel.mapReduce( inputs, context, nprocs )
-//    }
-//  }
-//}
-
-/*
-abstract class DualOperationKernel extends Kernel {
-
-  def mapReduce( inputs: List[PartitionedFragment], context: EDASExecutionContext, nprocs: Int ): Future[Option[DataFragment]] = {
-    val future_results1: IndexedSeq[Future[Option[DataFragment]]] = (0 until nprocs).map( iproc => Future { map1(iproc,inputs,context) } )
-    reduce1( future_results1, context )
-    val future_results2: IndexedSeq[Future[Option[DataFragment]]] = (0 until nprocs).map2( iproc => Future { map(iproc,inputs,context) } )
-    reduce2( future_results2, context )
-  }
-  def map( partIndex: Int, inputs: List[PartitionedFragment], context: EDASExecutionContext ): Option[DataFragment] = {
     val t0 = System.nanoTime
-    val inputVar = inputs.head
-    val axes: AxisIndices = context.request.getAxisIndices( context.operation.config("axes","") )
-    inputVar.domainDataFragment(partIndex).map { (dataFrag) =>
-      val async = context.config("async", "false").toBoolean
-      val resultFragSpec = dataFrag.getReducedSpec(axes)
-      val result_val_masked: CDFloatArray = mapCombineOpt match {
-        case Some( combineOp ) => dataFrag.data.reduce( combineOp, axes.args, initValue )
-        case None => dataFrag.data
+    val elems = a0.elements flatMap { case (key, data0) =>
+      a1.elements.get( key ) match {
+        case Some( data1 ) =>
+          val wKey = key + "_WEIGHTS_"
+          val vTot: FastMaskedArray = data0.toFastMaskedArray + data1.toFastMaskedArray
+          val t1 = System.nanoTime
+          val w0Opt: Option[ArraySpec] = a0.elements.get( wKey )
+          val w1Opt: Option[ArraySpec] = a1.elements.get( wKey )
+          val wTotOpt: Option[FastMaskedArray] = if(w0Opt.isDefined && w1Opt.isDefined) Option( w0Opt.get.toFastMaskedArray + w1Opt.get.toFastMaskedArray ) else None
+          val t2 = System.nanoTime
+          val resultList0 = List( key -> ArraySpec( vTot.missing, vTot.shape, data0.origin, vTot.getData ) )
+          wTotOpt.fold( resultList0 )( wTot => resultList0 ++ List( wKey -> ArraySpec(wTot.missing, wTot.shape, data0.origin, wTot.getData ) ) )
+        case None => logger.warn("Missing elemint in Record combine: " + key); List.empty[(String,ArraySpec)]
       }
-      logger.info("Executed Kernel %s[%d] map op, time = %.4f s".format(name, partIndex, (System.nanoTime - t0) / 1.0E9))
-      new DataFragment(resultFragSpec, result_val_masked)
     }
-  }
-  def weightedValueSumCombiner(context: EDASExecutionContext)(a0: DataFragment, a1: DataFragment, axes: AxisIndices ): DataFragment =  {
-    if ( axes.includes(0) ) {
-      val vTot = a0.data + a1.data
-      val wTot = a0.optData.map( w => w + a1.optData.get )
-      new DataFragment( a0.spec, vTot, wTot )
-    }
-    else { a0 ++ a1 }
+    val t3 = System.nanoTime
+    new CDTimeSlice( a0.mergeStart(a1), a0.mergeEnd(a1), elems )
   }
 
-  def weightedValueSumPostOp( future_result: Future[Option[DataFragment]], context: EDASExecutionContext ):  Future[Option[DataFragment]] = {
-    future_result.map( _.map( (result: DataFragment) => result.optData match {
-      case Some( weights_sum ) => new DataFragment( result.spec, result.data / weights_sum, result.optData )
-      case None => result
-    } ) )
+
+  def weightedValueSumRDDPostOp(result: TimeSliceCollection, context: KernelContext): TimeSliceCollection = {
+    val new_slices = result.slices.map { slice =>
+      val new_elements = slice.elements.filterKeys(!_.endsWith("_WEIGHTS_")) map { case (key, arraySpec) =>
+        val wts = slice.elements.getOrElse(key + "_WEIGHTS_", throw new Exception(s"Missing weights in slice, ids = ${slice.elements.keys.mkString(",")}"))
+        val newData = arraySpec.toFastMaskedArray / wts.toFastMaskedArray
+        key -> new ArraySpec(newData.missing, newData.shape, arraySpec.origin, newData.getData)
+      }
+      CDTimeSlice(slice.startTime, slice.endTime, new_elements)
+    }
+    new TimeSliceCollection( new_slices, result.metadata )
   }
+
+//  def getMontlyBinMap(id: String, context: KernelContext): CDCoordMap = {
+//    context.sectionMap.get(id).flatten.map( _.toSection ) match  {
+//      case Some( section ) =>
+//        val cdTimeCoordMap: CDTimeCoordMap = new CDTimeCoordMap( context.grid, section )
+//        cdTimeCoordMap.getMontlyBinMap( section )
+//      case None => throw new Exception( "Error, can't get section for input " + id )
+//    }
+//  }
+
 }
-*/
-//abstract class SingularKernel extends Kernel {
-//  override def map( partIndex: Int, inputs: List[Option[DataFragment]], context: KernelContext ): Option[DataFragment] = {
-//    val t0 = System.nanoTime
-//    val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
-//    logger.info("\n\n ****** SingularKernel-reduceOp START, axes = " + axes.getAxes.mkString(",") + "\n")
-//    inputs.head.map( dataFrag => {
-//      val async = context.config("async", "false").toBoolean
-//      val resultFragSpec = dataFrag.getReducedSpec(axes)
-//      val result_val_masked: CDFloatArray = mapCombineOpt match {
-//        case Some(combineOp) =>
-//          val result = dataFrag.data.reduce(combineOp, axes.args, initValue)
-//          logger.info(" ****** SingularKernel-reduceOp, shape = " + result.getShape.mkString(","))
-//          result
-//        case None =>
-//          logger.info(" ****** SingularKernel-No-Op")
-//          dataFrag.data
-//      }
-//      logger.info("Executed Kernel %s[%d] map op, time = %.4f s".format(name, partIndex, (System.nanoTime - t0) / 1.0E9))
-//      DataFragment(resultFragSpec, result_val_masked)
-//    } )
-//  }
-//}
-//
-//abstract class DualKernel extends Kernel {
-//  override def map( partIndex: Int, inputs: List[Option[DataFragment]], context: KernelContext ): Option[DataFragment] = {
-//    val t0 = System.nanoTime
-//    val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
-//    assert( inputs.length > 1, "Missing input(s) to dual input operation " + id )
-//    inputs(0).flatMap( dataFrag0 => {
-//      inputs(1).map( dataFrag1 => {
-//        logger.info("DualKernel: %s[%s] + %s[%s]".format( dataFrag0.spec.longname, dataFrag0.data.getShape.mkString(","), dataFrag1.spec.longname, dataFrag1.data.getShape.mkString(",") ) )
-//        val async = context.config("async", "false").toBoolean
-//        val result_val_masked: DataFragment = mapCombineOpt match {
-//          case Some(combineOp) =>
-//            logger.info( "DIFF2: dataFrag0 coordMap = %s".format( dataFrag0.optCoordMap.map( _.toString ).getOrElse("") ) )
-//            logger.info( "DIFF2: dataFrag1 coordMap = %s".format( dataFrag1.optCoordMap.map( _.toString ).getOrElse("") ) )
-//            DataFragment.combine( combineOp, dataFrag0, dataFrag1 )
-//          case None => dataFrag0
-//        }
-//        logger.info("\nExecuted Kernel %s[%d] map op, time = %.4f s".format(name, partIndex, (System.nanoTime - t0) / 1.0E9))
-////        logger.info("->> input0(%s): %s".format(dataFrag0.spec.varname, dataFrag0.data.mkDataString(",")))
-////        logger.info("->> input1(%s): %s".format(dataFrag1.spec.varname, dataFrag1.data.mkDataString(",")))
-////        logger.info("->> result: %s".format(result_val_masked.data.mkDataString(",")))
-//        result_val_masked
-//      })
-//    })
-//  }
-//}
+
+
 
 abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) extends Kernel(options)  {
-  override def map ( context: KernelContext ) ( inputs: RDDRecord  ): RDDRecord = {
+  override def map ( context: KernelContext ) ( inputs: CDTimeSlice  ): CDTimeSlice = {
     val t0 = System.nanoTime
     val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
-    val inputId = context.operation.inputs.headOption.getOrElse("NULL")
+    val inputId: String = context.operation.inputs.headOption.getOrElse("NULL")
     val shape = inputs.elements.head._2.shape
-    logger.debug(" ##### KERNEL [%s]: Map Op: combine, input shape = %s".format( name, shape.mkString(",") ) )
-    runtime.printMemoryUsage
-    val elem = inputs.findElements(inputId).headOption match {
+    val elem = inputs.element(inputId) match {
       case Some( input_array ) =>
         mapCombineOp match {
           case Some(combineOp) =>
-            val cdinput = input_array.toFastMaskedArray
-            val result = cdinput.reduce(combineOp, axes.args, initValue).toCDFloatArray
-//            logger.info( "Input data sample = [ %s ]".format(cdinput.toCDFloatArray.getArrayData(30).map( _.toString ).mkString(", ") ) )
-            logger.info(" ##### KERNEL [%s]: Map Op: combine, axes = %s, result shape = %s, result value[0] = %.4f".format( name, axes, result.getShape.mkString(","), result.getArrayData(1)(0) ) )
-            val result_metadata = inputs.metadata ++ input_array.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
-            context.operation.rid -> HeapFltArray( result, input_array.origin, result_metadata, None )
+            val result = input_array.toFastMaskedArray.reduce(combineOp, axes.args, initValue)
+            val result_data = result.getData
+//            logger.info(" ##### KERNEL [%s]: Map Op: combine, axes = %s, result shape = %s, result value[0] = %.4f".format( name, axes, result.shape.mkString(","), result_data(0) ) )
+            ArraySpec( input_array.missing, result.shape, input_array.origin, result_data )
           case None =>
-            logger.info(" ##### KERNEL [%s]: Map Op: NONE".format( name ) )
-            context.operation.rid -> HeapFltArray( input_array.toCDFloatArray, input_array.origin, input_array.metadata, None )
+//            logger.info(" ##### KERNEL [%s]: Map Op: NONE".format( name ) )
+            input_array
         }
       case None => throw new Exception( "Missing input to '" + this.getClass.getName + "' map op: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(",") )
     }
     val dt = (System.nanoTime - t0) / 1.0E9
-    logger.info("Executed Kernel %s map op, time = %.4f s".format(name, dt ))
-    context.addTimestamp( "Map Op complete, time = %.4f s, shape = (%s), record mdata = %s".format( dt, shape.mkString(","), inputs.metadata.mkString(";") ) )
-    RDDRecord( TreeMap( elem ), inputs.metadata, inputs.partition )
+    CDTimeSlice(  inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> elem) )
   }
 }
 
 abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(options)  {
-  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     if( mapCombineOp.isDefined ) {
-      val t0 = System.nanoTime
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      val input_arrays: Iterable[HeapFltArray] = inputs.elements.values
-      val ma2_input_arrays = input_arrays.map( _.toFastMaskedArray )
-      val result_array: CDFloatArray = ma2_input_arrays.tail.fold(ma2_input_arrays.head)(_.merge(_, mapCombineOp.get)).toCDFloatArray
-      val result_metadata = input_arrays.head.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
-      logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
-      context.addTimestamp("Map Op complete")
-      RDDRecord(TreeMap(context.operation.rid -> HeapFltArray(result_array, input_arrays.head.origin, result_metadata, None)), inputs.metadata, inputs.partition)
+      val input_arrays: List[ArraySpec] = getInputArrays( inputs, context )
+      val result_array: ArraySpec = input_arrays.reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1 ) )
+      CDTimeSlice(  inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> result_array) )
     } else { inputs }
   }
 }
 
 
-//abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(options)  {
-//  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
-//    if( mapCombineOp.isDefined ) {
-//      val t0 = System.nanoTime
-////      val input_keys = inputs.elements.keys
-////      val input_keys = inputs.elements.keys.map( key => if(key.contains('.')) { key.split('.').dropRight(1).mkString(".") } else { key } )
-////      val keyMap: Map[String,Iterable[String]] = Map( input_keys.map( key => key -> inputs.elements.keys.filter( _.startsWith(key) ) ).toSeq: _* )
-////      val dataMap: Map[String,Map[Int,HeapFltArray]] = keyMap.mapValues( keys => Map( keys.map( key => ( if(key.contains('.')) { key.split('.').last.toInt } else { 0 } ) -> inputs.elements.getOrElse(key,HeapFltArray.empty(0)) ).toSeq: _* ) )
-////      val input_array_maps: List[Map[Int,HeapFltArray]] = context.operation.inputs.flatMap(id => dataMap.find( { case (key,value) => key.endsWith(id) } ).map( _._2 ) )
-////      val input_arrays: List[ArrayBase[Float]] = context.operation.inputs.map(id => inputs.findElements(id)).foldLeft(List[ArrayBase[Float]]())(_ ++ _)
-//
-//      val inputMap = inputs.elements
-//      assert(inputMap.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-//      if( input_array_maps.forall( _.size == 1 ) ) {
-//        val input_arrays = input_array_maps.map( _.head._2 )
-//        val ma2_input_arrays = input_arrays.map( _.toFastMaskedArray )
-//        val result_array: CDFloatArray = ma2_input_arrays.tail.fold(ma2_input_arrays.head)(_.merge(_, mapCombineOp.get)).toCDFloatArray
-//        val result_metadata = input_arrays.head.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
-//        logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
-//        context.addTimestamp("Map Op complete")
-//        RDDRecord(TreeMap(context.operation.rid -> HeapFltArray(result_array, input_arrays(0).origin, result_metadata, None)), inputs.metadata, inputs.partition)
-//      } else {
-//        val startIndex = inputs.metadata.getOrElse("startIndex","0").toInt
-//        val result_array: HeapFltArray = mergeBinnedArrays( input_array_maps, context, mapCombineOp.get, startIndex )
-//        val result_metadata = result_array.metadata ++ inputs.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements))
-//        logger.info("Executed Kernel %s map op, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
-//        context.addTimestamp("Map Op complete")
-//        RDDRecord( TreeMap( context.operation.rid -> result_array ), inputs.metadata, inputs.partition)
-//      }
-//    } else { inputs }
-//  }
-//}
-
-//abstract class MultiRDDKernel( options: Map[String,String] ) extends Kernel(options)  {
-//
-//  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
-//    val t0 = System.nanoTime
-//    val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
-//    val async = context.config("async", "false").toBoolean
-//    val input_arrays: List[ArrayBase[Float]] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArrayBase[Float]]())( _ ++ _ )
-//    assert( input_arrays.size > 1, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format( context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",") ) )
-//    val cdFloatArrays = input_arrays.map( _.toCDFloatArray ).toArray
-//    val final_result: CDFloatArray = if( mapCombineNOp.isDefined ) {
-//      CDFloatArray.combine( mapCombineNOp.get, cdFloatArrays )
-//    } else if( mapCombineWNOp.isDefined ) {
-//      val (result_array, countArray) = CDFloatArray.combine( mapCombineWNOp.get, cdFloatArrays )
-//      result_array / countArray
-//    } else { throw new Exception("Undefined operation in MultiRDDKernel") }
-//    logger.info("&MAP: Finished Kernel %s, time = %.4f s".format(name, (System.nanoTime - t0) / 1.0E9))
-//    context.addTimestamp( "Map Op complete" )
-//    val result_metadata = input_arrays.head.metadata ++ List( "uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile( inputs.elements )  )
-//    RDDRecord( Map( context.operation.rid -> HeapFltArray(final_result, input_arrays(0).origin, result_metadata, None) ), inputs.metadata )
-//  }
-//}
 
 class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True" ), false, "restricted" ) {
 
-  override def map ( context: KernelContext ) (inputs: RDDRecord  ): RDDRecord = {
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val t0 = System.nanoTime
-    val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
-    val worker: PythonWorker = workerManager.getPythonWorker
-    try {
-      logger.info("&MAP: Starting Kernel %s, inputs = [ %s ]".format(name, inputs.elems.mkString(", ") ) )
-      val targetGrid: GridContext = context.grid
-      val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
-      val ( input_array_map, passthrough_array_map ) = inputs.elements.partition { case ( key, array ) => context.operation.inputs.contains(key) }
-      val op_input_arrays: List[HeapFltArray] = input_array_map.values.toList
-      assert(op_input_arrays.nonEmpty, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
+    logger.info("&MAP: Starting Kernel %s, inputs = [ %s ]".format(name, inputs.elements.keys.mkString(", ") ) )
+    val targetGrid: GridContext = context.grid
+    val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
+    val ( acceptable_array_map, regrid_array_map ) = inputs.elements.partition { case ( key, array ) => context.getInputVariableRecord(key).fold(true)( _ == regridSpec ) }
+    if ( regrid_array_map.isEmpty ) { inputs } else {
+      val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
+      val worker: PythonWorker = workerManager.getPythonWorker
 
-      val (acceptable_arrays, regrid_arrays) = op_input_arrays.partition(_.gridFilePath.equals(regridSpec.gridFile))
-      if (regrid_arrays.isEmpty) { inputs } else {
-        for (input_array <- acceptable_arrays) { worker.sendArrayMetadata( input_array.uid, input_array) }
-        for (input_array <- regrid_arrays) {
-          logger.info( s"Sending Array ${input_array.uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]")
-          worker.sendRequestInput( input_array.uid, input_array )
-        }
-        val acceptable_array_map = Map(acceptable_arrays.map(array => array.uid -> array): _*)
-
-        logger.info("Gateway: Executing operation %s".format( context.operation.identifier ) )
-        val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid )
-        val rID = UID()
-        worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_arrays.map(_.uid).toArray, context_metadata )
-
-        val resultItems = for (input_array <- regrid_arrays) yield {
-          val tvar = worker.getResult
-          val result = HeapFltArray( tvar, Some(regridSpec.gridFile), Some(inputs.partition.origin) )
-          context.operation.rid + ":" + input_array.uid -> result
-        }
-        val reprocessed_input_map = TreeMap(resultItems: _*)
-        val array_metadata = inputs.metadata ++ op_input_arrays.head.metadata ++ List("uid" -> context.operation.rid, "gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid  )
-        val array_metadata_crs = context.crsOpt.map( crs => array_metadata + ( "crs" -> crs ) ).getOrElse( array_metadata )
-        logger.info("&MAP: Finished Kernel %s, acceptable inputs = [ %s ], reprocessed inputs = [ %s ], passthrough inputs = [ %s ], time = %.4f s, metadata = %s".format(name, acceptable_array_map.keys.mkString(","), reprocessed_input_map.keys.mkString(","), passthrough_array_map.keys.mkString(","), (System.nanoTime - t0) / 1.0E9, array_metadata_crs.mkString(";") ) )
-        context.addTimestamp( "Map Op complete" )
-        RDDRecord( reprocessed_input_map ++ acceptable_array_map ++ passthrough_array_map, array_metadata_crs, inputs.partition )
+      for ((uid, input_array) <- acceptable_array_map) {
+        val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
+        worker.sendArrayMetadata(uid, input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions))))
       }
-    } finally {
-      workerManager.releaseWorker( worker )
+      for ((uid, input_array) <- regrid_array_map) {
+        logger.info(s"Sending Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]")
+        val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
+        val data_array = input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+        worker.sendRequestInput( uid, data_array )
+      }
+
+      logger.info("Gateway: Executing operation %s".format(context.operation.identifier))
+      val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
+      val rID = UID()
+      worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
+
+      val resultItems: Iterable[(String,ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
+        val tvar = worker.getResult
+        val result = ArraySpec( tvar )
+        context.operation.rid + ":" + uid -> result
+      }
+      val reprocessed_input_map = resultItems.toMap
+      CDTimeSlice( inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map )
     }
   }
 }
 
 class zmqPythonKernel( _module: String, _operation: String, _title: String, _description: String, options: Map[String,String], axisElimination: Boolean, visibility_status: String  ) extends Kernel(options) {
   override def operation: String = _operation
+
   override def module = _module
+
   override def name = _module.split('.').last + "." + _operation
+
   override def id = _module + "." + _operation
+
   override val identifier = name
-  override val doesAxisElimination: Boolean = axisElimination;
-  override val status = KernelStatus.parse( visibility_status )
-  val outputs = List( WPSProcessOutput( "operation result" ) )
+  override val doesAxisReduction: Boolean = axisElimination;
+  override val status = KernelStatus.parse(visibility_status)
+  val outputs = List(WPSProcessOutput("operation result"))
   val title = _title
   val description = _description
 
   override def cleanUp(): Unit = PythonWorkerPortal.getInstance.shutdown()
 
-  override def map ( context: KernelContext ) ( inputs: RDDRecord  ): RDDRecord = {
-    val t0 = System.nanoTime
-    val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance()
+  override def map(context: KernelContext)(inputs: CDTimeSlice): CDTimeSlice = {
+    val targetGrid: GridContext = context.grid
+    val workerManager: PythonWorkerPortal = PythonWorkerPortal.getInstance()
     val worker: PythonWorker = workerManager.getPythonWorker
     try {
-      val input_arrays: List[HeapFltArray] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[HeapFltArray]())( _ ++ _ )
-      assert( input_arrays.nonEmpty, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      val operation_input_arrays = context.operation.inputs.flatMap( input_id => inputs.element( input_id ) )
+      val input_arrays: List[ArraySpec] = getInputArrays(inputs, context)
       val t1 = System.nanoTime
-      for( input_id <- context.operation.inputs ) inputs.element(input_id) match {
-        case Some( input_array ) =>
-          if( addWeights( context ) ) {
-            val weights: CDFloatArray = KernelUtilities.getWeights(input_id, context, context.getWeightMode, false )
-            worker.sendRequestInput(input_id, HeapFltArray(input_array, weights))
-          } else {
-            worker.sendRequestInput(input_id, input_array)
-          }
+      for (input_id <- context.operation.inputs) inputs.element(input_id) match {
+        case Some(input_array) =>
+          val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(input_id)
+          val data_array = input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+          worker.sendRequestInput( input_id, data_array )
         case None =>
-          worker.sendUtility( List( "input", input_id ).mkString(";") )
+          worker.sendUtility(List("input", input_id).mkString(";"))
       }
-      val metadata = indexAxisConf( context.getConfiguration, context.grid.axisIndexMap ) ++ Map( "resultDir" -> Kernel.getResultDir.toString )
-      worker.sendRequest(context.operation.identifier, context.operation.inputs.toArray, metadata )
-      val resultItems = for( iInput <-  0 until (operation_input_arrays.length * nOutputsPerInput)  ) yield {
+      val metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) ++ Map("resultDir" -> Kernel.getResultDir.toString)
+      worker.sendRequest(context.operation.identifier, context.operation.inputs.toArray, metadata)
+      val resultItems: Seq[(String, ArraySpec)] = for (iInput <- 0 until (input_arrays.length * nOutputsPerInput)) yield {
         val tvar: TransVar = worker.getResult
-        val uid = tvar.getMetaData.get( "uid" )
-        val result = HeapFltArray( tvar )
-        logger.info( "Received result Var: " + tvar.toString + ", first = " + result.data(0).toString + " undef = " + result.missing.getOrElse(0.0))
+        val uid = tvar.getMetaData.get("uid")
+        val result = ArraySpec(tvar)
         context.operation.rid + ":" + uid + "~" + tvar.id() -> result
       }
-      logger.info( "Gateway: Executing operation %s in time %.4f s".format( context.operation.identifier, (System.nanoTime - t1) / 1.0E9 ) )
-
-      val result_metadata = inputs.metadata ++ input_arrays.head.metadata ++ List( "uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile( inputs.elements )  )
-      logger.info("&MAP: Finished zmqPythonKernel %s, time = %.4f s, metadata = %s".format(name, (System.nanoTime - t0) / 1.0E9, result_metadata.mkString(";") ) )
-      context.addTimestamp( "Map Op complete" )
-      RDDRecord( TreeMap(resultItems:_*), result_metadata, inputs.partition )
+      CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ resultItems )
     } finally {
-      workerManager.releaseWorker( worker )
+      workerManager.releaseWorker(worker)
     }
   }
-
-  override def customReduceRDD(context: KernelContext)(a0: ( RecordKey, RDDRecord ), a1: ( RecordKey, RDDRecord ) ): ( RecordKey, RDDRecord ) = {
-    val ( rdd0, rdd1 ) = ( a0._2, a1._2 )
-    val ( k0, k1 ) = ( a0._1, a1._1 )
-    val t0 = System.nanoTime
-    val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
-    val worker: PythonWorker = workerManager.getPythonWorker
-    val ascending = k0 < k1
-    val new_key = if(ascending) { k0 + k1 } else { k1 + k0 }
-    val op_metadata = indexAxisConf( context.getConfiguration, context.grid.axisIndexMap )
-    rdd0.elements.map {
-      case (key, element0) =>  rdd1.elements.get(key).map( element1 => key -> {
-        val (array0, array1) = if (ascending) (element0, element1) else (element1, element0)
-        val uids = Array( s"${array0.uid}", s"${array1.uid}" )
-        worker.sendRequestInput( uids(0), array0 )
-        worker.sendRequestInput( uids(1), array1 )
-        worker.sendRequest( context.operation.identifier, uids, Map( "action" -> "reduce", "axes" -> context.getAxes.getAxes.mkString(",") ) )
-      })
-    }
-    val resultItems = rdd0.elements.map {
-      case (key, element0) =>
-        val tvar = worker.getResult
-        val result = HeapFltArray( tvar )
-        context.operation.rid + ":" + element0.uid -> result
-    }
-    logger.debug("&MERGE %s: finish, time = %.4f s".format( context.operation.identifier, (System.nanoTime - t0) / 1.0E9 ) )
-    context.addTimestamp( "Custom Reduce Op complete" )
-    new_key -> RDDRecord( resultItems, rdd0.mergeMetadata("merge", rdd1), rdd0.partition )
-  }
-
   def indexAxisConf( metadata: Map[String,String], axisIndexMap: Map[String,Int] ): Map[String,String] = {
     try {
       metadata.get("axes") match {
@@ -1274,7 +827,38 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
   }
 }
 
-class TransientFragment( val dataFrag: DataFragment, val request: RequestContext, val varMetadata: Map[String,nc2.Attribute] ) extends OperationDataInput( dataFrag.spec, varMetadata ) {
+//  override def customReduceRDD(context: KernelContext)(a0: ( RecordKey, CDTimeSlice ), a1: ( RecordKey, CDTimeSlice ) ): ( RecordKey, CDTimeSlice ) = {
+//    val ( rec0, rec1 ) = ( a0._2, a1._2 )
+//    val ( k0, k1 ) = ( a0._1, a1._1 )
+//    val t0 = System.nanoTime
+//    val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
+//    val worker: PythonWorker = workerManager.getPythonWorker
+//    val ascending = k0 < k1
+//    val new_key = if(ascending) { k0 + k1 } else { k1 + k0 }
+//    val op_metadata = indexAxisConf( context.getConfiguration, context.grid.axisIndexMap )
+//    rec0.elements.map {
+//      case (key, element0) =>  rec1.elements.get(key).map( element1 => key -> {
+//        val (array0, array1) = if (ascending) (element0, element1) else (element1, element0)
+//        val uids = Array( s"${array0.uid}", s"${array1.uid}" )
+//        worker.sendRequestInput( uids(0), array0 )
+//        worker.sendRequestInput( uids(1), array1 )
+//        worker.sendRequest( context.operation.identifier, uids, Map( "action" -> "reduce", "axes" -> context.getAxes.getAxes.mkString(",") ) )
+//      })
+//    }
+//    val resultItems = rec0.elements.map {
+//      case (key, element0) =>
+//        val tvar = worker.getResult
+//        val result = HeapFltArray( tvar )
+//        context.operation.rid + ":" + element0.uid -> result
+//    }
+//    logger.debug("&MERGE %s: finish, time = %.4f s".format( context.operation.identifier, (System.nanoTime - t0) / 1.0E9 ) )
+//    context.addTimestamp( "Custom Reduce Op complete" )
+//    new_key -> CDTimeSlice( resultItems, rec0.mergeMetadata("merge", rec1), rec0.partition )
+//  }
+//
+//}
+
+class TransientFragment( val dataFrag: DataFragment, val request: RequestContext, val varMetadata: Map[String,nc2.Attribute] ) extends OperationDataInput( dataFrag.spec, varMetadata.toMap ) {
   def toXml(id: String): xml.Elem = {
     val units = varMetadata.get("units") match { case Some(attr) => attr.getStringValue; case None => "" }
     val long_name = varMetadata.getOrElse("long_name",varMetadata.getOrElse("fullname",varMetadata.getOrElse("varname", new Attribute("varname","UNDEF")))).getStringValue
@@ -1285,7 +869,7 @@ class TransientFragment( val dataFrag: DataFragment, val request: RequestContext
   def domainDataFragment( partIndex: Int,  optSection: Option[ma2.Section]  ): Option[DataFragment] = Some(dataFrag)
   def data(partIndex: Int ): CDFloatArray = dataFrag.data
   def delete() = {;}
-  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = { ; }
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = { ; }
 }
 
 class SerializeTest {

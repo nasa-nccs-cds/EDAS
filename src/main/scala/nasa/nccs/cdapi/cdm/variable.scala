@@ -2,21 +2,21 @@ package nasa.nccs.cdapi.cdm
 
 import nasa.nccs.caching._
 import nasa.nccs.cdapi.data._
-import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray, CDIndexMap}
+import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray}
 import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.KernelContext
-import nasa.nccs.esgf.process.DomainContainer.{filterMap, key_equals}
+import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection}
+import nasa.nccs.edas.sources.{Aggregation, Collection}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
-import nasa.nccs.esgf.utilities.wpsNameMatchers
 import ucar.{ma2, nc2, unidata}
 import ucar.nc2.dataset.{CoordinateAxis1D, _}
-import nasa.nccs.utilities.{Loggable, cdsutils}
+import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 import ucar.nc2.constants.AxisType
 
+import scala.collection.immutable.Map
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.immutable.TreeMap
 import scala.collection.mutable
 import scala.util.matching.Regex
 
@@ -25,7 +25,7 @@ object BoundsRole extends Enumeration { val Start, End = Value }
 object CDSVariable extends Loggable {
   def toCoordAxis1D(coordAxis: CoordinateAxis): CoordinateAxis1D = coordAxis match {
     case coordAxis1D: CoordinateAxis1D =>
-     //  if( coordAxis1D.getShortName.equalsIgnoreCase("time") ){coordAxis1D.setUnitsString( cdsutils.baseTimeUnits ) }
+     //  if( coordAxis1D.getShortName.equalsIgnoreCase("time") ){coordAxis1D.setUnitsString( EDTime.units ) }
       coordAxis1D
     case _ => throw new IllegalStateException("CDSVariable: 2D Coord axes not yet supported: " + coordAxis.getClass.getName)
   }
@@ -50,6 +50,7 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
       logger.info( "Found missing attribute value: " + s )
       s.toFloat
   }
+  def getAggregation: Aggregation = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") )
   def getAttributeValue( key: String, default_value: String  ) =  attributes.get( key ) match { case Some( attr_val ) => attr_val.toString.split('=').last.replace('"',' ').trim; case None => default_value }
   val description = getAttributeValue( "description", "" )
   val units = getAttributeValue( "units", "" )
@@ -66,7 +67,7 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
       { for( dim: nc2.Dimension <- collection.grid.dimensions; name=dim.getFullName; dlen=dim.getLength ) yield getCoordinateAxis( name ) match {
           case None=> <dimension name={name} length={dlen.toString}/>
           case Some(axis)=>
-              val units = axis.getAxisType match { case AxisType.Time =>{cdsutils.baseTimeUnits} case x => axis.getUnitsString }
+              val units = axis.getAxisType match { case AxisType.Time =>{EDTime.units} case x => axis.getUnitsString }
               <dimension name={name} length={dlen.toString} start={axis.getStart.toString} units={units} step={axis.getIncrement.toString} cfname={axis.getAxisType.getCFAxisName}/>
         }
       }
@@ -87,8 +88,11 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
   }
   def getCoordinateAxis( axisType: AxisType ): Option[CoordinateAxis1D] = collection.grid.findCoordinateAxis(axisType).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) )
   def getCoordinateAxis( name: String ): Option[CoordinateAxis1D] = {
+    val t0 = System.nanoTime()
     val caxis = collection.grid.findCoordinateAxis(name)
-    caxis.map( CDSVariable.toCoordAxis1D(_) )
+    val axis = caxis.map( CDSVariable.toCoordAxis1D(_) )
+    logger.info( s"getCoordinateAxis: ${name}, time: ${(System.nanoTime()-t0)/1.0E9}")
+    axis
   }
   def getCoordinateAxesList = collection.grid.getCoordinateAxes
 }
@@ -96,8 +100,7 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
 class InputConsumer( val operation: OperationContext ) {
   private var _satiated = false;
   val id: String = operation.identifier
-  def satiate(): Unit =
-    _satiated = true;
+  def satiate(): Unit = _satiated = true;
   def satiated: Boolean = _satiated
 }
 
@@ -112,24 +115,24 @@ trait OperationInput {
   def disposable: Boolean = transient && satiated
   private def unknown( operation: OperationContext ) = throw new Exception(s"Unrecognized operation ${operation.identifier} in opInput ${getKeyString}")
   def consume( op: OperationContext ): Unit = _consumers.getOrElse( op.identifier, unknown(op) ).satiate()
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int )
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int )
 }
 class EmptyOperationInput() extends OperationInput {
   def getKeyString: String = "";
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {;}
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {;}
 }
 
 class DependencyOperationInput( val inputNode: WorkflowNode, val opNode: WorkflowNode ) extends OperationInput with Loggable {
   def getKeyString: String =  inputNode.getNodeId + "->" + opNode.getNodeId
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = inputNode.getProduct match {
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = inputNode.getProduct match {
     case None =>
       logger.info("\n\n ----------------------- NODE %s => BEGIN Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ") ) )
       workflow.stream(inputNode, executor, batchIndex)
       logger.info("\n\n ----------------------- NODE %s => END   Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ") ) )
-    case Some((key: RecordKey, result: RDDRecord)) =>
+    case Some(results: TimeSliceCollection) =>
       val opSection: Option[CDSection] = kernelContext.getDomainSections.headOption
       logger.info("\n\n ----------------------- NODE %s => Get Cached Result: %s, batch = %d, rID = %s, opSection= %s -------\n".format( node.getNodeId, inputNode.getNodeId, batchIndex, inputNode.getResultId, opSection.map(_.toString()).getOrElse("(EMPTY)") ) )
-      executor.addOperationInput(workflow.executionMgr.serverContext, result, opSection, batchIndex)
+      executor.addOperationInput( workflow.executionMgr.serverContext, results, opSection, batchIndex )
   }
 }
 
@@ -139,7 +142,7 @@ class OperationTransientInput( val variable: RDDTransientVariable ) extends Oper
     case Some( dataFrag )=> dataFrag.getKeyString
     case None => variable.operation.inputs.mkString(":")
   }
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
 
   }
 }
@@ -168,7 +171,7 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
 
   def delete: Unit = Unit
 
-  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+  def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
 
   }
 
@@ -196,20 +199,20 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
   def getRDDVariableSpec( uid: String, optSection: Option[ma2.Section] = None ): DirectRDDVariableSpec  =
     domainSection(optSection) match {
       case Some( ( domFragSpec, section ) ) =>
-        new DirectRDDVariableSpec( uid, domFragSpec.getMetadata( Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.dataPath )
+        new DirectRDDVariableSpec( uid, domFragSpec.getMetadata( Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.collId )
       case _ =>
-        new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath )
+        new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.collId )
     }
 
   def getRDDVariableSpec: DirectRDDVariableSpec  =
-    new DirectRDDVariableSpec( fragmentSpec.uid, fragmentSpec.getMetadata( Some(fragmentSpec.roi)), fragmentSpec.missing_value, CDSection(fragmentSpec.roi), fragmentSpec.varname, fragmentSpec.collection.dataPath )
+    new DirectRDDVariableSpec( fragmentSpec.uid, fragmentSpec.getMetadata( Some(fragmentSpec.roi)), fragmentSpec.missing_value, CDSection(fragmentSpec.roi), fragmentSpec.varname, fragmentSpec.collection.collId )
 
   def getKeyedRDDVariableSpec( uid: String, optSection: Option[ma2.Section] ): ( RecordKey, DirectRDDVariableSpec ) =
     domainSection(optSection) match {
       case Some( ( domFragSpec, section ) ) =>
-        domFragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, domFragSpec.getMetadata(Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.dataPath )
+        domFragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, domFragSpec.getMetadata(Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.collId )
       case _ =>
-        fragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.dataPath )
+        fragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.collId )
     }
 }
 
@@ -222,19 +225,16 @@ class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,St
     CDFloatArray.empty
   }
 
-  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
-    val gridRefInput: OperationDataInput =  executor.getGridRefInput.getOrElse( throw new Exception("No grid ref input found for domainRDDPartition") )
-    val varSpec = getRDDVariableSpec(uid)
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
     val opSection: Option[CDSection] = workflow.getOpSectionIntersection( gridRefInput.getGrid, node ).map( CDSection(_) )
-    logger.info("\n\n ----------------------- BEGIN addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]   -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(executor), executor.contents.mkString(", ") ) )
-    executor.addKernelInputs( workflow.executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex )
-    logger.info("\n\n ----------------------- END addKernelInputs: NODE %s, VarSpec: %s, batch id: %d, contents = [ %s ]  -------\n".format( node.getNodeId, varSpec.uid, System.identityHashCode(executor), executor.contents.mkString(", ") ) )
+    val varSpec = getRDDVariableSpec(uid)
+    executor.addFileInputs( workflow.executionMgr.serverContext, kernelContext, List(varSpec), opSection, batchIndex )
   }
 }
 
 class ExternalDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {
   override def data(partIndex: Int ): CDFloatArray = CDFloatArray.empty
-  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
     throw new Exception(" ExternalDataInput is not currently supported as a Kernel input ")
   }
 }
@@ -246,7 +246,7 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
 
   def data(partIndex: Int ): CDFloatArray = partitions.getPartData(partIndex, fragmentSpec.missing_value )
 
-  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+  override def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
     throw new Exception(" PartitionedFragment is not currently supported as a Kernel input ")
   }
 
@@ -267,13 +267,6 @@ class PartitionedFragment( val partitions: CachePartitions, val maskOpt: Option[
   def partDataFragment( partIndex: Int ): DataFragment = {
     val partition = partitions.getPart(partIndex)
     DataFragment( partFragSpec(partIndex), partition.data( fragmentSpec.missing_value ) )
-  }
-
-  def partRDDPartition( partIndex: Int, startTime: Long ): RDDRecord = {
-    val partition = partitions.getPart(partIndex)
-    val data: CDFloatArray = partition.data( fragmentSpec.missing_value )
-    val spec: DataFragmentSpec = partFragSpec(partIndex)
-    RDDRecord( TreeMap( spec.uid -> HeapFltArray(data, fragSpec.getOrigin, spec.getMetadata(), None) ), Map.empty, partition )
   }
 
 //  def domainRDDPartition(partIndex: Int, optSection: Option[ma2.Section] ): Option[RDDPartition] = domainCDDataSection( partIndex, optSection ) match {

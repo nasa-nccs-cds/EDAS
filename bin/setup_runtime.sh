@@ -1,7 +1,9 @@
+#!/usr/bin/env bash
+export EDAS_BIN_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+export EDAS_HOME_DIR=${EDAS_BIN_DIR}/..
 export EDAS_CACHE_DIR=${EDAS_CACHE_DIR:-${HOME}/.edas/cache}
 export EDAS_VERSION=1.2
 export EDAS_MAX_MEM=${EDAS_MAX_MEM:-32000M}
-export EDAS_BIN_DIR=${EDAS_HOME_DIR}/bin
 export CDWPS_HOME_DIR=${CDWPS_HOME_DIR:-${EDAS_HOME_DIR}/../CDWPS}
 export CDSHELL_HOME_DIR=${CDSHELL_HOME_DIR:-${EDAS_HOME_DIR}/../EDASClientConsole}
 export EDAS_SCALA_DIR=${EDAS_HOME_DIR}/src/main/scala

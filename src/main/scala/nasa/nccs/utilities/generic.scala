@@ -11,7 +11,9 @@ import ucar.nc2.time.CalendarDate
 import java.nio.file.{Files, Path}
 import java.text.SimpleDateFormat
 import java.util.Calendar
+
 import nasa.nccs.esgf.process.UID
+import ucar.ma2
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -48,7 +50,7 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   def timestamp = Calendar.getInstance().getTime
   def timeStr = s"(${timeFormatter.format(timestamp)})"
 
-  val writer = {
+  lazy val writer = {
     val printer = if(Files.exists(logFilePath)) {
       new PrintWriter(logFilePath.toString)
     } else {
@@ -75,9 +77,9 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
     if( newline && !newline_state) { output = "\n" + output }
     if(newline) { writer.println( output ) } else { writer.print( output ) }
     writer.flush()
-    if(!test) { println( output ) }
+    if( !test && master ) { println( output ) }
     newline_state = newline
-  } catch { case ex: Exception =>  println( "Logging exception: " + ex.toString ) }
+  } catch { case ex: Exception =>  if( master) { println( "Logging exception: " + ex.toString ) } }
 
   def close() { writer.close(); }
   def info( msg: String ) = { log( "info", msg, true ) }
@@ -130,9 +132,22 @@ trait Loggable extends Serializable {
   def printMarker( index: Int ): Unit = print( s"\n@@@@ ${index.toString} @@@@\n")
 }
 
+object EDTime {
+  val units = "minutes since 1970-01-01T00:00:00Z"
+  val millisPerMinute = 1000 * 60.0
+  val datatype = "double"
+  val ucarDatatype = ma2.DataType.DOUBLE
+
+  def toValue( date: CalendarDate ): Double = date.getMillis / millisPerMinute
+  def toDate( value: Double ): CalendarDate = CalendarDate.of( ( value * millisPerMinute ).toLong )
+  def toMillis( value: Double ): Long = ( value * millisPerMinute ).toLong
+  def toString( value: Double ): String = "%f".format( value )
+
+}
+
 object cdsutils {
 
-  val baseTimeUnits = "seconds since 1970-01-01T00:00:00Z"
+
 
   def getOrElse[T]( map: Map[String,T], key: String, errMsg: String ): T = map.get(key) match { case Some(x) => x; case None => throw new Exception(errMsg) }
 

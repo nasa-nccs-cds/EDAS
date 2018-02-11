@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-cd "$( dirname "${BASH_SOURCE[0]}" )"; cd ..; sbt "runMain nasa.nccs.cdapi.cdm.CDMultiScan $*"
+cd "$( dirname "${BASH_SOURCE[0]}" )"; cd ..; sbt "runMain nasa.nccs.edas.sources.CDMultiScan $*"

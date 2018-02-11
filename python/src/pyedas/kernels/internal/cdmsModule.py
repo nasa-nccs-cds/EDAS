@@ -3,6 +3,7 @@ from pyedas.edasArray import cdmsArray, npArray
 import cdms2, time, os, cdutil
 from pyedas.messageParser import mParse
 import numpy as np
+import regrid2
 
 def sa2f( sarray ):
     try: return [ float(x) for x in sarray ]
@@ -43,6 +44,7 @@ class RegridKernel(CDMSKernel):
         gridType = str( mdata.get("grid","uniform") ).lower()
         target = str( mdata.get("target","") )
         gridSpec = str( mdata.get("gridSpec","") )
+        regridTool = str(mdata.get("regridTool", "regrid2"))
         method = str( mdata.get("method","linear") ).lower()
         res = sa2f( self.getListParm( mdata, "res" ) )
         shape = sa2i( self.getListParm( mdata, "shape" ) )
@@ -78,7 +80,7 @@ class RegridKernel(CDMSKernel):
             if( _input is None ):
                 raise Exception(" Can't find variable id {0} ({1}) in inputs {2} ".format( vid, input_id, str( _inputs.keys() ) ))
             else:
-                variable = _input.getVariable()
+                variable = _input.getVariable().squeeze()
                 ingrid = _input.getGrid()
                 inlatBounds, inlonBounds = ingrid.getBounds()
                 self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) )
@@ -91,9 +93,14 @@ class RegridKernel(CDMSKernel):
                     self.logger.info( " Regridding Variable {0} using grid {1} ".format( variable.id, str(toGrid) ) )
                     if self._debug:
                         self.logger.info( " >> Input Data Sample: [ {0} ]".format( ', '.join(  [ str( variable.data.flat[i] ) for i in range(20,90) ] ) ) )
-                        self.logger.info( " >> Input Variable Shape: {0}, Grid Shape: {1} ".format( str(variable.shape), str([len(ingrid.getLatitude()),len(ingrid.getLongitude())] )))
+                        self.logger.info( " >> Input Variable Shape: {0}, Grid Shape: {1}, Regrid Method: {2}, Grid Type: {3} ".format( str(variable.shape), str([len(ingrid.getLatitude()),len(ingrid.getLongitude())] ), method, toGrid.getType() ))
 
-                    result_var = variable.regrid( toGrid, regridTool="esmf", regridMethod=method )
+                    if( regridTool == "regrid2"):
+                        regridf = regrid2.Horizontal( ingrid, toGrid )
+                        result_var = regridf( variable, missing=variable.fill_value )
+                    else:
+                        result_var = variable.regrid(toGrid, regridTool=regridTool, regridMethod=method)
+
                     self.logger.info( " >> Gridded Data Sample: [ {0} ]".format( ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
                     results.append( self.createResult( result_var, _input, task ) )
         t1 = time.time()

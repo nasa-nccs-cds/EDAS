@@ -1,6 +1,6 @@
 ###                                EDAS Project
 
-_Earth Data Analytic Services provider built on scala, Spark, Akka, Haddop, and python tools such as UVCDAT, etc._
+_Earth Data Analytic Services provider built on scala, Spark, and python tools such as UVCDAT, etc._
 
 ####  Prerequisite: Install the Java/Scala develpment tools:
 

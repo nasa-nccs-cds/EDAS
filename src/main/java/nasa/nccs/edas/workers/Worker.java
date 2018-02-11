@@ -129,6 +129,7 @@ public abstract class Worker {
         logger = _logger;
         results = new ConcurrentLinkedQueue();
         messages = new ConcurrentLinkedQueue();
+
         request_socket = context.socket(ZMQ.PUSH);
         request_port = bindSocket( request_socket, BASE_PORT );
         resultThread = new ResultThread( request_port + 1, context );

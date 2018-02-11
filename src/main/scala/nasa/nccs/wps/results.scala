@@ -2,9 +2,10 @@ package nasa.nccs.wps
 
 import java.text.SimpleDateFormat
 import java.util.Calendar
+
 import nasa.nccs.caching.RDDTransientVariable
-import nasa.nccs.cdapi.data.RDDRecord
 import nasa.nccs.cdapi.tensors.CDFloatArray
+import nasa.nccs.edas.rdd.CDTimeSlice
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.UID.ndigits
 import nasa.nccs.esgf.process.{DataFragmentSpec, TargetGrid}
@@ -143,10 +144,10 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
           <wps:ProcessSucceeded>EDAS Process successfully calculated</wps:ProcessSucceeded>
         </wps:Status>
         <wps:ProcessOutputs>
-          {tvar.result.elements.map { case (id, result) =>
+          {tvar.result.concatSlices.slices.head.elements.map { case (id, result) =>
           <wps:Output>
             <wps:Data id={id}>
-              <wps:LiteralData uom={result.metadata.getOrElse("units", "")} shape={result.shape.mkString(",")}>
+              <wps:LiteralData  shape={result.shape.mkString(",")}>
                 {result.toCDFloatArray.mkDataString(" ", " ", " ")}
               </wps:LiteralData>
             </wps:Data>
@@ -157,8 +158,8 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
     case ResponseSyntax.Generic =>
       <response  serviceInstance={serviceInstance}  creation_time={currentTime} status="Success">
         <outputs>
-          {tvar.result.elements.map { case (id, result) =>
-          <output id={id} uom={result.metadata.getOrElse("units", "")} shape={result.shape.mkString(",")} >
+          {tvar.result.concatSlices.slices.head.elements.map { case (id, result) =>
+          <output id={id} shape={result.shape.mkString(",")} >
                 {result.toCDFloatArray.mkDataString(" ", " ", " ")}
           </output>
         }}
@@ -270,10 +271,10 @@ class MergedWPSExecuteResponse( serviceInstance: String, responses: Seq[WPSProce
   }
 }
 
-class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], id: String, val result: RDDRecord, resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  with Loggable {
+class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], id: String, val result: CDTimeSlice, resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  with Loggable {
   override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
     val syntax = getSyntax(response_syntax)
-    result.elements map { case (id, array) => getData( syntax, id, array.toCDFloatArray, array.metadata.getOrElse("units","") ) }
+    result.elements map { case (id, array) => getData( syntax, id, array.toCDFloatArray, "TODO: units" ) }
   }
 }
 

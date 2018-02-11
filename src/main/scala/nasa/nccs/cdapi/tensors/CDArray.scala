@@ -9,7 +9,7 @@ import nasa.nccs.cdapi.tensors.CDArray.{FlatIndex, StorageIndex}
 import nasa.nccs.utilities.{Loggable, cdsutils}
 import ucar.ma2
 import ucar.ma2.{ArrayFloat, Index, IndexIterator}
-
+import scala.collection.immutable.Map
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
@@ -36,6 +36,18 @@ object CDArray {
     }
   }
 
+  def apply1[T <: AnyVal]( index: CDIndexMap, storage: Buffer, invalid: T ): CDArray[T] = {
+    storage match {
+      case x: FloatBuffer => new CDFloatArray( index, storage.asInstanceOf[FloatBuffer], invalid.asInstanceOf[Float] ).asInstanceOf[CDArray[T]]
+      case x: IntBuffer => new CDIntArray( index, storage.asInstanceOf[IntBuffer] ).asInstanceOf[CDArray[T]]
+      case x: ByteBuffer => new CDByteArray( index, storage.asInstanceOf[ByteBuffer] ).asInstanceOf[CDArray[T]]
+      case x: ShortBuffer => new CDShortArray( index, storage.asInstanceOf[ShortBuffer] ).asInstanceOf[CDArray[T]]
+      case x: DoubleBuffer => new CDDoubleArray( index, storage.asInstanceOf[DoubleBuffer], invalid.asInstanceOf[Double] ).asInstanceOf[CDArray[T]]
+      case x: LongBuffer => new CDLongArray( index, storage.asInstanceOf[LongBuffer] ).asInstanceOf[CDArray[T]]
+      case x => throw new Exception( "Unsupported elem type in CDArray: " + x)
+    }
+  }
+
   def toBuffer[T]( array: Array[T] ): Buffer = array.head match {
     case u: Float  => FloatBuffer.wrap( array.asInstanceOf[Array[Float]] )
     case u: Double  => DoubleBuffer.wrap( array.asInstanceOf[Array[Double]] )
@@ -46,7 +58,16 @@ object CDArray {
   }
 
   def toBuffer( array: ucar.ma2.Array ): Buffer = array.getElementType.toString match {
-    case "float"  => FloatBuffer.wrap( array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Float]] )
+    case "float"  => FloatBuffer.wrap( array.getStorage.asInstanceOf[Array[Float]] )
+    case "double" => DoubleBuffer.wrap( array.getStorage.asInstanceOf[Array[Double]] )
+    case "int"    => IntBuffer.wrap( array.getStorage.asInstanceOf[Array[Int]] )
+    case "short"  => ShortBuffer.wrap( array.getStorage.asInstanceOf[Array[Short]] )
+    case "long"  =>  LongBuffer.wrap( array.getStorage.asInstanceOf[Array[Long]] )
+    case x                => ByteBuffer.wrap( array.getStorage.asInstanceOf[Array[Byte]] )
+  }
+
+  def toBufferSlow( array: ucar.ma2.Array ): Buffer = array.getElementType.toString match {
+    case "float"  => FloatBuffer.wrap( array.getStorage.asInstanceOf[Array[Float]] )
     case "double" => DoubleBuffer.wrap( array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Double]] )
     case "int"    => IntBuffer.wrap( array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Int]] )
     case "short"  => ShortBuffer.wrap( array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Short]] )
@@ -287,6 +308,15 @@ object CDFloatArray extends Loggable with Serializable {
   def const( shape: Array[Int], value: Float ): CDFloatArray = apply( CDIndexMap.const(shape), Array(value), Float.MaxValue )
 
   def toFloatBuffer( array: ucar.ma2.Array ): FloatBuffer = array.getElementType.toString match {
+    case "float"  => FloatBuffer.wrap( array.getStorage.asInstanceOf[Array[Float]] )
+    case "double" => FloatBuffer.wrap( array.getStorage.asInstanceOf[Array[Double]].map( _.toFloat ) )
+    case "int"    => FloatBuffer.wrap( array.getStorage.asInstanceOf[Array[Int]].map( _.toFloat ) )
+    case "short"  => FloatBuffer.wrap( array.getStorage.asInstanceOf[Array[Short]].map( _.toFloat ) )
+    case "long"  =>  FloatBuffer.wrap( array.getStorage.asInstanceOf[Array[Long]].map( _.toFloat ) )
+    case x        => FloatBuffer.wrap( array.getStorage.asInstanceOf[Array[Byte]].map( _.toFloat ) )
+  }
+
+  def toFloatBufferSlow( array: ucar.ma2.Array ): FloatBuffer = array.getElementType.toString match {
     case "float"  => FloatBuffer.wrap( array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Float]] )
     case "double" => FloatBuffer.wrap( array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Double]].map( _.toFloat ) )
     case "int"    => FloatBuffer.wrap( array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Int]].map( _.toFloat ) )
@@ -294,6 +324,7 @@ object CDFloatArray extends Loggable with Serializable {
     case "long"  =>  FloatBuffer.wrap( array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Long]].map( _.toFloat ) )
     case x        => FloatBuffer.wrap( array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Byte]].map( _.toFloat ) )
   }
+
 
   def toFloatArray( array: ucar.ma2.Array ): Array[Float] = array.getElementType.toString match {
     case "float"  => array.get1DJavaArray( array.getElementType ).asInstanceOf[Array[Float]]
@@ -489,6 +520,16 @@ class CDFloatArray( cdIndexMap: CDIndexMap, val floatStorage: FloatBuffer, prote
     }  else {
       val floatData = for ( index <- getIterator; if index < maxValue ) yield { getValue(index) }
       FloatBuffer.wrap(floatData.toArray)
+    }
+  }
+
+  def mapSectionData( f: Float => Float ): CDFloatArray =  {
+    val size = getSize
+    if( size == 0 ) {
+      CDFloatArray.empty
+    }  else {
+      val floatData = for ( index <- getIterator ) yield { f( getValue(index) ) }
+      CDFloatArray( getShape, floatData.toArray, invalid )
     }
   }
 
