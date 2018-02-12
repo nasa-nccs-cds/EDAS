@@ -1,8 +1,8 @@
 package nasa.nccs.esgf.wps
 import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.edas.engine.ExecutionCallback
-import nasa.nccs.edas.loaders.{CollectionLoadServices, EDAS_XML}
 import nasa.nccs.edas.portal.EDASPortalClient
+import nasa.nccs.edas.sources.{CollectionLoadServices, EDAS_XML}
 import nasa.nccs.esgf.process.{TaskRequest, WorkflowExecutor}
 import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.Loggable

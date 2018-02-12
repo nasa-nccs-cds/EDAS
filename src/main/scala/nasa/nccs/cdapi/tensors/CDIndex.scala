@@ -7,7 +7,7 @@ import ucar.nc2.time.Calendar
 import ucar.nc2.time.CalendarDate
 import nasa.nccs.cdapi.cdm.CDSVariable
 import nasa.nccs.esgf.process.{DomainAxis, GridContext, GridCoordSpec, TargetGrid}
-import nasa.nccs.utilities.{Loggable, cdsutils}
+import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 
 import scala.collection.mutable.ListBuffer
 import ucar.ma2
@@ -45,7 +45,7 @@ abstract class IndexMapIterator extends collection.Iterator[Int] {
 
 abstract class TimeIndexMapIterator( val timeOffsets: Array[Long], range: ma2.Range  ) extends IndexMapIterator {
   val index_offset: Int = range.first()
-  val timeHelper = new ucar.nc2.dataset.CoordinateAxisTimeHelper( Calendar.gregorian, cdsutils.baseTimeUnits )
+  val timeHelper = new ucar.nc2.dataset.CoordinateAxisTimeHelper( Calendar.gregorian, EDTime.units )
   override def getLength: Int =  range.last() - range.first() + 1
   def toDate( cd: CalendarDate ): DateTime = new DateTime( cd.toDate )
   def getCalendarDate( index: Int ) = timeHelper.makeCalendarDateFromOffset( timeOffsets(index) )
@@ -309,7 +309,7 @@ class IndexValueAccumulator( start_value: Int = 0 ) {
 }
 
 class CDTimeCoordMap( val gridContext: GridContext, section: ma2.Section ) extends Loggable {
-  val timeHelper = new ucar.nc2.dataset.CoordinateAxisTimeHelper( Calendar.gregorian, cdsutils.baseTimeUnits )
+  val timeHelper = new ucar.nc2.dataset.CoordinateAxisTimeHelper( Calendar.gregorian, EDTime.units )
   val timeOffsets: Array[Long] = getTimeAxisData
   val time_axis_index = gridContext.getAxisIndex("t")
 

@@ -1,7 +1,7 @@
 package nasa.nccs.cdapi.data
 
 import nasa.nccs.caching.{CachePartition, Partition, RegularPartition}
-import nasa.nccs.cdapi.cdm.{NetcdfDatasetMgr, RemapElem, TimeConversionSpec}
+import nasa.nccs.cdapi.cdm.{RemapElem, TimeConversionSpec}
 import nasa.nccs.cdapi.tensors.{CDFloatArray, _}
 import nasa.nccs.edas.engine.spark.{RangePartitioner, RecordKey}
 import nasa.nccs.edas.workers.TransVar
@@ -11,6 +11,7 @@ import org.apache.spark.rdd.RDD
 import ucar.nc2.constants.AxisType
 import ucar.ma2
 import java.nio
+import java.nio.FloatBuffer
 import java.util.Formatter
 
 import nasa.nccs.cdapi.data.FastMaskedArray.join
@@ -21,15 +22,18 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.portal.TestReadApplication.logger
+import nasa.nccs.edas.rdd.CDTimeSlice
+import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
+import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import ucar.ma2.{ArrayFloat, Index, IndexIterator}
 import ucar.nc2.dataset.{CoordinateAxis1DTime, NetcdfDataset}
 import ucar.nc2.time.{CalendarDate, CalendarPeriod}
 
-import scala.xml.{Elem, Node}
+import scala.collection.immutable.Map
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.{SortedMap, TreeMap}
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.reflect.ClassTag
 
 // Developer API for integrating various data management and IO frameworks such as SIA-IO and EDAS-Cache.
@@ -78,8 +82,7 @@ trait RDDataManager {
   def getDataProducts(): Set[String] = Set.empty
   def getDataProductMetadata( pid: String ): Map[String,String] = Map.empty
 
-  def getDataRDD( id: String, domain: Map[AxisType,(Int,Int)] ): RDD[RDDRecord]
-
+  def getDataRDD( id: String, domain: Map[AxisType,(Int,Int)] ): RDD[CDTimeSlice]
 
 }
 
@@ -217,13 +220,14 @@ class AnomalySorter(val input_data: HeapFltArray, val axesParm: String, grid: Gr
 }
 
 object FastMaskedArray {
+  var profileTime = 0f
   type ReduceOp = (Float,Float)=>Float
   def apply( array: ma2.Array, missing: Float ): FastMaskedArray = new FastMaskedArray( array, missing )
   def apply( shape: Array[Int], data:  Array[Float], missing: Float ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, shape, data ), missing )
   def apply( shape: Array[Int], init_value: Float, missing: Float ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, shape, Array.fill[Float](shape.product)(init_value) ), missing )
   def apply( fltArray: CDFloatArray ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, fltArray.getShape, fltArray.getArrayData() ), fltArray.getInvalid )
 
-  def weightedSum( arrays: Array[FastMaskedArray], wtsOpt: Option[FastMaskedArray], axes: Array[Int] = Array.emptyIntArray ): ( FastMaskedArray, FastMaskedArray ) = {
+  def weightedSum( arrays: Array[FastMaskedArray], wtsOpt: Option[FastMaskedArray] = None, axes: Array[Int] = Array.emptyIntArray ): ( FastMaskedArray, FastMaskedArray ) = {
     val input0: FastMaskedArray = arrays.head
     wtsOpt match {
       case Some( wts ) => if( !wts.shape.sameElements(input0.shape) ) { throw new Exception( s"Weights shape [${wts.shape.mkString(",")}] does not match data shape [${input0.shape.mkString(",")}]") }
@@ -328,6 +332,8 @@ object FastMaskedArray {
 
 class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggable {
 
+  def getData: Array[Float] = array.getStorage.asInstanceOf[Array[Float]]
+
   def getReductionAxes( s0: Array[Int], s1: Array[Int] ): Array[Int] = {
     var axes = ListBuffer.empty[Int]
     for ( index <- s0.indices; v0 = s0(index); v1 = s1(index); if (v0 != v1) ) {
@@ -370,34 +376,29 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     }
   }
 
-  def compareShapes( other_shape: Array[Int] ): ( Int, Array[Int] ) = {
-    val p0 = array.getShape.foldLeft(1L)(_ * _)
-    val p1 = other_shape.foldLeft(1L)(_ * _)
-    if( p0 == p1 ) ( 0, Array.emptyIntArray )
+  def compareShapes( other_shape: Array[Int] ): ( Int, Option[Array[Int]] ) = {
+    val p0 = array.getShape.product
+    val p1 = other_shape.product
+    if( p0 == p1 ) ( 0, None )
     else if( p0 > p1 )  {
       val axes = getReductionAxes( array.getShape, other_shape )
-      ( 1, axes )
+      ( 1, Some(axes) )
     } else {
       val axes = getReductionAxes( other_shape, array.getShape )
-      ( -1, axes )
+      ( -1, Some(axes) )
     }
   }
 
   def merge(other: FastMaskedArray, op: FastMaskedArray.ReduceOp ): FastMaskedArray = {
     val ( shape_comparison, axes ) = compareShapes( other.array.getShape )
     if( shape_comparison == 0 ) {
-      val vTot = new ma2.ArrayFloat(array.getShape)
-      (0 until array.getSize.toInt) foreach (index => {
-        val uv0: Float = array.getFloat(index)
-        val uv1: Float = other.array.getFloat(index)
-        if ((uv0 == missing) || uv0.isNaN || (uv1 == other.missing) || uv1.isNaN) {
-          missing
-        }
-        else {
-          vTot.setFloat(index, op(uv0, uv1))
-        }
+      val vTot: Array[Float] = new Array(array.getSize.toInt)
+      ( 0 until vTot.size ) foreach (index => {
+        val uv0 = array.getFloat(index)
+        val uv1 = other.array.getFloat(index)
+        vTot( index ) = if( (uv0 == missing) || uv0.isNaN || (uv1 == other.missing) || uv1.isNaN ) { missing } else {  op( uv0, uv1 ) }
       })
-      FastMaskedArray(vTot, missing)
+      FastMaskedArray( shape, vTot, missing )
     } else {
       val base_array = if( shape_comparison > 0 ) { array } else { other.array }
       val reduced_array = if( shape_comparison > 0 ) { other.array } else { array }
@@ -408,7 +409,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
       while ( base_iter.hasNext ) {
         val v0: Float = base_iter.getFloatNext
         if( ( v0 != missing ) && !v0.isNaN ) {
-          val reduced_flat_index: Int = getReducedFlatIndex( reduced_index, axes, base_iter )
+          val reduced_flat_index: Int = getReducedFlatIndex( reduced_index, axes.get, base_iter )
           val v1: Float = reduced_array.getFloat( reduced_flat_index )
           if( ( v1 != missing ) && !v1.isNaN ) {
             result_iter.setFloatNext( op(v0, v1) )
@@ -467,7 +468,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     val wtsIterOpt = wtsOpt.map( _.array.getIndexIterator )
     val ( shape_comparison, broadcast_axes ) = wtsOpt match {
       case Some( wts ) =>   compareShapes( wts.array.getShape )
-      case None =>          ( 0, Array.emptyIntArray )
+      case None =>          ( 0, None )
     }
     val rank = array.getRank
     val iter: IndexIterator = array.getIndexIterator()
@@ -526,7 +527,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
           val current_index = getReducedFlatIndex( targ_index, op_axes, iter )
           wtsIndexOpt match {
             case Some(wtsIndex) =>
-              val reduced_flat_index: Int = getReducedFlatIndex( wtsIndex, broadcast_axes, iter )
+              val reduced_flat_index: Int = getReducedFlatIndex( wtsIndex, broadcast_axes.get, iter )
               val wtval: Float = wts.getFloat( reduced_flat_index )
               target_array.array.setFloat(current_index, target_array.array.getFloat(current_index) + fval*wtval )
               weights_array.array.setFloat(current_index, weights_array.array.getFloat(current_index) + wtval )
@@ -745,11 +746,11 @@ class HeapFltArray( shape: Array[Int]=Array.emptyIntArray, origin: Array[Int]=Ar
     HeapFltArray.bb.putFloat( 0, mval )
     toUcarFloatArray.getDataAsByteBuffer().array() ++ HeapFltArray.bb.array()
   }
-  def combine( combineOp: CDArray.ReduceOp[Float], other: HeapFltArray ): HeapFltArray = {
-    verifyGrids( other )
-    val result = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp )
-    HeapFltArray( result.toCDFloatArray, origin, gridSpec, mergeMetadata("merge",other), toCDWeightsArray.map( _.append( other.toCDWeightsArray.get ) ) )
-  }
+//  def combine( combineOp: CDArray.ReduceOp[Float], other: HeapFltArray ): HeapFltArray = {
+//    verifyGrids( other )
+//    val result = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp )
+//    HeapFltArray( result.toCDFloatArray, origin, gridSpec, mergeMetadata("merge",other), toCDWeightsArray.map( _.append( other.toCDWeightsArray.get ) ) )
+//  }
   def findValue( value: Float, match_required: Boolean=true, eps: Float = 0.0001f ): Option[Int] = { val seps = eps*value; data.indexWhere( x => Math.abs(x-value) < seps ) }  match {
     case -1 => if(match_required) throw new Exception(s"Failed to find a match in array for value ${value}, array values = ${data.map(_.toString).mkString(",")}"); None
     case x => Some(x)
@@ -867,124 +868,124 @@ object HeapLongArray {
   def apply( ucarray: ucar.ma2.Array, origin: Array[Int], metadata: Map[String,String], missing: Float ): HeapLongArray = HeapLongArray( CDLongArray.factory(ucarray), origin, metadata )
 }
 
-class RDDRecord(val elements: SortedMap[String,HeapFltArray], metadata: Map[String,String], val partition: Partition ) extends MetadataCarrier(metadata) {
-  def ++( other: RDDRecord ): RDDRecord = {
-    new RDDRecord( elements ++ other.elements, metadata ++ other.metadata, partition )
-  }
-  def release( keys: Iterable[String] ): RDDRecord  = {
-    val new_elements = elements.filterKeys( key => !keys.contains(key) )
-    new RDDRecord( new_elements, metadata, partition )
-  }
-  def clear: RDDRecord  = new RDDRecord( SortedMap.empty[String,HeapFltArray], metadata, partition )
+//class CDTimeSlice(val elements: SortedMap[String,HeapFltArray], metadata: Map[String,String], val partition: Partition ) extends MetadataCarrier(metadata) {
+//  def ++( other: CDTimeSlice ): CDTimeSlice = {
+//    new CDTimeSlice( elements ++ other.elements, metadata ++ other.metadata, partition )
+//  }
+//  def release( keys: Iterable[String] ): CDTimeSlice  = {
+//    val new_elements = elements.filterKeys( key => !keys.contains(key) )
+//    new CDTimeSlice( new_elements, metadata, partition )
+//  }
+//  def clear: CDTimeSlice  = new CDTimeSlice( SortedMap.empty[String,HeapFltArray], metadata, partition )
+//
+//  def size: Long = elements.values.foldLeft(0L)( (size,elem) => size + elem.size )
+//
+//  def hasMultiGrids: Boolean = {
+//    if( elements.size == 0 ) return false
+//    val head_shape = elements.head._2.shape
+//    elements.exists( item => !item._2.shape.sameElements(head_shape) )     // TODO: Compare axes as well?
+//  }
+//  def reinterp( conversionMap: Map[Int,TimeConversionSpec] ): CDTimeSlice = {
+//    val new_elements = elements.mapValues( array => conversionMap.get(array.shape(0)) match {
+//      case Some( conversionSpec ) => array.reinterp( conversionSpec.weights, conversionSpec.mapOrigin )
+//      case None =>
+//        if( array.shape(0) != conversionMap.values.head.toSize )  throw new Exception( s"Unexpected time conversion input size: ${array.shape(0)} vs ${conversionMap.values.head.toSize}" )
+//        array
+//    })
+//    new CDTimeSlice( new_elements, metadata, partition )
+//  }
+//
+//  def slice( startIndex: Int, size: Int ): CDTimeSlice = {
+//    logger.info( s"RDDPartition: slice --> nElems:{${elements.size}} startIndex:{${startIndex}} size:{${size}} ")
+//    val new_elems = elements.mapValues( _.slice(startIndex,size) )
+//    new CDTimeSlice( new_elems, metadata, partition )
+//  }
+//  def section( optSection: Option[CDSection] ): CDTimeSlice = optSection match {
+//    case Some( section ) =>
+//      logger.info( s"CDTimeSlice-section[${section.toString()}]: elsems = ${elements.keys.mkString(", ")}")
+//      val new_elements = elements.mapValues( _.section( section.toSection ) )
+//      CDTimeSlice( new_elements, metadata, partition )
+//    case None =>
+//      this
+//  }
+//
+//  def hasMultiTimeScales( trsOpt: Option[String]=None ): Boolean = {
+//    if( elements.isEmpty ) return false
+//    val ntimesteps = elements.values.head.shape(0)
+//    elements.exists( item => !(item._2.shape(0)==ntimesteps) )
+//  }
+//  def append( other: CDTimeSlice ): CDTimeSlice = {
+//    val commonElems = elements.keySet.union( other.elements.keySet )
+//    val appendedElems: Set[(String,HeapFltArray)] = commonElems flatMap ( key =>
+//      other.elements.get(key).fold  (elements.get(key) map (e => key -> e))  (e1 => Some( key-> elements.get(key).fold (e1) (e0 => e0.append(e1)))))
+//    new CDTimeSlice( TreeMap(appendedElems.toSeq:_*), metadata ++ other.metadata, partition )
+//  }
+//  def extend( vSpec: DirectRDDVariableSpec ): CDTimeSlice = {
+//    if (elements.contains(vSpec.uid)) {
+//      this
+//    } else {
+//      val new_element = vSpec.toHeapArray(partition)
+//      val newRec = new CDTimeSlice(elements + (vSpec.uid -> new_element), metadata ++ vSpec.metadata, partition)
+////      print( s"\n ********* Extend with vSpec ${vSpec.uid}, elements = [ ${elements.keys.mkString(", ")} ], part=${partition.index}, result nelems = ${newRec.elements.size}\n\n" )
+//      newRec
+//    }
+//  }
+//
+////  def split( index: Int ): (RDDPartition,RDDPartition) = { }
+//  def getShape = elements.head._2.shape
+//  def getOrigin = elements.head._2.origin
+//  def elems = elements.keys
+//  def element( id: String ): Option[HeapFltArray] = ( elements find { case (key,array) => key.split(':')(0).equals(id) } ) map ( _._2 )
+//  def findElements( id: String ): Iterable[HeapFltArray] = ( elements filter { case (key,array) => key.split(':').last.equals(id) } ) values
+//  def empty( id: String ) = { element(id).isEmpty }
+//  def head: ( String, HeapFltArray ) = elements.head
+//  def toXml: xml.Elem = {
+//    val values: Iterable[xml.Node] = elements.values.map(_.toXml)
+//    <partition> {values} </partition>  % metadata
+//  }
+//  def configure( key: String, value: String ): CDTimeSlice = new CDTimeSlice( elements, metadata + ( key -> value ), partition )
+//}
+//
+//object CDTimeSlice {
+//  def apply ( elements: SortedMap[String,HeapFltArray],  metadata: Map[String,String], partition: Partition ) = new CDTimeSlice( elements, metadata, partition )
+//  def apply ( rdd: CDTimeSlice ) = new CDTimeSlice( rdd.elements, rdd.metadata, rdd.partition )
+//  def merge( rdd_parts: Seq[CDTimeSlice] ) = rdd_parts.foldLeft( CDTimeSlice.empty )( _ ++ _ )
+//  def empty: CDTimeSlice = { new CDTimeSlice( TreeMap.empty[String,HeapFltArray], Map.empty[String,String], RegularPartition.empty ) }
+//}
 
-  def size: Long = elements.values.foldLeft(0L)( (size,elem) => size + elem.size )
-
-  def hasMultiGrids: Boolean = {
-    if( elements.size == 0 ) return false
-    val head_shape = elements.head._2.shape
-    elements.exists( item => !item._2.shape.sameElements(head_shape) )     // TODO: Compare axes as well?
-  }
-  def reinterp( conversionMap: Map[Int,TimeConversionSpec] ): RDDRecord = {
-    val new_elements = elements.mapValues( array => conversionMap.get(array.shape(0)) match {
-      case Some( conversionSpec ) => array.reinterp( conversionSpec.weights, conversionSpec.mapOrigin )
-      case None =>
-        if( array.shape(0) != conversionMap.values.head.toSize )  throw new Exception( s"Unexpected time conversion input size: ${array.shape(0)} vs ${conversionMap.values.head.toSize}" )
-        array
-    })
-    new RDDRecord( new_elements, metadata, partition )
-  }
-
-  def slice( startIndex: Int, size: Int ): RDDRecord = {
-    logger.info( s"RDDPartition: slice --> nElems:{${elements.size}} startIndex:{${startIndex}} size:{${size}} ")
-    val new_elems = elements.mapValues( _.slice(startIndex,size) )
-    new RDDRecord( new_elems, metadata, partition )
-  }
-  def section( optSection: Option[CDSection] ): RDDRecord = optSection match {
-    case Some( section ) =>
-      logger.info( s"RDDRecord-section[${section.toString()}]: elsems = ${elements.keys.mkString(", ")}")
-      val new_elements = elements.mapValues( _.section( section.toSection ) )
-      RDDRecord( new_elements, metadata, partition )
-    case None =>
-      this
-  }
-
-  def hasMultiTimeScales( trsOpt: Option[String]=None ): Boolean = {
-    if( elements.isEmpty ) return false
-    val ntimesteps = elements.values.head.shape(0)
-    elements.exists( item => !(item._2.shape(0)==ntimesteps) )
-  }
-  def append( other: RDDRecord ): RDDRecord = {
-    val commonElems = elements.keySet.union( other.elements.keySet )
-    val appendedElems: Set[(String,HeapFltArray)] = commonElems flatMap ( key =>
-      other.elements.get(key).fold  (elements.get(key) map (e => key -> e))  (e1 => Some( key-> elements.get(key).fold (e1) (e0 => e0.append(e1)))))
-    new RDDRecord( TreeMap(appendedElems.toSeq:_*), metadata ++ other.metadata, partition )
-  }
-  def extend( vSpec: DirectRDDVariableSpec ): RDDRecord = {
-    if (elements.contains(vSpec.uid)) {
-      this
-    } else {
-      val new_element = vSpec.toHeapArray(partition)
-      val newRec = new RDDRecord(elements + (vSpec.uid -> new_element), metadata ++ vSpec.metadata, partition)
-//      print( s"\n ********* Extend with vSpec ${vSpec.uid}, elements = [ ${elements.keys.mkString(", ")} ], part=${partition.index}, result nelems = ${newRec.elements.size}\n\n" )
-      newRec
-    }
-  }
-
-//  def split( index: Int ): (RDDPartition,RDDPartition) = { }
-  def getShape = elements.head._2.shape
-  def getOrigin = elements.head._2.origin
-  def elems = elements.keys
-  def element( id: String ): Option[HeapFltArray] = ( elements find { case (key,array) => key.split(':')(0).equals(id) } ) map ( _._2 )
-  def findElements( id: String ): Iterable[HeapFltArray] = ( elements filter { case (key,array) => key.split(':').last.equals(id) } ) values
-  def empty( id: String ) = { element(id).isEmpty }
-  def head: ( String, HeapFltArray ) = elements.head
-  def toXml: xml.Elem = {
-    val values: Iterable[xml.Node] = elements.values.map(_.toXml)
-    <partition> {values} </partition>  % metadata
-  }
-  def configure( key: String, value: String ): RDDRecord = new RDDRecord( elements, metadata + ( key -> value ), partition )
-}
-
-object RDDRecord {
-  def apply ( elements: SortedMap[String,HeapFltArray],  metadata: Map[String,String], partition: Partition ) = new RDDRecord( elements, metadata, partition )
-  def apply ( rdd: RDDRecord ) = new RDDRecord( rdd.elements, rdd.metadata, rdd.partition )
-  def merge( rdd_parts: Seq[RDDRecord] ) = rdd_parts.foldLeft( RDDRecord.empty )( _ ++ _ )
-  def empty: RDDRecord = { new RDDRecord( TreeMap.empty[String,HeapFltArray], Map.empty[String,String], RegularPartition.empty ) }
-}
-
-object RDDPartSpec {
-  def apply( partition: CachePartition, tgrid: TargetGrid, varSpecs: List[ RDDVariableSpec ] ): RDDPartSpec = new RDDPartSpec( partition, partition.getPartitionRecordKey(tgrid,"RDDPartSpec"), varSpecs )
-}
-
-class RDDPartSpec(val partition: CachePartition, val timeRange: RecordKey, val varSpecs: List[ RDDVariableSpec ] ) extends Serializable with Loggable {
-
-  def getRDDPartition(kernelContext: KernelContext, batchIndex: Int): RDDRecord = {
-    val t0 = System.nanoTime()
-    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition)) ): _* )
-    val rv = RDDRecord( elements, Map( "partRange" -> partition.partRange.toString), partition )
-    val dt = (System.nanoTime() - t0) / 1.0E9
-    logger.debug( "RDDPartSpec{ partition = %s }: completed data input in %.4f sec".format( partition.toString, dt) )
-    kernelContext.addTimestamp( "Created input RDD { partition = %s, batch = %d  } in %.4f sec".format( partition.toString, batchIndex, dt ) )
-    rv
-  }
-
-  def getRDDMetaPartition: RDDRecord = {
-    val t0 = System.nanoTime()
-    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toMetaArray(partition)) ): _* )
-    val rv = RDDRecord( elements, Map.empty, partition )
-    logger.debug( "RDDPartSpec{ partition = %s }: completed data input in %.4f sec".format( partition.toString, (System.nanoTime() - t0) / 1.0E9) )
-    rv
-  }
-
-
-  def getPartitionKey( partitioner: RangePartitioner ): RecordKey = partitioner.newPartitionKey( timeRange.center )
-
-  def empty( uid: String ): Boolean = varSpecs.find( _.uid == uid ) match {
-    case Some( varSpec ) => varSpec.empty
-    case None => true
-  }
-
-}
+//object RDDPartSpec {
+//  def apply( partition: CachePartition, tgrid: TargetGrid, varSpecs: List[ RDDVariableSpec ] ): RDDPartSpec = new RDDPartSpec( partition, partition.getPartitionRecordKey(tgrid,"RDDPartSpec"), varSpecs )
+//}
+//
+//class RDDPartSpec(val partition: CachePartition, val timeRange: RecordKey, val varSpecs: List[ RDDVariableSpec ] ) extends Serializable with Loggable {
+//
+////  def getRDDPartition(kernelContext: KernelContext, batchIndex: Int): CDTimeSlice = {
+////    val t0 = System.nanoTime()
+////    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition)) ): _* )
+////    val rv = CDTimeSlice( elements, Map( "partRange" -> partition.partRange.toString), partition )
+////    val dt = (System.nanoTime() - t0) / 1.0E9
+////    logger.debug( "RDDPartSpec{ partition = %s }: completed data input in %.4f sec".format( partition.toString, dt) )
+////    kernelContext.addTimestamp( "Created input RDD { partition = %s, batch = %d  } in %.4f sec".format( partition.toString, batchIndex, dt ) )
+////    rv
+////  }
+//
+////  def getRDDMetaPartition: CDTimeSlice = {
+////    val t0 = System.nanoTime()
+////    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toMetaArray(partition)) ): _* )
+////    val rv = CDTimeSlice( elements, Map.empty, partition )
+////    logger.debug( "RDDPartSpec{ partition = %s }: completed data input in %.4f sec".format( partition.toString, (System.nanoTime() - t0) / 1.0E9) )
+////    rv
+////  }
+//
+//
+////  def getPartitionKey( partitioner: RangePartitioner ): RecordKey = partitioner.newPartitionKey( timeRange.center )
+//
+//  def empty( uid: String ): Boolean = varSpecs.find( _.uid == uid ) match {
+//    case Some( varSpec ) => varSpec.empty
+//    case None => true
+//  }
+//
+//}
 
 object DirectRDDPartSpec {
   def apply(partition: Partition, tgrid: TargetGrid, varSpecs: Iterable[ DirectRDDVariableSpec ] = Iterable.empty ): DirectRDDPartSpec = new DirectRDDPartSpec( partition, partition.getPartitionRecordKey(tgrid,"DirectRDDPartSpec"), varSpecs )
@@ -993,8 +994,8 @@ object DirectRDDPartSpec {
 class DirectRDDPartSpec(val partition: Partition, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
   val dbgIndex = 0
 
-  def getRDDRecordSpecs(): IndexedSeq[DirectRDDRecordSpec] =
-    ( 0 until partition.nRecords ) map ( DirectRDDRecordSpec( this, _ ) )
+  def getCDTimeSliceSpecs(): IndexedSeq[DirectCDTimeSliceSpec] =
+    ( 0 until partition.nRecords ) map ( DirectCDTimeSliceSpec( this, _ ) )
 
   def index = partition.index
 
@@ -1005,20 +1006,20 @@ class DirectRDDPartSpec(val partition: Partition, val timeRange: RecordKey, val 
 
 }
 
-object DirectRDDRecordSpec {
-  def apply( partSpec: DirectRDDPartSpec, iRecord: Int ): DirectRDDRecordSpec = new DirectRDDRecordSpec( partSpec.partition, iRecord, partSpec.timeRange, partSpec.varSpecs )
+object DirectCDTimeSliceSpec {
+  def apply( partSpec: DirectRDDPartSpec, iRecord: Int ): DirectCDTimeSliceSpec = new DirectCDTimeSliceSpec( partSpec.partition, iRecord, partSpec.timeRange, partSpec.varSpecs )
 }
 
-class DirectRDDRecordSpec(val partition: Partition, iRecord: Int, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
+class DirectCDTimeSliceSpec(val partition: Partition, iRecord: Int, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
 
-  def getRDDPartition( batchIndex: Int ): RDDRecord = {
-    val t0 = System.nanoTime()
-    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition)) ).toSeq: _* )
-    val rv = RDDRecord( elements, Map( "partIndex" -> partition.index.toString, "startIndex" -> timeRange.elemStart.toString, "recIndex" -> iRecord.toString, "batchIndex" -> batchIndex.toString ), partition )
-    val dt = (System.nanoTime() - t0) / 1.0E9
-    logger.debug( "DirectRDDRecordSpec{ partition = %s, record = %d, nelems=%d }: completed data input in %.4f sec".format( partition.toString, iRecord, elements.size, dt) )
-    rv
-  }
+//  def getRDDPartition( batchIndex: Int ): CDTimeSlice = {
+//    val t0 = System.nanoTime()
+//    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toHeapArray(partition)) ).toSeq: _* )
+//    val rv = CDTimeSlice( elements, Map( "partIndex" -> partition.index.toString, "startIndex" -> timeRange.elemStart.toString, "recIndex" -> iRecord.toString, "batchIndex" -> batchIndex.toString ), partition )
+//    val dt = (System.nanoTime() - t0) / 1.0E9
+//    logger.debug( "DirectCDTimeSliceSpec{ partition = %s, record = %d, nelems=%d }: completed data input in %.4f sec".format( partition.toString, iRecord, elements.size, dt) )
+//    rv
+//  }
 
   def index = partition.index
   override def toString() = s"RDD-Record[${iRecord.toString}]{ ${partition.toString}, ${timeRange.toString} }"
@@ -1030,40 +1031,27 @@ class DirectRDDRecordSpec(val partition: Partition, iRecord: Int, val timeRange:
 
 }
 
-object ExtRDDPartSpec {
-  def apply(timeRange: RecordKey, varSpecs: List[ RDDVariableSpec ] ): ExtRDDPartSpec = new ExtRDDPartSpec( timeRange, varSpecs )
-}
+//object ExtRDDPartSpec {
+//  def apply(timeRange: RecordKey, varSpecs: List[ RDDVariableSpec ] ): ExtRDDPartSpec = new ExtRDDPartSpec( timeRange, varSpecs )
+//}
+//
+//class ExtRDDPartSpec(val timeRange: RecordKey, val varSpecs: List[ RDDVariableSpec ] ) extends Serializable with Loggable {
+//
+//  def getRDDPartition(kernelContext: KernelContext, partition: Partition, batchIndex: Int): CDTimeSlice = {
+//    val t0 = System.nanoTime()
+//    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toMetaArray ) ): _* )
+//    val rv = CDTimeSlice( elements, Map.empty, partition )
+//    val dt = (System.nanoTime() - t0) / 1.0E9
+//    logger.debug( "RDDPartSpec: completed data input in %.4f sec".format( dt) )
+//    kernelContext.addTimestamp( "Created input RDD { varSpecs = (%s), batchIndex = %d } in %.4f sec".format( varSpecs.map(_.uid).mkString(","), batchIndex, dt ) )
+//    rv
+//  }
+//
+//}
 
-class ExtRDDPartSpec(val timeRange: RecordKey, val varSpecs: List[ RDDVariableSpec ] ) extends Serializable with Loggable {
-
-  def getRDDPartition(kernelContext: KernelContext, partition: Partition, batchIndex: Int): RDDRecord = {
-    val t0 = System.nanoTime()
-    val elements =  TreeMap( varSpecs.flatMap( vSpec => if(vSpec.empty) None else Some(vSpec.uid, vSpec.toMetaArray ) ): _* )
-    val rv = RDDRecord( elements, Map.empty, partition )
-    val dt = (System.nanoTime() - t0) / 1.0E9
-    logger.debug( "RDDPartSpec: completed data input in %.4f sec".format( dt) )
-    kernelContext.addTimestamp( "Created input RDD { varSpecs = (%s), batchIndex = %d } in %.4f sec".format( varSpecs.map(_.uid).mkString(","), batchIndex, dt ) )
-    rv
-  }
-
-}
-
-class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, section: CDSection, val varShortName: String, val dataPath: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
-  def toHeapArray( partition: Partition ): HeapFltArray = {
-    val timeAxis: CoordinateAxis1DTime = NetcdfDatasetMgr.getTimeAxis(dataPath)
-    val recordSection: ma2.Section = partition.recordSection( section.toSection, partition.index, timeAxis, partition.start_time, partition.end_time )
-    val part_size = recordSection.getShape.foldLeft(1L)(_ * _)
-    if( part_size > 0 ) {
-      val fltData: CDFloatArray = CDFloatArray.factory(readVariableData(recordSection), missing)
-      logger.debug("READ Variable section: %s, part[%d]: dim=%d, origin=(%s), shape=[%s], data shape=[%s], data size=%d, part size=%d, data buffer size=%d, recordSectionShape=%s, recordSectionOrigin=%s\n\n **********--> data sample = %s\n".format(
-        section.toString(), partition.index, partition.dimIndex, recordSection.getOrigin.mkString(","), recordSection.getShape.mkString(","), fltData.getShape.mkString(","),
-        fltData.getSize, part_size, fltData.getStorageSize, recordSection.getShape.mkString(","), recordSection.getOrigin.mkString(","), fltData.mkBoundedDataString(", ", 32) ) )
-      HeapFltArray(fltData, section.getOrigin, metadata, None)
-    } else {
-      HeapFltArray.empty( section.getShape.length )
-    }
-  }
-  def readVariableData(section: ma2.Section): ma2.Array =  NetcdfDatasetMgr.readVariableData(varShortName, dataPath, section )
+class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, section: CDSection, val varShortName: String, val collectionId: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
+  def getCollection: Collection =  Collections.findCollection(collectionId) getOrElse { throw new Exception( s"Can't find collection ${collectionId}") }
+  def getAggregation(): Aggregation = getCollection.getAggregation(varShortName) getOrElse { throw new Exception( s"Can't find aggregation for variable ${varShortName} in collection ${collectionId}" ) }
 }
 
 class RDDVariableSpec( val uid: String, val metadata: Map[String,String], val missing: Float, val section: CDSection  ) extends Serializable with Loggable {

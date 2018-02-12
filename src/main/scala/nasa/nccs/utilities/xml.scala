@@ -167,7 +167,7 @@ object XMLParser extends AnyRef with parsing.TokenTests {
     */
   def serialize(
                  x: Node,
-                 depth: Int = 0,
+                 sdepth: Int = 0,
                  pscope: NamespaceBinding = TopScope,
                  sb: StringBuilder = new StringBuilder,
                  stripComments: Boolean = true,
@@ -179,30 +179,30 @@ object XMLParser extends AnyRef with parsing.TokenTests {
       case c: Comment if !stripComments => c buildString sb
       case s: SpecialNode               => s buildString sb
       case g: Group                     =>
-        for (c <- g.nodes) serialize(c, depth+1, g.scope, sb, stripComments, decodeEntities, preserveWhitespace, minimizeTags); sb
+        for (c <- g.nodes) serialize(c, sdepth+1, g.scope, sb, stripComments, decodeEntities, preserveWhitespace, minimizeTags); sb
       case el: Elem =>
-        sb.append('\n')
-        ( 0 until depth ) foreach { sb.append('\t') }
-        sb.append('<')
+        newline( sb, sdepth )
+        sb.append("<")
         el.nameToString(sb)
         if (el.attributes ne null) el.attributes.buildString(sb)
         el.scope.buildString(sb, pscope)
-        if (el.child.isEmpty &&
-          (minimizeTags == MinimizeMode.Always || (minimizeTags == MinimizeMode.Default && el.minimizeEmpty))) {
-          // no children, so use short form: <xyz .../>
+        if (el.child.isEmpty && (minimizeTags == MinimizeMode.Always || (minimizeTags == MinimizeMode.Default && el.minimizeEmpty))) {
           sb.append("/>")
         } else {
-          // children, so use long form: <xyz ...>...</xyz>
           sb.append('>')
-          sequenceToXML(el.child, depth+1, el.scope, sb, stripComments, decodeEntities, preserveWhitespace, minimizeTags)
-          sb.append('\n')
-          ( 0 until depth ) foreach { sb.append('\t') }
+          sequenceToXML(el.child, sdepth+1, el.scope, sb, stripComments, decodeEntities, preserveWhitespace, minimizeTags)
+          newline( sb, sdepth )
           sb.append("</")
           el.nameToString(sb)
           sb.append('>')
         }
       case _ => throw new IllegalArgumentException("Don't know how to serialize a " + x.getClass.getName)
     }
+  }
+
+  def newline( sb: StringBuilder = new StringBuilder, depth: Int = 0 ): Unit = {
+    sb.append('\n')
+    ( 0 until depth ) foreach { sb.append("   ") }
   }
 
   def sequenceToXML(
@@ -219,11 +219,9 @@ object XMLParser extends AnyRef with parsing.TokenTests {
     else if (children forall isAtomAndNotText) { // add space
       val it = children.iterator
       val f = it.next()
-      sb.append('\n')
       serialize(f, depth, pscope, sb, stripComments, decodeEntities, preserveWhitespace, minimizeTags)
       while (it.hasNext) {
         val x = it.next()
-        sb.append('\n')
         serialize(x, depth, pscope, sb, stripComments, decodeEntities, preserveWhitespace, minimizeTags)
       }
     } else children foreach { serialize(_, depth, pscope, sb, stripComments, decodeEntities, preserveWhitespace, minimizeTags) }

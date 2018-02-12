@@ -1,6 +1,6 @@
 package nasa.nccs.edas.portal;
 import com.google.common.io.Files;
-import nasa.nccs.edas.loaders.CollectionLoadServices;
+import nasa.nccs.edas.sources.CollectionLoadServices;
 import nasa.nccs.edas.workers.python.PythonWorkerPortal;
 import nasa.nccs.utilities.Logger;
 import org.apache.commons.lang.StringUtils;
@@ -8,7 +8,6 @@ import org.joda.time.DateTime;
 import org.zeromq.ZMQ;
 import nasa.nccs.utilities.EDASLogManager;
 import ucar.nc2.time.CalendarDate;
-import nasa.nccs.edas.loaders.Collections;
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.concurrent.ConcurrentLinkedQueue;
