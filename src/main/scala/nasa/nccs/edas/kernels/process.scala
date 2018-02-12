@@ -273,6 +273,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def hasReduceOp: Boolean = reduceCombineOp.isDefined
   val initValue: Float = 0f
   def cleanUp() = {}
+  override def toString = s"Kernel[ id=${id} status=${status}]"
 
   def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive

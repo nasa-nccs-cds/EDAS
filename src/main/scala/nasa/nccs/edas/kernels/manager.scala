@@ -48,9 +48,10 @@ object KernelPackageTools extends Loggable {
     val visLevel = KernelStatus.parse( if( visibility.isEmpty ) { appParameters("kernels.visibility","public") } else visibility )
     val internal_kernels: Map[String,KernelModule] = getKernelClasses.map(ClassInfoRec( _ )).groupBy( _.module.toLowerCase ).mapValues( KernelModule(_) filter visLevel )
     val capabilities_data = PythonWorkerPortal.getInstance().getCapabilities()
-    logger.info( " #PK# Loading python kernels from capabilities data: " + capabilities_data.mkString(", "))
-    val python_kernels: Array[KernelModule] = capabilities_data map ( KernelModule(_) filter visLevel )
-    val external_kernel_map: Map[String,KernelModule] = Map( python_kernels.map( km => km.getName -> km ): _* )
+    val python_kernel_modules: Array[KernelModule] = capabilities_data map ( KernelModule(_)  )
+    logger.info( " #PK# Loading python kernels from capabilities data: \n" + python_kernel_modules.map( km => s"** Kernel Module ${km.name}:\n" + km.getKernels.map( _.toString ).mkString( "\n\t") ).mkString("\n") )
+    val external_kernel_map: Map[String,KernelModule] = Map( python_kernel_modules.map( km => km.getName -> km.filter(visLevel) ): _* )
+    logger.info( " #PK# External Kernels: " + external_kernel_map.keys.mkString( ", "))
     ( internal_kernels ++ external_kernel_map ) filter { case (_,kmod) => kmod.nonEmpty }
   }
 
