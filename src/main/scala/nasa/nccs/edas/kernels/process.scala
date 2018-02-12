@@ -744,12 +744,14 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
       for ((uid, input_array) <- acceptable_array_map) {
         val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
-        worker.sendArrayMetadata(uid, input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions))))
+        val data_array = input_array.toHeapFltArray(optVarRec.fold(targetGrid.gridFile)(_.gridFilePath), Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+        logger.info(s" #S# Sending acceptable Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ], metadata = { ${data_array.metadata.toString} }")
+        worker.sendArrayMetadata( uid, data_array )
       }
       for ((uid, input_array) <- regrid_array_map) {
-        logger.info(s"Sending Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]")
         val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
-        val data_array = input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+        val data_array = input_array.toHeapFltArray(optVarRec.fold("")(_.gridFilePath), Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+        logger.info(s" #S# Sending regrid Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ], metadata = { ${data_array.metadata.toString} }")
         worker.sendRequestInput( uid, data_array )
       }
 

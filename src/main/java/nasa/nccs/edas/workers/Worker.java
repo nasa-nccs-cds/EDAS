@@ -172,6 +172,7 @@ public abstract class Worker {
                 float[] weights = weightsOpt.get();
                 String[] shapeStr = array.attr("wshape").split(",");
                 int[] shape = new int[shapeStr.length];
+                logger.info( " #S# --> SendRequestInput[" + id + "], shape = " + Arrays.toString(shape) );
                 for (int i = 0; i < shapeStr.length; i++) {
                     try { shape[i] = Integer.parseInt(shapeStr[i]); }
                     catch ( NumberFormatException nfe ) { logger.error("Error parsing shape in sendRequestInput: " + array.attr("wshape") ); return; };
@@ -201,7 +202,7 @@ public abstract class Worker {
     }
 
     private void _sendArrayMetadata( String id, int[] origin, int[] shape, Map<String, String> metadata ) {
-        logger.debug( String.format("Kernel: Sending metadata to worker for input %s", id ));
+        logger.debug( String.format(" #S# Kernel: Sending metadata to worker for input %s, shape: %s, metadata: %s", id, Arrays.toString(shape), m2s(metadata) ));
         List<String> slist = Arrays.asList( "array", id, ia2s(origin), ia2s(shape), m2s(metadata), withoutData );
         String header = StringUtils.join(slist,"|");
         logger.debug("Sending header: " + header);
