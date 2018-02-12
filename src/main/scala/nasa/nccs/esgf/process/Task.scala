@@ -304,7 +304,6 @@ class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) 
 }
 
 class DataSource(val name: String, val collection: Collection, val declared_domain: Option[String], val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
-  val debug = 1
   private val _inferredDomains = new scala.collection.mutable.HashSet[String]()
   declared_domain.foreach( _addDomain )
   def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.getDomain, dsource.autoCache )

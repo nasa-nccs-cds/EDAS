@@ -1062,6 +1062,8 @@ class RDDVariableSpec( val uid: String, val metadata: Map[String,String], val mi
     rv
   }
 
+  def getParameter( key: String, default: String ): String = metadata.getOrElse( key, default )
+
 
   def toMetaArray = {
     val rv = HeapFltArray( section.getShape, section.getOrigin, metadata )

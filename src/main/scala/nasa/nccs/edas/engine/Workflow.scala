@@ -258,6 +258,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 
   def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  TimeSliceCollection  = {
     processInputs( executor.rootNode, executor, kernelCx, batchIndex)
+    executor.regrid( kernelCx.addVariableRecords( executor.variableRecs ) )
     executor.execute( this, kernelCx, batchIndex )
   }
 
@@ -423,7 +424,6 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     executor.getInputs(node).foreach { case (uid, opinput) =>
       opinput.processInput( uid, this, node, executor, kernelContext, gridRefInput, batchIndex)
     }
-    executor.regrid( kernelContext.addVariableRecords( executor.variableRecs ) )
   }
 
 //  def getTimeReferenceRdd(rddMap: Map[String,RDD[CDTimeSlice]], kernelContext: KernelContext ): Option[RDD[CDTimeSlice]] = kernelContext.trsOpt map { trs =>

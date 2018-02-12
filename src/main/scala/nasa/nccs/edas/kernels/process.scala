@@ -81,7 +81,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
 
   lazy val grid: GridContext = getTargetGridContext
   def addVariableRecords( varRecs: Map[String,VariableRecord] ): KernelContext = { _variableRecs = _variableRecs ++ varRecs; this }
-  def getVariableRecord(vid: String): VariableRecord = _variableRecs.getOrElse(vid, throw new Exception( s"Missing variable record '${vid}' in KernelContext[${operation.name}]"))
+  def getInputVariableRecord(vid: String): Option[VariableRecord] = _variableRecs.get(vid)
 
   def findGrid(gridRef: String): Option[GridContext] = grids.find(item => (item._1.equalsIgnoreCase(gridRef) || item._1.split('-')(0).equalsIgnoreCase(gridRef))).flatMap(_._2)
 
@@ -142,7 +142,7 @@ case class ResultManifest( val name: String, val dataset: String, val descriptio
 
 object Kernel extends Loggable {
   var profileTime: Float = 0f
-  val customKernels = List[Kernel]( new CDMSRegridKernel() )
+  val customKernels = List[Kernel](  ) // new CDMSRegridKernel()
   def isEmpty( kvp: CDTimeSlice ) = kvp.elements.isEmpty
 
   def getResultFile( resultId: String, deleteExisting: Boolean = false ): File = {
@@ -304,7 +304,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val axes = context.getAxes
       val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
         context.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
-          val optGroup = context.config("groupBy") map TSGroup.getGroup
+          val optGroup = context.operation.config("groupBy") map TSGroup.getGroup
           reduceElements.reduce(getReduceOp(context), optGroup, ordered)
         })
       } else {
@@ -592,7 +592,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def collectRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = { a0 ++ a1 }
 
 
-  def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = combineRDD(context)( a0, a1 )
+  def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =
+    if( a0.isEmpty ) { a1 } else  if( a1.isEmpty ) { a0 } else { combineRDD(context)( a0, a1 ) }
 
   def getDataSample(result: CDFloatArray, sample_size: Int = 20): Array[Float] = {
     val result_array = result.floatStorage.array
@@ -733,19 +734,23 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val t0 = System.nanoTime
-    val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
-    val worker: PythonWorker = workerManager.getPythonWorker
     logger.info("&MAP: Starting Kernel %s, inputs = [ %s ]".format(name, inputs.elements.keys.mkString(", ") ) )
     val targetGrid: GridContext = context.grid
     val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
-    val ( acceptable_arrays, regrid_array_map ) = inputs.elements.partition { case ( key, array ) => context.getVariableRecord(key).gridFilePath.equals(regridSpec.gridFile) }
-    if (regrid_array_map.nonEmpty) {
-      for ((uid, input_array) <- acceptable_arrays) {
-        worker.sendArrayMetadata(uid, input_array.toHeapFltArray)
+    val ( acceptable_array_map, regrid_array_map ) = inputs.elements.partition { case ( key, array ) => context.getInputVariableRecord(key).fold(true)( _ == regridSpec ) }
+    if ( regrid_array_map.isEmpty ) { inputs } else {
+      val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
+      val worker: PythonWorker = workerManager.getPythonWorker
+
+      for ((uid, input_array) <- acceptable_array_map) {
+        val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
+        worker.sendArrayMetadata(uid, input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions))))
       }
       for ((uid, input_array) <- regrid_array_map) {
         logger.info(s"Sending Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]")
-        worker.sendRequestInput(uid, input_array.toHeapFltArray)
+        val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
+        val data_array = input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+        worker.sendRequestInput( uid, data_array )
       }
 
       logger.info("Gateway: Executing operation %s".format(context.operation.identifier))
@@ -753,43 +758,14 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val rID = UID()
       worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
 
-      val resultItems = for (uid <- regrid_array_map.keys) yield {
+      val resultItems: Iterable[(String,ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
         val tvar = worker.getResult
-        val result = HeapFltArray(tvar, Some(regridSpec.gridFile), Some(inputs.partition.origin))
+        val result = ArraySpec( tvar )
         context.operation.rid + ":" + uid -> result
       }
+      val reprocessed_input_map = resultItems.toMap
+      CDTimeSlice( inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map )
     }
-
-    print(".")
-//     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.element( id ).getOrElse { throw new Exception(s"Can't find input ${id} for kernel ${identifier}") } )
-
-    //      val (acceptable_arrays, regrid_arrays) = input_arrays.partition(_.gridFilePath.equals(regridSpec.gridFile))
-    //      if (!regrid_arrays.isEmpty) {
-    //        for (input_array <- acceptable_arrays) { worker.sendArrayMetadata( input_array.uid, input_array) }
-    //        for (input_array <- regrid_arrays) {
-    //          logger.info( s"Sending Array ${input_array.uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]")
-    //          worker.sendRequestInput( input_array.uid, input_array )
-    //        }
-    //        val acceptable_array_map = Map(acceptable_arrays.map(array => array.uid -> array): _*)
-    //
-    //        logger.info("Gateway: Executing operation %s".format( context.operation.identifier ) )
-    //        val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid )
-    //        val rID = UID()
-    //        worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_arrays.map(_.uid).toArray, context_metadata )
-    //
-    //        val resultItems = for (input_array <- regrid_arrays) yield {
-    //          val tvar = worker.getResult
-    //          val result = HeapFltArray( tvar, Some(regridSpec.gridFile), Some(inputs.partition.origin) )
-    //          context.operation.rid + ":" + input_array.uid -> result
-    //        }
-    //        val reprocessed_input_map = TreeMap(resultItems: _*)
-    //        val array_metadata = inputs.metadata ++ op_input_arrays.head.metadata ++ List("uid" -> context.operation.rid, "gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid  )
-    //        val array_metadata_crs = context.crsOpt.map( crs => array_metadata + ( "crs" -> crs ) ).getOrElse( array_metadata )
-    //        logger.info("&MAP: Finished Kernel %s, acceptable inputs = [ %s ], reprocessed inputs = [ %s ], passthrough inputs = [ %s ], time = %.4f s, metadata = %s".format(name, acceptable_array_map.keys.mkString(","), reprocessed_input_map.keys.mkString(","), passthrough_array_map.keys.mkString(","), (System.nanoTime - t0) / 1.0E9, array_metadata_crs.mkString(";") ) )
-    //        context.addTimestamp( "Map Op complete" )
-    //        return CDTimeSlice( reprocessed_input_map ++ acceptable_array_map ++ passthrough_array_map, array_metadata_crs, inputs.partition )
-    //      }
-    inputs
   }
 }
 
@@ -812,6 +788,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
   override def cleanUp(): Unit = PythonWorkerPortal.getInstance.shutdown()
 
   override def map(context: KernelContext)(inputs: CDTimeSlice): CDTimeSlice = {
+    val targetGrid: GridContext = context.grid
     val workerManager: PythonWorkerPortal = PythonWorkerPortal.getInstance()
     val worker: PythonWorker = workerManager.getPythonWorker
     try {
@@ -819,7 +796,9 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
       val t1 = System.nanoTime
       for (input_id <- context.operation.inputs) inputs.element(input_id) match {
         case Some(input_array) =>
-          worker.sendRequestInput(input_id, input_array.toHeapFltArray)
+          val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(input_id)
+          val data_array = input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+          worker.sendRequestInput( input_id, data_array )
         case None =>
           worker.sendUtility(List("input", input_id).mkString(";"))
       }
