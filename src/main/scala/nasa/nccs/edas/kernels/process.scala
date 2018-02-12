@@ -142,7 +142,7 @@ case class ResultManifest( val name: String, val dataset: String, val descriptio
 
 object Kernel extends Loggable {
   var profileTime: Float = 0f
-  val customKernels = List[Kernel](  ) // new CDMSRegridKernel()
+  val customKernels = List[Kernel]( new CDMSRegridKernel() )
   def isEmpty( kvp: CDTimeSlice ) = kvp.elements.isEmpty
 
   def getResultFile( resultId: String, deleteExisting: Boolean = false ): File = {
@@ -730,7 +730,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
 
 
 
-class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True" ), false, "restricted" ) {
+class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True" ), false, "public" ) {
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val t0 = System.nanoTime
