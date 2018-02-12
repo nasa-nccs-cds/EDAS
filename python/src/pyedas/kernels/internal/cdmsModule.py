@@ -16,7 +16,7 @@ def sa2i( sarray ):
 class RegridKernel(CDMSKernel):
 
     def __init__( self ):
-        Kernel.__init__( self, KernelSpec("regrid", "Regridder", "Regrids the inputs using UVCDAT", parallelize=True ) )
+        Kernel.__init__( self, KernelSpec("regrid", "Regridder", "Regrids the inputs using UVCDAT", parallelize=True, visibility="public" ) )
         self._debug = True
 
     def getGrid( self, gridFile, latInterval=None, lonInterval=None ):
