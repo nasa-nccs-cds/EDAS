@@ -156,6 +156,7 @@ object EDASExecutionManager extends Loggable {
       val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result ${resultId}"))
       //      assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
       val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
+      if( dataMap.values.isEmpty ) { return "" }
       val shape = dataMap.values.head.getShape
       val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
@@ -454,7 +455,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
           if (resultFile.exists) List(resultFile.getAbsolutePath)
           else {
             val resultMap = tvar.result.concatSlices.slices.flatMap( _.elements.headOption ).toMap.mapValues( _.toCDFloatArray )
-            List(saveResultToFile(executor, resultMap, tvar.result.metadata.toMap, List.empty[nc2.Attribute]))
+            List(saveResultToFile(executor, resultMap, tvar.result.metadata.toMap, List.empty[nc2.Attribute])).filter( ! _.isEmpty )
           }
         case None => List.empty[String]
       }
