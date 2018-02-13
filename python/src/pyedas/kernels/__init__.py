@@ -4,7 +4,7 @@ lname = "worker"
 lFilename = "edas-python-" + lname
 log_path = os.path.expanduser( '~/.edas/logs/python' )
 if not os.path.exists(log_path): os.makedirs(log_path)
-log_file = log_path  + lFilename + "-" + str(os.getpid()) +'.log'
+log_file = log_path  + "/" +  lFilename + "-" + str(os.getpid()) +'.log'
 
 try: os.remove(log_file)
 except Exception: pass
