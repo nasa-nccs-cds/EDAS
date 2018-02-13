@@ -29,13 +29,14 @@ resolvers += "Artima Maven Repository" at "http://repo.artima.com/releases"
 resolvers += "Geotoolkit" at "http://maven.geotoolkit.org/"
 resolvers += "Maven Central" at "http://central.maven.org/maven2/"
 resolvers += "JBoss Repo" at "https://repository.jboss.org/nexus/content/repositories/thirdparty-releases"
+resolvers += "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
 
 enablePlugins(JavaAppPackaging)
 
 mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
-libraryDependencies ++= ( Dependencies.cache  ++ Dependencies.geo ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test ) // ++ Dependencies.jackson
+libraryDependencies ++= ( Dependencies.cache  ++ Dependencies.geo ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test ++ Dependencies.breeze ) // ++ Dependencies.jackson
 
 libraryDependencies ++= {
   sys.env.get("YARN_CONF_DIR") match {
