@@ -34,7 +34,7 @@ class CDAxis(JSONObject):
 
     def init( self, axis, values, **args ):
         JSONObject.__init__( self )
-        self.logger =  logging.getLogger("worker")
+        self.logger =  logging.getLogger()
         self.tolerance=0.001
         self.items['config'] = {}
         self.items['bounds'] = {}
@@ -109,7 +109,7 @@ class Region(JSONObject):
 
     def __init__( self, region={}, **args ):
         JSONObject.__init__( self, region, **args )
-        self.logger =  logging.getLogger("worker")
+        self.logger =  logging.getLogger()
 
     def getAxisRange( self, axis_name ):
         try:
@@ -238,7 +238,7 @@ class Region(JSONObject):
 class DomainSpec:
 
     def __init__( self, variable_spec,  region_spec ):
-        self.logger =  logging.getLogger("worker")
+        self.logger =  logging.getLogger()
         self.variable_spec = variable_spec
         self.region_spec = region_spec
         self.stat = {}
@@ -289,7 +289,7 @@ class Domain(Region):
     COMPLETE = 1
 
     def __init__( self, region=None,  **args ):
-        self.logger =  logging.getLogger("worker")
+        self.logger =  logging.getLogger()
         self.stat = args.get( 'region_spec', { 'persist_id':None } )
         Region.__init__( self, region )
         self._variable = None
@@ -403,7 +403,7 @@ class Domain(Region):
 class DomainManager:
 
     def __init__( self ):
-        self.logger =  logging.getLogger("worker")
+        self.logger =  logging.getLogger()
         self.domains = []
 
     def persist( self, **args ):

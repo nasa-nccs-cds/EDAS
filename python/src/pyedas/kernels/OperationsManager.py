@@ -7,7 +7,7 @@ from os.path import isfile, join, os
 class OperationsManager:
 
     def __init__( self ):
-        self.logger =  logging.getLogger("worker")
+        self.logger =  logging.getLogger()
         self.operation_modules = {}
         self.build()
 

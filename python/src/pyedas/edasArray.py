@@ -13,7 +13,7 @@ class CDArray:
     __metaclass__ = ABCMeta
 
     def __init__(self, _id, _origin, _shape, _metadata ):
-        self.logger = logging.getLogger("worker")
+        self.logger = logging.getLogger()
         self.id = _id
         self.origin = _origin
         self.shape = _shape
@@ -93,7 +93,7 @@ class npArray(CDArray):
     @classmethod
     def createInput(self, header, data):
         """  :rtype: npArray """
-        logger = logging.getLogger("worker")
+        logger = logging.getLogger()
         logger.info(" ***->> Creating Input, header = {0}".format( header ) )
         header_toks = header.split('|')
         id = header_toks[1]
@@ -120,7 +120,7 @@ class npArray(CDArray):
     @classmethod
     def createInput1(self, header, data):
         """  :rtype: npArray """
-        logger = logging.getLogger("worker")
+        logger = logging.getLogger()
         logger.info(" ***->> Creating Input, header = {0}".format( header ) )
         header_toks = header.split('|')
         id = header_toks[1]
