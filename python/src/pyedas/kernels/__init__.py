@@ -2,7 +2,7 @@ import logging, os, getpass
 
 lname = "worker"
 lFilename = "edas-python-" + lname
-log_path = os.path.expanduser( '~/.edas/logs/python' )
+log_path = os.path.expanduser( '/tmp/' + getpass.getuser() + '/logs/' )
 if not os.path.exists(log_path): os.makedirs(log_path)
 log_file = log_path  + "/" +  lFilename + "-" + str(os.getpid()) +'.log'
 
