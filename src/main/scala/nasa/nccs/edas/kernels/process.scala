@@ -760,10 +760,11 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
         worker.sendRequestInput( uid, data_array )
       }
 
-      logger.info("Gateway: Executing operation %s".format(context.operation.identifier))
+
       val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
       val rID = UID()
-      worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
+      logger.info("Gateway: Executing operation %s, operation metadata: { %s }".format(context.operation.identifier,context_metadata.mkString(", ")))
+      worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata )
 
       val resultItems: Iterable[(String,ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
         val tvar = worker.getResult

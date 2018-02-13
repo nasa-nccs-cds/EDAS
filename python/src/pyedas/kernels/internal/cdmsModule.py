@@ -39,7 +39,7 @@ class RegridKernel(CDMSKernel):
         cdms2.setAutoBounds(2)
         t0 = time.time()
         mdata = task.metadata;     """:type : dict[str,str] """
-        self.logger.info( " Execute REGRID Task with metadata: " + str( task.metadata ) )
+        self.logger.info( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
         gridType = str( mdata.get("grid","uniform") ).lower()
         target = str( mdata.get("target","") )
         gridSpec = str( mdata.get("gridSpec","") )
