@@ -739,13 +739,16 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val t0 = System.nanoTime
-    logger.info("&MAP: Starting Kernel %s, inputs = [ %s ]".format(name, inputs.elements.keys.mkString(", ") ) )
     val targetGrid: GridContext = context.grid
     val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
     val ( acceptable_array_map, regrid_array_map ) = inputs.elements.partition { case ( key, array ) => context.getInputVariableRecord(key).fold(true)( _ == regridSpec ) }
-    if ( regrid_array_map.isEmpty ) { inputs } else {
+    if ( regrid_array_map.isEmpty ) {
+      logger.info(" #S#: CDMSRegridKernel, inputs[%d] = [ %s ] match RegridSpec: %s".format( inputs.startTime, inputs.elements.keys.mkString(", "), regridSpec.toString ) )
+      inputs
+    } else {
       val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
       val worker: PythonWorker = workerManager.getPythonWorker
+      logger.info(" #S#: Starting CDMSRegridKernel, inputs[%d] = [ %s ]".format( inputs.startTime, inputs.elements.keys.mkString(", ") ) )
 
       for ((uid, input_array) <- acceptable_array_map) {
         val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
@@ -759,7 +762,6 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
         logger.info(s" #S# Sending regrid Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ], metadata = { ${data_array.metadata.toString} }")
         worker.sendRequestInput( uid, data_array )
       }
-
 
       val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
       val rID = UID()
