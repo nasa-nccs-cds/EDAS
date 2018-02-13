@@ -161,8 +161,9 @@ object Kernel extends Loggable {
 
   def apply(module: String, kernelSpec: String, api: String): Kernel = {
     val specToks = kernelSpec.split("[;]")
-    customKernels.find(_.matchesSpecs(specToks)) match {
-      case Some(kernel) => kernel
+    customKernels.find(_.matchesSpecs( module, specToks.head )) match {
+      case Some(kernel) =>
+        kernel
       case None => api match {
         case "python" =>
           val options = str2Map(specToks(3))
@@ -262,7 +263,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val parallelizable: Boolean = options.getOrElse( "parallelize", (!extInputs).toString ).toBoolean
   logger.info( s" #PK# Create Kernel ${id}, status=${status}, parallelizable=${parallelizable}, options={ ${options.mkString("; ")} }")
   val identifier = name
-  def matchesSpecs( specs: Array[String] ): Boolean = { (specs.size >= 2) && specs(0).equals(module) && specs(1).equals(operation) }
+  def matchesSpecs( _module: String, _operation: String ): Boolean = { _module.equals(module) && _operation.equals(operation) }
   val nOutputsPerInput: Int = options.getOrElse("nOutputsPerInput","1").toInt
   def getInputArrays( inputs: CDTimeSlice, context: KernelContext ): List[ArraySpec] =
     context.operation.inputs.map( id => inputs.element( id ).getOrElse {
