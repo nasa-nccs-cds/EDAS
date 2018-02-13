@@ -280,7 +280,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
-    logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier  )
+    logger.info( "Executing map OP for Kernel " + id + ": " + this.getClass.getName + "---> OP = " + context.operation.identifier  )
     val result = input.map( map(context) )
     result
   }
@@ -793,6 +793,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
   override def cleanUp(): Unit = PythonWorkerPortal.getInstance.shutdown()
 
   override def map(context: KernelContext)(inputs: CDTimeSlice): CDTimeSlice = {
+    logger.info("&MAP: EXECUTING zmqPythonKernel, inputs = [ %s ]".format(name, inputs.elements.keys.mkString(", ") ) )
     val targetGrid: GridContext = context.grid
     val workerManager: PythonWorkerPortal = PythonWorkerPortal.getInstance()
     val worker: PythonWorker = workerManager.getPythonWorker
