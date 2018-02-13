@@ -40,7 +40,6 @@ class RegridKernel(CDMSKernel):
         t0 = time.time()
         mdata = task.metadata;     """:type : dict[str,str] """
         self.logger.info( " Execute REGRID Task with metadata: " + str( task.metadata ) )
-        print( " Execute REGRID Task with metadata: " + str( task.metadata ) )
         gridType = str( mdata.get("grid","uniform") ).lower()
         target = str( mdata.get("target","") )
         gridSpec = str( mdata.get("gridSpec","") )
