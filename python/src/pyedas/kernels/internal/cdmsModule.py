@@ -36,9 +36,11 @@ class RegridKernel(CDMSKernel):
         :type task: Task
         :type _inputs: dict[str,npArray]
         """
+        log_file = open("/tmp/edasadm/logs/debug_log_file.txt","w")
         cdms2.setAutoBounds(2)
         t0 = time.time()
         mdata = task.metadata;     """:type : dict[str,str] """
+        log_file.write( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
         self.logger.info( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
         gridType = str( mdata.get("grid","uniform") ).lower()
         target = str( mdata.get("target","") )
@@ -99,6 +101,7 @@ class RegridKernel(CDMSKernel):
                     results.append( self.createResult( result_var, _input, task ) )
         t1 = time.time()
         self.logger.info(" @RRR@ Completed regrid operation for input variables: {0} in time {1}".format( str( _inputs.keys() ), (t1 - t0)))
+        log_file.close()
         return results
 
 class AverageKernel(CDMSKernel):
