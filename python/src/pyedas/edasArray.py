@@ -177,27 +177,30 @@ class npArray(CDArray):
             (latInterval, lonInterval) = (lataxis.mapInterval( gridBnds[0] ), lonaxis.mapInterval( gridBnds[1] ))
             return baseGrid.subGrid( latInterval, lonInterval )
 
-    def getGrid(self):
+    def getGrid(self, _gridFilePath = None ):
         import cdms2
-        gridfile = cdms2.open(self.gridFile)
+        gridFilePath = self.gridFile if (_gridFilePath == None) else _gridFilePath
+        gridfile = cdms2.open( gridFilePath )
         baseGrid = gridfile.grids.values()[0]
         (latInterval, lonInterval) = ( self.getAxisSection('y'), self.getAxisSection('x') )
         if ( (latInterval is None) or (lonInterval is None)  ):  return baseGrid
         else: return baseGrid.subGrid( latInterval, lonInterval )
 
 
-    def getVariable( self, gridFilePath = None ):
+    def getVariable( self, _gridFilePath = None ):
         """  :rtype: cdms2.tvariable.TransientVariable """
         import cdms2
         if( self.variable is None ):
             t0 = time.time()
-            gridFilePath = self.gridFile if (gridFilePath==None) else gridFilePath
+            gridFilePath = self.gridFile if (_gridFilePath==None) else _gridFilePath
             gridfile = cdms2.open( gridFilePath )
             var = gridfile[self.name]
-            grid = self.getGrid()
+            baseGrid = gridfile.grids.values()[0]
+            (latInterval, lonInterval) = (self.getAxisSection('y'), self.getAxisSection('x'))
+            grid = baseGrid if ((latInterval is None) or (lonInterval is None)) else baseGrid.subGrid(latInterval, lonInterval)
             partition_axes = self.subsetAxes(self.dimensions, gridfile, self.origin, self.shape)
 
-            self.logger.info( "Creating Variable {0}, gridfile = {1}, data shape = [ {2} ], self.shape = [ {3} ], grid shape = [ {4} ]".format( self.name, gridFilePath, a2s(self.array.shape), a2s(self.shape), a2s(grid.shape) ) )
+            self.logger.info( "Creating Variable {0}, gridfile = {1}, data shape = [ {2} ], self.shape = [ {3} ], grid shape = [ {4} ], roi = {5}, baseGrid shape = [ {6} ]".format( self.name, gridFilePath, a2s(self.array.shape), a2s(self.shape), a2s(grid.shape), str(self.roi), a2s(baseGrid.shape) ) )
             self.variable = cdms2.createVariable( self.array, typecode=None, copy=0, savespace=0, mask=None, fill_value=var.getMissing(), missing_value=var.getMissing(),
                                             grid=grid, axes=partition_axes, attributes=self.metadata, id=self.collection + "-" + self.name)
             self.variable.createattribute("gridfile", self.gridFile)
