@@ -9,7 +9,7 @@ def getFillValue( array ):
     try:    return array.get_fill_value()
     except: return sys.float_info.max
 
-def a2s( self, array ):  ', '.join(map(str, array))
+def a2s( array ):  ', '.join(map(str, array))
 
 class CDArray:
     __metaclass__ = ABCMeta
