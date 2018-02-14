@@ -22,7 +22,7 @@ class Kernel:
     __metaclass__ = ABCMeta
 
     def __init__( self, spec ):
-        self.logger = logging.getLogger("worker")
+        self.logger = logging.getLogger()
         self._spec = spec
         self.cacheReturn = [ False, True ]
 

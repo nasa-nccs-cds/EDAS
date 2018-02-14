@@ -23,7 +23,7 @@ class EnsembleWorkflowKernel(CDMSKernel):
         cdms2.setAutoBounds(2)
         start = time.time()
         mdata = task.metadata;     """:type : dict[str,str] """
-        self.logger.info( " Execute REGRID Task with metadata: " + str( task.metadata ) )
+        self.logger.info( " Execute Ensemble Task with metadata: " + str( task.metadata ) )
         target = str( mdata.get("target","") )
         method = str( mdata.get("method","linear") ).lower()
         res = sa2f( self.getListParm( mdata, "res" ) )

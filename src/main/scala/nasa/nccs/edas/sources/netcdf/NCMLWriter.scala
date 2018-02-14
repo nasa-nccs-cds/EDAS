@@ -18,7 +18,7 @@ import scala.collection.JavaConverters._
 
 
 
-class NCMLWriter(fileHeaders: IndexedSeq[FileHeader], val maxCores: Int = 8)  extends Loggable {
+class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader], val maxCores: Int = 8)  extends Loggable {
   private val nReadProcessors = Math.min( Runtime.getRuntime.availableProcessors, maxCores )
   private val nFiles = fileHeaders.length
   val outerDimensionSize: Int = fileHeaders.foldLeft(0)(_ + _.nElem)
@@ -162,24 +162,26 @@ class NCMLWriter(fileHeaders: IndexedSeq[FileHeader], val maxCores: Int = 8)  ex
     fileMetadata.coordVars find (fileMetadata.getAxisType(_) == AxisType.Time)
 
   def getNCMLVerbose: ( List[String], xml.Node ) = {
-    val fileMetadata = FileMetadata(fileHeaders.head.filePath)
-    try {
-      logger.info(s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n")
-      val timeRegularSpecs = None //  getTimeSpecs( fileMetadata )
-      logger.info("Processing %d files with %d workers".format(nFiles, nReadProcessors))
-      val result = <netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
-        <explicit/>
-        <attribute name="title" type="string" value="NetCDF aggregated dataset"/>
-            {for (attribute <- fileMetadata.attributes) yield getAttribute(attribute)}
-            {(for (coordAxis <- fileMetadata.coordinateAxes) yield getDimension(coordAxis)).flatten}
-            {for (variable <- fileMetadata.coordVars) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
-            {for (variable <- fileMetadata.variables) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
-            {getAggregation(fileMetadata, timeRegularSpecs.isDefined)}
-      </netcdf>
-      val varNames: List[String] = fileMetadata.variables.map(_.getShortName)
+    if( fileHeaders.isEmpty ) {
+      logger.warn( s"No files found for agg ${aggregationId}")
+      val result = <netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2" />
+      val varNames: List[String] = List.empty
       (varNames, result)
-    } finally {
-      fileMetadata.close
+    } else {
+      val fileMetadata = FileMetadata(fileHeaders.head.filePath)
+      try {
+        logger.info(s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n")
+        val timeRegularSpecs = None //  getTimeSpecs( fileMetadata )
+        logger.info("Processing %d files with %d workers".format(nFiles, nReadProcessors))
+        val result = <netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
+          <explicit/>
+          <attribute name="title" type="string" value="NetCDF aggregated dataset"/>{for (attribute <- fileMetadata.attributes) yield getAttribute(attribute)}{(for (coordAxis <- fileMetadata.coordinateAxes) yield getDimension(coordAxis)).flatten}{for (variable <- fileMetadata.coordVars) yield getVariable(fileMetadata, variable, timeRegularSpecs)}{for (variable <- fileMetadata.variables) yield getVariable(fileMetadata, variable, timeRegularSpecs)}{getAggregation(fileMetadata, timeRegularSpecs.isDefined)}
+        </netcdf>
+        val varNames: List[String] = fileMetadata.variables.map(_.getShortName)
+        (varNames, result)
+      } finally {
+        fileMetadata.close
+      }
     }
   }
 

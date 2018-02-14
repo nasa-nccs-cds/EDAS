@@ -108,6 +108,16 @@ object CDGrid extends Loggable {
     } else { collectionFiles.push( datfilePath ) }
     collectionFiles.toSet
   }
+  def getBoundsVar(coordAxis: CoordinateAxis ): Option[String] = Option( coordAxis.getBoundaryRef ) match {
+    case Some(bref) => Some(bref)
+    case None => Option(coordAxis.findAttributeIgnoreCase("bounds")) match {
+      case Some(attr) => Some(attr.getStringValue)
+      case None =>
+        logger.warn("Can't locate bounds for axis " + coordAxis.getShortName )
+        None
+    }
+  }
+
 
   def createGridFile(gridFilePath: String, datfilePath: String) = {
     val collectionFiles = getCollectionFiles( datfilePath )
@@ -116,6 +126,7 @@ object CDGrid extends Loggable {
 
     val cvarOrigins = mutable.HashMap.empty[String,Seq[nc2.Variable]]
     val newVarsMap = mutable.HashMap.empty[String,nc2.Variable]
+    val bndsVarsMap = mutable.HashMap.empty[String,nc2.Variable]
     val dimList = mutable.ListBuffer.empty[String]
     val coordList = mutable.ListBuffer.empty[String]
 
@@ -141,6 +152,19 @@ object CDGrid extends Loggable {
           cvarOrigins += (collectionFile -> (cvarOrigins.getOrElse(collectionFile, Seq.empty[nc2.Variable]) ++ Seq(newVar)))
         }
         newVarsMap += ( varName -> newVar )
+
+        cvar match {
+          case coordAxis: CoordinateAxis => {
+            getBoundsVar(coordAxis) foreach ( bndsVarName =>
+              Option( ncDataset.findVariable(bndsVarName) )
+                foreach ( boundsVar => {
+                  val newBoundsVar: nc2.Variable = gridWriter.addVariable(newGroup, boundsVar.getShortName, boundsVar.getDataType, boundsVar.getDimensions)
+                  bndsVarsMap += (bndsVarName -> newBoundsVar)
+                } ))
+          }
+          case x => Unit
+        }
+
         varName -> (cvar -> newVar)
       }
       val varMap= Map( varTups:_* )
@@ -166,15 +190,7 @@ object CDGrid extends Loggable {
     for ((collectionFile, newVars ) <- cvarOrigins.iterator; ncDataset= NetcdfDataset.openDataset(collectionFile) ) {
       for ( newVar <- newVars; cvar = ncDataset.findVariable(newVar.getFullName) ) cvar match {
         case coordAxis: CoordinateAxis =>
-          val boundsVarOpt: Option[String] = Option(coordAxis.getBoundaryRef) match {
-            case Some(bref) => Some(bref)
-            case None => Option(coordAxis.findAttributeIgnoreCase("bounds")) match {
-              case Some(attr) => Some(attr.getStringValue)
-              case None =>
-                logger.warn("Can't locate bounds for axis " + coordAxis.getShortName + " in file " + datfilePath + ", vars = " + ncDataset.getVariables.map(_.getShortName).mkString(","))
-                None
-            }
-          }
+          val boundsVarOpt: Option[String] = getBoundsVar( coordAxis )
           if (coordAxis.getAxisType == AxisType.Time) {
             val (time_values, bounds): ( Array[Double], Array[Array[Double]] ) = FileHeader.getTimeValues(ncDataset, coordAxis)
             newVar.addAttribute(new Attribute(CDM.UNITS, EDTime.units))
@@ -183,12 +199,12 @@ object CDGrid extends Loggable {
             gridWriter.write(newVar, coordAxis.read())
             coordAxis match {
               case coordAxis1D: CoordinateAxis1D =>
-                boundsVarOpt flatMap newVarsMap.get match {
+                boundsVarOpt flatMap bndsVarsMap.get match {
                   case Some( newVarBnds ) =>
                     try {
                       val cvarBnds = ncDataset.findVariable( newVarBnds.getFullName )
-                      val bounds: Array[Double] = ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
-                      gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, bounds))
+//                      val bounds:  Array[Double] = coordAxis1D.getBound2 // ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
+                      gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, coordAxis1D.getBound2 ))
                     } catch {
                       case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}")
                     }

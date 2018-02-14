@@ -1,7 +1,7 @@
 import json
 import numpy
 import time
-
+import os
 
 def wrank( value ):
     return ( value if not isinstance(value,basestring) else int( value.split('-')[1] ) )
@@ -53,6 +53,31 @@ def genericize( results ):
 
 def dump_json_str( obj ):
     return json.dumps(obj) if not isinstance(obj, basestring) else obj
+
+class Logger:
+    LOGPATH = '/tmp/' + os.path.expanduser("~") + '/logs/edas-python-worker-' + str(os.getpid()) +'.log'
+
+    def __init__( self, logFilePath=LOGPATH ):
+        self.logFile = open( logFilePath, "w")
+
+    def info(self, msg ):
+        self.logFile.write( "\n info:" + msg )
+        self.logFile.flush()
+
+    def debug(self, msg ):
+        self.logFile.write( "\n debug:" + msg )
+        self.logFile.flush()
+
+    def warn(self, msg ):
+        self.logFile.write( "\n warn:" + msg )
+        self.logFile.flush()
+
+    def error(self, msg ):
+        self.logFile.write( "\n error:" + msg )
+        self.logFile.flush()
+
+    def close(self):
+        self.logFile.close()
 
 class ExecutionRecord:
 

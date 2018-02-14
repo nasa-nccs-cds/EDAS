@@ -12,7 +12,7 @@ class Worker(object):
     def __init__( self, request_port, result_port ):
         self.cached_results = {};                   """ :type : dict[str,npArray] """
         self.cached_inputs = {};                    """ :type : dict[str,npArray] """
-        self.logger = logging.getLogger("worker")
+        self.logger = logging.getLogger()
         try:
             self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.PULL)

@@ -115,7 +115,7 @@ object AggregationWriter extends Loggable {
       val aggregationId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
       //      logger.info(s" %X% extract Aggregations($collectionId)-> group_key=$group_key, aggregatoinId=$aggregatoinId, files=${files.mkString(";")}" )
       val fileHeaders = Aggregation.write(aggregationId, files.map(fp => dataLocation.resolve(fp).toString), agFormat )
-      val writer = new NCMLWriter( fileHeaders )
+      val writer = new NCMLWriter( aggregationId, fileHeaders )
       val varNames = writer.writeNCML( Collections.getAggregationPath.resolve(aggregationId + ".ncml").toFile )
       varNames.map(vname => vname -> aggregationId)
     }

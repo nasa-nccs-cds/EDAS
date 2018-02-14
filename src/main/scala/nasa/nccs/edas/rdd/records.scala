@@ -118,7 +118,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
   def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {
     import sc.session.implicits._
     val nNodes = 18
-    val usedCoresPerNode = 8
+    val usedCoresPerNode = 16
     val dataFile = "/dass/adm/edas/cache/collections/agg/merrra2_m2i1nxint-MERRA2.inst1.2d.int.Nx.nc4.ag1"
     val varName1 = "KE"
     val varId1 = "v1"
@@ -140,7 +140,7 @@ class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
     val config = optRequest.fold(Map.empty[String,String])( _.operations.head.getConfiguration )
     val basePath = agg.getBasePath.getOrElse("")
     val domains = optRequest.fold(Map.empty[String,DomainContainer])( _.domainMap )
-    val nPartitions: Int = config.get( "parts" ).fold( 2 * nNodes * usedCoresPerNode ) (_.toInt)
+    val nPartitions: Int = config.get( "parts" ).fold( nNodes * usedCoresPerNode ) (_.toInt)
     val mode = config.getOrElse( "mode", "rdd" )
     val missing = Float.NaN
     val tslice = config.getOrElse( "tslice", "prefetch" )

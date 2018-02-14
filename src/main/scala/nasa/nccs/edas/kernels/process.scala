@@ -142,7 +142,7 @@ case class ResultManifest( val name: String, val dataset: String, val descriptio
 
 object Kernel extends Loggable {
   var profileTime: Float = 0f
-  val customKernels = List[Kernel](  ) // new CDMSRegridKernel()
+  val customKernels = List[Kernel]( new CDMSRegridKernel() )
   def isEmpty( kvp: CDTimeSlice ) = kvp.elements.isEmpty
 
   def getResultFile( resultId: String, deleteExisting: Boolean = false ): File = {
@@ -161,10 +161,13 @@ object Kernel extends Loggable {
 
   def apply(module: String, kernelSpec: String, api: String): Kernel = {
     val specToks = kernelSpec.split("[;]")
-    customKernels.find(_.matchesSpecs(specToks)) match {
-      case Some(kernel) => kernel
+    customKernels.find(_.matchesSpecs( module, specToks.head )) match {
+      case Some(kernel) =>
+        kernel
       case None => api match {
-        case "python" => new zmqPythonKernel(module, specToks(0), specToks(1), specToks(2), str2Map(specToks(3)), false, "developmental" )
+        case "python" =>
+          val options = str2Map(specToks(3))
+          new zmqPythonKernel(module, specToks(0), specToks(1), specToks(2), options, false )
       }
       case wtf => throw new Exception("Unrecognized kernel api: " + api)
     }
@@ -250,7 +253,7 @@ object PostOpOperations {
 abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Loggable with Serializable with WPSProcess {
   import Kernel._
   val identifiers = this.getClass.getName.split('$').flatMap(_.split('.'))
-  val status = KernelStatus.developmental
+  val status = options.get("visibility").fold(KernelStatus.developmental)( opVal => KernelStatus.parse(opVal) )
   val doesAxisReduction: Boolean
   def operation: String = identifiers.last.toLowerCase
   def module: String = identifiers.dropRight(1).mkString(".")
@@ -258,8 +261,9 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def name = identifiers.takeRight(2).mkString(".")
   val extInputs: Boolean = options.getOrElse("handlesInput","false").toBoolean
   val parallelizable: Boolean = options.getOrElse( "parallelize", (!extInputs).toString ).toBoolean
+  logger.info( s" #PK# Create Kernel ${id}, status=${status}, parallelizable=${parallelizable}, options={ ${options.mkString("; ")} }")
   val identifier = name
-  def matchesSpecs( specs: Array[String] ): Boolean = { (specs.size >= 2) && specs(0).equals(module) && specs(1).equals(operation) }
+  def matchesSpecs( _module: String, _operation: String ): Boolean = { _module.equals(module) && _operation.equals(operation) }
   val nOutputsPerInput: Int = options.getOrElse("nOutputsPerInput","1").toInt
   def getInputArrays( inputs: CDTimeSlice, context: KernelContext ): List[ArraySpec] =
     context.operation.inputs.map( id => inputs.element( id ).getOrElse {
@@ -273,10 +277,11 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def hasReduceOp: Boolean = reduceCombineOp.isDefined
   val initValue: Float = 0f
   def cleanUp() = {}
+  override def toString = s"Kernel[ id=${id} status=${status}]"
 
   def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
-    logger.info( "Executing map OP for Kernel " + id + "---> OP = " + context.operation.identifier  )
+    logger.info( "Executing map OP for Kernel " + id + ": " + this.getClass.getName + "---> OP = " + context.operation.identifier  )
     val result = input.map( map(context) )
     result
   }
@@ -730,33 +735,38 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
 
 
 
-class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True" ), false, "restricted" ) {
+class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True", "visibility" -> "public" ), false ) {
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val t0 = System.nanoTime
-    logger.info("&MAP: Starting Kernel %s, inputs = [ %s ]".format(name, inputs.elements.keys.mkString(", ") ) )
     val targetGrid: GridContext = context.grid
     val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
     val ( acceptable_array_map, regrid_array_map ) = inputs.elements.partition { case ( key, array ) => context.getInputVariableRecord(key).fold(true)( _ == regridSpec ) }
-    if ( regrid_array_map.isEmpty ) { inputs } else {
+    if ( regrid_array_map.isEmpty ) {
+      logger.info(" #S#: CDMSRegridKernel, inputs[%d] = [ %s ] match RegridSpec: %s".format( inputs.startTime, inputs.elements.keys.mkString(", "), regridSpec.toString ) )
+      inputs
+    } else {
       val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
       val worker: PythonWorker = workerManager.getPythonWorker
+      logger.info(" #S#: Starting CDMSRegridKernel, inputs[%d] = [ %s ]".format( inputs.startTime, inputs.elements.keys.mkString(", ") ) )
 
       for ((uid, input_array) <- acceptable_array_map) {
         val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
-        worker.sendArrayMetadata(uid, input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions))))
+        val data_array = input_array.toHeapFltArray(optVarRec.fold(targetGrid.gridFile)(_.gridFilePath), Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+        logger.info(s" #S# Sending acceptable Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ], metadata = { ${data_array.metadata.toString} }")
+        worker.sendArrayMetadata( uid, data_array )
       }
       for ((uid, input_array) <- regrid_array_map) {
-        logger.info(s"Sending Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]")
         val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
-        val data_array = input_array.toHeapFltArray(targetGrid.gridFile, Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+        val data_array = input_array.toHeapFltArray(optVarRec.fold("")(_.gridFilePath), Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
+        logger.info(s" #S# Sending regrid Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ], metadata = { ${data_array.metadata.toString} }")
         worker.sendRequestInput( uid, data_array )
       }
 
-      logger.info("Gateway: Executing operation %s".format(context.operation.identifier))
       val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
       val rID = UID()
-      worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
+      logger.info("Gateway: Executing operation %s, operation metadata: { %s }".format(context.operation.identifier,context_metadata.mkString(", ")))
+      worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata )
 
       val resultItems: Iterable[(String,ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
         val tvar = worker.getResult
@@ -769,7 +779,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
   }
 }
 
-class zmqPythonKernel( _module: String, _operation: String, _title: String, _description: String, options: Map[String,String], axisElimination: Boolean, visibility_status: String  ) extends Kernel(options) {
+class zmqPythonKernel( _module: String, _operation: String, _title: String, _description: String, options: Map[String,String], axisElimination: Boolean  ) extends Kernel(options) {
   override def operation: String = _operation
 
   override def module = _module
@@ -780,7 +790,6 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
 
   override val identifier = name
   override val doesAxisReduction: Boolean = axisElimination;
-  override val status = KernelStatus.parse(visibility_status)
   val outputs = List(WPSProcessOutput("operation result"))
   val title = _title
   val description = _description
@@ -788,6 +797,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
   override def cleanUp(): Unit = PythonWorkerPortal.getInstance.shutdown()
 
   override def map(context: KernelContext)(inputs: CDTimeSlice): CDTimeSlice = {
+    logger.info("&MAP: EXECUTING zmqPythonKernel, inputs = [ %s ]".format(name, inputs.elements.keys.mkString(", ") ) )
     val targetGrid: GridContext = context.grid
     val workerManager: PythonWorkerPortal = PythonWorkerPortal.getInstance()
     val worker: PythonWorker = workerManager.getPythonWorker

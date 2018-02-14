@@ -192,7 +192,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
           sendFile( clientId, jobId, "publish", filepath, sharedDataDir.isEmpty )
         })
       } else {
-        sendErrorReport( response_format, clientId, jobId, new Exception( "Can't find href or node in attributes: " + getNodeAttributes( node ) ) )
+        sendErrorReport( response_format, clientId, jobId, new Exception( "Can't find href or files in attributes: " + getNodeAttributes( node ) ) )
       }
     }
   }

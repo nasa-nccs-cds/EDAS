@@ -4,6 +4,7 @@ object Versions {
   val ucar = "4.6.8"
   val spark = "2.2.1"
   val jackson = "2.6.5"
+  val breeze = "0.13.2"
 }
 
 object Library {
@@ -16,6 +17,9 @@ object Library {
   val sparkStreaming = "org.apache.spark"  %% "spark-streaming" % Versions.spark
   val commonsIO      = "commons-io"         % "commons-io"      % "2.5"
   val zeromq         = "org.zeromq"         % "jeromq"          % "0.4.2"
+  val breezeNlp      = "org.scalanlp"       %% "breeze"         % Versions.breeze
+  val breezeNative   = "org.scalanlp"      %% "breeze-natives"  % Versions.breeze
+  val breezeViz      = "org.scalanlp"      %% "breeze-viz"      % Versions.breeze
   val cdm            = "edu.ucar"           % "cdm"             % Versions.ucar
   val clcommon       = "edu.ucar"           % "clcommon"        % Versions.ucar
   val netcdf4        = "edu.ucar"           % "netcdf4"         % Versions.ucar
@@ -29,7 +33,7 @@ object Library {
   val natty          = "com.joestelmach"    % "natty"           % "0.12"
   val py4j           = "net.sf.py4j"        % "py4j"            % "0.10.4"
   val geotools       = "org.geotools"      %  "gt-shapefile"    % "13.2"
-  val breeze         = "org.scalanlp"      %% "breeze"          % "0.12"
+
   val sprayCache     = "io.spray"       % "spray-caching_2.11" % "1.3.3"
   val sprayUtil      = "io.spray"       % "spray-util_2.11"    % "1.3.3"
   val scalactic      = "org.scalactic" %% "scalactic"          % "3.0.0"
@@ -54,6 +58,8 @@ object Dependencies {
   val test = Seq( scalatest, logback )
 
   val xml = Seq( scalaxml, scalaparser )
+
+  val breeze = Seq( breezeNlp, breezeNative, breezeViz )
 
   val jackson = Seq( jacksonCore, jacksonDatabind, jacksonModule )
 
