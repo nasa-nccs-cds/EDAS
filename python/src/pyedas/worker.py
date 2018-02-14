@@ -1,5 +1,6 @@
 import os, traceback
 import zmq, cdms2, logging
+import platform, socket
 import numpy as np
 from messageParser import mParse
 from edasArray import npArray, IO_DType
@@ -80,13 +81,14 @@ class Worker(object):
         self.result_socket.send(result_data)
 
     def sendError( self, err ):
-        msg = "Worker Error {0}: {1}".format(err, traceback.format_exc() )
+        msg = "Worker [{0}:{1}] Error {2}: {3}".format( platform.node(), socket.gethostname(), err, traceback.format_exc() )
         self.logger.error( msg  )
         header = "|".join( [ "error-"+str(os.getpid()), msg ] )
         self.result_socket.send( header )
 
-    def sendInfoMessage( self, msg ):
-        self.logger.info( "Worker Info: {0}\n".format( msg )  )
+    def sendInfoMessage( self, info ):
+        msg =  "Worker  [{0}:{1}] Info: {2}\n".format( platform.node(), socket.gethostname(), info )
+        self.logger.info( msg )
         header = "|".join( [ "info-"+str(os.getpid()), msg ] )
         self.result_socket.send( header )
 
