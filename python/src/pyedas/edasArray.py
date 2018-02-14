@@ -9,7 +9,7 @@ def getFillValue( array ):
     try:    return array.get_fill_value()
     except: return sys.float_info.max
 
-def a2s( array ):  ', '.join(map(str, array))
+def a2s( array ): return ', '.join(map(str, array))
 
 class CDArray:
     __metaclass__ = ABCMeta
@@ -197,7 +197,7 @@ class npArray(CDArray):
             grid = self.getGrid()
             partition_axes = self.subsetAxes(self.dimensions, gridfile, self.origin, self.shape)
 
-            self.logger.info( "Creating Variable {0}, gridfile = {1}, data shape = {2}, self.shape = {3}, grid shape = {4}".format( self.name, gridFilePath, a2s(self.array.shape), a2s(self.shape), a2s(grid.shape) ) )
+            self.logger.info( "Creating Variable {0}, gridfile = {1}, data shape = [ {2} ], self.shape = [ {3} ], grid shape = [ {4} ]".format( self.name, gridFilePath, a2s(self.array.shape), a2s(self.shape), a2s(grid.shape) ) )
             self.variable = cdms2.createVariable( self.array, typecode=None, copy=0, savespace=0, mask=None, fill_value=var.getMissing(), missing_value=var.getMissing(),
                                             grid=grid, axes=partition_axes, attributes=self.metadata, id=self.collection + "-" + self.name)
             self.variable.createattribute("gridfile", self.gridFile)
