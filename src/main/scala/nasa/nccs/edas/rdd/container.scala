@@ -262,6 +262,7 @@ object VariableRecord {
 }
 
 class VariableRecord( val varName: String, val gridFilePath: String, resolution: String, projection: String, val dimensions: String, val metadata: Map[String,String] ) extends EDASCoordSystem( resolution, projection ) {
+  override def toString = s"VariableRecord[ varName=${varName}, gridFilePath=${gridFilePath}, resolution=${resolution}, projection=${projection}, dimensions=${dimensions}, metadata={${metadata.mkString(",")}} )"
 }
 
 class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
