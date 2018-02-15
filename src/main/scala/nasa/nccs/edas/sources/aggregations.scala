@@ -378,17 +378,19 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
   val ave_file_nrows: Long = time_nrows/files.length
   def findVariable( varName: String ): Option[Variable] = variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
-  def gridFilePath: String = ( dataPath.split('.').dropRight(1) + "nc" ).mkString(".")
-  def ncmlFilePath: String = ( dataPath.split('.').dropRight(1) + "ncml" ).mkString(".")
+  def gridFilePath: String = getRelatedFile( "nc")
+  def ncmlFilePath: String = getRelatedFile( "ncml")
   def getFilebase: FileBase = new FileBase( files, parms.get("base.path") )
-  def toXml: xml.Elem = {
-    <aggregation id={id}>
-      { variables.map( _.toXml ) }
-    </aggregation>
-  }
+  def toXml: xml.Elem = { <aggregation id={id}> { variables.map( _.toXml ) } </aggregation> }
 
   private def _estimate_file_index_from_time_value( time_value: Long ): Int = ( ( time_value - time_start ) / ave_file_dt ).toInt
   private def _estimate_file_index_from_row_index( row_index: Int ): Int = ( row_index / ave_file_nrows ).toInt
+
+  def getRelatedFile( extension: String ): String = {
+    val toks: Array[String] = dataPath.split('.').dropRight(1)
+    val toks_ext: Array[String] = if( toks.last.equals( extension ) ) { toks } else { toks :+ extension }
+    toks_ext.mkString(".")
+  }
 
   private def _fileInputsFromTimeValue( time_value: Long, estimated_file_index: Int ): TimeRange = {
     if( time_value < time_start ) { return  TimeRange( time_start, time_start, 0, 0, BoundedIndex.BelowRange )  }
