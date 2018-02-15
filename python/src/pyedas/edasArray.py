@@ -109,6 +109,7 @@ class npArray(CDArray):
                 undef_value = raw_data[-1]
                 logger.info(" *** buffer len = {0}, undef = {1}, head = {2}".format( str(len(raw_data)), str(undef_value), str(raw_data[0]) ) )
                 data_array = ma.masked_invalid( raw_data[0:-1].reshape(shape) )
+                logger.info( " Creating input array: " + id + ", shape = " + str(shape) + ", header = " + header + " metadata = " + str(metadata) )
                 nparray =  ma.masked_equal(data_array,undef_value) if ( undef_value != 1.0 ) else data_array
             except Exception as err:
                 logger.info( " !!!!! Error creating input array: " + str(err) )
