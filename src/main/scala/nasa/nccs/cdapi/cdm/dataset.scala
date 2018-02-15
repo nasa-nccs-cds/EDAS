@@ -123,7 +123,7 @@ object CDGrid extends Loggable {
     logger.info( s" %G% Creating #grid# file $gridFilePath from aggregation: [${aggregation.id}]" )
     val cvarOrigins = mutable.HashMap.empty[String,Seq[nc2.Variable]]
     val newVarsMap = mutable.HashMap.empty[String,nc2.Variable]
-    val bndsVarsMap = mutable.HashMap.empty[String,nc2.Variable]
+    val bndsVarsMap = mutable.HashMap.empty[String,(nc2.Variable,nc2.Variable)]
     val dimList = mutable.ListBuffer.empty[String]
     val coordList = mutable.ListBuffer.empty[String]
     val collectionFile = aggregation.ncmlFilePath
@@ -156,7 +156,7 @@ object CDGrid extends Loggable {
             Option( ncDataset.findVariable(bndsVarName) )
               foreach ( boundsVar => {
               val newBoundsVar: nc2.Variable = gridWriter.addVariable(newGroup, boundsVar.getShortName, boundsVar.getDataType, boundsVar.getDimensions)
-              bndsVarsMap += (bndsVarName -> newBoundsVar)
+              bndsVarsMap += ( bndsVarName -> ( boundsVar, newBoundsVar) )
             } ))
         }
         case x => Unit
@@ -191,13 +191,10 @@ object CDGrid extends Loggable {
           } else {
             gridWriter.write(newVar, coordAxis.read())
             coordAxis match {
-              case coordAxis1D: CoordinateAxis1D =>
-                boundsVarOpt flatMap bndsVarsMap.get match {
-                  case Some(newVarBnds) =>
+              case coordAxis1D: CoordinateAxis1D => boundsVarOpt flatMap bndsVarsMap.get match {
+                  case Some((cvarBnds,newVarBnds)) =>
                     try {
-                      val cvarBnds = ncDataset.findVariable(newVarBnds.getFullName)
-                      //                      val bounds:  Array[Double] = coordAxis1D.getBound2 // ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
-                      gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, coordAxis1D.getBound2))
+                      gridWriter.write( newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, coordAxis1D.getBound2))
                     } catch {
                       case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}: " + err.toString)
                     }
