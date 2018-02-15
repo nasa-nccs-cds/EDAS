@@ -378,6 +378,8 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
   val ave_file_nrows: Long = time_nrows/files.length
   def findVariable( varName: String ): Option[Variable] = variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
+  def gridFilePath: String = ( dataPath.split('.').dropRight(1) + "nc" ).mkString(".")
+  def ncmlFilePath: String = ( dataPath.split('.').dropRight(1) + "ncml" ).mkString(".")
   def getFilebase: FileBase = new FileBase( files, parms.get("base.path") )
   def toXml: xml.Elem = {
     <aggregation id={id}>

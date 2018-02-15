@@ -257,8 +257,10 @@ class PartitionExtensionGenerator(val partIndex: Int) extends Serializable {
 }
 
 object VariableRecord {
-  def apply( vspec: DirectRDDVariableSpec, collection: Collection, metadata: Map[String,String]  ): VariableRecord =
-    new VariableRecord( vspec.varShortName, collection.id, collection.grid.gridFilePath, collection.getResolution, collection.grid.getProjection, vspec.getParameter("dimensions",""), vspec.metadata ++ metadata )
+  def apply( vspec: DirectRDDVariableSpec, collection: Collection, metadata: Map[String,String]  ): VariableRecord = {
+    val grid = collection.getGrid(vspec.varShortName)
+    new VariableRecord(vspec.varShortName, collection.id, grid.gridFilePath, collection.getResolution(vspec.varShortName), grid.getProjection, vspec.getParameter("dimensions", ""), vspec.metadata ++ metadata)
+  }
 }
 
 class VariableRecord( val varName: String, val collection: String, val gridFilePath: String, resolution: String, projection: String, val dimensions: String, val metadata: Map[String,String] ) extends EDASCoordSystem( resolution, projection ) {

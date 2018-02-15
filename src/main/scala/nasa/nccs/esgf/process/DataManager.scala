@@ -54,7 +54,10 @@ case class EDASCoordSystem( resolution: String, projection: String ) extends Ser
 }
 
 object RegridSpec {
-  def apply( target_input: DataFragmentSpec  ): RegridSpec = new RegridSpec( target_input.collection.getGridFilePath, target_input.collection.getResolution, target_input.collection.grid.getProjection, target_input.cdsection.toSection.toString  )
+  def apply( target_input: DataFragmentSpec  ): RegridSpec = {
+    val vname = target_input.varname
+    new RegridSpec( target_input.collection.getGridFilePath(vname), target_input.collection.getResolution(vname), target_input.collection.getGrid(vname).getProjection, target_input.cdsection.toSection.toString  )
+  }
 }
 
 class RegridSpec( val gridFile: String, resolution: String, projection: String, val subgrid: String ) extends EDASCoordSystem( resolution, projection ) { }
@@ -347,14 +350,14 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
 object GridSection extends Loggable {
   def apply( variable: CDSVariable, roiOpt: Option[List[DomainAxis]] ): GridSection = {
     val t0 = System.nanoTime
-    val grid = variable.collection.grid
+    val grid = variable.collection.getGrid( variable.name )
     val t1 = System.nanoTime
     val axes = variable.getCoordinateAxesList
     val t2 = System.nanoTime
     val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = variable.getCoordinateAxis(dim)) yield coord_axis_opt match {
       case Some( coord_axis ) =>
         val domainAxisOpt: Option[DomainAxis] = roiOpt.flatMap(axes => axes.find(da => da.matches( coord_axis.getAxisType )))
-        Some( new GridCoordSpec(idim, variable.collection.grid, variable.getAggregation, coord_axis, domainAxisOpt) )
+        Some( new GridCoordSpec(idim, grid, variable.getAggregation, coord_axis, domainAxisOpt) )
       case None =>
         logger.warn( "Unrecognized coordinate axis: %s, axes = ( %s )".format( dim, grid.getCoordinateAxes.map( axis => axis.getFullName ).mkString(", ") )); None
     }

@@ -138,24 +138,25 @@ object CollectionLoadServices {
 
 class Collection( val ctype: String, val id: String, val dataPath: String, val aggregations: Map[String,Aggregation], val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List() ) extends Serializable with Loggable {
   val collId = id // Collections.idToFile(id)
-  private val variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()
+  private val _grids = new ConcurrentLinkedHashMap.Builder[String, CDGrid].initialCapacity(10).maximumWeightedCapacity(500).build()
+  private val _variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()
   override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
   def isEmpty = dataPath.isEmpty
   lazy val varNames = vars.map( varStr => varStr.split(Array(':', '|')).head )
-  lazy val grid = CDGrid( id, dataPath )
+  def getGrid( varName: String ) = _grids.getOrElseUpdate( varName,  CDGrid( getRequiredAggregation(varName), dataPath ) )
   def getAggregation( varName: String ): Option[Aggregation] = aggregations.get(varName)
+  def getRequiredAggregation( varName: String ): Aggregation = getAggregation( varName ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${varName} in collection ${id}") )
 
   def isMeta: Boolean = dataPath.endsWith(".csv")
-  def deleteAggregation() = grid.deleteAggregation
-  def getVariableMetadata(varName: String): List[nc2.Attribute] = grid.getVariableMetadata(varName)
-  def getGridFilePath = grid.gridFilePath
-  def getVariable(varName: String): CDSVariable = variables.getOrElseUpdate(varName, new CDSVariable(varName, this))
+  def getVariableMetadata(varName: String): List[nc2.Attribute] = getGrid( varName ).getVariableMetadata(varName)
+  def getGridFilePath( varName: String ) = getGrid( varName ).gridFilePath
+  def getVariable(varName: String): CDSVariable = _variables.getOrElseUpdate(varName, new CDSVariable(varName, this))
 
   def getDatasetMetadata(): List[nc2.Attribute] = List(
     new nc2.Attribute("variables", varNames),
     new nc2.Attribute("path", dataPath),
     new nc2.Attribute("ctype", ctype)
-  ) ++ grid.attributes
+  )
 
 //  def generateAggregation(): xml.Elem = {
 //    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(grid.gridFilePath, 10.toString, true)
@@ -190,8 +191,8 @@ class Collection( val ctype: String, val id: String, val dataPath: String, val a
 //    vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) )
 //  }
 
-  def getResolution: String = try {
-    grid.resolution.toSeq.sortBy( _._1 ).map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")
+  def getResolution( varName: String ): String = try {
+    getGrid(varName).resolution.toSeq.sortBy( _._1 ).map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")
   } catch {
     case ex: Exception =>
       print( s"Exception in Collection.getResolution: ${ex.getMessage}" )
@@ -201,7 +202,7 @@ class Collection( val ctype: String, val id: String, val dataPath: String, val a
 
 
   def toXml: xml.Elem = {
-    <collection id={id} title={title} resolution={getResolution}>
+    <collection id={id} title={title}>
       { aggregations.values.toSet.map { agg: Aggregation => agg.toXml } }
     </collection>
   }
@@ -325,13 +326,15 @@ class CollectionLoader( val collId: String, val collectionFile: File ) extends R
   }
 }
 
-class CollectionGridFileLoader( val collId: String, val collectionFile: File ) extends Runnable  with Loggable  {
+class CollectionGridFileLoader( val collId: String, val collectionFile: File ) extends Runnable  with Loggable {
   def run() {
-    logger.info( s" ---> Loading collection $collId" )
-    val optCollection = Collections.addCollection( collId, Some( collectionFile.toString ) )
-    optCollection foreach { collection =>
-      if( ! new File(collection.grid.gridFilePath).exists ) {
-        logger.info(s"Creating grid file ${collection.grid.gridFilePath} for collection ${collId}")
+    logger.info(s" ---> Loading collection $collId")
+    val optCollection = Collections.addCollection(collId, Some(collectionFile.toString))
+    optCollection foreach { collection => collection.aggregations.values foreach { aggregation =>
+        if (!new File(aggregation.gridFilePath).exists) {
+          logger.info(s"Creating grid file ${aggregation.gridFilePath} for collection ${collId}")
+          CDGrid.createGridFile(aggregation)
+        }
       }
     }
   }
@@ -459,7 +462,6 @@ object Collections extends XmlResource with Loggable {
         case Some(collection) =>
           logger.info("Removing collection: " + collection.id )
           _datasets.remove( collection.id )
-          collection.deleteAggregation()
           Some(collection.id)
         case None => logger.error("Attempt to delete collection that does not exist: " + collectionId ); None
       }

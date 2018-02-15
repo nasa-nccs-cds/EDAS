@@ -32,10 +32,9 @@ import scala.io.Source
 
 
 object CDGrid extends Loggable {
-  def apply(name: String, datfilePath: String): CDGrid = {
-    val gridFilePath: String = Collections.getAggregationPath.resolve(Collections.idToFile(name, ".nc")).toString
-    if( !Files.exists( Paths.get(gridFilePath) ) ) { createGridFile(gridFilePath, datfilePath) }
-    CDGrid.create(name, gridFilePath)
+  def apply( aggregation: Aggregation, datfilePath: String): CDGrid = {
+    if( !Files.exists( Paths.get( aggregation.gridFilePath ) ) ) { createGridFile( aggregation ) }
+    CDGrid.create( aggregation.id, aggregation.gridFilePath )
   }
 
   def create(name: String, gridFilePath: String): CDGrid = {
@@ -118,95 +117,89 @@ object CDGrid extends Loggable {
     }
   }
 
-
-  def createGridFile(gridFilePath: String, datfilePath: String) = {
-    val collectionFiles = getCollectionFiles( datfilePath )
-    logger.info( s" %G% Creating #grid# file $gridFilePath from collectionFiles: [${collectionFiles.map(_.split('/').last).mkString(", ")}] from collections metafile: $datfilePath" )
+  def createGridFile( aggregation: Aggregation ) = {
+    val gridFilePath: String = aggregation.gridFilePath
     val gridWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf4, gridFilePath, null)
-
+    logger.info( s" %G% Creating #grid# file $gridFilePath from aggregation: [${aggregation.id}]" )
     val cvarOrigins = mutable.HashMap.empty[String,Seq[nc2.Variable]]
     val newVarsMap = mutable.HashMap.empty[String,nc2.Variable]
     val bndsVarsMap = mutable.HashMap.empty[String,nc2.Variable]
     val dimList = mutable.ListBuffer.empty[String]
     val coordList = mutable.ListBuffer.empty[String]
+    val collectionFile = aggregation.ncmlFilePath
 
-    for( collectionFile <- collectionFiles ) {
-      logger.info( s" Processing collection file ${collectionFile}" )
-      val ncDataset: NetcdfDataset = NetcdfDataset.openDataset(collectionFile)
-      val groupMap: mutable.HashMap[String,nc2.Group] = mutable.HashMap.empty[String,nc2.Group]
-      val localDims = ncDataset.getDimensions.map( d => AggregationWriter.getName(d) )
-      for (d <- ncDataset.getDimensions; dname = AggregationWriter.getName(d); if !dimList.contains(dname)) {
-        val dimension = gridWriter.addDimension(null, dname, d.getLength)
-        dimList += dname
-      }
-
-      val varTups = for (cvar <- ncDataset.getVariables; varName = AggregationWriter.getName(cvar); if !newVarsMap.contains( varName ) ) yield {
-        val dataType = cvar match {
-          case coordAxis: CoordinateAxis => if (coordAxis.getAxisType == AxisType.Time) { EDTime.ucarDatatype } else { cvar.getDataType }
-          case x => cvar.getDataType
-        }
-        val oldGroup = cvar.getGroup
-        val newGroup = getNewGroup(groupMap, oldGroup, gridWriter)
-        val newVar: nc2.Variable = gridWriter.addVariable(newGroup, varName, dataType, getDimensionNames( cvar.getDimensionsString.split(' '), localDims ).mkString(" "))
-        if( cvar.isCoordinateVariable && (cvar.getRank == 1) ) {
-          cvarOrigins += (collectionFile -> (cvarOrigins.getOrElse(collectionFile, Seq.empty[nc2.Variable]) ++ Seq(newVar)))
-        }
-        newVarsMap += ( varName -> newVar )
-
-        cvar match {
-          case coordAxis: CoordinateAxis => {
-            getBoundsVar(coordAxis) foreach ( bndsVarName =>
-              Option( ncDataset.findVariable(bndsVarName) )
-                foreach ( boundsVar => {
-                  val newBoundsVar: nc2.Variable = gridWriter.addVariable(newGroup, boundsVar.getShortName, boundsVar.getDataType, boundsVar.getDimensions)
-                  bndsVarsMap += (bndsVarName -> newBoundsVar)
-                } ))
-          }
-          case x => Unit
-        }
-
-        varName -> (cvar -> newVar)
-      }
-      val varMap= Map( varTups:_* )
-      for ((cvar, newVar) <- varMap.values; attr <- cvar.getAttributes) cvar match {
-        case coordAxis: CoordinateAxis =>
-          if ((coordAxis.getAxisType == AxisType.Time) && attr.getShortName.equalsIgnoreCase(CDM.UNITS)) {
-            gridWriter.addVariableAttribute(newVar, new Attribute(CDM.UNITS, EDTime.units))
-          } else {
-            gridWriter.addVariableAttribute(newVar, attr)
-          }
-        case x =>
-          gridWriter.addVariableAttribute(newVar, attr)
-      }
-      if( collectionFiles.isEmpty ) {
-        val globalAttrs = Map(ncDataset.getGlobalAttributes.map(attr => attr.getShortName -> attr): _*)
-        globalAttrs.mapValues(attr => gridWriter.addGroupAttribute(null, attr))
-        var nDataFiles = getNumFiles(ncDataset)
-        gridWriter.addGroupAttribute(null, new Attribute("NumDataFiles", nDataFiles))
-      }
-      ncDataset.close()
+    logger.info( s" Processing collection file ${collectionFile}" )
+    val ncDataset: NetcdfDataset = NetcdfDataset.openDataset(collectionFile)
+    val groupMap: mutable.HashMap[String,nc2.Group] = mutable.HashMap.empty[String,nc2.Group]
+    val localDims = ncDataset.getDimensions.map( d => AggregationWriter.getName(d) )
+    for (d <- ncDataset.getDimensions; dname = AggregationWriter.getName(d); if !dimList.contains(dname)) {
+      val dimension = gridWriter.addDimension(null, dname, d.getLength)
+      dimList += dname
     }
+
+    val varTups = for (cvar <- ncDataset.getVariables; varName = AggregationWriter.getName(cvar); if !newVarsMap.contains( varName ) ) yield {
+      val dataType = cvar match {
+        case coordAxis: CoordinateAxis => if (coordAxis.getAxisType == AxisType.Time) { EDTime.ucarDatatype } else { cvar.getDataType }
+        case x => cvar.getDataType
+      }
+      val oldGroup = cvar.getGroup
+      val newGroup = getNewGroup(groupMap, oldGroup, gridWriter)
+      val newVar: nc2.Variable = gridWriter.addVariable(newGroup, varName, dataType, getDimensionNames( cvar.getDimensionsString.split(' '), localDims ).mkString(" "))
+      if( cvar.isCoordinateVariable && (cvar.getRank == 1) ) {
+        cvarOrigins += (collectionFile -> (cvarOrigins.getOrElse(collectionFile, Seq.empty[nc2.Variable]) ++ Seq(newVar)))
+      }
+      newVarsMap += ( varName -> newVar )
+
+      cvar match {
+        case coordAxis: CoordinateAxis => {
+          getBoundsVar(coordAxis) foreach ( bndsVarName =>
+            Option( ncDataset.findVariable(bndsVarName) )
+              foreach ( boundsVar => {
+              val newBoundsVar: nc2.Variable = gridWriter.addVariable(newGroup, boundsVar.getShortName, boundsVar.getDataType, boundsVar.getDimensions)
+              bndsVarsMap += (bndsVarName -> newBoundsVar)
+            } ))
+        }
+        case x => Unit
+      }
+
+      varName -> (cvar -> newVar)
+    }
+    val varMap= Map( varTups:_* )
+    for ((cvar, newVar) <- varMap.values; attr <- cvar.getAttributes) cvar match {
+      case coordAxis: CoordinateAxis =>
+        if ((coordAxis.getAxisType == AxisType.Time) && attr.getShortName.equalsIgnoreCase(CDM.UNITS)) {
+          gridWriter.addVariableAttribute(newVar, new Attribute(CDM.UNITS, EDTime.units))
+        } else {
+          gridWriter.addVariableAttribute(newVar, attr)
+        }
+      case x =>
+        gridWriter.addVariableAttribute(newVar, attr)
+    }
+    val globalAttrs = Map(ncDataset.getGlobalAttributes.map(attr => attr.getShortName -> attr): _*)
+    globalAttrs.mapValues(attr => gridWriter.addGroupAttribute(null, attr))
+    var nDataFiles = getNumFiles(ncDataset)
+    gridWriter.addGroupAttribute(null, new Attribute("NumDataFiles", nDataFiles))
     gridWriter.create()
-    for ((collectionFile, newVars ) <- cvarOrigins.iterator; ncDataset= NetcdfDataset.openDataset(collectionFile) ) {
-      for ( newVar <- newVars; cvar = ncDataset.findVariable(newVar.getFullName) ) cvar match {
+    for ((collectionFile, newVars ) <- cvarOrigins.iterator ) {
+      for (newVar <- newVars; cvar = ncDataset.findVariable(newVar.getFullName)) cvar match {
         case coordAxis: CoordinateAxis =>
-          val boundsVarOpt: Option[String] = getBoundsVar( coordAxis )
+          val boundsVarOpt: Option[String] = getBoundsVar(coordAxis)
           if (coordAxis.getAxisType == AxisType.Time) {
-            val (time_values, bounds): ( Array[Double], Array[Array[Double]] ) = FileHeader.getTimeValues(ncDataset, coordAxis)
+            val (time_values, bounds): (Array[Double], Array[Array[Double]]) = FileHeader.getTimeValues(ncDataset, coordAxis)
             newVar.addAttribute(new Attribute(CDM.UNITS, EDTime.units))
-            gridWriter.write(newVar, ma2.Array.factory( EDTime.ucarDatatype, coordAxis.getShape, time_values))
+            gridWriter.write(newVar, ma2.Array.factory(EDTime.ucarDatatype, coordAxis.getShape, time_values))
           } else {
             gridWriter.write(newVar, coordAxis.read())
             coordAxis match {
               case coordAxis1D: CoordinateAxis1D =>
                 boundsVarOpt flatMap bndsVarsMap.get match {
-                  case Some( newVarBnds ) =>
+                  case Some(newVarBnds) =>
                     try {
-                      val cvarBnds = ncDataset.findVariable( newVarBnds.getFullName )
-//                      val bounds:  Array[Double] = coordAxis1D.getBound2 // ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
-                      gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, coordAxis1D.getBound2 ))
+                      val cvarBnds = ncDataset.findVariable(newVarBnds.getFullName)
+                      //                      val bounds:  Array[Double] = coordAxis1D.getBound2 // ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
+                      gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, coordAxis1D.getBound2))
                     } catch {
-                      case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}")
+                      case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}: " + err.toString)
                     }
                   case None => Unit
                 }
@@ -215,8 +208,8 @@ object CDGrid extends Loggable {
           }
         case x => Unit
       }
-      ncDataset.close()
     }
+    ncDataset.close()
     logger.info( s"Finished Writing Grid File $gridFilePath" )
     gridWriter.close()
   }

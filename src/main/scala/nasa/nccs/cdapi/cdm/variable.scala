@@ -64,7 +64,7 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
   def getAttributeValue( name: String ): String =  attributes.getOrElse(name, new nc2.Attribute(new unidata.util.Parameter("",""))).getValue(0).toString
   def toXml: xml.Node =
     <variable name={name} fullname={fullname} description={description} shape={shape.mkString("[", " ", "]")} units={units}>
-      { for( dim: nc2.Dimension <- collection.grid.dimensions; name=dim.getFullName; dlen=dim.getLength ) yield getCoordinateAxis( name ) match {
+      { for( dim: nc2.Dimension <- collection.getGrid(name).dimensions; name=dim.getFullName; dlen=dim.getLength ) yield getCoordinateAxis( name ) match {
           case None=> <dimension name={name} length={dlen.toString}/>
           case Some(axis)=>
               val units = axis.getAxisType match { case AxisType.Time =>{EDTime.units} case x => axis.getUnitsString }
@@ -75,7 +75,7 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
     </variable>
 
   def toXmlHeader: xml.Node = {
-      collection.grid.getVariable(name) match {
+      collection.getGrid(name).getVariable(name) match {
         case Some( (index, variable) ) =>   <variable name={name} fullname={fullname} description={description} units={units} shape={shape.mkString("[", " ", "]")} dims={variable.getDimensionsString}/>
         case None =>                        <variable name={name} fullname={fullname} description={description} units={units} shape={shape.mkString("[", " ", "]")} />
       }
@@ -84,17 +84,17 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
   //  def read( section: ma2.Section ) = ncVariable.read(section)
   def getTargetGrid( fragSpec: DataFragmentSpec ): TargetGrid = fragSpec.targetGridOpt match { case Some(targetGrid) => targetGrid;  case None => new TargetGrid( this, Some(fragSpec.getAxes) ) }
   def getCoordinateAxes: List[ CoordinateAxis1D ] = {
-    dims.flatMap( dim => collection.grid.findCoordinateAxis( dim ).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) ) ).toList
+    dims.flatMap( dim => collection.getGrid(name).findCoordinateAxis( dim ).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) ) ).toList
   }
-  def getCoordinateAxis( axisType: AxisType ): Option[CoordinateAxis1D] = collection.grid.findCoordinateAxis(axisType).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) )
+  def getCoordinateAxis( axisType: AxisType ): Option[CoordinateAxis1D] = collection.getGrid(name).findCoordinateAxis(axisType).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) )
   def getCoordinateAxis( name: String ): Option[CoordinateAxis1D] = {
     val t0 = System.nanoTime()
-    val caxis = collection.grid.findCoordinateAxis(name)
+    val caxis = collection.getGrid(name).findCoordinateAxis(name)
     val axis = caxis.map( CDSVariable.toCoordAxis1D(_) )
     logger.info( s"getCoordinateAxis: ${name}, time: ${(System.nanoTime()-t0)/1.0E9}")
     axis
   }
-  def getCoordinateAxesList = collection.grid.getCoordinateAxes
+  def getCoordinateAxesList = collection.getGrid(name).getCoordinateAxes
 }
 
 class InputConsumer( val operation: OperationContext ) {
