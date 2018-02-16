@@ -202,7 +202,7 @@ object CDGrid extends Loggable {
                       logger.error(s" ---> Creating bounds for var ${coordAxis1D.getShortName} in grid file $gridFilePath, bndsvar = ${cvarBnds.getShortName} " )
                       gridWriter.write( newVarBnds, cvarBnds.read )
                     } catch {
-                      case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}:\n\t" + err.getStackTrace.mkString( "\n\t" ))
+                      case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}: " + err.toString )
                     }
                   case None => Unit
                 }
