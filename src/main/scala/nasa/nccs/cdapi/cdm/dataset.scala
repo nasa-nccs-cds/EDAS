@@ -75,13 +75,6 @@ object CDGrid extends Loggable {
       }
     })
 
-  def getNewGroup( groupMap: mutable.Map[String,nc2.Group], oldGroup: Group, gridWriter: NetcdfFileWriter ): Group = {
-    val gname = if(oldGroup==null) "" else oldGroup.getShortName
-    if( gname.isEmpty ) gridWriter.addGroup(null,"root") else {
-      groupMap.getOrElseUpdate( gname, gridWriter.addGroup( getNewGroup( groupMap, oldGroup.getParentGroup, gridWriter ), gname ) )
-    }
-  }
-
   def testNc4(): Unit = {
     val iospClass = this.getClass.getClassLoader.loadClass("ucar.nc2.jni.netcdf.Nc4Iosp")
     val ctor = iospClass.getConstructor(classOf[NetcdfFileWriter.Version])
@@ -132,7 +125,6 @@ object CDGrid extends Loggable {
 
     logger.info( s" Processing collection file ${collectionFile}" )
     val ncDataset: NetcdfDataset = NetcdfDataset.openDataset(collectionFile)
-    val groupMap: mutable.HashMap[String,nc2.Group] = mutable.HashMap.empty[String,nc2.Group]
     val localDims = ncDataset.getDimensions.map( d => AggregationWriter.getName(d) )
     for (d <- ncDataset.getDimensions; dname = AggregationWriter.getName(d); if !dimList.contains(dname)) {
       val dimension = gridWriter.addDimension(null, dname, d.getLength)
@@ -144,9 +136,7 @@ object CDGrid extends Loggable {
         getBoundsVar(coordAxis) foreach ( bndsVarName =>
           Option( ncDataset.findVariable(bndsVarName) ) foreach ( boundsVar => {
             if( writeSpatialBounds || (coordAxis.getAxisType == AxisType.Time) ) {
-              val oldGroup = cvar.getGroup
-              val newGroup = getNewGroup(groupMap, oldGroup, gridWriter)
-              val newBoundsVar: nc2.Variable = gridWriter.addVariable(newGroup, boundsVar.getShortName, boundsVar.getDataType, boundsVar.getDimensions)
+              val newBoundsVar: nc2.Variable = gridWriter.addVariable(null, boundsVar.getShortName, boundsVar.getDataType, boundsVar.getDimensions)
               bndsVarsMap += ( bndsVarName -> ( boundsVar, Some(newBoundsVar) ) )
             } else {
               bndsVarsMap += ( bndsVarName -> ( boundsVar, None ) )
@@ -162,9 +152,7 @@ object CDGrid extends Loggable {
         case coordAxis: CoordinateAxis => if (coordAxis.getAxisType == AxisType.Time) { EDTime.ucarDatatype } else { cvar.getDataType }
         case x => cvar.getDataType
       }
-      val oldGroup = cvar.getGroup
-      val newGroup = getNewGroup(groupMap, oldGroup, gridWriter)
-      val newVar: nc2.Variable = gridWriter.addVariable(newGroup, varName, dataType, getDimensionNames( cvar.getDimensionsString.split(' '), localDims ).mkString(" "))
+      val newVar: nc2.Variable = gridWriter.addVariable(null, varName, dataType, getDimensionNames( cvar.getDimensionsString.split(' '), localDims ).mkString(" "))
       if( cvar.isCoordinateVariable && (cvar.getRank == 1) ) {
         cvarOrigins += (collectionFile -> (cvarOrigins.getOrElse(collectionFile, Seq.empty[nc2.Variable]) ++ Seq(newVar)))
       }
