@@ -27,6 +27,7 @@ import nasa.nccs.esgf.wps.ProcessManager
 import ucar.nc2._
 import ucar.nc2.write.Nc4Chunking
 
+import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
 
@@ -194,8 +195,10 @@ object CDGrid extends Loggable {
               case coordAxis1D: CoordinateAxis1D => boundsVarOpt flatMap bndsVarsMap.get match {
                   case Some((cvarBnds,newVarBnds)) =>
                     try {
-                      val bounds:  Array[Double] = ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
-//                      logger.error(s"Creating bounds in grid file $gridFilePath, shape = [ ${cvarBnds.getShape.mkString(", ")} ], len=${bounds.length}, sample = [ ${bounds.slice(0,10).mkString(", ")} ]" )
+                      val boundsBuffer = new ArrayBuffer[Double]( (2*coordAxis1D.getSize).toInt )
+                      for( index <- ( 0 until coordAxis1D.getSize.toInt ); bndsIndex = 2*index; bnds = coordAxis1D.getCoordBounds(index) ) { boundsBuffer.insertAll( 2*index, bnds ) }
+                      val bounds = boundsBuffer.toArray
+                      logger.error(s"Creating bounds in grid file $gridFilePath, shape = [ ${cvarBnds.getShape.mkString(", ")} ], len=${bounds.length}, sample = [ ${bounds.slice(0,10).mkString(", ")} ]" )
                       gridWriter.write( newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, cvarBnds.getShape, bounds ) )
                     } catch {
                       case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}:\n\t" + err.getStackTrace.mkString( "\n\t" ))
