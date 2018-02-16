@@ -195,11 +195,12 @@ object CDGrid extends Loggable {
               case coordAxis1D: CoordinateAxis1D => boundsVarOpt flatMap bndsVarsMap.get match {
                   case Some((cvarBnds,newVarBnds)) =>
                     try {
-                      val boundsBuffer = new ArrayBuffer[Double]( (2*coordAxis1D.getSize).toInt )
-                      for( index <- ( 0 until coordAxis1D.getSize.toInt ); bndsIndex = 2*index; bnds = coordAxis1D.getCoordBounds(index) ) { boundsBuffer.insertAll( 2*index, bnds ) }
-                      val bounds = boundsBuffer.toArray
-                      logger.error(s"Creating bounds in grid file $gridFilePath, shape = [ ${cvarBnds.getShape.mkString(", ")} ], len=${bounds.length}, sample = [ ${bounds.slice(0,10).mkString(", ")} ]" )
-                      gridWriter.write( newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, cvarBnds.getShape, bounds ) )
+ //                     val boundsBuffer = new ArrayBuffer[Double]( (2*coordAxis1D.getSize).toInt )
+ //                     for( index <- ( 0 until coordAxis1D.getSize.toInt ); bndsIndex = 2*index; bnds = coordAxis1D.getCoordBounds(index) ) { boundsBuffer.insertAll( 2*index, bnds ) }
+ //                     val bounds = boundsBuffer.toArray
+//                      logger.error(s"Creating bounds in grid file $gridFilePath, shape = [ ${cvarBnds.getShape.mkString(", ")} ], len=${bounds.length}, sample = [ ${bounds.slice(0,10).mkString(", ")} ]" )
+                      logger.error(s" ---> Creating bounds for var ${coordAxis1D.getShortName} in grid file $gridFilePath, bndsvar = ${cvarBnds.getShortName} " )
+                      gridWriter.write( newVarBnds, cvarBnds.read )
                     } catch {
                       case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}:\n\t" + err.getStackTrace.mkString( "\n\t" ))
                     }
