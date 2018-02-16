@@ -133,7 +133,7 @@ object CDGrid extends Loggable {
     val varTups = for (cvar <- ncDataset.getVariables) yield {
       val dataType = cvar match {
         case coordAxis: CoordinateAxis =>
-          if(coordAxis.getAxisType == AxisType.Time) ma2.DataType.LONG
+          if(coordAxis.getAxisType == AxisType.Time) EDTime.ucarDatatype
           else cvar.getDataType
         case x => cvar.getDataType
       }
