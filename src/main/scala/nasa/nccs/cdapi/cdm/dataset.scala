@@ -123,8 +123,8 @@ object CDGrid extends Loggable {
     val coordList = mutable.ListBuffer.empty[String]
     val collectionFile = aggregation.ncmlFilePath
 
-    logger.info( s" Processing collection file ${collectionFile}" )
     val ncDataset: NetcdfDataset = NetcdfDataset.openDataset(collectionFile)
+    logger.info( s" Processing collection file ${collectionFile}, variables = [ ${ncDataset.getVariables.map(_.getShortName).mkString(", ")} ]" )
     val localDims = ncDataset.getDimensions.map( d => AggregationWriter.getName(d) )
     for (d <- ncDataset.getDimensions; dname = AggregationWriter.getName(d); if !dimList.contains(dname)) {
       val dimension = gridWriter.addDimension(null, dname, d.getLength)
@@ -141,7 +141,6 @@ object CDGrid extends Loggable {
             } else {
               bndsVarsMap += ( bndsVarName -> ( boundsVar, None ) )
             }
-
           } ))
       }
       case x => Unit
@@ -185,7 +184,7 @@ object CDGrid extends Loggable {
           } else {
             gridWriter.write(newVar, coordAxis.read())
           }
-          val boundsVarOpt: Option[String] = if(writeSpatialBounds) { getBoundsVar(coordAxis) } else { None }
+          val boundsVarOpt: Option[String] = if( writeSpatialBounds || (coordAxis.getAxisType == AxisType.Time ) ) { getBoundsVar(coordAxis) } else { None }
           coordAxis match {
             case coordAxis1D: CoordinateAxis1D => boundsVarOpt flatMap bndsVarsMap.get match {
                 case Some((cvarBnds,newVarBndsOpt)) => newVarBndsOpt.map( newVarBnds =>
