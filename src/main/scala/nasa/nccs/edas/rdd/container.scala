@@ -112,7 +112,7 @@ case class CDTimeSlice( startTime: Long, endTime: Long, elements: Map[String,Arr
   def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice( startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ) )
   def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice( startTime, endTime, elements.filterKeys(key => op(key) ) )
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
-  def element( id: String ): Option[ArraySpec] = elements.get( id )
+  def element( id: String ): Option[ArraySpec] =  elements find { case (key,value) => key.split(':').last.equals(id) } map ( _._2 )
   def isEmpty = elements.isEmpty
   def findElements( id: String ): Iterable[ArraySpec] = ( elements filter { case (key,array) => key.split(':').last.equals(id) } ) values
   def contains( other_startTime: Long ): Boolean = { ( other_startTime >= startTime ) && ( other_startTime <= endTime ) }
