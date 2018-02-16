@@ -200,7 +200,7 @@ object CDGrid extends Loggable {
  //                     val bounds = boundsBuffer.toArray
 //                      logger.error(s"Creating bounds in grid file $gridFilePath, shape = [ ${cvarBnds.getShape.mkString(", ")} ], len=${bounds.length}, sample = [ ${bounds.slice(0,10).mkString(", ")} ]" )
                       logger.error(s" ---> Creating bounds for var ${coordAxis1D.getShortName} in grid file $gridFilePath, bndsvar = ${cvarBnds.getShortName} " )
-                      gridWriter.write( newVarBnds, cvarBnds.read )
+                      gridWriter.write( newVarBnds, cvarBnds.read.reshape( cvarBnds.getShape ) )
                     } catch {
                       case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}: " + err.toString )
                     }
