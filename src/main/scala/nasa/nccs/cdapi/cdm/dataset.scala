@@ -194,7 +194,9 @@ object CDGrid extends Loggable {
               case coordAxis1D: CoordinateAxis1D => boundsVarOpt flatMap bndsVarsMap.get match {
                   case Some((cvarBnds,newVarBnds)) =>
                     try {
-                      gridWriter.write( newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, coordAxis1D.getBound2))
+                      val bounds:  Array[Double] = coordAxis1D.getBound2 // ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
+                      val shape = cvarBnds.getShape
+                      gridWriter.write( newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, shape, bounds ) )
                     } catch {
                       case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}: " + err.toString)
                     }
