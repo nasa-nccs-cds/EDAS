@@ -157,7 +157,9 @@ object EDASExecutionManager extends Loggable {
       //      assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
       val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
       if( dataMap.values.isEmpty ) { return "" }
-      val shape = dataMap.values.head.getShape
+      val raw_shape: Array[Int] = dataMap.values.head.getShape
+      val shape: Array[Int] = if( raw_shape.length == targetGrid.grid.axes.length-1 ) { Array[Int](1) ++ raw_shape } else { raw_shape }
+      assert( shape.length == targetGrid.grid.axes.length, s"Array shape mismatch: [ ${shape.mkString(", ")} ] vs [ ${targetGrid.grid.axes.mkString(", ")} ]" )
       val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
       val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>

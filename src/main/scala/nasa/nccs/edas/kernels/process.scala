@@ -764,7 +764,6 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
       val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
       val rID = UID()
-      logger.info("Gateway: Executing operation %s, operation metadata: { %s }".format(context.operation.identifier,context_metadata.mkString(", ")))
       worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata )
 
       val resultItems: Iterable[(String,ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
@@ -773,6 +772,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
         context.operation.rid + ":" + uid -> result
       }
       val reprocessed_input_map = resultItems.toMap
+      logger.info("Gateway: Executed operation %s, time: %.2f, operation metadata: { %s }".format(context.operation.identifier, (System.nanoTime-t0)/1.0E9, context_metadata.mkString(", ")))
       CDTimeSlice( inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map )
     }
   }
