@@ -119,6 +119,7 @@ object CDGrid extends Loggable {
   }
 
   def createGridFile( aggregation: Aggregation ) = {
+    val writeSpatialBounds = false
     val gridFilePath: String = aggregation.gridFilePath
     val gridWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf4, gridFilePath, null)
     logger.info( s" %G% Creating #grid# file $gridFilePath from aggregation: [${aggregation.id}]" )
@@ -152,7 +153,7 @@ object CDGrid extends Loggable {
       newVarsMap += ( varName -> newVar )
 
       cvar match {
-        case coordAxis: CoordinateAxis => {
+        case coordAxis: CoordinateAxis => if( writeSpatialBounds ) {
           getBoundsVar(coordAxis) foreach ( bndsVarName =>
             Option( ncDataset.findVariable(bndsVarName) )
               foreach ( boundsVar => {
