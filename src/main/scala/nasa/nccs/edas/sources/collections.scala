@@ -331,10 +331,7 @@ class CollectionGridFileLoader( val collId: String, val collectionFile: File ) e
     logger.info(s" ---> Loading collection $collId")
     val optCollection = Collections.addCollection(collId, Some(collectionFile.toString))
     optCollection foreach { collection => collection.aggregations.values foreach { aggregation =>
-        if (!new File(aggregation.gridFilePath).exists) {
-          logger.info(s"Creating grid file ${aggregation.gridFilePath} for collection ${collId}")
-          CDGrid.createGridFile(aggregation)
-        }
+        if (!new File(aggregation.gridFilePath).exists) { CDGrid.createGridFile(aggregation) }
       }
     }
   }

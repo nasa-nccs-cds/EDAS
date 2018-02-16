@@ -165,7 +165,7 @@ object CDGrid extends Loggable {
           case None => Option(coordAxis.findAttributeIgnoreCase("bounds")) match {
             case Some(attr) => Some(attr.getStringValue)
             case None =>
-              logger.warn("Can't locate bounds for axis " + coordAxis.getShortName + " in file " + collectionFile + ", vars = " + ncDataset.getVariables.map(_.getShortName).mkString(",") )
+//              logger.warn("Can't locate bounds for axis " + coordAxis.getShortName + " in file " + collectionFile + ", vars = " + ncDataset.getVariables.map(_.getShortName).mkString(",") )
               None
           }
         }
@@ -184,7 +184,11 @@ object CDGrid extends Loggable {
               boundsVarOpt flatMap varMap.get match {
                 case Some((cvarBnds, newVarBnds)) =>
                   val bounds: Array[Double] = ((0 until coordAxis1D.getShape(0)) map (index => coordAxis1D.getCoordBounds(index))).toArray.flatten
-                  gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, bounds))
+                  try {
+                    gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, bounds))
+                  } catch {
+                    case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}, shape: ${cvarBnds.getShape}, data length: ${bounds.length}: " + err.toString )
+                  }
                 case None => Unit
               }
             case x => Unit
