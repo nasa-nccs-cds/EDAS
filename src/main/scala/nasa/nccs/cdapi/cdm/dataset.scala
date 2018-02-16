@@ -153,7 +153,7 @@ object CDGrid extends Loggable {
       newVarsMap += ( varName -> newVar )
 
       cvar match {
-        case coordAxis: CoordinateAxis => if( writeSpatialBounds ) {
+        case coordAxis: CoordinateAxis => if( writeSpatialBounds || (coordAxis.getAxisType == AxisType.Time) ) {
           getBoundsVar(coordAxis) foreach ( bndsVarName =>
             Option( ncDataset.findVariable(bndsVarName) )
               foreach ( boundsVar => {
@@ -185,36 +185,36 @@ object CDGrid extends Loggable {
     for ((collectionFile, newVars ) <- cvarOrigins.iterator ) {
       for (newVar <- newVars; cvar = ncDataset.findVariable(newVar.getFullName)) cvar match {
         case coordAxis: CoordinateAxis =>
-          val boundsVarOpt: Option[String] = getBoundsVar(coordAxis)
           if (coordAxis.getAxisType == AxisType.Time) {
             val (time_values, bounds): (Array[Double], Array[Array[Double]]) = FileHeader.getTimeValues(ncDataset, coordAxis)
             newVar.addAttribute(new Attribute(CDM.UNITS, EDTime.units))
             gridWriter.write(newVar, ma2.Array.factory(EDTime.ucarDatatype, coordAxis.getShape, time_values))
           } else {
             gridWriter.write(newVar, coordAxis.read())
-            coordAxis match {
-              case coordAxis1D: CoordinateAxis1D => boundsVarOpt flatMap bndsVarsMap.get match {
-                  case Some((cvarBnds,newVarBnds)) =>
-                    try {
- //                     val boundsBuffer = new ArrayBuffer[Double]( (2*coordAxis1D.getSize).toInt )
- //                     for( index <- ( 0 until coordAxis1D.getSize.toInt ); bndsIndex = 2*index; bnds = coordAxis1D.getCoordBounds(index) ) { boundsBuffer.insertAll( 2*index, bnds ) }
- //                     val bounds = boundsBuffer.toArray
+          }
+          val boundsVarOpt: Option[String] = if(writeSpatialBounds) { getBoundsVar(coordAxis) } else { None }
+          coordAxis match {
+            case coordAxis1D: CoordinateAxis1D => boundsVarOpt flatMap bndsVarsMap.get match {
+                case Some((cvarBnds,newVarBnds)) =>
+                  try {
+//                     val boundsBuffer = new ArrayBuffer[Double]( (2*coordAxis1D.getSize).toInt )
+//                     for( index <- ( 0 until coordAxis1D.getSize.toInt ); bndsIndex = 2*index; bnds = coordAxis1D.getCoordBounds(index) ) { boundsBuffer.insertAll( 2*index, bnds ) }
+//                     val bounds = boundsBuffer.toArray
 //                      logger.error(s"Creating bounds in grid file $gridFilePath, shape = [ ${cvarBnds.getShape.mkString(", ")} ], len=${bounds.length}, sample = [ ${bounds.slice(0,10).mkString(", ")} ]" )
-                      logger.error(s" ---> Creating bounds for var ${coordAxis1D.getShortName} in grid file $gridFilePath, bndsvar = ${cvarBnds.getShortName} " )
-                      gridWriter.write( newVarBnds, cvarBnds.read.reshape( cvarBnds.getShape ) )
-                    } catch {
-                      case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}: " + err.toString )
-                    }
-                  case None => Unit
-                }
-              case x => Unit
-            }
+                    logger.error(s" ---> Creating bounds for var ${coordAxis1D.getShortName} in grid file $gridFilePath, bndsvar = ${cvarBnds.getShortName} " )
+                    gridWriter.write( newVarBnds, cvarBnds.read.reshape( cvarBnds.getShape ) )
+                  } catch {
+                    case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}: " + err.toString )
+                  }
+                case None => Unit
+              }
+            case x => Unit
           }
         case x => Unit
       }
     }
     ncDataset.close()
-    logger.info( s"Finished Writing Grid File $gridFilePath" )
+//    logger.info( s"Finished Writing Grid File $gridFilePath" )
     gridWriter.close()
   }
 }

@@ -267,7 +267,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val nOutputsPerInput: Int = options.getOrElse("nOutputsPerInput","1").toInt
   def getInputArrays( inputs: CDTimeSlice, context: KernelContext ): List[ArraySpec] =
     context.operation.inputs.map( id => inputs.element( id ).getOrElse {
-      throw new Exception(s"Can't find input ${id} for kernel ${identifier}")
+      throw new Exception(s"Can't find input ${id} for kernel ${identifier}, availiable inputs = ${context.operation.inputs.mkString(",")}")
     } )
 
   val mapCombineOp: Option[ReduceOpFlt] = options.get("mapOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
