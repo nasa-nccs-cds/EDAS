@@ -172,7 +172,7 @@ object CDGrid extends Loggable {
         if( coordAxis.getAxisType == AxisType.Time ) {
           val ( time_values, bounds ) = FileHeader.getTimeValues( ncDataset, coordAxis )
           newVar.addAttribute( new Attribute( CDM.UNITS, EDTime.units ) )
-          gridWriter.write( newVar, ma2.Array.factory( ma2.DataType.LONG, coordAxis.getShape, time_values ) )
+          gridWriter.write( newVar, ma2.Array.factory( EDTime.ucarDatatype, coordAxis.getShape, time_values ) )
           boundsVarOpt flatMap varMap.get match {
             case Some( ( cvarBnds, newVarBnds )  ) => gridWriter.write( newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, cvarBnds.getShape, bounds ) )
             case None => Unit
