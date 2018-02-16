@@ -174,7 +174,7 @@ object CDGrid extends Loggable {
           newVar.addAttribute( new Attribute( CDM.UNITS, EDTime.units ) )
           gridWriter.write( newVar, ma2.Array.factory( EDTime.ucarDatatype, coordAxis.getShape, time_values ) )
           boundsVarOpt flatMap varMap.get match {
-            case Some( ( cvarBnds, newVarBnds )  ) => gridWriter.write( newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, cvarBnds.getShape, bounds ) )
+            case Some( ( cvarBnds, newVarBnds )  ) => gridWriter.write( newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, cvarBnds.getShape, bounds.flatten ) )
             case None => Unit
           }
         } else {
