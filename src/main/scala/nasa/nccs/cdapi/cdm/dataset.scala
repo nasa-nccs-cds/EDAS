@@ -125,7 +125,7 @@ object CDGrid extends Loggable {
     logger.info( s" %G% Creating #grid# file $gridFilePath from aggregation: [${aggregation.id}]" )
     val cvarOrigins = mutable.HashMap.empty[String,Seq[nc2.Variable]]
     val newVarsMap = mutable.HashMap.empty[String,nc2.Variable]
-    val bndsVarsMap = mutable.HashMap.empty[String,(nc2.Variable,nc2.Variable)]
+    val bndsVarsMap = mutable.HashMap.empty[String,(nc2.Variable,Option[nc2.Variable])]
     val dimList = mutable.ListBuffer.empty[String]
     val coordList = mutable.ListBuffer.empty[String]
     val collectionFile = aggregation.ncmlFilePath
@@ -139,7 +139,25 @@ object CDGrid extends Loggable {
       dimList += dname
     }
 
-    val varTups = for (cvar <- ncDataset.getVariables; varName = AggregationWriter.getName(cvar); if !newVarsMap.contains( varName ) ) yield {
+    for ( cvar <- ncDataset.getVariables ) cvar match {
+      case coordAxis: CoordinateAxis =>  {
+        getBoundsVar(coordAxis) foreach ( bndsVarName =>
+          Option( ncDataset.findVariable(bndsVarName) ) foreach ( boundsVar => {
+            if( writeSpatialBounds || (coordAxis.getAxisType == AxisType.Time) ) {
+              val oldGroup = cvar.getGroup
+              val newGroup = getNewGroup(groupMap, oldGroup, gridWriter)
+              val newBoundsVar: nc2.Variable = gridWriter.addVariable(newGroup, boundsVar.getShortName, boundsVar.getDataType, boundsVar.getDimensions)
+              bndsVarsMap += ( bndsVarName -> ( boundsVar, Some(newBoundsVar) ) )
+            } else {
+              bndsVarsMap += ( bndsVarName -> ( boundsVar, None ) )
+            }
+
+          } ))
+      }
+      case x => Unit
+    }
+
+    val varTups = for (cvar <- ncDataset.getVariables; varName = AggregationWriter.getName(cvar); if !newVarsMap.contains( varName ) && !bndsVarsMap.contains( cvar.getFullNameEscaped ) ) yield {
       val dataType = cvar match {
         case coordAxis: CoordinateAxis => if (coordAxis.getAxisType == AxisType.Time) { EDTime.ucarDatatype } else { cvar.getDataType }
         case x => cvar.getDataType
@@ -151,19 +169,6 @@ object CDGrid extends Loggable {
         cvarOrigins += (collectionFile -> (cvarOrigins.getOrElse(collectionFile, Seq.empty[nc2.Variable]) ++ Seq(newVar)))
       }
       newVarsMap += ( varName -> newVar )
-
-      cvar match {
-        case coordAxis: CoordinateAxis => if( writeSpatialBounds || (coordAxis.getAxisType == AxisType.Time) ) {
-          getBoundsVar(coordAxis) foreach ( bndsVarName =>
-            Option( ncDataset.findVariable(bndsVarName) )
-              foreach ( boundsVar => {
-              val newBoundsVar: nc2.Variable = gridWriter.addVariable(newGroup, boundsVar.getShortName, boundsVar.getDataType, boundsVar.getDimensions)
-              bndsVarsMap += ( bndsVarName -> ( boundsVar, newBoundsVar) )
-            } ))
-        }
-        case x => Unit
-      }
-
       varName -> (cvar -> newVar)
     }
     val varMap= Map( varTups:_* )
@@ -195,17 +200,17 @@ object CDGrid extends Loggable {
           val boundsVarOpt: Option[String] = if(writeSpatialBounds) { getBoundsVar(coordAxis) } else { None }
           coordAxis match {
             case coordAxis1D: CoordinateAxis1D => boundsVarOpt flatMap bndsVarsMap.get match {
-                case Some((cvarBnds,newVarBnds)) =>
+                case Some((cvarBnds,newVarBndsOpt)) => newVarBndsOpt.map( newVarBnds =>
                   try {
 //                     val boundsBuffer = new ArrayBuffer[Double]( (2*coordAxis1D.getSize).toInt )
 //                     for( index <- ( 0 until coordAxis1D.getSize.toInt ); bndsIndex = 2*index; bnds = coordAxis1D.getCoordBounds(index) ) { boundsBuffer.insertAll( 2*index, bnds ) }
 //                     val bounds = boundsBuffer.toArray
 //                      logger.error(s"Creating bounds in grid file $gridFilePath, shape = [ ${cvarBnds.getShape.mkString(", ")} ], len=${bounds.length}, sample = [ ${bounds.slice(0,10).mkString(", ")} ]" )
-                    logger.error(s" ---> Creating bounds for var ${coordAxis1D.getShortName} in grid file $gridFilePath, bndsvar = ${cvarBnds.getShortName} " )
-                    gridWriter.write( newVarBnds, cvarBnds.read.reshape( cvarBnds.getShape ) )
+                      logger.error(s" ---> Creating bounds for var ${coordAxis1D.getShortName} in grid file $gridFilePath, bndsvar = ${cvarBnds.getShortName} " )
+                      gridWriter.write( newVarBnds, cvarBnds.read.reshape( cvarBnds.getShape ) )
                   } catch {
                     case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}: " + err.toString )
-                  }
+                  })
                 case None => Unit
               }
             case x => Unit
