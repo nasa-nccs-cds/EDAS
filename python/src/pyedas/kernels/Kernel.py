@@ -96,6 +96,7 @@ class CDMSKernel(Kernel):
         if( gridFilePath ): result_var.createattribute( "gridfile", gridFilePath )
         result_var.createattribute( "origin", input.origin )
         result = cdmsArray.createResult( task, input, result_var )
+        self.logger.info( " #RS# Creating result({0}), shape = {1}".format( result.id, str(result.shape) ))
         if self.cacheReturn[0]: self.cached_results[ result.id ] = result
         if self.cacheReturn[1]: rv = result
         return rv

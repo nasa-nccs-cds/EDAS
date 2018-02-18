@@ -157,8 +157,8 @@ object EDASExecutionManager extends Loggable {
       //      assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
       val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
       if( dataMap.values.isEmpty ) { return "" }
-      val raw_shape: Array[Int] = dataMap.values.head.getShape
-      val shape: Array[Int] = if( raw_shape.length == targetGrid.grid.axes.length-1 ) { Array[Int](1) ++ raw_shape } else { raw_shape }
+      val shape: Array[Int] = dataMap.values.head.getShape
+//      val shape: Array[Int] = if( raw_shape.length == targetGrid.grid.axes.length-1 ) { Array[Int](1) ++ raw_shape } else { raw_shape }
       assert( shape.length == targetGrid.grid.axes.length, s"Array shape mismatch: [ ${shape.mkString(", ")} ] vs [ ${targetGrid.grid.axes.mkString(", ")} ]" )
       val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
@@ -459,6 +459,8 @@ class EDASExecutionManager extends WPSServer with Loggable {
           val resultFile = Kernel.getResultFile(resId)
           if (resultFile.exists) List(resultFile.getAbsolutePath)
           else {
+            val result_shape = tvar.result.slices.headOption.fold("")( _.elements.values.head.shape.mkString(",") )
+            logger.info( s" #RS# Result ${resId} Shape: [${result_shape.mkString(",")}]")
             val resultMap = tvar.result.concatSlices.slices.flatMap( _.elements.headOption ).toMap.mapValues( _.toCDFloatArray )
             List(saveResultToFile(executor, resultMap, tvar.result.metadata.toMap, List.empty[nc2.Attribute])).filter( ! _.isEmpty )
           }
