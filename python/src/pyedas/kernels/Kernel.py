@@ -1,8 +1,7 @@
 from abc import ABCMeta, abstractmethod
-import logging, os, cdms2, time
+import logging, cdms2, time, os, socket
 from pyedas.messageParser import mParse
 from pyedas.edasArray import cdmsArray
-import cdms2, time, os, cdutil
 
 class KernelSpec:
     def __init__( self, name, title, description, **kwargs ):
@@ -95,6 +94,7 @@ class CDMSKernel(Kernel):
         gridFilePath = self.saveGridFile( result_var.id, result_var )
         if( gridFilePath ): result_var.createattribute( "gridfile", gridFilePath )
         result_var.createattribute( "origin", input.origin )
+        result_var.createattribute( "worker", socket.gethostname() )
         result = cdmsArray.createResult( task, input, result_var )
         self.logger.info( " #RS# Creating result({0}), shape = {1}".format( result.id, str(result.shape) ))
         if self.cacheReturn[0]: self.cached_results[ result.id ] = result
