@@ -82,7 +82,6 @@ class RegridKernel(CDMSKernel):
                 raise Exception(" Can't find variable id {0} ({1}) in inputs {2} ".format( vid, input_id, str( _inputs.keys() ) ))
             else:
                 self.logger.info( "Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}".format( vid, _input.name, _input.collection, _input.gridFile ) )
-                variable = _input.getVariable().squeeze()
                 ingrid = _input.getGrid()
                 inlatBounds, inlonBounds = ingrid.getBounds()
                 self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) )
