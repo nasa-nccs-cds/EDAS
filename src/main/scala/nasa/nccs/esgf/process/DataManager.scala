@@ -74,6 +74,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def releaseBatch: Unit = _inputsRDD.releaseBatch
   def getRegridSpec: Option[RegridSpec] = getGridRefInput.map( opInput => RegridSpec( opInput.fragmentSpec ) )
   def variableRecs: Map[String,VariableRecord] = _inputsRDD.variableRecs
+  def nSlices = _inputsRDD.nSlices
 
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Iterable[String] = {
     for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )

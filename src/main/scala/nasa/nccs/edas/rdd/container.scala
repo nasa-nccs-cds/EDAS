@@ -468,6 +468,7 @@ class RDDContainer extends Loggable {
   def section( section: CDSection ): Unit = vault.map( _.section(section) )
   def release( keys: Iterable[String] ): Unit = { vault.release( keys ) }
   def variableRecs: Map[String,VariableRecord] = value.variableRecords
+  def nSlices = _vault.fold(-1)( _.nSlices.toInt )
 
   private def initialize( init_value: TimeSliceRDD, contents: List[String] ) = {
     _vault = Some( new RDDVault( init_value ) )
@@ -486,6 +487,7 @@ class RDDContainer extends Loggable {
       assert( records.nslices <= 1, "UNIMPLEMENTED FEATURE: TimeSliceCollection -> RDDVault")
       update( _rdd.map( slice => slice ++ records.slices.headOption.getOrElse( CDTimeSlice.empty ) ) )
     }
+    def nSlices = _rdd.nSlices
   }
   def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
 
