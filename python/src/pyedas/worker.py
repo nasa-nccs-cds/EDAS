@@ -87,9 +87,7 @@ class Worker(object):
         self.result_socket.send( header )
 
     def sendInfoMessage( self, info ):
-        msg =  "Worker  [{0}:{1}] Info: {2}\n".format( platform.node(), socket.gethostname(), info )
-        self.logger.info( msg )
-        header = "|".join( [ "info-"+str(os.getpid()), msg ] )
+        header = "|".join( [ "info-"+platform.node()+"-"+str(os.getpid()), info ] )
         self.result_socket.send( header )
 
     def processTask(self, task ):

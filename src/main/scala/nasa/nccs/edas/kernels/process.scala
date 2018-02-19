@@ -740,26 +740,26 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
     val t0 = System.nanoTime
     val targetGrid: GridContext = context.grid
     val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
-    val ( acceptable_array_map, regrid_array_map ) = inputs.elements.partition { case ( key, array ) => context.getInputVariableRecord(key).fold(true)( _ == regridSpec ) }
+    val ( acceptable_array_map, regrid_array_map ) = if( context.operation.getConfParm("grid").isEmpty ) { inputs.elements.partition { case ( key, array ) => context.getInputVariableRecord(key).fold(true)( _ == regridSpec ) } } else { ( Map.empty, inputs.elements ) }
     if ( regrid_array_map.isEmpty ) {
       logger.info(" #S#: CDMSRegridKernel, inputs[%d] = [ %s ] match RegridSpec: %s".format( inputs.startTime, inputs.elements.keys.mkString(", "), regridSpec.toString ) )
       inputs
     } else {
+      val optGridParm: Option[String] = context.operation.getConfParm("grid")
       val workerManager: PythonWorkerPortal  = PythonWorkerPortal.getInstance
       val worker: PythonWorker = workerManager.getPythonWorker
       logger.info(" #S#: Starting CDMSRegridKernel, inputs[%d] = [ %s ]".format( inputs.startTime, inputs.elements.keys.mkString(", ") ) )
 
-      for ((uid, input_array) <- acceptable_array_map) {
-        val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
-        val data_array = input_array.toHeapFltArray(optVarRec.fold(targetGrid.gridFile)(_.gridFilePath), Map( "collection"->targetGrid.collectionId, "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
-        logger.info(s" #S# Sending acceptable Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]\n ** varRec=${optVarRec.fold(s"{gridfile=${targetGrid.gridFile}}")(_.toString)}\n ** metadata = { ${data_array.metadata.toString} }")
-        worker.sendArrayMetadata( uid, data_array )
+      for ((uid, input_array) <- acceptable_array_map) context.getInputVariableRecord(uid) foreach  { varRec =>
+        val data_array = input_array.toHeapFltArray(varRec.gridFilePath, Map("collection" -> targetGrid.collectionId, "name" -> varRec.varName, "dimensions" -> varRec.dimensions))
+        logger.info(s" #S# Sending acceptable Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]\n ** varRec=${varRec.toString}\n ** metadata = { ${data_array.metadata.toString} }")
+        worker.sendArrayMetadata(uid, data_array)
       }
-      for ((uid, input_array) <- regrid_array_map) {
-        val optVarRec: Option[VariableRecord] = context.getInputVariableRecord(uid)
-        val data_array = input_array.toHeapFltArray(optVarRec.fold("")(_.gridFilePath), Map( "collection"->optVarRec.fold(targetGrid.collectionId)(_.collection) , "name"->optVarRec.fold("")(_.varName), "dimensions"->optVarRec.fold("")(_.dimensions)))
-        logger.info(s" #S# Sending regrid Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]\n ** varRec=${optVarRec.fold("")(_.toString)}\n ** metadata = { ${data_array.metadata.toString} }")
-        worker.sendRequestInput( uid, data_array )
+
+      for ((uid, input_array) <- regrid_array_map) context.getInputVariableRecord(uid) foreach  { varRec =>
+        val data_array = input_array.toHeapFltArray(varRec.gridFilePath, Map("collection" -> varRec.collection, "name" -> varRec.varName, "dimensions" -> varRec.dimensions ))
+        logger.info(s" #S# Sending regrid Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]\n ** varRec=${varRec.toString}\n ** metadata = { ${data_array.metadata.toString} }")
+        worker.sendRequestInput(uid, data_array)
       }
 
       val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)

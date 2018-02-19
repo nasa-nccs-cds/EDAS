@@ -12,7 +12,7 @@ import org.apache.commons.lang.RandomStringUtils
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import org.scalatest.{BeforeAndAfter, FunSuite, Ignore}
-import ucar.nc2.Variable
+import ucar.nc2.{NetcdfFileWriter, Variable}
 
 import scala.collection.mutable.ListBuffer
 
@@ -162,13 +162,12 @@ class DefaultTestSuite extends EDASTestSuite {
 
 
   test("pyRegridTest")  { if(test_regrid) {
-    val unverified_result: CDFloatArray = CDFloatArray( Array( 238.95024, 238.95496, 238.95744, 238.95612, 238.95665, 238.95854, 238.95789, 238.95601, 238.95627, 238.95576, 238.95413, 238.95435, 238.95703, 238.95584, 238.95236, 238.94908, 238.94554, 238.94348, 238.94159, 238.94058, 238.93684, 238.93082, 238.92488, 238.91869, 238.9234, 238.92516, 238.91739, 238.91312, 238.91335, 238.91077, 238.90666, 238.902, 238.89793, 238.90051 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.cdmsModule.regrid","input":"v1","domain":"d0","grid":"gaussian","shape":"128"}]]"""
-    val result_node = executeTest(datainputs)
-    val result_data = CDFloatArray( getResultData( result_node ) ).sample( 35 )
-    println( " ** CDMS Result:       " + result_data.mkDataString( ", " ) )
-    println( " ** Unverified Result:       " + unverified_result.mkDataString(", ") )
-    assert( result_data.maxScaledDiff( unverified_result )  < eps, s" Regrid result does not match previously computed  value")
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
+    val result_node = executeTest(datainputs, Map( "saveLocalFile" -> "true" ) )
+    val result_array = CDFloatArray( getResultData( result_node ) )
+    println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
+    println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
+//    webProcessManager.apiManager.getServiceProvider("edas").
   }}
 
   test("pyRegridTest1") { if(test_regrid)  {

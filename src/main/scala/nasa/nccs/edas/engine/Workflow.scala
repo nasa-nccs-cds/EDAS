@@ -2,6 +2,7 @@ package nasa.nccs.edas.engine
 
 import nasa.nccs.caching.{BatchSpec, RDDTransientVariable, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{OperationInput, _}
+import nasa.nccs.edas.engine.EDASExecutionManager.saveResultToFile
 import nasa.nccs.edas.kernels._
 import nasa.nccs.edas.rdd.{TimeSliceCollection, VariableRecord}
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
@@ -406,7 +407,12 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 
   def cacheResult( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): String = {
     if( executionResult.holdsData ) {
-      collectionDataCache.putResult(executor.requestCx.jobId, new RDDTransientVariable( executionResult.results, executor.rootNode.operation, executor.requestCx))
+      val tvar = new RDDTransientVariable( executionResult.results, executor.rootNode.operation, executor.requestCx)
+      collectionDataCache.putResult(executor.requestCx.jobId, tvar )
+      if( ! executor.requestCx.getConf( "saveLocalFile", "" ).isEmpty ) {
+        val resultMap = tvar.result.concatSlices.slices.flatMap(_.elements.headOption).toMap.mapValues(_.toCDFloatArray)
+        saveResultToFile(executor, resultMap, tvar.result.metadata, List.empty[nc2.Attribute])
+      }
     }
     executor.requestCx.jobId
   }

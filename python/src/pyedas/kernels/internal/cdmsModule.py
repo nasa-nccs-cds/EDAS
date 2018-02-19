@@ -37,72 +37,78 @@ class RegridKernel(CDMSKernel):
         :type _inputs: dict[str,npArray]
         """
 #        log_file = open("/tmp/edasadm/logs/debug_log_file.txt","w")
-        cdms2.setAutoBounds(2)
-        t0 = time.time()
-        mdata = task.metadata;     """:type : dict[str,str] """
-#        log_file.write( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
-        self.logger.info( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
-        gridType = str( mdata.get("grid","uniform") ).lower()
-        target = str( mdata.get("target","") )
-        gridSpec = str( mdata.get("gridSpec","") )
-        regridTool = str(mdata.get("regridTool", "esmf"))
-        method = str( mdata.get("method","linear") ).lower()
-        res = sa2f( self.getListParm( mdata, "res" ) )
-        shape = sa2i( self.getListParm( mdata, "shape" ) )
-        gridSection = str( mdata.get('gridSection',"") )
-        plev = sa2f( self.getListParm( mdata, "plev" ) )
-        toGrid = None
-        if( target ):
-            grid_input = _inputs.get( target, None )
-            if not grid_input: raise Exception( "Can't find grid variable uid: " + target + ", variable uids = " + str( _inputs.keys() ) )
-            toGrid = grid_input.getGrid()
-        else :
-            if( gridSpec ):
+        results = []
+        if( len(_inputs) == 0 ):
+            self.logger.info( "No inputs to operation; returning empty result" )
+        else:
+            cdms2.setAutoBounds(2)
+            t0 = time.time()
+            mdata = task.metadata;     """:type : dict[str,str] """
+    #        log_file.write( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
+            gridType = str( mdata.get("grid","uniform") ).lower()
+            target = str( mdata.get("target","") )
+            gridSpec = str( mdata.get("gridSpec","") )
+            regridTool = str(mdata.get("regridTool", "esmf"))
+            method = str( mdata.get("method","linear") ).lower()
+            res = sa2f( self.getListParm( mdata, "res" ) )
+            shape = sa2i( self.getListParm( mdata, "shape" ) )
+            gridSection = str( mdata.get('gridSection',"") )
+            plev = sa2f( self.getListParm( mdata, "plev" ) )
+            self.logger.info("\n Execute REGRID -> " + gridType + " Task with metadata: " + str(task.metadata) + "\n")
+
+            toGrid = None
+            if ("gaussian" in gridType):
+                toGrid = cdms2.createGaussianGrid(shape[0])
+                self.logger.info("createGaussianGrid")
+            elif ("uniform" in gridType):
+                origin = sa2f(self.getListParm(mdata, "origin", "0,-90"))
+                if (shape):
+                    if (not res): res = [(360.0 - origin[0]) / shape[0], (90.0 - origin[1]) / shape[1]]
+                else:
+                    if (not res):  raise Exception("Must define either 'shape' or 'res' parameter in regrid kernel")
+                    shape = [int(round((360.0 - origin[0]) / res[0])), int(round((90.0 - origin[1]) / res[1]))]
+                toGrid = cdms2.createUniformGrid(origin[0], shape[0], res[0], origin[1], shape[1], res[1])
+                self.logger.info("createUniformGrid")
+            elif( target ):
+                grid_input = _inputs.get( target, None )
+                if not grid_input: raise Exception( "Can't find grid variable uid: " + target + ", variable uids = " + str( _inputs.keys() ) )
+                self.logger.info("create Grid from target")
+                toGrid = grid_input.getGrid()
+            elif( gridSpec ):
                 toGrid = self.getGrid( gridSpec )
                 if( gridSection ):
                     ( bounds0, bounds1 ) = self.getAxisBounds( gridSection )
                     toGrid = toGrid.subGrid( bounds0, bounds1 )
-            else:
-                if( "gaussian" in gridType ):
-                    toGrid = cdms2.createGaussianGrid( shape[0] )
-                elif( "uniform" in gridType ):
-                    origin = sa2f( self.getListParm( mdata, "origin", "0,-90" ) )
-                    if( shape ):
-                        if( not res ): res = [ (360.0-origin[0])/shape[0], (90.0-origin[1])/shape[1] ]
-                    else:
-                        if( not res ):  raise Exception( "Must define either 'shape' or 'res' parameter in regrid kernel")
-                        shape = [ int(round((360.0-origin[0])/res[0])), int(round((90.0-origin[1])/res[1])) ]
-                    toGrid = cdms2.createUniformGrid( origin[0], shape[0], res[0], origin[1], shape[1], res[1] )
+                    self.logger.info("create Grid from gridSpec")
 
-        results = []
-        for input_id in task.inputs:
-            vid = input_id.split('-')[0]
-            _input = _inputs.get( vid );    """ :type : npArray """
-            if( _input is None ):
-                raise Exception(" Can't find variable id {0} ({1}) in inputs {2} ".format( vid, input_id, str( _inputs.keys() ) ))
-            else:
-                self.logger.info( "Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}".format( vid, _input.name, _input.collection, _input.gridFile ) )
-                variable = _input.getVariable()
-                ingrid = _input.getGrid()
-                inlatBounds, inlonBounds = ingrid.getBounds()
-                self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) )
-                self.logger.info( " >> in LON Bounds shape: " + str(inlonBounds.shape) )
-                self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
-                outlatBounds, outlonBounds = toGrid.getBounds()
-                self.logger.info( " >> out LAT Bounds shape: " + str(outlatBounds.shape) )
-                self.logger.info( " >> out LON Bounds shape: " + str(outlonBounds.shape) )
-                if( not ingrid == toGrid ):
-                    self.logger.info( " Regridding Variable {0} using grid {1} ".format( variable.id, str(toGrid) ) )
-                    if self._debug:
-                        self.logger.info( " >> Input Data Sample: [ {0} ]".format( ', '.join(  [ str( variable.data.flat[i] ) for i in range(20,90) ] ) ) )
-                        self.logger.info( " >> Input Variable Shape: {0}, Grid Shape: {1}, Regrid Method: {2}, Grid Type: {3} ".format( str(variable.shape), str([len(ingrid.getLatitude()),len(ingrid.getLongitude())] ), method, toGrid.getType() ))
+            for input_id in task.inputs:
+                vid = input_id.split('-')[0]
+                _input = _inputs.get( vid );    """ :type : npArray """
+                if( _input is None ):
+                    raise Exception(" Can't find variable id {0} ({1}) in inputs {2} ".format( vid, input_id, str( _inputs.keys() ) ))
+                else:
+                    self.logger.info( "Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}".format( vid, _input.name, _input.collection, _input.gridFile ) )
+                    variable = _input.getVariable()
+                    ingrid = _input.getGrid()
+                    inlatBounds, inlonBounds = ingrid.getBounds()
+                    self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) )
+                    self.logger.info( " >> in LON Bounds shape: " + str(inlonBounds.shape) )
+                    self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
+                    outlatBounds, outlonBounds = toGrid.getBounds()
+                    self.logger.info( " >> out LAT Bounds shape: " + str(outlatBounds.shape) )
+                    self.logger.info( " >> out LON Bounds shape: " + str(outlonBounds.shape) )
+                    if( not ingrid == toGrid ):
+                        self.logger.info( " Regridding Variable {0} using grid {1} ".format( variable.id, toGrid.getType() ) )
+                        if self._debug:
+                            self.logger.info( " >> Input Data Sample: [ {0} ]".format( ', '.join(  [ str( variable.data.flat[i] ) for i in range(20,90) ] ) ) )
+                            self.logger.info( " >> Input Variable Shape: {0}, Grid Shape: {1}, Regrid Method: {2}, Grid Type: {3} ".format( str(variable.shape), str([len(ingrid.getLatitude()),len(ingrid.getLongitude())] ), method, toGrid.getType() ))
 
-                    result_var = variable.regrid(toGrid, regridTool=regridTool, regridMethod=method)
-                    self.logger.info( " >> Gridded Data Sample: [ {0} ]".format( ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
-                    results.append( self.createResult( result_var, _input, task ) )
-        t1 = time.time()
-        self.logger.info(" @RRR@ Completed regrid operation for input variables: {0} in time {1}".format( str( _inputs.keys() ), (t1 - t0)))
-#        log_file.close()
+                        result_var = variable.regrid(toGrid, regridTool=regridTool, regridMethod=method)
+                        self.logger.info( " >> Gridded Data Sample: [ {0} ]".format( ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
+                        results.append( self.createResult( result_var, _input, task ) )
+            t1 = time.time()
+            self.logger.info(" @RRR@ Completed regrid operation for input variables: {0} in time {1}".format( str( _inputs.keys() ), (t1 - t0)))
+    #        log_file.close()
         return results
 
 class AverageKernel(CDMSKernel):
