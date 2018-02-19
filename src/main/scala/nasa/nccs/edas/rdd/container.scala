@@ -486,7 +486,7 @@ class RDDContainer extends Loggable {
       assert( records.nslices <= 1, "UNIMPLEMENTED FEATURE: TimeSliceCollection -> RDDVault")
       update( _rdd.map( slice => slice ++ records.slices.headOption.getOrElse( CDTimeSlice.empty ) ) )
     }
-    def nSlices = _rdd.nSlices
+    def nSlices = { _rdd.cache; _rdd.nSlices }
   }
   def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
 

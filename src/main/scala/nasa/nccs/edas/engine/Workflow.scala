@@ -257,22 +257,29 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   }
 
   def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  TimeSliceCollection  = {
-    val t0 = System.nanoTime()
     processInputs( executor.rootNode, executor, kernelCx, batchIndex)
-    val nSlices0 = executor.nSlices
-    val t1 = System.nanoTime()
-    logger.info( s" TTT processInputs: nSlices0: ${nSlices0}, time: ${(t1-t0)/1.0E9}")
     executor.regrid( kernelCx.addVariableRecords( executor.variableRecs ) )
-    val nSlices1 = executor.nSlices
-    val t2 = System.nanoTime()
-    logger.info( s" TTT regrid: nSlices: ${nSlices1}, time: ${(t2-t1)/1.0E9}")
-    val rv = executor.execute( this, kernelCx, batchIndex )
-    val t3 = System.nanoTime()
-    logger.info( s" TTT execute: nSlices: ${rv.slices.length}, time: ${(t3-t2)/1.0E9}, total time: ${(t3-t0)/1.0E9}")
-    rv
+    executor.execute( this, kernelCx, batchIndex )
   }
 
-//  def streamMapReduceBatchRecursive( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[CDTimeSlice]] =
+//  def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  TimeSliceCollection  = {
+//    val t0 = System.nanoTime()
+//    processInputs( executor.rootNode, executor, kernelCx, batchIndex)
+//    val nSlices0 = executor.nSlices
+//    val t1 = System.nanoTime()
+//    logger.info( s" TTT processInputs: nSlices0: ${nSlices0}, time: ${(t1-t0)/1.0E9}")
+//    executor.regrid( kernelCx.addVariableRecords( executor.variableRecs ) )
+//    val nSlices1 = executor.nSlices
+//    val t2 = System.nanoTime()
+//    logger.info( s" TTT regrid: nSlices: ${nSlices1}, time: ${(t2-t1)/1.0E9}")
+//    val rv = executor.execute( this, kernelCx, batchIndex )
+//    val t3 = System.nanoTime()
+//    logger.info( s" TTT execute: nSlices: ${rv.slices.length}, time: ${(t3-t2)/1.0E9}, total time: ${(t3-t0)/1.0E9}")
+//    rv
+//  }
+
+
+  //  def streamMapReduceBatchRecursive( node: WorkflowNode, opInputs: Map[String, OperationInput], kernelContext: KernelContext, requestCx: RequestContext, batchIndex: Int ): Option[RDD[CDTimeSlice]] =
 //    prepareInputs(node, opInputs, kernelContext, requestCx, batchIndex) map ( inputs => {
 //      logger.info( s"Executing mapReduce Batch ${batchIndex.toString}" )
 //      val mapresult = node.map( inputs, kernelContext )
