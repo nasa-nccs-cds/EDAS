@@ -385,6 +385,7 @@ class subset extends Kernel(Map.empty) {
 //}
 
 class noOp extends Kernel(Map.empty) {
+  override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "NoOperation"
