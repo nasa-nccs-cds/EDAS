@@ -42,9 +42,9 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   val LNAME = if( test ) name + "-test" else name + "-"
   val LID = if( master ) "master" else UID().uid
   var newline_state = true
-  val logFileDir: Path = Paths.get( System.getProperty("user.home"), ".edas", "logs" )
+  val logFileDir: Path = Paths.get( "/tmp", System.getProperty("user.name"), "logs", LNAME + LID + ".log" )
+//  val logFileDir: Path = Paths.get( System.getProperty("user.home"), ".edas", "logs" )
   logFileDir.toFile.mkdirs()
-//  val logFilePath: Path = Paths.get( "/tmp", System.getProperty("user.name"), "logs", LNAME + LID + ".log" )
   val logFilePath: Path = logFileDir.resolve( LNAME + LID + ".log" ) // Paths.get( "/tmp", System.getProperty("user.name"), "logs", LNAME + LID + ".log" )
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
   def timestamp = Calendar.getInstance().getTime
@@ -54,23 +54,15 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
     val printer = if(Files.exists(logFilePath)) {
       new PrintWriter(logFilePath.toString)
     } else {
-      if( !logFilePath.getParent().toFile.exists() ) {
-        val perms: java.util.Set[PosixFilePermission] = PosixFilePermissions.fromString("rwxrwxrwx")
-        val fileAttr = PosixFilePermissions.asFileAttribute(perms)
-        Files.createDirectories(logFilePath.getParent, fileAttr)
-      }
+      if( !logFilePath.getParent().toFile.exists() ) { Files.createDirectories(logFilePath.getParent ) }
       new PrintWriter( logFilePath.toFile )
     }
     printer.print("LOGFILE\n"); printer.flush();
-    openLogFilePermissions( "rwxrwxrwx" )
+    val p = Runtime.getRuntime.exec( s"chmod -R a+rwX ${Paths.get( "/tmp", System.getProperty("user.name"))}")
     printer
   }
 
-  def openLogFilePermissions( perms: String ) = {
-    val folder: Path = Paths.get( "/tmp", System.getProperty("user.name"), "logs" )
-    Files.setPosixFilePermissions(folder, PosixFilePermissions.fromString(perms))
-    folder.toFile.listFiles.map( file => Files.setPosixFilePermissions( file.toPath, PosixFilePermissions.fromString(perms) ) );
-  }
+
 
   def log( level: String, msg: String, newline: Boolean  ) = try {
     var output = if(newline) { level + timeStr + ": " + msg } else { msg }
