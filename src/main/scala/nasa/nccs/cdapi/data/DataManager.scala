@@ -675,6 +675,8 @@ abstract class ArrayBase[T <: AnyVal]( val shape: Array[Int]=Array.emptyIntArray
   def uid: String = metadata.getOrElse("uid", metadata.getOrElse("collection","") + ":" + metadata.getOrElse("name",""))
   def size: Long = data.length
   override def toString = "<array shape=(%s)> %s </array>".format( shape.mkString(","), metadata.mkString(",") )
+  def getShape = shape
+  def getOrigin = origin
 
 }
 

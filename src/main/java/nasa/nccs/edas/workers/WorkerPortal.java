@@ -6,6 +6,8 @@ import nasa.nccs.utilities.Logger;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -22,9 +24,19 @@ public abstract class WorkerPortal extends Thread {
         busyWorkers = new ConcurrentLinkedQueue<Worker>();
     }
 
+    public String getProcessorAddress() {
+        String hostname = "Unknown";
+        try  {
+            InetAddress addr = InetAddress.getLocalHost();
+            hostname = addr.getHostName();
+        } catch (UnknownHostException ex)  { ; }
+        return hostname + "--" + String.valueOf(Thread.currentThread().getId());
+    }
+
     public Worker getWorker() throws Exception {
         Worker worker = availableWorkers.poll();
         if( worker == null ) { worker =  newWorker(); }
+        else { logger.info( " #PW# ("+ this.getProcessorAddress() + "): Starting new Task with existing worker"); }
         busyWorkers.add( worker );
         return worker;
     }
