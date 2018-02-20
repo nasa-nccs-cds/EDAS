@@ -99,8 +99,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
 
   def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
     _inputsRDD.addFileInputs( serverContext.spark, kernelCx, vSpecs )
-    printf( s"addFileInputs, kernel = ${kernelCx.operation.identifier}, vSpecs = [ ${vSpecs.map(_.uid).mkString(", ")} ] ")
-//    section.foreach( section => _inputsRDD.section(section) )
+    logger.info( s"addFileInputs, kernel = ${kernelCx.operation.identifier}, vSpecs = [ ${vSpecs.map(_.uid).mkString(", ")} ] ")
   }
 
   def regrid( kernelCx: KernelContext ): Unit = {

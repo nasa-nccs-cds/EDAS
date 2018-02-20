@@ -28,7 +28,7 @@ public class PythonWorkerPortal extends WorkerPortal {
         return PythonWorkerPortal.SingletonHelper.INSTANCE;
     }
 
-    protected Worker newWorker() throws Exception { return  new PythonWorker( zmqContext, logger ); }
+    protected Worker newWorker() throws Exception { return  new PythonWorker( this ); }
 
     public PythonWorker getPythonWorker() throws Exception { return (PythonWorker) getWorker(); }
 

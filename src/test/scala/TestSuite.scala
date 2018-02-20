@@ -163,18 +163,39 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("pyRegridTest")  { if(test_regrid) {
     val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
+    val result_node = executeTest(datainputs )
+    val result_array = CDFloatArray( getResultData( result_node ) )
+    println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
+    println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
+  }}
+
+  test("AveTest")  { if(test_regrid) {
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val result_node = executeTest(datainputs )
+    val result_array = CDFloatArray( getResultData( result_node ) )
+    println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
+    println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
+  }}
+
+  test("pyRegrid2Test")  { if(test_regrid) {
+    val t0 = System.nanoTime()
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
+    val result_node = executeTest(datainputs )
+    val result_array = CDFloatArray( getResultData( result_node ) )
+    println(" ### First Execution, time: %.2f".format( (System.nanoTime-t0)/1.0E9 ))
+    val t1 = System.nanoTime()
+    val datainputs1 = s"""[domain=[{"name":"d0","time":{"start":20,"end":30,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
+    val result_node1 = executeTest(datainputs1 )
+    val result_array1 = CDFloatArray( getResultData( result_node1 ) )
+    println(" ### Second Execution, time: %.2f".format( (System.nanoTime-t1)/1.0E9 ))
+  }}
+
+  test("pyRegridTest1")  { if(test_regrid) {
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":20,"end":40,"system":"indices"},"lon":{"start":10,"end":50,"system":"indices"},"time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
     val result_node = executeTest(datainputs, Map( "saveLocalFile" -> "true" ) )
     val result_array = CDFloatArray( getResultData( result_node ) )
     println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
     println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
-//    webProcessManager.apiManager.getServiceProvider("edas").
-  }}
-
-  test("pyRegridTest1") { if(test_regrid)  {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"},"level":{"start":0,"end":0,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.cdmsModule.regrid","input":"v1","domain":"d0","grid":"uniform","res":"4.0,4.0"}]]"""
-    val result_node = executeTest(datainputs)
-    val result_data = CDFloatArray( getResultData( result_node ) ).sample( 35 )
-    println( " ** CDMS Result:       " + result_data.mkDataString( ", " ) )
   }}
 
   test("subsetTestT") {

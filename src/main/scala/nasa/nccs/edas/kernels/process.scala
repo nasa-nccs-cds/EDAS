@@ -280,9 +280,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
-    logger.info( "Executing map OP for Kernel " + id + ": " + this.getClass.getName + "---> OP = " + context.operation.identifier  )
-    val result = input.map( map(context) )
-    result
+    input.map( map(context) )      // BASE
   }
 
   def filterInputs ( input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = { input }
@@ -319,8 +317,11 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
+    val t0 = System.nanoTime()
     val mapresult: TimeSliceRDD = mapRDD( input, context )
-    reduce( mapresult, context, batchIndex, merge )
+    val rv = reduce( mapresult, context, batchIndex, merge )
+    logger.info(" ### Executed mapReduce, time: %.2f".format( (System.nanoTime-t0)/1.0E9 ))
+    rv
   }
 
   def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: TimeSliceRDD): TimeSliceRDD = {
@@ -772,7 +773,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
         context.operation.rid + ":" + uid -> result
       }
       val reprocessed_input_map = resultItems.toMap
-      logger.info("Gateway: Executed operation %s, time: %.2f, operation metadata: { %s }".format(context.operation.identifier, (System.nanoTime-t0)/1.0E9, context_metadata.mkString(", ")))
+      logger.info("Gateway[T:%s]: Executed operation %s, time: %.2f, operation metadata: { %s }".format( Thread.currentThread.getId, context.operation.identifier, (System.nanoTime-t0)/1.0E9, context_metadata.mkString(", ")))
       CDTimeSlice( inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map )
     }
   }

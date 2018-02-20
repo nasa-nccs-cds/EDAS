@@ -14,7 +14,7 @@ public abstract class WorkerPortal extends Thread {
     protected ZMQ.Context zmqContext = null;
     protected ConcurrentLinkedQueue<Worker> availableWorkers = null;
     protected ConcurrentLinkedQueue<Worker> busyWorkers = null;
-    protected Logger logger = EDASLogManager.getCurrentLogger();
+    public Logger logger = EDASLogManager.getCurrentLogger();
 
     protected WorkerPortal(){
         zmqContext = ZMQ.context(1);
