@@ -34,7 +34,7 @@ public class PythonWorker extends Worker {
             for (Map.Entry<String, String> entry : sysenv.entrySet()) { env.put( entry.getKey(), entry.getValue() ); }
             pb.redirectErrorStream( true );
             pb.redirectOutput( ProcessBuilder.Redirect.appendTo( log_path.toFile() ));
-            _portal.logger.info( " #PW# ("+ portal.getProcessorAddress() + ") Starting Python Worker: pyedas.worker.Worker --> request_port = " + String.valueOf(request_port)+ ", result_port = " + String.valueOf(result_port));
+            _portal.logger.info( " #PW# ("+ _portal.getProcessorAddress() + ") Starting Python Worker: pyedas.worker.Worker --> request_port = " + String.valueOf(request_port)+ ", result_port = " + String.valueOf(result_port));
             return pb.start();
         } catch ( IOException ex ) {
             throw new Exception( "Error starting Python Worker : " + ex.toString() );
