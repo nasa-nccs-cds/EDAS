@@ -45,7 +45,7 @@ class RegridKernel(CDMSKernel):
             t0 = time.time()
             mdata = task.metadata;     """:type : dict[str,str] """
     #        log_file.write( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
-            gridType = str( mdata.get("grid","uniform") ).lower()
+            gridType = str( mdata.get("grid","") ).lower()
             target = str( mdata.get("target","") )
             gridSpec = str( mdata.get("gridSpec","") )
             regridTool = str(mdata.get("regridTool", "esmf"))
@@ -77,6 +77,8 @@ class RegridKernel(CDMSKernel):
             elif( gridSpec ):
                 toGrid = self.getGrid( gridSpec )
                 self.logger.info("create Grid from gridSpec")
+            else:
+                raise Exception( "Unable to determine target grid type in Regrid operation")
 
             if( gridSection ):
                 ( bounds0, bounds1 ) = self.getAxisBounds( gridSection )
