@@ -155,18 +155,20 @@ object EDASExecutionManager extends Loggable {
     try {
       val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
       val shape: Array[Int] = dataMap.values.head._2.getShape
-      val gridFileOpt = dataMap.values.map( _._1 ).find( _.nonEmpty )
+      val gridFileOpt: Option[String] = dataMap.values.map( _._1 ).find( _.nonEmpty )
       val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = gridFileOpt match {
         case Some( gridFilePath ) =>
           val gridDSet = NetcdfDataset.openDataset(gridFilePath)
           val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
           val dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
           gridDSet.close
+          logger.info( s" WWW Generating coords from gridspec $gridFilePath, dims = [ ${dims.map(dim => dim.getShortName + ":" + dim.getLength.toString).mkString(", ")} ]")
           ( coordAxes, dims )
         case None =>
-          val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result ${resultId}"))
+          val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
           val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
           val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
+          logger.info( s" WWW Generating coords from TargetGrid ${targetGrid.getGridFile}, dims = [ ${dims.map(dim => dim.getShortName + ":" + dim.getLength.toString).mkString(", ")} ]")
           ( coordAxes, dims )
       }
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
