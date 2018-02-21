@@ -77,12 +77,11 @@ class RegridKernel(CDMSKernel):
             elif( gridSpec ):
                 toGrid = self.getGrid( gridSpec )
                 self.logger.info("create Grid from gridSpec")
+                if( gridSection ):
+                    ( bounds0, bounds1 ) = self.getAxisBounds( gridSection )
+                    toGrid = toGrid.subGrid( bounds0, bounds1 )
             else:
                 raise Exception( "Unable to determine target grid type in Regrid operation")
-
-            if( gridSection ):
-                ( bounds0, bounds1 ) = self.getAxisBounds( gridSection )
-                toGrid = toGrid.subGrid( bounds0, bounds1 )
 
             for input_id in task.inputs:
                 vid = input_id.split('-')[0]
