@@ -23,7 +23,7 @@ class MessageParser:
     def ia2s(self,  intArray ): return ','.join( str(e) for e in intArray )
 
     def null2s(self,  val ):
-        if val is not None: return val;
+        if val is not None: return str(val);
         else: return "";
 
     def m2s(self,  map  ): return ';'.join( key+":"+self.null2s(value) for key,value in map.iteritems() )
