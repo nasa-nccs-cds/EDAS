@@ -203,7 +203,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
         aggResult = aggResult.merge( batchResult, reduceOp )
       } else {
         if( executor.requestCx.task.getUserAuth > 0 ) {
-          val resultMap = batchResult.concatSlices.slices.head.elements.mapValues( _.toCDFloatArray ).toMap
+          val resultMap = batchResult.concatSlices.slices.head.elements.mapValues( slice => (slice.gridspec, slice.toCDFloatArray) ).toMap
           resultFiles += EDASExecutionManager.saveResultToFile(executor, resultMap, batchResult.metadata.toMap, List.empty[nc2.Attribute])
           executor.releaseBatch
         } else {
@@ -410,7 +410,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       val tvar = new RDDTransientVariable( executionResult.results, executor.rootNode.operation, executor.requestCx)
       collectionDataCache.putResult(executor.requestCx.jobId, tvar )
       if( ! executor.requestCx.getConf( "saveLocalFile", "" ).isEmpty ) {
-        val resultMap = tvar.result.concatSlices.slices.flatMap(_.elements.headOption).toMap.mapValues(_.toCDFloatArray)
+        val resultMap = tvar.result.concatSlices.slices.flatMap(_.elements.headOption).toMap.mapValues( slice => (slice.gridspec, slice.toCDFloatArray) )
         saveResultToFile(executor, resultMap, tvar.result.metadata, List.empty[nc2.Attribute])
       }
     }

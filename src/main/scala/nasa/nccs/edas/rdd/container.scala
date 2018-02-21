@@ -31,12 +31,13 @@ import scala.collection.mutable
 object ArraySpec {
   def apply( tvar: TransVar ) = {
     val data_array =  HeapFltArray( tvar )
-    new ArraySpec( data_array.missing.getOrElse(Float.NaN), tvar.getShape, tvar.getOrigin, data_array.data )
+    val gridFile =  tvar.getMetaDataValue("gridfile","")
+    new ArraySpec( data_array.missing.getOrElse(Float.NaN), tvar.getShape, tvar.getOrigin, data_array.data, gridFile )
   }
   def apply( fma: FastMaskedArray, origin: Array[Int] ): ArraySpec = new ArraySpec( fma.missing, fma.shape, origin,  fma.getData)
 }
 
-case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
+case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float], gridspec: String = "" ) {
   def size: Long = shape.product
   def ++( other: ArraySpec ): ArraySpec = concat( other )
   def toHeapFltArray( gridSpec: String, metadata: Map[String,String] = Map.empty) = new HeapFltArray( shape, origin, data, Option( missing ), gridSpec, metadata + ( "gridfile" -> gridSpec ) )

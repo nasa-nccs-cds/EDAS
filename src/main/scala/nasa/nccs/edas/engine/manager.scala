@@ -28,7 +28,7 @@ import nasa.nccs.edas.portal.CleanupManager
 import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.wps.{WPSExecuteStatusStarted, WPSResponse, _}
 import ucar.nc2.Attribute
-import ucar.nc2.dataset.CoordinateAxis
+import ucar.nc2.dataset.{CoordinateAxis, NetcdfDataset}
 import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingDefault, Nc4ChunkingStrategyNone}
 
 import scala.io.Source
@@ -144,7 +144,8 @@ object EDASExecutionManager extends Loggable {
       case None => appParameters( key, default_val )
     }
 
-  def saveResultToFile( executor: WorkflowExecutor, dataMap: Map[String,CDFloatArray], varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute] ): String = {
+  def saveResultToFile( executor: WorkflowExecutor, dataMap: Map[String,(String,CDFloatArray)], varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute] ): String = {
+    if( dataMap.values.isEmpty ) { return "" }
     val resultId: String = executor.requestCx.jobId
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
     val resultFile = Kernel.getResultFile(resultId, true)
@@ -153,14 +154,21 @@ object EDASExecutionManager extends Loggable {
     val path = resultFile.getAbsolutePath
     try {
       val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
-      val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result ${resultId}"))
-      //      assert(targetGrid.grid.getRank == maskedTensor.getRank, "Axes not the same length as data shape in saveResult")
-      val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
-      if( dataMap.values.isEmpty ) { return "" }
-      val shape: Array[Int] = dataMap.values.head.getShape
-//      val shape: Array[Int] = if( raw_shape.length == targetGrid.grid.axes.length-1 ) { Array[Int](1) ++ raw_shape } else { raw_shape }
-      assert( shape.length == targetGrid.grid.axes.length, s"Array shape mismatch: [ ${shape.mkString(", ")} ] vs [ ${targetGrid.grid.axes.mkString(", ")} ]" )
-      val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
+      val shape: Array[Int] = dataMap.values.head._2.getShape
+      val gridFileOpt = dataMap.values.map( _._1 ).find( _.nonEmpty )
+      val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = gridFileOpt match {
+        case Some( gridFilePath ) =>
+          val gridDSet = NetcdfDataset.openDataset(gridFilePath)
+          val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
+          val dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
+          gridDSet.close
+          ( coordAxes, dims )
+        case None =>
+          val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result ${resultId}"))
+          val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
+          val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
+          ( coordAxes, dims )
+      }
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], dsetMetadata={ %s }".format(
@@ -182,7 +190,7 @@ object EDASExecutionManager extends Loggable {
           case None => None
         }
       }).flatten
-      val variables = dataMap.map { case ( tname, maskedTensor) =>
+      val variables = dataMap.map { case ( tname, ( gridspec, maskedTensor ) ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
         val varname = baseName + "-" + tname
         val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, dims.toList)
@@ -191,7 +199,6 @@ object EDASExecutionManager extends Loggable {
         dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
         ( variable, maskedTensor )
       }
-
 
       writer.create()
 
@@ -462,7 +469,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
           else {
             val result_shape = tvar.result.slices.headOption.fold("")( _.elements.values.headOption.fold("")( _.shape.mkString(",") ) )
             logger.info( s" #RS# Result ${resId} Shape: [${result_shape}], metadata: [${tvar.result.metadata.mkString(",")}] " )
-            val resultMap = tvar.result.concatSlices.slices.flatMap( _.elements.headOption ).toMap.mapValues( _.toCDFloatArray )
+            val resultMap = tvar.result.concatSlices.slices.flatMap( _.elements.headOption ).toMap.mapValues( slice => ( slice.gridspec, slice.toCDFloatArray ) )
             List(saveResultToFile(executor, resultMap, tvar.result.metadata, List.empty[nc2.Attribute])).filter( ! _.isEmpty )
           }
         case None => List.empty[String]
