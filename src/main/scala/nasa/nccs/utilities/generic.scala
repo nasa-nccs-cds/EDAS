@@ -42,7 +42,7 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   val LNAME = if( test ) name + "-test" else name + "-"
   val LID = if( master ) "master" else UID().uid
   var newline_state = true
-  val logFileDir: Path = Paths.get( "/tmp", System.getProperty("user.name"), "logs", LNAME + LID + ".log" )
+  val logFileDir: Path = Paths.get( "/tmp", System.getProperty("user.name"), "logs" )
 //  val logFileDir: Path = Paths.get( System.getProperty("user.home"), ".edas", "logs" )
   logFileDir.toFile.mkdirs()
   val logFilePath: Path = logFileDir.resolve( LNAME + LID + ".log" ) // Paths.get( "/tmp", System.getProperty("user.name"), "logs", LNAME + LID + ".log" )
