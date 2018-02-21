@@ -97,7 +97,7 @@ class CDMSKernel(Kernel):
         for key in varmd: result_var.createattribute( key, varmd[key] )
         result_metadata = dict( input.metadata )
         for mdata in [ task.metadata, varmd ]: result_metadata.update( mdata )
-        result = cdmsArray.createResult( task.rId, input.origin, result_metadata, result_var )
+        result = cdmsArray.createModifiedResult( task.rId, input.origin, result_metadata, result_var )
         self.logger.info( " #RS# Creating result({0}), shape = {1}".format( result.id, str(result.shape) ))
         if self.cacheReturn[0]: self.cached_results[ result.id ] = result
         if self.cacheReturn[1]: rv = result

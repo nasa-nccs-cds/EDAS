@@ -229,6 +229,10 @@ class npArray(CDArray):
 class cdmsArray(CDArray):
 
     @classmethod
+    def createModifiedResult(cls, id, origin, metadata, cdVariable ):
+        return cdmsArray( id, origin, cdVariable.shape, metadata, cdVariable )
+
+    @classmethod
     def createResult(cls, task, input, cdVariable ):
         return cdmsArray( task.rId, input.origin, cdVariable.shape, dict( input.metadata, **task.metadata ), cdVariable )
 
