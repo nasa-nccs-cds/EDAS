@@ -31,13 +31,12 @@ import scala.collection.mutable
 object ArraySpec {
   def apply( tvar: TransVar ) = {
     val data_array =  HeapFltArray( tvar )
-    val gridFile =  tvar.getMetaDataValue("gridfile","")
-    new ArraySpec( data_array.missing.getOrElse(Float.NaN), tvar.getShape, tvar.getOrigin, data_array.data, gridFile )
+    new ArraySpec( data_array.missing.getOrElse(Float.NaN), tvar.getShape, tvar.getOrigin, data_array.data )
   }
   def apply( fma: FastMaskedArray, origin: Array[Int] ): ArraySpec = new ArraySpec( fma.missing, fma.shape, origin,  fma.getData)
 }
 
-case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float], gridspec: String = "" ) {
+case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float] ) {
   def size: Long = shape.product
   def ++( other: ArraySpec ): ArraySpec = concat( other )
   def toHeapFltArray( gridSpec: String, metadata: Map[String,String] = Map.empty) = new HeapFltArray( shape, origin, data, Option( missing ), gridSpec, metadata + ( "gridfile" -> gridSpec ) )
@@ -95,23 +94,23 @@ case class CDTimeInterval(startTime: Long, endTime: Long ) {
 
 object CDTimeSlice {
   type ReduceOp = (CDTimeSlice,CDTimeSlice)=>CDTimeSlice
-  def empty = new CDTimeSlice( -1, 0, Map.empty[String,ArraySpec] )
+  def empty = new CDTimeSlice( -1, 0, Map.empty[String,ArraySpec], "" )
 }
 
-case class CDTimeSlice( startTime: Long, endTime: Long, elements: Map[String,ArraySpec] ) {
-  def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( startTime, endTime, elements ++ other.elements ) }
+case class CDTimeSlice( startTime: Long, endTime: Long, elements: Map[String,ArraySpec], gridspec: String ) {
+  def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice( startTime, endTime, elements ++ other.elements, gridspec ) }
   def <+( other: CDTimeSlice ): CDTimeSlice = append( other )
-  def clear: CDTimeSlice = { new CDTimeSlice( startTime, endTime, Map.empty[String,ArraySpec] ) }
+  def clear: CDTimeSlice = { new CDTimeSlice( startTime, endTime, Map.empty[String,ArraySpec], gridspec ) }
   def midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDTimeSlice ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDTimeSlice ): Long = Math.max( endTime, other.endTime )
   def section( section: CDSection ): Option[CDTimeSlice] = {
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
-    if( new_elements.isEmpty ) { None } else { Some( new CDTimeSlice( startTime, endTime, new_elements ) ) }
+    if( new_elements.isEmpty ) { None } else { Some( new CDTimeSlice( startTime, endTime, new_elements, gridspec ) ) }
   }
-  def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice( startTime, endTime, elements.filterKeys(key => !keys.contains(key) ) ) }
-  def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice( startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ) )
-  def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice( startTime, endTime, elements.filterKeys(key => op(key) ) )
+  def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice( startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), gridspec ) }
+  def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice( startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), gridspec )
+  def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice( startTime, endTime, elements.filterKeys(key => op(key) ), gridspec )
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def element( id: String ): Option[ArraySpec] =  elements find { case (key,value) => key.split(':').last.equals(id) } map ( _._2 )
   def isEmpty = elements.isEmpty
@@ -120,12 +119,12 @@ case class CDTimeSlice( startTime: Long, endTime: Long, elements: Map[String,Arr
   def contains( other: CDTimeSlice ): Boolean = { contains( other.startTime ) }
   def ~( other: CDTimeSlice ) =  { assert( (endTime == other.endTime) && (startTime == other.startTime) , s"Mismatched Time slices: { $startTime $endTime } vs { ${other.startTime} ${other.endTime} }" ) }
   def precedes( other: CDTimeSlice ) = {assert(  startTime < other.startTime, s"Disordered Time slices: { $startTime $endTime -> ${startTime+endTime} } vs { ${other.startTime} ${other.endTime} }" ) }
-  def append( other: CDTimeSlice ): CDTimeSlice = { this precedes other; new CDTimeSlice( mergeStart( other ), mergeEnd( other ), elements.flatMap { case (key,array0) => other.elements.get(key).map(array1 => key -> ( array0 ++ array1 ) ) } ) }
+  def append( other: CDTimeSlice ): CDTimeSlice = { this precedes other; new CDTimeSlice( mergeStart( other ), mergeEnd( other ), elements.flatMap { case (key,array0) => other.elements.get(key).map(array1 => key -> ( array0 ++ array1 ) ) }, gridspec ) }
   def addExtractedSlice( collection: TimeSliceCollection ): CDTimeSlice = collection.slices.find( _.contains( this ) ) match {
     case None =>
       throw new Exception( s"Missing matching slice in broadcast: { ${startTime}, ${endTime} }")
     case Some( extracted_slice ) =>
-      CDTimeSlice( startTime, endTime, elements ++ extracted_slice.elements )
+      CDTimeSlice( startTime, endTime, elements ++ extracted_slice.elements, gridspec )
   }
 }
 
@@ -215,6 +214,11 @@ case class TimeSliceCollection( slices: Array[CDTimeSlice], metadata: Map[String
       tsc0.slices.zip( tsc1.slices ) map { case (s0,s1) => op(s0,s1) }
     }
     TimeSliceCollection( merged_slices, metadata ++ other.metadata )
+  }
+
+  def getMetadata: Map[String,String] = {
+    val gridSpec: Option[String] = slices.map( _.gridspec ).find( _.nonEmpty )
+    gridSpec.fold( metadata ) ( gridSpec => metadata + ( "gridpec" -> gridSpec ) )
   }
 
   def concatSlices: TimeSliceCollection = {
@@ -379,7 +383,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
           val data_shape: Array[Int] = data_section.getShape
           val section = variable.getShapeAsSection
           val arraySpec = ArraySpec( missing, data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array)
-          CDTimeSlice( time_bounds(0), time_bounds(1), Map(varId -> arraySpec))
+          CDTimeSlice( time_bounds(0), time_bounds(1), Map(varId -> arraySpec), "")
         }
         dataset.close()
         if (fileInput.fileIndex % 500 == 0) {
@@ -449,7 +453,7 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
     val data_shape: Array[Int] = data_section.getShape
     val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array )
-    CDTimeSlice( template_slice.startTime, template_slice.endTime, Map( varId -> arraySpec ) )
+    CDTimeSlice( template_slice.startTime, template_slice.endTime, Map( varId -> arraySpec ), template_slice.gridspec )
   }
 
   def getMissing( variable: Variable, default_value: Float = Float.NaN ): Float = {

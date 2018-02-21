@@ -144,7 +144,7 @@ object EDASExecutionManager extends Loggable {
       case None => appParameters( key, default_val )
     }
 
-  def saveResultToFile( executor: WorkflowExecutor, dataMap: Map[String,(String,CDFloatArray)], varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute] ): String = {
+  def saveResultToFile( executor: WorkflowExecutor, dataMap: Map[String,CDFloatArray], varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute] ): String = {
     if( dataMap.values.isEmpty ) { return "" }
     val resultId: String = executor.requestCx.jobId
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
@@ -154,8 +154,8 @@ object EDASExecutionManager extends Loggable {
     val path = resultFile.getAbsolutePath
     try {
       val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
-      val shape: Array[Int] = dataMap.values.head._2.getShape
-      val gridFileOpt: Option[String] = dataMap.values.map( _._1 ).find( _.nonEmpty )
+      val shape: Array[Int] = dataMap.values.head.getShape
+      val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
       val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = gridFileOpt match {
         case Some( gridFilePath ) =>
           val gridDSet = NetcdfDataset.openDataset(gridFilePath)
@@ -173,10 +173,9 @@ object EDASExecutionManager extends Loggable {
       }
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
 
-      logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], dsetMetadata={ %s }".format(
+      logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], varMetadata={ %s }".format(
         resultId, path, dataMap.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
-        coordAxes.map { caxis => "%s: (%s)".format(caxis.getFullName, caxis.getShape.mkString(",")) }.mkString(","), optInputSpec.fold(" ")(_.roi.toString),
-        dsetMetadata.map( attr => attr.getShortName + ": " + attr.getStringValue ).mkString("; ") ) )
+        coordAxes.map { caxis => "%s: (%s)".format(caxis.getFullName, caxis.getShape.mkString(",")) }.mkString(","), optInputSpec.fold(" ")(_.roi.toString), varMetadata.mkString("; ") ) )
 
       val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
         inputSpec.getRange(coordAxis.getFullName) match {
@@ -192,7 +191,7 @@ object EDASExecutionManager extends Loggable {
           case None => None
         }
       }).flatten
-      val variables = dataMap.map { case ( tname, ( gridspec, maskedTensor ) ) =>
+      val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
         val varname = baseName + "-" + tname
         val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, dims.toList)
@@ -471,8 +470,8 @@ class EDASExecutionManager extends WPSServer with Loggable {
           else {
             val result_shape = tvar.result.slices.headOption.fold("")( _.elements.values.headOption.fold("")( _.shape.mkString(",") ) )
             logger.info( s" #RS# Result ${resId} Shape: [${result_shape}], metadata: [${tvar.result.metadata.mkString(",")}] " )
-            val resultMap = tvar.result.concatSlices.slices.flatMap( _.elements.headOption ).toMap.mapValues( slice => ( slice.gridspec, slice.toCDFloatArray ) )
-            List(saveResultToFile(executor, resultMap, tvar.result.metadata, List.empty[nc2.Attribute])).filter( ! _.isEmpty )
+            val resultMap = tvar.result.concatSlices.slices.flatMap( _.elements.headOption ).toMap.mapValues( slice => slice.toCDFloatArray )
+            List(saveResultToFile(executor, resultMap, tvar.result.getMetadata, List.empty[nc2.Attribute])).filter( ! _.isEmpty )
           }
         case None => List.empty[String]
       }
