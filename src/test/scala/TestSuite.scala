@@ -959,7 +959,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     val executionCallback: ExecutionCallback = new ExecutionCallback {
       override def success( results: xml.Node ): Unit = {
         val responseType = runArgs.getOrElse("response","xml")
-        logger.info(s"\n\n *** ExecutionCallback: rId = ${rId}, responseType = ${responseType} *** \n\n")
+        logger.info(s" *** ExecutionCallback: rId = ${rId}, responseType = ${responseType} *** ")
         if (responseType == "file") { ; }
       }
       override def failure( msg: String ): Unit = { logger.error( s"ERROR CALLBACK ($rId): " + msg ) }

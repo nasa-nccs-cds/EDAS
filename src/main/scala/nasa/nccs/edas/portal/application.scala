@@ -106,7 +106,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val responseType = runargs.getOrElse("response","file")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
       override def success( results: xml.Node ): Unit = {
-        logger.info(s"\n\n *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType} *** \n\n")
+        logger.info(s" *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType} *** ")
         if (responseType == "object") { sendDirectResponse(response_syntax, clientId, jobId, results) }
         else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
         setExeStatus(jobId, "completed")
@@ -188,7 +188,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 //        val href = hrefOpt.get
 //        val rid = href.split("[/]").last
         fileOpt.get.split(",").foreach( filepath => {
-          logger.info("\n\n     ****>> Found file node for jobId: " + jobId + ", clientId: " + clientId + ", sending File: " + filepath + " ****** \n\n")
+          logger.info("     ****>> Found file node for jobId: " + jobId + ", clientId: " + clientId + ", sending File: " + filepath + " ****** ")
           sendFile( clientId, jobId, "publish", filepath, sharedDataDir.isEmpty )
         })
       } else {

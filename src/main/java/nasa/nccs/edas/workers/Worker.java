@@ -50,7 +50,7 @@ public abstract class Worker {
 
     private void addResult( String result_header, byte[] data ) {
         String elapsedTime = String.valueOf( ( System.currentTimeMillis() - requestTime )/1000.0 );
-        _portal.logger.info( "*********************************\n Caching result from worker: " + result_header+ ", data size = " + data.length  + ", Worker time = " + elapsedTime + "\n*********************************\n");
+        _portal.logger.info( "Caching result from worker:\n   " + result_header+ ", data size = " + data.length  + ", Worker time = " + elapsedTime );
         results.add( new TransVar( result_header, data, 0 ) );
     }
 

@@ -163,9 +163,9 @@ object EDASExecutionManager extends Loggable {
       val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
 
-      logger.info("Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
+      logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], varMetadata={%s}".format(
         resultId, path, dataMap.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
-        coordAxes.map { caxis => "%s: (%s)".format(caxis.getFullName, caxis.getShape.mkString(",")) }.mkString(","), optInputSpec.fold(" ")(_.roi.toString) ) )
+        coordAxes.map { caxis => "%s: (%s)".format(caxis.getFullName, caxis.getShape.mkString(",")) }.mkString(","), optInputSpec.fold(" ")(_.roi.toString), varMetadata.mkString(";").toString ) )
 
       val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
         inputSpec.getRange(coordAxis.getFullName) match {
