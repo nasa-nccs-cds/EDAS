@@ -59,7 +59,7 @@ class RegridKernel(CDMSKernel):
             toGrid = None
             if ("gaussian" in gridType):
                 toGrid = cdms2.createGaussianGrid(shape[0])
-                self.logger.info("createGaussianGrid")
+                self.logger.info("createGaussianGrid, shape = " + str(toGrid.shape) )
             elif ("uniform" in gridType):
                 origin = sa2f(self.getListParm(mdata, "origin", "0,-90"))
                 if (shape):
