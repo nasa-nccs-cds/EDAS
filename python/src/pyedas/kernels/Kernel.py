@@ -92,10 +92,11 @@ class CDMSKernel(Kernel):
         rv = None
         result_var.id = result_var.id  + "-" + task.rId
         gridFilePath = self.saveGridFile( result_var.id, result_var )
-        if( gridFilePath ): result_var.createattribute( "gridfile", gridFilePath )
-        result_var.createattribute( "origin", input.origin )
-        result_var.createattribute( "worker", socket.gethostname() )
-        result = cdmsArray.createResult( task, input, result_var )
+        varmd = { "origin": input.origin, "worker": socket.gethostname() }
+        if( gridFilePath ): varmd["gridfile"] = gridFilePath
+        for key in varmd: result_var.createattribute( key, varmd[key] )
+        metadata = dict( input.metadata, **task.metadata.update(varmd) )
+        result = cdmsArray.createResult( task.rId, input.origin, metadata, result_var )
         self.logger.info( " #RS# Creating result({0}), shape = {1}".format( result.id, str(result.shape) ))
         if self.cacheReturn[0]: self.cached_results[ result.id ] = result
         if self.cacheReturn[1]: rv = result

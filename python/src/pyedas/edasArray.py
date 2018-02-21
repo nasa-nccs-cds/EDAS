@@ -253,7 +253,7 @@ class cdmsArray(CDArray):
         return self.variable.data.astype(dtype).tobytes() + np.array([ self.variable.getMissing() ]).astype(dtype).tobytes() # bytearray( struct.pack("f", self.variable.getMissing()))
 
     def __init__(self, _id, _origin, _shape, _metadata, cdVariable ):
-        super(cdmsArray, self).__init__(_id,_origin,_shape,_metadata)
+        super(cdmsArray, self).__init__( _id, _origin, _shape, _metadata )
         self.logger.info(" *** Creating input cdms array, size = " + str( cdVariable.size ) )
         self.name = cdmsArray.getName(cdVariable)
         self.grid = cdVariable.getGrid()
