@@ -152,7 +152,7 @@ object EDASExecutionManager extends Loggable {
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
     val path = resultFile.getAbsolutePath
     try {
-      val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
+      val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
       val shape: Array[Int] = dataMap.values.head.getShape
       val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
       val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = gridFileOpt match {
@@ -161,7 +161,8 @@ object EDASExecutionManager extends Loggable {
           val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
           val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
           val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
-          val timeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+          val gblTimeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+          val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
           val dims = space_dims :+ new Dimension(timeCoordAxis.getShortName, timeCoordAxis.getShape(0) )
           dims.map( dim => writer.addDimension( null, dim.getShortName, dim.getLength ) )
           gridDSet.close
@@ -176,22 +177,18 @@ object EDASExecutionManager extends Loggable {
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], varMetadata={ %s }".format(
         resultId, path, dataMap.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
-        coordAxes.map { caxis => "%s: (%s)".format(caxis.getFullName, caxis.getShape.mkString(",")) }.mkString(","), optInputSpec.fold(" ")(_.roi.toString), varMetadata.mkString("; ") ) )
+        coordAxes.map { caxis => "%s: (%s)".format(caxis.getFullName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString, varMetadata.mkString("; ") ) )
 
-      val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
-        inputSpec.getRange(coordAxis.getFullName) match {
-          case Some(range) =>
-            val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
-            for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
-            val newRange = dimsMap.get(coordAxis.getFullName) match {
-              case None => range;
-              case Some(dim) => if (dim.getLength < range.length) new ma2.Range(dim.getLength) else range
-            }
-            val data = coordAxis.read(List(newRange))
-            Some(coordVar, data)
-          case None => None
+      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.flatMap( coordAxis => inputSpec.getRange(coordAxis.getFullName) map { range =>
+        val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
+        for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
+        val newRange = dimsMap.get(coordAxis.getFullName) match {
+          case None => range;
+          case Some(dim) => if (dim.getLength < range.length) new ma2.Range(dim.getLength) else range
         }
-      }).flatten
+        val data = coordAxis.read(List(newRange))
+        (coordVar, data)
+      })
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
         val varname = baseName + "-" + tname
