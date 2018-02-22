@@ -151,6 +151,7 @@ object EDASExecutionManager extends Loggable {
     val resultFile = Kernel.getResultFile(resultId, true)
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
     val path = resultFile.getAbsolutePath
+    var optGridDest: Option[NetcdfDataset] = None
     try {
       val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
       val shape: Array[Int] = dataMap.values.head.getShape
@@ -165,7 +166,7 @@ object EDASExecutionManager extends Loggable {
           val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
           val dims = space_dims :+ new Dimension(timeCoordAxis.getShortName, inputSpec.roi.getRange(0).length )
           dims.map( dim => writer.addDimension( null, dim.getShortName, dim.getLength ) )
-          gridDSet.close
+          optGridDest = Option(gridDSet)
           ( coordAxes :+ timeCoordAxis, dims )
         case None =>
           val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
@@ -226,6 +227,7 @@ object EDASExecutionManager extends Loggable {
         throw ex
     }
     writer.close()
+    optGridDest.foreach( _.close )
     path
   }
 
