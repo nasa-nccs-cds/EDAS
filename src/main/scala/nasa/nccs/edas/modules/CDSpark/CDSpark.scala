@@ -167,7 +167,7 @@ class eAve extends Kernel(Map.empty) {
       context.operation.rid -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, resultArray.getData ),
       context.operation.rid + "_WEIGHTS_" -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, weightArray.getData )
     ).toMap
-    CDTimeSlice( inputs.startTime, inputs.endTime, elems, inputs.gridspec )
+    CDTimeSlice(inputs.startTime, inputs.endTime, elems, inputs.metadata)
   }
   override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
   override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
@@ -239,7 +239,7 @@ class ave extends SingularRDDKernel(Map.empty) {
     val t1 = System.nanoTime/ 1.0E9
 //    logger.info("T[%.2f] @P@ Executed Kernel %s map op, input = %s, time = %.4f s".format(t0, name,  id, (t1 - t0) ))
 //    context.addTimestamp( "Map Op complete" )
-    val rv = CDTimeSlice( inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.gridspec )
+    val rv = CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata)
 //    logger.info("Returning result value")
     rv
   }
@@ -258,7 +258,7 @@ class subset extends Kernel(Map.empty) {
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
-    CDTimeSlice( inputs.startTime, inputs.endTime, elems.toMap, inputs.gridspec )
+    CDTimeSlice(inputs.startTime, inputs.endTime, elems.toMap, inputs.metadata)
   }
 }
 //
@@ -394,7 +394,7 @@ class noOp extends Kernel(Map.empty) {
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
-    CDTimeSlice( inputs.startTime, inputs.endTime, elems.toMap, inputs.gridspec )
+    CDTimeSlice(inputs.startTime, inputs.endTime, elems.toMap, inputs.metadata)
   }
 }
 //class binAve extends SingularRDDKernel(Map.empty) {
