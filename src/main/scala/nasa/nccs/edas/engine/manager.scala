@@ -159,12 +159,13 @@ object EDASExecutionManager extends Loggable {
         case Some( gridFilePath ) =>
           val gridDSet = NetcdfDataset.openDataset(gridFilePath)
           val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
-          val dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
-          dims.map( dim => writer.addDimension( null, dim.getShortName, dim.getLength ) )
+          val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
           val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
           val timeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+          val dims = space_dims :+ new Dimension(timeCoordAxis.getShortName, timeCoordAxis.getShape(0) )
+          dims.map( dim => writer.addDimension( null, dim.getShortName, dim.getLength ) )
           gridDSet.close
-          ( coordAxes :+ timeCoordAxis, dims :+ new Dimension(timeCoordAxis.getShortName, timeCoordAxis.getShape(0) ) )
+          ( coordAxes :+ timeCoordAxis, dims )
         case None =>
           val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
           val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
