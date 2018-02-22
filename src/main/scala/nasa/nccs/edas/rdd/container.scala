@@ -218,7 +218,7 @@ case class TimeSliceCollection( slices: Array[CDTimeSlice], metadata: Map[String
 
   def getMetadata: Map[String,String] = {
     val gridSpec: Option[String] = slices.map( _.gridspec ).find( _.nonEmpty )
-    gridSpec.fold( metadata ) ( gridSpec => metadata + ( "gridpec" -> gridSpec ) )
+    gridSpec.fold( metadata ) ( gridSpec => metadata + ( "gridspec" -> gridSpec ) )
   }
 
   def concatSlices: TimeSliceCollection = {
