@@ -320,7 +320,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     val t0 = System.nanoTime()
     val mapresult: TimeSliceRDD = mapRDD( input, context )
     val rv = reduce( mapresult, context, batchIndex, merge )
-    logger.info(" ### Executed mapReduce, time: %.2f".format( (System.nanoTime-t0)/1.0E9 ))
+    logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
   }
 
