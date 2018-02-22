@@ -161,7 +161,8 @@ object EDASExecutionManager extends Loggable {
           val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
           val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
           val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
-          val timeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+          val gblTimeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+          val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
           val dims = space_dims :+ new Dimension(timeCoordAxis.getShortName, inputSpec.roi.getRange(0).length )
           dims.map( dim => writer.addDimension( null, dim.getShortName, dim.getLength ) )
           gridDSet.close
@@ -178,16 +179,24 @@ object EDASExecutionManager extends Loggable {
         resultId, path, dataMap.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
         coordAxes.map { caxis => "%s: (%s)".format(caxis.getFullName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString, varMetadata.mkString("; ") ) )
 
-      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.flatMap( coordAxis => inputSpec.getRange(coordAxis.getFullName) map { range =>
+//      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.flatMap( coordAxis => inputSpec.getRange(coordAxis.getFullName) map { range =>
+//        val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
+//        for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
+//        val newRange = dimsMap.get(coordAxis.getFullName) match {
+//          case None => range;
+//          case Some(dim) => if ( (dim.getLength < range.length) || ( coordAxis.getShape(0) <= range.last() ) ) new ma2.Range(dim.getLength) else range
+//        }
+//        val data = coordAxis.read(List(newRange))
+//        (coordVar, data)
+//      })
+
+      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.map( coordAxis => {
         val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
         for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
-        val newRange = dimsMap.get(coordAxis.getFullName) match {
-          case None => range;
-          case Some(dim) => if (dim.getLength < range.length) new ma2.Range(dim.getLength) else range
-        }
-        val data = coordAxis.read(List(newRange))
+        val data = coordAxis.read()
         (coordVar, data)
       })
+
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
         val varname = baseName + "-" + tname
