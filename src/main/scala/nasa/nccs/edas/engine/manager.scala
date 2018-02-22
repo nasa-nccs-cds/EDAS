@@ -164,13 +164,22 @@ object EDASExecutionManager extends Loggable {
           val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
           val gblTimeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
           val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
-          val dims = space_dims :+ new Dimension(timeCoordAxis.getShortName, inputSpec.roi.getRange(0).length )
-          dims.map( dim => writer.addDimension( null, dim.getShortName, dim.getLength ) )
+          val dims0 = space_dims :+ new Dimension(timeCoordAxis.getShortName, inputSpec.roi.getRange(0).length )
+          val newdims = dims0.map( dim => {
+            val newdim = writer.addDimension(null, dim.getShortName, dim.getLength)
+            logger.info(s"Writer addDimension ${dim.getShortName} ${dim.getLength.toString}")
+            newdim
+          })
           optGridDest = Option(gridDSet)
-          ( coordAxes :+ timeCoordAxis, dims )
+          ( coordAxes :+ timeCoordAxis, newdims )
         case None =>
           val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
-          val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
+          val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => {
+            val aname = targetGrid.grid.getAxisSpec(idim).getAxisName
+            val dim = writer.addDimension(null, aname, shape(idim))
+            logger.info(s"Writer addDimension ${aname} ${shape(idim).toString}")
+            dim
+          })
           val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
           ( coordAxes, dims )
       }
