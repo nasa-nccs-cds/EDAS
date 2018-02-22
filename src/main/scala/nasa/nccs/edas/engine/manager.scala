@@ -156,12 +156,12 @@ object EDASExecutionManager extends Loggable {
       val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
       val shape: Array[Int] = dataMap.values.head.getShape
       val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
+      val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
       val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = gridFileOpt match {
         case Some( gridFilePath ) =>
           val gridDSet = NetcdfDataset.openDataset(gridFilePath)
           val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
           val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
-          val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
           val gblTimeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
           val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
           val dims0 = space_dims :+ new Dimension(timeCoordAxis.getShortName, inputSpec.roi.getRange(0).length )
@@ -173,7 +173,6 @@ object EDASExecutionManager extends Loggable {
           optGridDest = Option(gridDSet)
           ( coordAxes :+ timeCoordAxis, newdims )
         case None =>
-          val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
           val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => {
             val aname = targetGrid.grid.getAxisSpec(idim).getAxisName
             val dim = writer.addDimension(null, aname, shape(idim))
@@ -183,7 +182,7 @@ object EDASExecutionManager extends Loggable {
           val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
           ( coordAxes, dims )
       }
-      val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
+      val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getShortName -> dim)): _*)
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], varMetadata={ %s }".format(
         resultId, path, dataMap.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
@@ -210,7 +209,9 @@ object EDASExecutionManager extends Loggable {
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
         val varname = baseName + "-" + tname
-        val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, dims.toList)
+        val varDims = targetGrid.getDims.map( dimName => dimsMap.getOrElse(dimName, throw new Exception( s"Missing dim in targetGrid in saveResultToFile: ${dimName}")))
+        logger.info("Creating var %s: dims = [%s]".format(varname, varDims.map( _.getShortName).mkString(", ") ) )
+        val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, varDims.toList )
         varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }
         variable.addAttribute(new nc2.Attribute("missing_value", maskedTensor.getInvalid))
         dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
