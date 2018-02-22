@@ -27,7 +27,7 @@ import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.CleanupManager
 import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.wps.{WPSExecuteStatusStarted, WPSResponse, _}
-import ucar.nc2.Attribute
+import ucar.nc2.{Attribute, Dimension}
 import ucar.nc2.dataset.{CoordinateAxis, NetcdfDataset}
 import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingDefault, Nc4ChunkingStrategyNone}
 
@@ -150,7 +150,6 @@ object EDASExecutionManager extends Loggable {
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
     val resultFile = Kernel.getResultFile(resultId, true)
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
-    writer.setLargeFile(true)
     val path = resultFile.getAbsolutePath
     try {
       val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
@@ -161,14 +160,15 @@ object EDASExecutionManager extends Loggable {
           val gridDSet = NetcdfDataset.openDataset(gridFilePath)
           val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
           val dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
+          dims.map( dim => writer.addDimension( null, dim.getShortName, dim.getLength ) )
+          val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
+          val timeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
           gridDSet.close
-          logger.info( s" WWW Generating coords from gridspec $gridFilePath, dims = [ ${dims.map(dim => dim.getShortName + ":" + dim.getLength.toString).mkString(", ")} ]")
-          ( coordAxes, dims )
+          ( coordAxes :+ timeCoordAxis, dims :+ new Dimension(timeCoordAxis.getShortName, timeCoordAxis.getShape(0) ) )
         case None =>
           val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
           val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => writer.addDimension(null, targetGrid.grid.getAxisSpec(idim).getAxisName, shape(idim)))
           val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
-          logger.info( s" WWW Generating coords from TargetGrid ${targetGrid.getGridFile}, dims = [ ${dims.map(dim => dim.getShortName + ":" + dim.getLength.toString).mkString(", ")} ]")
           ( coordAxes, dims )
       }
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getFullName -> dim)): _*)
