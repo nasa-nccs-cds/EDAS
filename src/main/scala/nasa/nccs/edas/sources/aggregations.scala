@@ -37,7 +37,7 @@ object AggregationWriter extends Loggable {
   val ncExtensions = Seq( "nc", "nc4")
   val colIdSep = "."
 
-  def getName(node: nc2.CDMNode): String = node.getFullName
+  def getName(node: nc2.CDMNode): String = node.getShortName
 
   def backup( dir: File, backupDir: File ): Unit = {
     backupDir.mkdirs()
