@@ -226,7 +226,10 @@ object EDASExecutionManager extends Loggable {
             writer.write(coordVar, coordData)
         }
       }
-      variables.foreach { case (variable, maskedTensor) => writer.write(variable, maskedTensor) }
+      variables.foreach { case (variable, maskedTensor) => {
+        logger.info("Writing var %s: var shape = [%s], data Shape = %s".format(variable.getFullName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
+        writer.write(variable, maskedTensor)
+      } }
       logger.info("Done writing output to file %s".format(path))
     } catch {
       case ex: IOException =>
