@@ -216,7 +216,7 @@ case class TimeSliceCollection( slices: Array[CDTimeSlice], metadata: Map[String
     TimeSliceCollection( merged_slices, metadata ++ other.metadata )
   }
 
-  def getMetadata: Map[String,String] = slices.foldLeft(metadata)( _ ++ _.metadata )
+  def getMetadata: Map[String,String] = metadata ++ slices.headOption.fold(Map.empty[String,String])(_.metadata) // slices.foldLeft(metadata)( _ ++ _.metadata )
 
   def concatSlices: TimeSliceCollection = {
     val concatSlices = sort().slices.reduce( _ <+ _ )
