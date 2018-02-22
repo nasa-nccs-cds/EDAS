@@ -161,9 +161,8 @@ object EDASExecutionManager extends Loggable {
           val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
           val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
           val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
-          val gblTimeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
-          val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
-          val dims = space_dims :+ new Dimension(timeCoordAxis.getShortName, timeCoordAxis.getShape(0) )
+          val timeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+          val dims = space_dims :+ new Dimension(timeCoordAxis.getShortName, inputSpec.roi.getRange(0).length )
           dims.map( dim => writer.addDimension( null, dim.getShortName, dim.getLength ) )
           gridDSet.close
           ( coordAxes :+ timeCoordAxis, dims )
