@@ -538,7 +538,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
   def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = grid.getTimeCoordinateAxis
   def getTimeUnits: String  = grid.getTimeCoordinateAxis match { case Some(timeAxis) => timeAxis.getUnitsString; case None => "" }
   def getCalendarDate ( idx: Int, context: String ): CalendarDate = grid.getCalendarDate(idx,context)
-  def getDims: IndexedSeq[String] = grid.axes.map( _.coordAxis.getFullName )
+  def getDims: IndexedSeq[String] = grid.axes.map( _.coordAxis.getDimension(0).getFullName )
 
   def addSectionMetadata( section: ma2.Section ): ma2.Section = grid.addRangeNames( section )
 
