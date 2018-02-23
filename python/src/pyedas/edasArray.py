@@ -201,7 +201,8 @@ class npArray(CDArray):
             grid = baseGrid if ((latInterval is None) or (lonInterval is None)) else baseGrid.subGrid(latInterval, lonInterval)
             partition_axes = self.subsetAxes(self.dimensions, gridfile, self.origin, self.shape)
 
-            self.logger.info( "Creating Variable {0}, gridfile = {1}, data shape = [ {2} ], self.shape = [ {3} ], grid shape = [ {4} ], roi = {5}, baseGrid shape = [ {6} ]".format( self.name, gridFilePath, a2s(self.array.shape), a2s(self.shape), a2s(grid.shape), str(self.roi), a2s(baseGrid.shape) ) )
+            self.logger.info( "Creating Variable {0}, gridfile = {1}, data shape = [ {2} ], self.shape = [ {3} ], grid shape = [ {4} ], roi = {5}, baseGrid shape = [ {6} ], latInterval = {7}, lonInterval = {8}".format(
+                self.name, gridFilePath, a2s(self.array.shape), a2s(self.shape), a2s(grid.shape), str(self.roi), a2s(baseGrid.shape), str(latInterval), str(lonInterval) ) )
             self.variable = cdms2.createVariable( self.array, typecode=None, copy=0, savespace=0, mask=None, fill_value=var.getMissing(), missing_value=var.getMissing(),
                                             grid=grid, axes=partition_axes, attributes=self.metadata, id=self.collection + "-" + self.name)
             self.variable.createattribute("gridfile", self.gridFile)
