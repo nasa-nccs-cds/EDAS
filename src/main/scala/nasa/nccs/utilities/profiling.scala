@@ -1,17 +1,21 @@
 package nasa.nccs.utilities
 import java.util.{ArrayList, Collections}
+
 import org.apache.spark._
 import org.apache.spark.util.{AccumulatorV2, CollectionAccumulator}
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 
-case class EventRecord( eventId: String, timestamp: Long, duration: Long )  extends Serializable  {}
+case class EventRecord( eventId: String, timestamp: Long, duration: Long, clocktime: Long )  extends Serializable  {}
 
 case class StartEvent( eventId: String )  extends Serializable {
   private var _timestamp = System.nanoTime()
+  private val _clocktime = System.currentTimeMillis()
   def update(): StartEvent = { _timestamp = System.nanoTime(); this }
   def timestamp: Long = _timestamp
+  def clocktime = _clocktime
 }
 
 class EventMetrics( val eventId: String ) extends Serializable {
@@ -20,6 +24,7 @@ class EventMetrics( val eventId: String ) extends Serializable {
   private var _maxDuration: Float=0f
   private var _minDuration: Float=Float.MaxValue
   private var _start: Long=0
+  private var _clock: Long=0
   private var _end: Long=0
 
   def +=( rec: EventRecord ): Unit = {
@@ -29,9 +34,11 @@ class EventMetrics( val eventId: String ) extends Serializable {
     if( tsec > _maxDuration ) { _maxDuration = tsec }
     if( tsec < _minDuration ) { _minDuration = tsec }
     if( _start == 0 ) { _start = rec.timestamp }
+    if( _clock == 0 ) { _start = rec.clocktime }
     _end = rec.timestamp + rec.duration
   }
-  override def toString: String = s"[ EM(${eventId}): SumDuration=${_sumDuration}, AveDuration=${_sumDuration/_nEvents}, NEvents=${_nEvents}, MaxDuration=${_maxDuration}, MinDuration=${_minDuration}, Extent=${(_end-_start)/1.0e9} ]"
+  def clock = _clock
+  def toString( baseClockTime: Long ): String = s"[ EM(${eventId}): SumDuration=${_sumDuration}, AveDuration=${_sumDuration/_nEvents}, NEvents=${_nEvents}, MaxDuration=${_maxDuration}, MinDuration=${_minDuration}, Extent=${(_end-_start)/1.0e9} ClockSecs=${(_clock-baseClockTime)/1000}]"
 }
 
 class EventAccumulator extends AccumulatorV2[EventRecord, java.util.List[EventMetrics]] with Loggable {
@@ -48,10 +55,16 @@ class EventAccumulator extends AccumulatorV2[EventRecord, java.util.List[EventMe
   override def copyAndReset(): EventAccumulator = new EventAccumulator
   override def value: java.util.List[EventMetrics] = _metricsList.synchronized { java.util.Collections.unmodifiableList(new ArrayList[EventMetrics](_metricsList)) }
 
+  override def toString(): String = {
+    val events: List[EventMetrics] = value.toList.sortBy( _.clock )
+    val baseClockTime = events.head.clock
+    "\n\n PROFILING RESULTS: \n ** " + events.map(_.toString(baseClockTime)).mkString( "\n ** ")
+  }
+
   def startEvent( eventId: String ): StartEvent = updateStartEvent( eventId )
 
   def endEvent( eventId: String ): Unit = getStartEvent( eventId ) match {
-    case Some(startEvent) => add( new EventRecord( eventId, startEvent.timestamp, System.nanoTime()-startEvent.timestamp ) )
+    case Some(startEvent) => add( new EventRecord( eventId, startEvent.timestamp, System.nanoTime()-startEvent.timestamp, startEvent.clocktime ) )
     case None => logger.error(s"End event '${eventId}' without start event in current thread")
   }
 
