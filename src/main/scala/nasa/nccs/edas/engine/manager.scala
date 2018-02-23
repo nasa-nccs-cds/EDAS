@@ -184,7 +184,7 @@ object EDASExecutionManager extends Loggable {
           ( coordAxes, dims )
       }
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getShortName -> dim)): _*)
-      val coordsMap: Map[AxisType, Dimension ] = Map(coordAxes.map(axis => (axis.getAxisType -> dimsMap.getOrElse( axis.getDimension(0).getShortName, throw new Exception(s"Misising dimenssion: ${axis.getDimension(0).getShortName}") ) )): _*)
+      val coordsMap: Map[String, Dimension ] = Map(coordAxes.map(axis => (axis.getAxisType.getCFAxisName -> dimsMap.getOrElse( axis.getDimension(0).getShortName, throw new Exception(s"Misising dimenssion: ${axis.getDimension(0).getShortName}") ) )): _*)
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], varMetadata={ %s }".format(
         resultId, path, dataMap.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
@@ -208,12 +208,11 @@ object EDASExecutionManager extends Loggable {
         (coordVar, data)
       })
 
-      val varDimNames: Array[String] = varMetadata.getOrElse("dims", throw new Exception( s"Missing dims parameter in variable metadata in saveResultToFile") ).split(' ')
-      val varCoords = varDimNames.map( dimName => coordsMap.getOrElse(dimName, throw new Exception( s"Missing coordinate ${dimName} in saveResultToFile") ) )
+      val axisTypes = if( shape.length == 4 ) Array("T", "Z", "Y", "X" )  else Array("T", "Y", "X" )
+      val varDims: Array[Dimension] = axisTypes.map( aType => coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
         val varname = baseName + "-" + tname
-        val varDims = varDimNames.map( dimName => dimsMap.getOrElse(dimName, throw new Exception( s"Missing dim in saveResultToFile: ${dimName}, known dims = [ ${dimsMap.keys.mkString(", ")} ]")))
         logger.info("Creating var %s: dims = [%s]".format(varname, varDims.map( _.getShortName).mkString(", ") ) )
         val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, varDims.toList )
         varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }

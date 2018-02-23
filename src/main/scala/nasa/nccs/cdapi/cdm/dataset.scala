@@ -24,7 +24,7 @@ import scala.collection.{concurrent, mutable}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.esgf.wps.ProcessManager
-import ucar.nc2._
+import ucar.nc2.{dataset, _}
 import ucar.nc2.write.Nc4Chunking
 
 import scala.collection.mutable.ArrayBuffer
@@ -418,6 +418,7 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
     val numDataFiles: Int = Option(ncDataset.findGlobalAttribute("NumDataFiles")).fold(0)(_.getNumericValue.intValue())
     val variables = ncDataset.getVariables.toList
     val result: Option[(Int, nc2.Variable)] = variables.find(v => (v.getShortName equals varShortName)) map { variable => (numDataFiles, variable) }
+    val coordVars = variables.filter( _.isCoordinateVariable )
     if (result.isEmpty) {
       logger.error("Can't find variable %s in collection %s (%s), variable names = [ %s ] ".format(varShortName, name, gridFilePath, variables.map(_.getShortName).mkString(", ")))
     }
