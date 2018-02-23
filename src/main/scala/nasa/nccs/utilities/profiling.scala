@@ -51,6 +51,7 @@ class EventAccumulator extends AccumulatorV2[EventRecord, java.util.List[EventMe
   private def getMetrics( eventId: String ): EventMetrics = _metricsList.find( _.eventId.equals(eventId) ).getOrElse( newEvent(eventId) )
   private def getStartEvent( eventId: String ): Option[StartEvent] = _startEventList.find( _.eventId.equals(eventId) )
   private def updateStartEvent( eventId: String ): StartEvent = getStartEvent(eventId).fold( newStartEvent(eventId) )( _.update() )
+  private var _activated = false
   override def add(v: EventRecord): Unit = getMetrics( v.eventId ) += v
   override def copyAndReset(): EventAccumulator = new EventAccumulator
   override def value: java.util.List[EventMetrics] = _metricsList.synchronized { java.util.Collections.unmodifiableList(new ArrayList[EventMetrics](_metricsList)) }
@@ -62,6 +63,8 @@ class EventAccumulator extends AccumulatorV2[EventRecord, java.util.List[EventMe
   }
 
   def startEvent( eventId: String ): StartEvent = updateStartEvent( eventId )
+  def activate: Unit = { _activated = true }
+  def activated: Boolean  = _activated
 
   def endEvent( eventId: String ): Unit = getStartEvent( eventId ) match {
     case Some(startEvent) => add( new EventRecord( eventId, startEvent.timestamp, System.nanoTime()-startEvent.timestamp, startEvent.clocktime ) )
@@ -78,12 +81,12 @@ class EventAccumulator extends AccumulatorV2[EventRecord, java.util.List[EventMe
     case _ => throw new UnsupportedOperationException( s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
   }
 
-  def profile[T]( eventId: String )( code: () => T ) : T = {
+  def profile[T]( eventId: String )( code: () => T ) : T = if( _activated ) {
     startEvent(eventId)
     val rv = code()
     endEvent(eventId)
     rv
-  }
+  } else { code() }
 }
 
 

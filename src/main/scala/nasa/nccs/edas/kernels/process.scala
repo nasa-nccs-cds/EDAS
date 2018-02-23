@@ -1,6 +1,7 @@
 package nasa.nccs.edas.kernels
 
 import java.io._
+import java.net.{InetAddress, UnknownHostException}
 import java.nio.{ByteBuffer, ByteOrder, FloatBuffer}
 
 import nasa.nccs.caching.EDASPartitioner
@@ -102,6 +103,17 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
     case Some(dc) => dc.metadata;
     case None => Map.empty
   }
+
+  def getHostAddress: String = try {
+    val ip = InetAddress.getLocalHost
+    String.format("%s(%s)", ip.getHostName, ip.getHostAddress)
+  } catch { case e: UnknownHostException => "UNKNOWN" }
+
+  def getProcessAddress: String = try {
+    val ip = InetAddress.getLocalHost
+    val currentThread = Thread.currentThread
+    String.format("%s:T%d", ip.getHostName, currentThread.getId )
+  } catch { case e: UnknownHostException => "UNKNOWN" }
 
   def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
 
@@ -737,7 +749,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
 
 class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True", "visibility" -> "public" ), false ) {
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = context.profiler.profile("CDMSRegridKernel.map") ( () => {
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = context.profiler.profile(s"CDMSRegridKernel.map(${context.getProcessAddress})") ( () => {
       val t0 = System.nanoTime
       val targetGrid: GridContext = context.grid
       val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
@@ -763,20 +775,21 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
           worker.sendRequestInput(uid, data_array)
         }
 
-        val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
         val rID = UID()
-        worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
-
-        var gridFile = ""
-        val resultItems: Iterable[(String, ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
-          val tvar = worker.getResult
-          val result = ArraySpec(tvar)
-          if (gridFile.isEmpty) {
-            gridFile = tvar.getMetaDataValue("gridfile", "")
+        val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
+        val (gridFile,resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${context.getProcessAddress})") ( () => {
+          worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
+          var gFile = ""
+          val resultItems: Iterable[(String, ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
+            val tvar = worker.getResult
+            val result = ArraySpec(tvar)
+            if (gFile.isEmpty) { gFile = tvar.getMetaDataValue("gridfile", "") }
+            context.operation.rid + ":" + uid -> result
           }
-          context.operation.rid + ":" + uid -> result
-        }
-        val reprocessed_input_map = resultItems.toMap
+          (gFile,resultItems)
+        } )
+
+        val reprocessed_input_map = resultArrays.toMap
         logger.info("Gateway[T:%s]: Executed operation %s, time: %.2f, operation metadata: { %s }".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9, context_metadata.mkString(", ")))
         CDTimeSlice(inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map, inputs.metadata + ("gridspec" -> gridFile))
       }
