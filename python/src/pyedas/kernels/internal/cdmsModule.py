@@ -64,7 +64,9 @@ class RegridKernel(CDMSKernel):
             new_origin = list(origin)
             if( ( outlatBounds0[0] < inlatBounds0[0] ) and ( outlatBounds0[1] > inlatBounds0[0] ) ): origin[0] = origin[0] + (inlatBounds0[0]-outlatBounds0[0])
             if( ( outlonBounds0[0] < inlonBounds0[0] ) and ( outlonBounds0[1] > inlonBounds0[0] ) ): origin[1] = origin[1] + (inlonBounds0[0]-outlonBounds0[0])
-            if( cmp(new_origin,origin) ):  toGrid = cdms2.createUniformGrid(new_origin[0], shape[0], res[0], new_origin[1], shape[1], res[1])
+            if( cmp(new_origin,origin) ):
+                self.logger.info("Re-create uniform Grid, new origin = " + str(new_origin) + " old bounds, lat = " + str( outlatBounds0 ) + ", lon = " + str( outlonBounds0 ))
+                toGrid = cdms2.createUniformGrid(new_origin[0], shape[0], res[0], new_origin[1], shape[1], res[1])
             self.logger.info("createUniformGrid")
         elif( target ):
             grid_input = inputs.get( target, None )
