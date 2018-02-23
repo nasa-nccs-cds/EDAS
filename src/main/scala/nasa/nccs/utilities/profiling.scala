@@ -34,11 +34,11 @@ class EventMetrics( val eventId: String ) extends Serializable {
     if( tsec > _maxDuration ) { _maxDuration = tsec }
     if( tsec < _minDuration ) { _minDuration = tsec }
     if( _start == 0 ) { _start = rec.timestamp }
-    if( _clock == 0 ) { _start = rec.clocktime }
+    if( _clock == 0 ) { _clock = rec.clocktime }
     _end = rec.timestamp + rec.duration
   }
   def clock = _clock
-  def toString( baseClockTime: Long ): String = s"[ EM(${eventId}): SumDuration=${_sumDuration}, AveDuration=${_sumDuration/_nEvents}, NEvents=${_nEvents}, MaxDuration=${_maxDuration}, MinDuration=${_minDuration}, Extent=${(_end-_start)/1.0e9} ClockSecs=${(_clock-baseClockTime)/1000}]"
+  def toString( baseClockTime: Long ): String = s"[ EM(${eventId}): SumDuration=${_sumDuration}, AveDuration=${_sumDuration/_nEvents}, NEvents=${_nEvents}, MaxDuration=${_maxDuration}, MinDuration=${_minDuration}, Extent=${(_end-_start)/1.0e9} Clock=${(_clock-baseClockTime)/1000.0}]"
 }
 
 class EventAccumulator extends AccumulatorV2[EventRecord, java.util.List[EventMetrics]] with Loggable {
