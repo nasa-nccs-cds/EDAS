@@ -54,12 +54,15 @@ class RegridKernel(CDMSKernel):
             shape = sa2i( self.getListParm( mdata, "shape" ) )
             gridSection = str( mdata.get('gridSection',"") )
             plev = sa2f( self.getListParm( mdata, "plev" ) )
-            self.logger.info("\n Execute REGRID -> " + gridType + " Task with metadata: " + str(task.metadata) + "\n")
+            self.logger.info("\n Execute REGRID -> " + gridType + ", grid section: '" + str(gridSection) + "' Task with metadata: " + str(task.metadata) + "\n")
 
             toGrid = None
             if ("gaussian" in gridType):
                 toGrid = cdms2.createGaussianGrid(shape[0])
                 self.logger.info("createGaussianGrid, shape = " + str(toGrid.shape) )
+                if (gridSection):
+                    (bounds0, bounds1) = self.getAxisBounds(gridSection)
+                    toGrid = toGrid.subGrid(bounds0, bounds1)
             elif ("uniform" in gridType):
                 origin = sa2f(self.getListParm(mdata, "origin", "0,-90"))
                 if (shape):
@@ -93,12 +96,12 @@ class RegridKernel(CDMSKernel):
                     variable = _input.getVariable()
                     ingrid = _input.getGrid()
                     inlatBounds, inlonBounds = ingrid.getBounds()
-                    self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) )
-                    self.logger.info( " >> in LON Bounds shape: " + str(inlonBounds.shape) )
+                    self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) + ", values: " + str(inlatBounds) )
+                    self.logger.info( " >> in LON Bounds shape: " + str(inlonBounds.shape) + ", values: " + str(inlonBounds)  )
                     self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
                     outlatBounds, outlonBounds = toGrid.getBounds()
-                    self.logger.info( " >> out LAT Bounds shape: " + str(outlatBounds.shape) )
-                    self.logger.info( " >> out LON Bounds shape: " + str(outlonBounds.shape) )
+                    self.logger.info( " >> out LAT Bounds shape: " + str(outlatBounds.shape) + ", values: " + str(outlatBounds)  )
+                    self.logger.info( " >> out LON Bounds shape: " + str(outlonBounds.shape) + ", values: " + str(outlonBounds)  )
                     if( not ingrid == toGrid ):
                         self.logger.info( " Regridding Variable {0} using grid {1} ".format( variable.id, toGrid.getType() ) )
                         if self._debug:
