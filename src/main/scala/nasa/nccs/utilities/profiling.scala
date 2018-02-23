@@ -91,20 +91,25 @@ class EventAccumulator( val activationStatus: String ) extends AccumulatorV2[Eve
   } else { code() }
 }
 
+// sbt "run-main nasa.nccs.utilities.ClockTest"
+
 object ClockTest {
   def main(args : Array[String]) {
-    val eventAccum = new EventAccumulator("active")
+    val profiler = new EventAccumulator("active")
     val sc = CDSparkContext()
+    sc.sparkContext.register( profiler, "EDAS_EventAccumulator" )
     val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19), 20 )
-    eventAccum.profile("master") ( ( ) => {
+    profiler.profile("master") ( ( ) => {
       indices.map(index => {
-        eventAccum.profile(index.toString)(() => {
+        profiler.profile(index.toString)(() => {
           Thread.sleep(1000)
         })
       })
     })
-    print( eventAccum.toString() )
+    print( profiler.toString() )
   }
 }
+
+
 
 
