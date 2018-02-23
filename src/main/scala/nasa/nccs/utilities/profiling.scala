@@ -51,7 +51,7 @@ class EventAccumulator( val activationStatus: String ) extends AccumulatorV2[Eve
   private def getMetrics( eventId: String ): EventMetrics = _metricsList.find( _.eventId.equals(eventId) ).getOrElse( newEvent(eventId) )
   private def getStartEvent( eventId: String ): Option[StartEvent] = _startEventList.find( _.eventId.equals(eventId) )
   private def updateStartEvent( eventId: String ): StartEvent = getStartEvent(eventId).fold( newStartEvent(eventId) )( _.update() )
-  private var _activated = !activationStatus.isEmpty
+  private var _activated = true // !activationStatus.isEmpty
   override def add(v: EventRecord): Unit = getMetrics( v.eventId ) += v
   override def copyAndReset(): EventAccumulator = new EventAccumulator(activationStatus)
   override def value: java.util.List[EventMetrics] = _metricsList.synchronized { java.util.Collections.unmodifiableList(new ArrayList[EventMetrics](_metricsList)) }
@@ -60,7 +60,7 @@ class EventAccumulator( val activationStatus: String ) extends AccumulatorV2[Eve
     val events: List[EventMetrics] = value.toList.sortBy( _.clock )
     val baseClockTime = events.head.clock
     "EVENTS:\n ** " + events.map(_.toString(baseClockTime)).mkString( "\n ** ")
-  } catch { case _ => "" }
+  } catch { case err: Throwable => "" }
 
   def startEvent( eventId: String ): StartEvent = updateStartEvent( eventId )
   def activate: Unit = { _activated = true }
