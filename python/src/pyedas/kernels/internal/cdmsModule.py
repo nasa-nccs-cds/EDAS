@@ -31,6 +31,54 @@ class RegridKernel(CDMSKernel):
         subGridIndices = [map(int, x.split(':')) for x in subGridSpec]
         return ( [subGridIndices[0][0],subGridIndices[0][1]+1], [subGridIndices[1][0],subGridIndices[1][1]+1]  )
 
+    def getOutGrid(self, mdata, inputs, inlatBounds, inlonBounds ):
+        #        log_file.write( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
+        gridType = str( mdata.get("grid","") ).lower()
+        target = str( mdata.get("target","") )
+        gridSpec = str( mdata.get("gridSpec","") )
+        res = sa2f( self.getListParm( mdata, "res" ) )
+        shape = sa2i( self.getListParm( mdata, "shape" ) )
+        gridSection = str( mdata.get('gridSection',"") )
+        plev = sa2f( self.getListParm( mdata, "plev" ) )
+        self.logger.info("\n Execute REGRID -> " + gridType + ", grid section: '" + str(gridSection) + "' Task with metadata: " + str(task.metadata) + "\n")
+        toGrid = None
+        if ("gaussian" in gridType):
+            toGrid = cdms2.createGaussianGrid(shape[0])
+            self.logger.info("createGaussianGrid, shape = " + str(toGrid.shape) )
+            # if (gridSection):
+            #     (bounds0, bounds1) = self.getAxisBounds(gridSection)
+            #     toGrid = toGrid.subGrid(bounds0, bounds1)
+        elif ("uniform" in gridType):
+            origin = sa2f(self.getListParm(mdata, "origin", "0,-90"))
+            if (shape):
+                if (not res): res = [(90.0 - origin[0]) / shape[0], (360.0 - origin[1]) / shape[1]]
+            else:
+                if (not res):  raise Exception("Must define either 'shape' or 'res' parameter in regrid kernel")
+                shape = [int(round((90.0 - origin[0]) / res[0])), int(round((360.0 - origin[1]) / res[1]))]
+            toGrid = cdms2.createUniformGrid(origin[0], shape[0], res[0], origin[1], shape[1], res[1])
+            outlatBounds, outlonBounds = toGrid.getBounds()
+            outlatBounds0, outlonBounds0 = outlatBounds[0], outlonBounds[0]
+            inlatBounds0, inlonBounds0 = inlatBounds[0], inlonBounds[0]
+            new_origin = list(origin)
+            if( ( outlatBounds0[0] < inlatBounds0[0] ) and ( outlatBounds0[1] > inlatBounds0[0] ) ): origin[0] = origin[0] + (inlatBounds0[0]-outlatBounds0[0])
+            if( ( outlonBounds0[0] < inlonBounds0[0] ) and ( outlonBounds0[1] > inlonBounds0[0] ) ): origin[1] = origin[1] + (inlonBounds0[0]-outlonBounds0[0])
+            if( cmp(new_origin,origin) ):  toGrid = cdms2.createUniformGrid(new_origin[0], shape[0], res[0], new_origin[1], shape[1], res[1])
+            self.logger.info("createUniformGrid")
+        elif( target ):
+            grid_input = inputs.get( target, None )
+            if not grid_input: raise Exception( "Can't find grid variable uid: " + target + ", variable uids = " + str( inputs.keys() ) )
+            self.logger.info("create Grid from target")
+            toGrid = grid_input.getGrid()
+        elif( gridSpec ):
+            toGrid = self.getGrid( gridSpec )
+            self.logger.info("create Grid from gridSpec")
+            if( gridSection ):
+                ( bounds0, bounds1 ) = self.getAxisBounds( gridSection )
+                toGrid = toGrid.subGrid( bounds0, bounds1 )
+        else:
+            raise Exception( "Unable to determine target grid type in Regrid operation")
+        return toGrid
+
     def executeOperations(self, task, _inputs):
         """
         :type task: Task
@@ -44,47 +92,8 @@ class RegridKernel(CDMSKernel):
             cdms2.setAutoBounds(2)
             t0 = time.time()
             mdata = task.metadata;     """:type : dict[str,str] """
-    #        log_file.write( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
-            gridType = str( mdata.get("grid","") ).lower()
-            target = str( mdata.get("target","") )
-            gridSpec = str( mdata.get("gridSpec","") )
             regridTool = str(mdata.get("regridTool", "esmf"))
             method = str( mdata.get("method","linear") ).lower()
-            res = sa2f( self.getListParm( mdata, "res" ) )
-            shape = sa2i( self.getListParm( mdata, "shape" ) )
-            gridSection = str( mdata.get('gridSection',"") )
-            plev = sa2f( self.getListParm( mdata, "plev" ) )
-            self.logger.info("\n Execute REGRID -> " + gridType + ", grid section: '" + str(gridSection) + "' Task with metadata: " + str(task.metadata) + "\n")
-
-            toGrid = None
-            if ("gaussian" in gridType):
-                toGrid = cdms2.createGaussianGrid(shape[0])
-                self.logger.info("createGaussianGrid, shape = " + str(toGrid.shape) )
-                # if (gridSection):
-                #     (bounds0, bounds1) = self.getAxisBounds(gridSection)
-                #     toGrid = toGrid.subGrid(bounds0, bounds1)
-            elif ("uniform" in gridType):
-                origin = sa2f(self.getListParm(mdata, "origin", "0,-90"))
-                if (shape):
-                    if (not res): res = [(90.0 - origin[0]) / shape[0], (360.0 - origin[1]) / shape[1]]
-                else:
-                    if (not res):  raise Exception("Must define either 'shape' or 'res' parameter in regrid kernel")
-                    shape = [int(round((90.0 - origin[0]) / res[0])), int(round((360.0 - origin[1]) / res[1]))]
-                toGrid = cdms2.createUniformGrid(origin[0], shape[0], res[0], origin[1], shape[1], res[1])
-                self.logger.info("createUniformGrid")
-            elif( target ):
-                grid_input = _inputs.get( target, None )
-                if not grid_input: raise Exception( "Can't find grid variable uid: " + target + ", variable uids = " + str( _inputs.keys() ) )
-                self.logger.info("create Grid from target")
-                toGrid = grid_input.getGrid()
-            elif( gridSpec ):
-                toGrid = self.getGrid( gridSpec )
-                self.logger.info("create Grid from gridSpec")
-                if( gridSection ):
-                    ( bounds0, bounds1 ) = self.getAxisBounds( gridSection )
-                    toGrid = toGrid.subGrid( bounds0, bounds1 )
-            else:
-                raise Exception( "Unable to determine target grid type in Regrid operation")
 
             for input_id in task.inputs:
                 vid = input_id.split('-')[0]
@@ -96,6 +105,7 @@ class RegridKernel(CDMSKernel):
                     variable = _input.getVariable()
                     ingrid = _input.getGrid()
                     inlatBounds, inlonBounds = ingrid.getBounds()
+                    toGrid = self.getGrid( mdata, _inputs, inlatBounds, inlonBounds )
                     self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) + ", values: " + str(inlatBounds) )
                     self.logger.info( " >> in LON Bounds shape: " + str(inlonBounds.shape) + ", values: " + str(inlonBounds)  )
                     self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
