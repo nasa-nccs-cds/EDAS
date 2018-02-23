@@ -106,13 +106,13 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
 
   def getHostAddress: String = try {
     val ip = InetAddress.getLocalHost
-    String.format("%s(%s)", ip.getHostName, ip.getHostAddress)
+    s"${ip.getHostName}(${ip.getHostAddress})"
   } catch { case e: UnknownHostException => "UNKNOWN" }
 
   def getProcessAddress: String = try {
     val ip = InetAddress.getLocalHost
     val currentThread = Thread.currentThread
-    String.format("%s:T%d", ip.getHostName, currentThread.getId )
+    s"${ip.getHostName}:T${currentThread.getId.toString}"
   } catch { case e: UnknownHostException => "UNKNOWN" }
 
   def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
