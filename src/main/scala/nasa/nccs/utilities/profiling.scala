@@ -93,7 +93,7 @@ class EventAccumulator( val activationStatus: String ) extends AccumulatorV2[Eve
 
 // sbt "run-main nasa.nccs.utilities.ClockTest"
 
-object ClockTest {
+object ClockTest1 {
   def main(args : Array[String]) {
     val profiler = new EventAccumulator("active")
     val sc = CDSparkContext()
@@ -109,6 +109,17 @@ object ClockTest {
     print( profiler.toString() )
   }
 }
+
+object ClockTest {
+  def main(args : Array[String]) {
+    val sc = CDSparkContext()
+    val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19), 20 )
+    val times = indices.map(index => { System.currentTimeMillis() } )
+    val clock_times = times.collect()
+    print( "\n" + clock_times.mkString("\n") )
+  }
+}
+
 
 
 
