@@ -113,9 +113,9 @@ object ClockTest1 {
 object ClockTest {
   def main(args : Array[String]) {
     val sc = CDSparkContext()
-    val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19), 20 )
-    val times = indices.map(index => { System.currentTimeMillis() } )
-    val clock_times = times.collect()
+    val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19) )
+    val times: RDD[String] = indices.map(index => { System.currentTimeMillis().toString } )
+    val clock_times: Array[String] = times.collect()
     print( "\n" + clock_times.mkString("\n") )
   }
 }
