@@ -65,8 +65,13 @@ class CDArray:
     def parseRoi(self):
         roiSpec = self.metadata.get("roi")
         roiMap = {}
-        if not (roiSpec is None):
-            self.logger.info(" ***->> Parsing ROI spec: {0}".format( roiSpec ) )
+        if (roiSpec is None):
+            self.logger.info(" >>>->> Empty ROI spec {0} in CDArray".format( self.id ) )
+            axisIds = ['t','z','y','x'] if( len(self.shape) == 4 ) else ['t','y','x']
+            for axisIndex in range( len(axisIds) ):
+                roiMap[axisIds[axisIndex]] = ( self.origin[axisIndex], self.origin[axisIndex] + self.shape[axisIndex] )
+        else:
+            self.logger.info(" >>>->> Parsing ROI spec: {0}".format( roiSpec ) )
             for roiTok in roiSpec.split('+'):
                 axisToks = roiTok.split(',')
                 roiMap[ axisToks[0].lower() ] = ( int(axisToks[1]),  int(axisToks[2]) + 1 )
