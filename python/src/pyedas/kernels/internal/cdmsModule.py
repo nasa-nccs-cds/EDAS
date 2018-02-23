@@ -47,7 +47,7 @@ class RegridKernel(CDMSKernel):
         if ("gaussian" in gridType):
             toGrid = cdms2.createGaussianGrid(shape[0])
             self.logger.info("createGaussianGrid, shape = " + str(toGrid.shape) )
-            # if (gridSection):
+            if (gridSection): raise Exception( "Gaussian Grid currently does not work with a spatial roi")
             #     (bounds0, bounds1) = self.getAxisBounds(gridSection)
             #     toGrid = toGrid.subGrid(bounds0, bounds1)
         elif ("uniform" in gridType):

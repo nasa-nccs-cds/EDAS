@@ -464,7 +464,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
       val response = results.toXml( ResponseSyntax.Generic )
       executionCallback.foreach( _.success( response ) )
       collectionDataCache.removeJob( jobId )
-      logger.info( "\n\n PROFILING RESULTS: \n ** " + requestContext.profiler.value.mkString( "\n ** ") )
+      logger.info( "\n\n PROFILING RESULTS: " + requestContext.profiler.toString() )
       results
     }
   }

@@ -58,7 +58,7 @@ class EventAccumulator extends AccumulatorV2[EventRecord, java.util.List[EventMe
   override def toString(): String = {
     val events: List[EventMetrics] = value.toList.sortBy( _.clock )
     val baseClockTime = events.head.clock
-    "\n\n PROFILING RESULTS: \n ** " + events.map(_.toString(baseClockTime)).mkString( "\n ** ")
+    "EVENTS:\n ** " + events.map(_.toString(baseClockTime)).mkString( "\n ** ")
   }
 
   def startEvent( eventId: String ): StartEvent = updateStartEvent( eventId )
