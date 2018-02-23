@@ -31,7 +31,7 @@ class RegridKernel(CDMSKernel):
         subGridIndices = [map(int, x.split(':')) for x in subGridSpec]
         return ( [subGridIndices[0][0],subGridIndices[0][1]+1], [subGridIndices[1][0],subGridIndices[1][1]+1]  )
 
-    def getOutGrid(self, mdata, inputs, inlatBounds, inlonBounds ):
+    def getOutGrid(self, mdata, inputs, ingrid ):
         #        log_file.write( "\n Execute REGRID Task with metadata: " + str( task.metadata ) + "\n" )
         gridType = str( mdata.get("grid","") ).lower()
         target = str( mdata.get("target","") )
@@ -39,8 +39,10 @@ class RegridKernel(CDMSKernel):
         res = sa2f( self.getListParm( mdata, "res" ) )
         shape = sa2i( self.getListParm( mdata, "shape" ) )
         gridSection = str( mdata.get('gridSection',"") )
-        plev = sa2f( self.getListParm( mdata, "plev" ) )
-        self.logger.info("\n Execute REGRID -> " + gridType + ", grid section: '" + str(gridSection) + "' Task with metadata: " + str(task.metadata) + "\n")
+        inlatBounds, inlonBounds = ingrid.getBounds()
+        self.logger.info("\n Execute REGRID -> " + gridType + ", grid section: '" + str(gridSection) + "' with metadata: " + str(mdata) + "\n")
+        self.logger.info(" >> in LAT Bounds shape: " + str(inlatBounds.shape) + ", values: " + str(inlatBounds))
+        self.logger.info(" >> in LON Bounds shape: " + str(inlonBounds.shape) + ", values: " + str(inlonBounds))
         toGrid = None
         if ("gaussian" in gridType):
             toGrid = cdms2.createGaussianGrid(shape[0])
@@ -77,6 +79,10 @@ class RegridKernel(CDMSKernel):
                 toGrid = toGrid.subGrid( bounds0, bounds1 )
         else:
             raise Exception( "Unable to determine target grid type in Regrid operation")
+
+        outlatBounds, outlonBounds = toGrid.getBounds()
+        self.logger.info(" >> out LAT Bounds shape: " + str(outlatBounds.shape) + ", values: " + str(outlatBounds))
+        self.logger.info(" >> out LON Bounds shape: " + str(outlonBounds.shape) + ", values: " + str(outlonBounds))
         return toGrid
 
     def executeOperations(self, task, _inputs):
@@ -104,14 +110,8 @@ class RegridKernel(CDMSKernel):
                     self.logger.info( "Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}".format( vid, _input.name, _input.collection, _input.gridFile ) )
                     variable = _input.getVariable()
                     ingrid = _input.getGrid()
-                    inlatBounds, inlonBounds = ingrid.getBounds()
-                    toGrid = self.getGrid( mdata, _inputs, inlatBounds, inlonBounds )
-                    self.logger.info( " >> in LAT Bounds shape: " + str(inlatBounds.shape) + ", values: " + str(inlatBounds) )
-                    self.logger.info( " >> in LON Bounds shape: " + str(inlonBounds.shape) + ", values: " + str(inlonBounds)  )
                     self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
-                    outlatBounds, outlonBounds = toGrid.getBounds()
-                    self.logger.info( " >> out LAT Bounds shape: " + str(outlatBounds.shape) + ", values: " + str(outlatBounds)  )
-                    self.logger.info( " >> out LON Bounds shape: " + str(outlonBounds.shape) + ", values: " + str(outlonBounds)  )
+                    toGrid = self.getOutGrid( mdata, _inputs, ingrid )
                     if( not ingrid == toGrid ):
                         self.logger.info( " Regridding Variable {0} using grid {1} ".format( variable.id, toGrid.getType() ) )
                         if self._debug:
