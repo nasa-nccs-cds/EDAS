@@ -1,7 +1,9 @@
 package nasa.nccs.utilities
 import java.util.{ArrayList, Collections}
 
+import nasa.nccs.edas.engine.spark.CDSparkContext
 import org.apache.spark._
+import org.apache.spark.rdd.RDD
 import org.apache.spark.util.{AccumulatorV2, CollectionAccumulator}
 
 import scala.collection.JavaConversions._
@@ -87,6 +89,22 @@ class EventAccumulator( val activationStatus: String ) extends AccumulatorV2[Eve
     endEvent(eventId)
     rv
   } else { code() }
+}
+
+object ClockTest {
+  def main(args : Array[String]) {
+    val eventAccum = new EventAccumulator("active")
+    val sc = CDSparkContext()
+    val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19), 20 )
+    eventAccum.profile("master") ( ( ) => {
+      indices.map(index => {
+        eventAccum.profile(index.toString)(() => {
+          Thread.sleep(1000)
+        })
+      })
+    })
+    print( eventAccum.toString() )
+  }
 }
 
 
