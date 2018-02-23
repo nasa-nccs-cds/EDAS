@@ -60,16 +60,16 @@ class RegridKernel(CDMSKernel):
             if ("gaussian" in gridType):
                 toGrid = cdms2.createGaussianGrid(shape[0])
                 self.logger.info("createGaussianGrid, shape = " + str(toGrid.shape) )
-                if (gridSection):
-                    (bounds0, bounds1) = self.getAxisBounds(gridSection)
-                    toGrid = toGrid.subGrid(bounds0, bounds1)
+                # if (gridSection):
+                #     (bounds0, bounds1) = self.getAxisBounds(gridSection)
+                #     toGrid = toGrid.subGrid(bounds0, bounds1)
             elif ("uniform" in gridType):
                 origin = sa2f(self.getListParm(mdata, "origin", "0,-90"))
                 if (shape):
-                    if (not res): res = [(360.0 - origin[0]) / shape[0], (90.0 - origin[1]) / shape[1]]
+                    if (not res): res = [(90.0 - origin[0]) / shape[0], (360.0 - origin[1]) / shape[1]]
                 else:
                     if (not res):  raise Exception("Must define either 'shape' or 'res' parameter in regrid kernel")
-                    shape = [int(round((360.0 - origin[0]) / res[0])), int(round((90.0 - origin[1]) / res[1]))]
+                    shape = [int(round((90.0 - origin[0]) / res[0])), int(round((360.0 - origin[1]) / res[1]))]
                 toGrid = cdms2.createUniformGrid(origin[0], shape[0], res[0], origin[1], shape[1], res[1])
                 self.logger.info("createUniformGrid")
             elif( target ):
