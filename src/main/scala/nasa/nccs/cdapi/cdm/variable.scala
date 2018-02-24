@@ -89,11 +89,8 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
   def getCoordinateAxis( axisType: AxisType ): Option[CoordinateAxis1D] = collection.getGrid(name).findCoordinateAxis(axisType).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) )
 
   def getCoordinateAxis( cname: String ): Option[CoordinateAxis1D] = {
-    val t0 = System.nanoTime()
     val caxis = collection.getGrid(name).findCoordinateAxis(cname)
-    val axis = caxis.map( CDSVariable.toCoordAxis1D(_) )
-    logger.info( s"getCoordinateAxis: ${cname}, time: ${(System.nanoTime()-t0)/1.0E9}")
-    axis
+    caxis.map( CDSVariable.toCoordAxis1D(_) )
   }
   def getCoordinateAxesList = collection.getGrid(name).getCoordinateAxes
 }

@@ -128,7 +128,6 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
 }
 
 class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, private val configuration: Map[String,String], val executionCallback: Option[ExecutionCallback]=None ) extends ScopeContext with Loggable {
-  logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = task.domainMap
   val profiler: EventAccumulator = new EventAccumulator()
@@ -182,7 +181,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   private val _rangeCache: concurrent.TrieMap[String, (Int,Int)] = concurrent.TrieMap.empty[String, (Int,Int)]
   val t3 = System.nanoTime()
   val enable_range_caching = true;
-  logger.info( s" Created GridCoordSpec ${coordAxis.getFullName}, times = ${(t1-t0)/1.0E9} ${(t2-t1)/1.0E9} ${(t3-t2)/1.0E9} sec" )
+//  logger.info( s" Created GridCoordSpec ${coordAxis.getFullName}, times = ${(t1-t0)/1.0E9} ${(t2-t1)/1.0E9} ${(t3-t2)/1.0E9} sec" )
   def getAxisType: AxisType = coordAxis.getAxisType
 
   def getCFAxisName: String = Option(coordAxis.getAxisType) match  {
@@ -373,7 +372,7 @@ object GridSection extends Loggable {
     val t3 = System.nanoTime
     val rv = new GridSection( grid, coordSpecs.flatten )
     val t4 = System.nanoTime
-    logger.info( " @GS@ GridSection: %.4f %.4f %.4f, %.4f, T = %.4f ".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, (t4-t3)/1.0E9, (t4-t0)/1.0E9 ) )
+//    logger.info( " @GS@ GridSection: %.4f %.4f %.4f, %.4f, T = %.4f ".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, (t4-t3)/1.0E9, (t4-t0)/1.0E9 ) )
     rv
   }
 
@@ -697,7 +696,6 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
   def createInputSpec( dataContainer: DataContainer, domain_container_opt: Option[DomainContainer],  request: TaskRequest ): (String, Option[DataFragmentSpec]) = {
     val t0 = System.nanoTime
     val data_source: DataSource = dataContainer.getSource
-    logger.info( s"Data Source, fragIdOpt: ${data_source.fragIdOpt.toString}" )
     val t1 = System.nanoTime
     val variable: CDSVariable = dataContainer.getVariable
     val t2 = System.nanoTime

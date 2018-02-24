@@ -166,9 +166,9 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
   def section( section: CDSection ): TimeSliceRDD = TimeSliceRDD( rdd.flatMap( _.section(section) ), metadata, variableRecords )
   def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata, variableRecords )
-  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD =
-    TimeSliceRDD( rdd map op , metadata, variableRecords )
+  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = TimeSliceRDD( rdd map op , metadata, variableRecords )
   def getNumPartitions = rdd.getNumPartitions
+  def nodeList: Array[String] = rdd.map( ts => KernelContext.getProcessAddress ).collect
   def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata, variableRecords )
 
@@ -490,6 +490,9 @@ class RDDContainer extends Loggable {
       update( _rdd.map( slice => slice ++ records.slices.headOption.getOrElse( CDTimeSlice.empty ) ) )
     }
     def nSlices = { _rdd.cache; _rdd.nSlices }
+    def nPartitions = {  _rdd.getNumPartitions }
+    def nodeList = {  _rdd.nodeList }
+
   }
   def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
 
@@ -498,6 +501,8 @@ class RDDContainer extends Loggable {
   }
   def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
   def reduceBroadcast( node: Kernel, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ) )
+  def nPartitions: Int = _vault.fold(0)(_.nPartitions)
+  def nodeList: Array[String] = _vault.fold( Array.empty[String] )( _.nodeList )
 
   private def _extendRDD( generator: RDDGenerator, rdd: TimeSliceRDD, vSpecs: List[DirectRDDVariableSpec]  ): TimeSliceRDD = {
     if( vSpecs.isEmpty ) { rdd }
@@ -514,7 +519,6 @@ class RDDContainer extends Loggable {
     val newVSpecs = vSpecs.filter( vspec => ! contents.contains(vspec.uid) )
     if( newVSpecs.nonEmpty ) {
       val generator = new RDDGenerator( sparkContext, BatchSpec.nParts )
-      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}" )
       val remainingVspecs = if( _vault.isEmpty ) {
         val tvspec = vSpecs.head
         val baseRdd: TimeSliceRDD = generator.parallelize( tvspec )
@@ -522,6 +526,7 @@ class RDDContainer extends Loggable {
         vSpecs.tail
       } else { vSpecs }
       extendVault( generator, remainingVspecs )
+      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, nodes = [ ${nodeList.mkString(", ")} ]" )
     }
   }
 

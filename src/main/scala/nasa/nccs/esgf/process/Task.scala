@@ -78,7 +78,7 @@ class TaskRequest(val id: UID,
     val t1 = System.nanoTime
     val rv = new TargetGrid(variable, roiOpt)
     val t2 = System.nanoTime
-    logger.info( " CreateTargetGridT: %.4f %.4f ".format((t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9))
+ //   logger.info( " CreateTargetGridT: %.4f %.4f ".format((t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9))
     rv
   }
 
