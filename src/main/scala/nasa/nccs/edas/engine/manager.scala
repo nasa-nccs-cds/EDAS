@@ -190,23 +190,29 @@ object EDASExecutionManager extends Loggable {
         resultId, path, dataMap.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
         coordAxes.map { caxis => "%s: (%s)".format(caxis.getShortName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString, varMetadata.mkString("; ") ) )
 
-//      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.flatMap( coordAxis => inputSpec.getRange(coordAxis.getShortName) map { range =>
+
+//      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.map( coordAxis => {
 //        val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getShortName, coordAxis.getDataType, coordAxis.getShortName)
 //        for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
-//        val newRange = dimsMap.get(coordAxis.getShortName) match {
-//          case None => range;
-//          case Some(dim) => if ( (dim.getLength < range.length) || ( coordAxis.getShape(0) <= range.last() ) ) new ma2.Range(dim.getLength) else range
-//        }
-//        val data = coordAxis.read(List(newRange))
+//        val data = coordAxis.read()
 //        (coordVar, data)
 //      })
-
-      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.map( coordAxis => {
-        val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getShortName, coordAxis.getDataType, coordAxis.getShortName)
-        for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
-        val data = coordAxis.read()
-        (coordVar, data)
-      })
+      
+      val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
+      val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
+        inputSpec.getRange(coordAxis.getFullName) match {
+          case Some(range) =>
+            val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
+            for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
+            val newRange = dimsMap.get(coordAxis.getFullName) match {
+              case None => range;
+              case Some(dim) => if (dim.getLength < range.length) new ma2.Range(dim.getLength) else range
+            }
+            val data = coordAxis.read(List(newRange))
+            Some(coordVar, data)
+          case None => None
+        }
+      }).flatten
 
       val axisTypes = if( shape.length == 4 ) Array("T", "Z", "Y", "X" )  else Array("T", "Y", "X" )
       val varDims: Array[Dimension] = axisTypes.map( aType => coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
