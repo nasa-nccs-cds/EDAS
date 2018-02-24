@@ -124,9 +124,9 @@ class TestClockProcess( id: String ) extends TestProcess( id ) with Loggable {
     sc.sparkContext.register( profiler, "EDAS_EventAccumulator" )
     val indices1: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19) )
     profiler.profile("master") ( ( ) => {
-      indices1.map( index => {
-        profiler.profile(index.toString)( () => { val x = Math.sin( 10000.0 ) } )
-      })
+      val result = indices1.map( index => {
+        profiler.profile(index.toString)( () => { Math.sin( index * 3.14159 ) } )
+      }).collect()
     })
     logger.info( "\n EVENTS: \n" + profiler.toString() )
     new WPSMergedEventReport( Seq.empty )
