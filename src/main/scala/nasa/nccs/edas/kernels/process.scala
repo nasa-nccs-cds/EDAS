@@ -84,8 +84,6 @@ object KernelContext {
 
 class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],
                      _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec],  val profiler: EventAccumulator ) extends Loggable with Serializable with ScopeContext {
-  import KernelContext._
-
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
   val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
@@ -753,7 +751,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
 
 class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True", "visibility" -> "public" ), false ) {
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = context.profiler.profile(s"CDMSRegridKernel.map(${context.getProcessAddress})") ( () => {
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = context.profiler.profile(s"CDMSRegridKernel.map(${KernelContext.getProcessAddress})") ( () => {
       val t0 = System.nanoTime
       val targetGrid: GridContext = context.grid
       val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse( throw new Exception( "Undefined target Grid in regrid operation"))
@@ -781,7 +779,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
         val rID = UID()
         val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
-        val (gridFile,resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${context.getProcessAddress})") ( () => {
+        val (gridFile,resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${KernelContext.getProcessAddress})") ( () => {
           worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
           var gFile = ""
           val resultItems: Iterable[(String, ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
