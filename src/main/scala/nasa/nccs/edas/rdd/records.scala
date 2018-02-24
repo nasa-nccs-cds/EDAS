@@ -115,9 +115,21 @@ class TimeSliceIterator1( val varId: String, val varName: String, val section: S
 class TestClockProcess( id: String ) extends TestProcess( id ) with Loggable {
   def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {
     val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19) )
-    val times: RDD[String] = indices.map(index => { System.currentTimeMillis().toString } )
+    val times: RDD[String] = indices.map(index => { (System.currentTimeMillis()/1000.0).toString } )
     val clock_times: Array[String] = times.collect()
     logger.info( "\n" + clock_times.mkString("\n") )
+
+    val profiler = new EventAccumulator("active")
+    sc.sparkContext.register( profiler, "EDAS_EventAccumulator" )
+    val indices1: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19) )
+    profiler.profile("master") ( ( ) => {
+      indices1.map(index => {
+        profiler.profile(index.toString)(() => {
+          Thread.sleep(1000)
+        })
+      })
+    })
+    logger.info( "\n EVENTS: \n" + profiler.toString() )
     new WPSMergedEventReport( Seq.empty )
   }
 }
