@@ -166,7 +166,8 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
   def section( section: CDSection ): TimeSliceRDD = TimeSliceRDD( rdd.flatMap( _.section(section) ), metadata, variableRecords )
   def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata, variableRecords )
-  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = TimeSliceRDD( rdd.map( ts => op(ts) ), metadata, variableRecords )
+  def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD =
+    TimeSliceRDD( rdd.map( (ts: CDTimeSlice) => KernelContext.profiler.profile(s"TimeSliceRDD.map(${KernelContext.getProcessAddress}):${ts.toString}")( () => op(ts) )), metadata, variableRecords )
   def getNumPartitions = rdd.getNumPartitions
   def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata, variableRecords )
@@ -484,7 +485,7 @@ class RDDContainer extends Loggable {
     def contents = _rdd.rdd.first().elements.keys
     def release( keys: Iterable[String] ) = { update( _rdd.release(keys) ) }
     def += ( record: CDTimeSlice ) = { update( _rdd.map( slice => slice ++ record ) ) }
-    def += ( records: TimeSliceCollection ) = {
+    def += ( records: TimeSliceCollection  ) = {
       assert( records.nslices <= 1, "UNIMPLEMENTED FEATURE: TimeSliceCollection -> RDDVault")
       update( _rdd.map( slice => slice ++ records.slices.headOption.getOrElse( CDTimeSlice.empty ) ) )
     }

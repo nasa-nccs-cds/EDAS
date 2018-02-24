@@ -10,7 +10,7 @@ import nasa.nccs.esgf.process._
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import nasa.nccs.utilities.{EventAccumulator, Loggable, cdsutils}
-import nasa.nccs.edas.kernels.{Kernel, KernelMgr, KernelModule}
+import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelMgr, KernelModule}
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.{Await, Future, Promise}
@@ -351,15 +351,15 @@ class EDASExecutionManager extends WPSServer with Loggable {
 //  }
 
   def createRequestContext( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): RequestContext = {
-    val profiler = new EventAccumulator( run_args.getOrElse("profile","") )
-    serverContext.spark.sparkContext.register( profiler, "EDAS_EventAccumulator" )
+    KernelContext.profiler.setActivationStatus( run_args.getOrElse("profile","active") )
+    serverContext.spark.sparkContext.register( KernelContext.profiler, "EDAS_EventAccumulator" )
     val sourceContainers = request.variableMap.values.filter(_.isSource)
     val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource ) yield {
       val domainOpt: Option[DomainContainer] = data_container.getSource.getDomain.flatMap(request.getDomain)
       serverContext.createInputSpec( data_container, domainOpt, request )
     }
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
-    new RequestContext ( jobId, sourceMap, request, profiler, run_args, executionCallback )
+    new RequestContext ( jobId, sourceMap, request, run_args, executionCallback )
   }
 
 //  def cacheInputData(request: TaskRequest, run_args: Map[String, String] ): Iterable[Option[(DataFragmentKey, Future[PartitionedFragment])]] = {
@@ -464,7 +464,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
       val response = results.toXml( ResponseSyntax.Generic )
       executionCallback.foreach( _.success( response ) )
       collectionDataCache.removeJob( jobId )
-      logger.info( "\n\n PROFILING RESULTS: " + requestContext.profiler.toString() )
+      logger.info( "\n\n PROFILING RESULTS: " + KernelContext.profiler.toString() )
       results
     }
   }

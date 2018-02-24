@@ -126,7 +126,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
 
 }
 
-class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, val profiler: EventAccumulator, private val configuration: Map[String,String], val executionCallback: Option[ExecutionCallback]=None ) extends ScopeContext with Loggable {
+class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFragmentSpec]], val task: TaskRequest, private val configuration: Map[String,String], val executionCallback: Option[ExecutionCallback]=None ) extends ScopeContext with Loggable {
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = task.domainMap
@@ -146,7 +146,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
     case None =>inputs.head._2 map { _.roi }
   }
 
-  def getTimingReport(label: String): String = profiler.toString
+  def getTimingReport(label: String): String = KernelContext.profiler.toString
   def logTimingReport(label: String): Unit = logger.info(getTimingReport(label))
 
   def getDomain(domain_id: String): DomainContainer = domains.get(domain_id) match {
