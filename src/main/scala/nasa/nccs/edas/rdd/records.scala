@@ -7,7 +7,7 @@ import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.sources.{Aggregation, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.esgf.process.{CDSection, DataContainer, DomainContainer, TaskRequest}
-import nasa.nccs.utilities.{EDASLogManager, Loggable}
+import nasa.nccs.utilities.{EDASLogManager, EventAccumulator, Loggable}
 import nasa.nccs.wps.WPSMergedEventReport
 import org.apache.spark.rdd.RDD
 import ucar.ma2
@@ -112,7 +112,42 @@ class TimeSliceIterator1( val varId: String, val varName: String, val section: S
 }
 
 
+class TestClockProcess( id: String ) extends TestProcess( id ) with Loggable {
+  def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {
+    val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19) )
+    val times: RDD[String] = indices.map(index => { System.currentTimeMillis().toString } )
+    val clock_times: Array[String] = times.collect()
+    logger.info( "\n" + clock_times.mkString("\n") )
+    new WPSMergedEventReport( Seq.empty )
+  }
+}
 
+//object ClockTest1 {
+//  def main(args : Array[String]) {
+//    val profiler = new EventAccumulator("active")
+//    val sc = CDSparkContext()
+//    sc.sparkContext.register( profiler, "EDAS_EventAccumulator" )
+//    val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19), 20 )
+//    profiler.profile("master") ( ( ) => {
+//      indices.map(index => {
+//        profiler.profile(index.toString)(() => {
+//          Thread.sleep(1000)
+//        })
+//      })
+//    })
+//    print( profiler.toString() )
+//  }
+//}
+//
+//object ClockTest {
+//  def main(args : Array[String]) {
+//    val sc = CDSparkContext()
+//    val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19) )
+//    val times: RDD[String] = indices.map(index => { System.currentTimeMillis().toString } )
+//    val clock_times: Array[String] = times.collect()
+//    print( "\n" + clock_times.mkString("\n") )
+//  }
+//}
 
 class TestDatasetProcess( id: String ) extends TestProcess( id ) with Loggable {
   def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {

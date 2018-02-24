@@ -224,6 +224,7 @@ object EDASApplication extends Loggable {
     val appConfiguration = getConfiguration( parameter_file )
     val client_address: String = appConfiguration.getOrElse("client","*")
     EDASExecutionManager.addTestProcess( new TestDatasetProcess( "testDataset") )
+    EDASExecutionManager.addTestProcess( new TestClockProcess( "testClock") )
     val app = new EDASapp( client_address, request_port, response_port, appConfiguration )
     app.start( run_program )
     logger.info(s"EXIT EDASApplication");
