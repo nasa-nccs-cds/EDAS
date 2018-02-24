@@ -199,6 +199,8 @@ object EDASExecutionManager extends Loggable {
 //      })
 
       val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
+      val axisTypes = if( shape.length == 4 ) Array("T", "Z", "Y", "X" )  else Array("T", "Y", "X" )
+
       val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
         inputSpec.getRange(coordAxis.getFullName) match {
           case Some(range) =>
@@ -206,7 +208,7 @@ object EDASExecutionManager extends Loggable {
             for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
             val newRange = dimsMap.get(coordAxis.getFullName) match {
               case None => range;
-              case Some(dim) => if (dim.getLength < range.length) new ma2.Range(dim.getLength) else range
+              case Some(dim) => if ( (coordAxis.getAxisType != AxisType.Time ) && (dim.getLength < range.length) ) new ma2.Range(dim.getLength) else range
             }
             val data = coordAxis.read(List(newRange))
             Some(coordVar, data)
@@ -214,7 +216,7 @@ object EDASExecutionManager extends Loggable {
         }
       }).flatten
 
-      val axisTypes = if( shape.length == 4 ) Array("T", "Z", "Y", "X" )  else Array("T", "Y", "X" )
+
       val varDims: Array[Dimension] = axisTypes.map( aType => coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
