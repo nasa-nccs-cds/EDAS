@@ -168,7 +168,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
   def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata, variableRecords )
   def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = TimeSliceRDD( rdd map op , metadata, variableRecords )
   def getNumPartitions = rdd.getNumPartitions
-  def nodeList: Array[String] = rdd.map( ts => KernelContext.getProcessAddress ).collect
+  def nodeList: Array[String] = rdd.mapPartitionsWithIndex { case ( index, tsIter )  => Seq( s"{P${index}-(${KernelContext.getProcessAddress}), size: ${tsIter.length}}" ).toIterator  } collect
   def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata, variableRecords )
 
@@ -526,7 +526,7 @@ class RDDContainer extends Loggable {
         vSpecs.tail
       } else { vSpecs }
       extendVault( generator, remainingVspecs )
-      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, nodes = [ ${nodeList.mkString(", ")} ]" )
+      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, nodes: \n  ${nodeList.mkString("\n  ")}" )
     }
   }
 
