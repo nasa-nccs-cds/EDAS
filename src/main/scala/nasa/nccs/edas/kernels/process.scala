@@ -69,10 +69,23 @@ object KernelContext {
     val gridMapCols: Map[String,Option[GridContext]] = gridMapVars.flatMap { case ( uid, gcOpt ) => gcOpt.map( gc => ( gc.collectionId, Some(gc) ) ) }
     new KernelContext( operation, gridMapVars ++ gridMapCols, sectionMap, executor.requestCx.domains, executor.requestCx.getConfiguration, executor.workflowCx.crs, executor.getRegridSpec, executor.requestCx.profiler )
   }
+
+  def getHostAddress: String = try {
+    val ip = InetAddress.getLocalHost
+    s"${ip.getHostName}(${ip.getHostAddress})"
+  } catch { case e: UnknownHostException => "UNKNOWN" }
+
+  def getProcessAddress: String = try {
+    val ip = InetAddress.getLocalHost
+    val currentThread = Thread.currentThread
+    s"${ip.getHostName}:T${currentThread.getId.toString}"
+  } catch { case e: UnknownHostException => "UNKNOWN" }
 }
 
 class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],
                      _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec],  val profiler: EventAccumulator ) extends Loggable with Serializable with ScopeContext {
+  import KernelContext._
+
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
   val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
@@ -104,16 +117,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
     case None => Map.empty
   }
 
-  def getHostAddress: String = try {
-    val ip = InetAddress.getLocalHost
-    s"${ip.getHostName}(${ip.getHostAddress})"
-  } catch { case e: UnknownHostException => "UNKNOWN" }
 
-  def getProcessAddress: String = try {
-    val ip = InetAddress.getLocalHost
-    val currentThread = Thread.currentThread
-    s"${ip.getHostName}:T${currentThread.getId.toString}"
-  } catch { case e: UnknownHostException => "UNKNOWN" }
 
   def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
 

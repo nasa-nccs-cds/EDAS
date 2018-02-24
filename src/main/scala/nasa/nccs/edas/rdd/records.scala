@@ -4,6 +4,7 @@ import java.nio.file.Paths
 
 import nasa.nccs.edas.engine.TestProcess
 import nasa.nccs.edas.engine.spark.CDSparkContext
+import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.sources.{Aggregation, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.esgf.process.{CDSection, DataContainer, DomainContainer, TaskRequest}
@@ -115,7 +116,7 @@ class TimeSliceIterator1( val varId: String, val varName: String, val section: S
 class TestClockProcess( id: String ) extends TestProcess( id ) with Loggable {
   def execute( sc: CDSparkContext, jobId: String, optRequest: Option[TaskRequest]=None, run_args: Map[String, String]=Map.empty ): WPSMergedEventReport= {
     val indices: RDD[Int] = sc.sparkContext.parallelize( Array.range(0,19) )
-    val times: RDD[String] = indices.map(index => { (System.currentTimeMillis()/1000.0).toString } )
+    val times: RDD[String] = indices.map(index => { KernelContext.getProcessAddress + ": " + (System.currentTimeMillis()/1000.0).toString } )
     val clock_times: Array[String] = times.collect()
     logger.info( "\n" + clock_times.mkString("\n") )
 
