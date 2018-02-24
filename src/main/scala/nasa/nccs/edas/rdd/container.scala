@@ -167,7 +167,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
   def section( section: CDSection ): TimeSliceRDD = TimeSliceRDD( rdd.flatMap( _.section(section) ), metadata, variableRecords )
   def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata, variableRecords )
   def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD =
-    TimeSliceRDD( rdd.map( (ts: CDTimeSlice) => KernelContext.profiler.profile(s"TimeSliceRDD.map(${KernelContext.getProcessAddress}):${ts.toString}")( () => op(ts) )), metadata, variableRecords )
+    TimeSliceRDD( rdd map op , metadata, variableRecords )
   def getNumPartitions = rdd.getNumPartitions
   def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata, variableRecords )

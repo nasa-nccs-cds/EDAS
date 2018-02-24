@@ -219,7 +219,7 @@ class ave extends SingularRDDKernel(Map.empty) {
   val doesAxisReduction: Boolean = true
   val description = "REDUCTION OPERATION: Computes (weighted) means of element values from input variable data over specified axes and roi"
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = KernelContext.profiler.profile(s"ave.map(${KernelContext.getProcessAddress}):${inputs.toString}")( () => {
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = context.profiler.profile(s"ave.map(${KernelContext.getProcessAddress}):${inputs.toString}")( () => {
     val axes = context.config("axes","")
     val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId) match {

@@ -11,6 +11,7 @@ import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
 import nasa.nccs.utilities._
+import org.apache.spark.SparkContext
 import org.joda.time.DateTime
 import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
@@ -130,6 +131,13 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   logger.info( "Creating RequestContext with inputs: " + inputs.keys.mkString(",") )
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = task.domainMap
+  val profiler: EventAccumulator = new EventAccumulator()
+
+  def initializeProfiler( activationStatus: String, sc: SparkContext ) = {
+    profiler.setActivationStatus( activationStatus )
+    try { sc.register( profiler, "EDAS_EventAccumulator" ) } catch { case ex: IllegalStateException => Unit }
+    profiler.reset()
+  }
 
   def getConf( key: String, default: String ) = configuration.getOrElse(key,default)
   def missing_variable(uid: String) = throw new Exception("Can't find Variable '%s' in uids: [ %s ]".format(uid, inputs.keySet.mkString(", ")))
@@ -146,7 +154,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
     case None =>inputs.head._2 map { _.roi }
   }
 
-  def getTimingReport(label: String): String = KernelContext.profiler.toString
+  def getTimingReport(label: String): String = profiler.toString
   def logTimingReport(label: String): Unit = logger.info(getTimingReport(label))
 
   def getDomain(domain_id: String): DomainContainer = domains.get(domain_id) match {

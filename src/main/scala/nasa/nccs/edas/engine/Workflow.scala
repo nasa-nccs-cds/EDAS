@@ -258,15 +258,15 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   }
 
   def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  TimeSliceCollection  = {
-    KernelContext.profiler.profile("processInputs") ( () => {
+    kernelCx.profiler.profile("processInputs") ( () => {
       processInputs( executor.rootNode, executor, kernelCx, batchIndex)
-      executor.update
+      if( kernelCx.profiler.activated ) { executor.update }
     } )
-    KernelContext.profiler.profile("regrid") ( () => {
+    kernelCx.profiler.profile("regrid") ( () => {
       executor.regrid( kernelCx.addVariableRecords( executor.variableRecs ) )
-      executor.update
+      if( kernelCx.profiler.activated ) { executor.update }
     } )
-    KernelContext.profiler.profile("execute") ( () => {
+    kernelCx.profiler.profile("execute") ( () => {
       executor.execute(this, kernelCx, batchIndex)
     } )
   }

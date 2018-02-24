@@ -61,14 +61,8 @@ class AxisIndices( private val axisIds: Set[Int] = Set.empty ) extends Serializa
   override def toString = axisIds.mkString(",")
 }
 
-object KernelContext {
-  val profiler: EventAccumulator = new EventAccumulator()
 
-  def initializeProfiler( activationStatus: String, sc: SparkContext ) = {
-    KernelContext.profiler.setActivationStatus( activationStatus )
-    try { sc.register( KernelContext.profiler, "EDAS_EventAccumulator" ) } catch { case ex: IllegalStateException => Unit }
-    KernelContext.profiler.reset()
-  }
+object KernelContext {
 
   def apply( operation: OperationContext, executor: WorkflowExecutor ): KernelContext = {
     val sectionMap: Map[String, Option[CDSection]] = executor.requestCx.inputs.mapValues(_.map(_.cdsection)).map(identity)
@@ -76,7 +70,7 @@ object KernelContext {
       uid -> tgridOpt.map( tg => GridContext(uid,tg))
     }
     val gridMapCols: Map[String,Option[GridContext]] = gridMapVars.flatMap { case ( uid, gcOpt ) => gcOpt.map( gc => ( gc.collectionId, Some(gc) ) ) }
-    new KernelContext( operation, gridMapVars ++ gridMapCols, sectionMap, executor.requestCx.domains, executor.requestCx.getConfiguration, executor.workflowCx.crs, executor.getRegridSpec )
+    new KernelContext( operation, gridMapVars ++ gridMapCols, sectionMap, executor.requestCx.domains, executor.requestCx.getConfiguration, executor.workflowCx.crs, executor.getRegridSpec, executor.requestCx.profiler )
   }
 
   def getHostAddress: String = try {
@@ -92,7 +86,7 @@ object KernelContext {
 }
 
 class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],
-                     _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec] ) extends Loggable with Serializable with ScopeContext {
+                     _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec], val profiler: EventAccumulator ) extends Loggable with Serializable with ScopeContext {
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
   val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
@@ -328,7 +322,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val reduceElements: TimeSliceRDD = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
       val axes = context.getAxes
       val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
-        KernelContext.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
+        context.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
           val optGroup = context.operation.config("groupBy") map TSGroup.getGroup
           reduceElements.reduce(getReduceOp(context), optGroup, ordered)
         })
@@ -341,8 +335,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
     val t0 = System.nanoTime()
-    val mapresult: TimeSliceRDD = KernelContext.profiler.profile("mapReduce.mapRDD") ( () => { mapRDD(input, context).exe } )
-    val rv = KernelContext.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge ) } )
+    val mapresult: TimeSliceRDD = context.profiler.profile("mapReduce.mapRDD") ( () => { mapRDD(input, context).exe } )
+    val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge ) } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
   }
@@ -402,7 +396,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
   
   def combineRDD(context: KernelContext)(rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = {
-    if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else KernelContext.profiler.profile[CDTimeSlice]( "Kernel.combineRDD" ) ( () => {
+    if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else context.profiler.profile[CDTimeSlice]( "Kernel.combineRDD" ) ( () => {
       val axes = context.getAxes
       val keys = rec0.elements.keys
       val new_elements: Iterator[(String, ArraySpec)] = rec0.elements.iterator flatMap { case (key0, array0) => rec1.elements.get(key0) match {
@@ -721,7 +715,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
 
 abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) extends Kernel(options)  {
-  override def map ( context: KernelContext ) ( inputs: CDTimeSlice  ): CDTimeSlice =  KernelContext.profiler.profile(s"SingularRDDKernel.map(${KernelContext.getProcessAddress}):${inputs.toString}")( () => {
+  override def map ( context: KernelContext ) ( inputs: CDTimeSlice  ): CDTimeSlice =  context.profiler.profile(s"SingularRDDKernel.map(${KernelContext.getProcessAddress}):${inputs.toString}")( () => {
     val t0 = System.nanoTime
     val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
     val inputId: String = context.operation.inputs.headOption.getOrElse("NULL")
@@ -792,7 +786,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
       val rID = UID()
       val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
-      val (gridFile, resultArrays) = KernelContext.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${KernelContext.getProcessAddress})")(() => {
+      val (gridFile, resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${KernelContext.getProcessAddress})")(() => {
         worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
         var gFile = ""
         val resultItems: Iterable[(String, ArraySpec)] = for (uid <- regrid_array_map.keys) yield {

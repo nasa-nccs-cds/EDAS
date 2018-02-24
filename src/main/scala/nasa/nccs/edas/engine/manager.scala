@@ -208,7 +208,7 @@ object EDASExecutionManager extends Loggable {
             for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
             val newRange = dimsMap.get(coordAxis.getFullName) match {
               case None => range;
-              case Some(dim) => if ( (coordAxis.getAxisType != AxisType.Time ) && (dim.getLength < range.length) ) new ma2.Range(dim.getLength) else range
+              case Some(dim) => if ( dim.getLength < range.length ) new ma2.Range(dim.getLength) else range
             }
             val data = coordAxis.read(List(newRange))
             Some(coordVar, data)
@@ -359,14 +359,15 @@ class EDASExecutionManager extends WPSServer with Loggable {
 //  }
 
   def createRequestContext( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): RequestContext = {
-    KernelContext.initializeProfiler( run_args.getOrElse("profile","active"), serverContext.spark.sparkContext )
     val sourceContainers = request.variableMap.values.filter(_.isSource)
     val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource ) yield {
       val domainOpt: Option[DomainContainer] = data_container.getSource.getDomain.flatMap(request.getDomain)
       serverContext.createInputSpec( data_container, domainOpt, request )
     }
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
-    new RequestContext ( jobId, sourceMap, request, run_args, executionCallback )
+    val rc = new RequestContext ( jobId, sourceMap, request, run_args, executionCallback )
+    rc.initializeProfiler( run_args.getOrElse("profile","active"), serverContext.spark.sparkContext )
+    rc
   }
 
 //  def cacheInputData(request: TaskRequest, run_args: Map[String, String] ): Iterable[Option[(DataFragmentKey, Future[PartitionedFragment])]] = {
@@ -471,7 +472,6 @@ class EDASExecutionManager extends WPSServer with Loggable {
       val response = results.toXml( ResponseSyntax.Generic )
       executionCallback.foreach( _.success( response ) )
       collectionDataCache.removeJob( jobId )
-      logger.info( "\n\n PROFILING RESULTS: " + KernelContext.profiler.toString() )
       results
     }
   }
