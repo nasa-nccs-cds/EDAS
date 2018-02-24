@@ -9,7 +9,7 @@ import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
 import nasa.nccs.edas.engine.{EDASExecutionManager, ExecutionCallback, TestProcess}
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.edas.rdd.{CDTimeSlice, TestDatasetProcess}
+import nasa.nccs.edas.rdd.{CDTimeSlice, TestClockProcess, TestDatasetProcess}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
