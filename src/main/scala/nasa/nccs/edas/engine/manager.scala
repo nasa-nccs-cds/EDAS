@@ -200,15 +200,19 @@ object EDASExecutionManager extends Loggable {
 
       val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
       val axisTypes = if( shape.length == 4 ) Array("T", "Z", "Y", "X" )  else Array("T", "Y", "X" )
-
+      logger.info( s" InputSpec: {${optInputSpec.fold("")(_.getMetadata().mkString(", ")}} ")
       val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
         inputSpec.getRange(coordAxis.getFullName) match {
           case Some(range) =>
             val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
             for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
             val newRange = dimsMap.get(coordAxis.getFullName) match {
-              case None => range;
-              case Some(dim) => if ( dim.getLength < range.length ) new ma2.Range(dim.getLength) else range
+              case None =>
+                logger.info( s" Reading coord var ${coordAxis.getFullName}, range = [${range.first}:${range.last}], axis shape = [${coordAxis.getShapeAll.mkString(",")}] " )
+                range
+              case Some(dim) =>
+                logger.info( s" Reading coord var ${coordAxis.getFullName}, dim Length =${dim.getLength}, range = [${range.first}:${range.last}], axis shape = [${coordAxis.getShapeAll.mkString(",")}] " )
+                if ( dim.getLength < range.length ) new ma2.Range(dim.getLength) else range
             }
             val data = coordAxis.read(List(newRange))
             Some(coordVar, data)
