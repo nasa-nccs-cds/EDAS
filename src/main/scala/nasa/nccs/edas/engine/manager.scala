@@ -358,7 +358,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
 
   def createRequestContext( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): RequestContext = {
     KernelContext.profiler.setActivationStatus( run_args.getOrElse("profile","active") )
-    serverContext.spark.sparkContext.register( KernelContext.profiler, "EDAS_EventAccumulator" )
+    try { serverContext.spark.sparkContext.register( KernelContext.profiler, "EDAS_EventAccumulator" ) } catch { case ex: IllegalStateException => Unit }
     val sourceContainers = request.variableMap.values.filter(_.isSource)
     val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource ) yield {
       val domainOpt: Option[DomainContainer] = data_container.getSource.getDomain.flatMap(request.getDomain)
