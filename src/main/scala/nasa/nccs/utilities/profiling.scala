@@ -5,7 +5,7 @@ import nasa.nccs.edas.engine.spark.CDSparkContext
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.{AccumulatorV2, CollectionAccumulator}
-
+import scala.collection.concurrent.TrieMap
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -45,18 +45,19 @@ class EventMetrics( val eventId: String ) extends Serializable {
 
 class EventAccumulator( initActivationStatus: String = "active" ) extends AccumulatorV2[EventRecord, java.util.List[EventMetrics]] with Loggable {
   private var _activationStatus: String = initActivationStatus
-  private val _metricsList: java.util.List[EventMetrics] = Collections.synchronizedList(new ArrayList[EventMetrics]())
-  private val _startEventList: java.util.List[StartEvent] = Collections.synchronizedList(new ArrayList[StartEvent]())
+  private val _metricsList = new TrieMap[String,EventMetrics]
+  private val _startEventList = new TrieMap[String,StartEvent]
   override def isZero: Boolean = _metricsList.isEmpty
   override def reset(): Unit = _metricsList.clear()
-  private def newEvent( eventId: String ): EventMetrics = { val newMetrics =  new EventMetrics( eventId ); _metricsList += newMetrics; newMetrics }
-  private def newStartEvent( eventId: String ): StartEvent = { val newStartEvent =  new StartEvent( eventId ); _startEventList += newStartEvent; newStartEvent }
-  private def getMetrics( eventId: String ): EventMetrics = _metricsList.find( _.eventId.equals(eventId) ).getOrElse( newEvent(eventId) )
-  private def getStartEvent( eventId: String ): Option[StartEvent] = _startEventList.find( _.eventId.equals(eventId) )
+  private def newEvent( eventId: String ): EventMetrics = { val newMetrics =  new EventMetrics( eventId ); _metricsList += ( eventId -> newMetrics); newMetrics }
+  private def newStartEvent( eventId: String ): StartEvent = { val newStartEvent =  new StartEvent( eventId ); _startEventList += ( eventId -> newStartEvent); newStartEvent }
+  private def getMetrics( eventId: String ): EventMetrics = _metricsList.getOrElse( eventId, newEvent(eventId) )
+  private def getStartEvent( eventId: String ): Option[StartEvent] = _startEventList.get( eventId )
   private def updateStartEvent( eventId: String ): StartEvent = getStartEvent(eventId).fold( newStartEvent(eventId) )( _.update() )
   override def add(v: EventRecord): Unit = getMetrics( v.eventId ) += v
   override def copyAndReset(): EventAccumulator = new EventAccumulator(_activationStatus)
-  override def value: java.util.List[EventMetrics] = _metricsList.synchronized { java.util.Collections.unmodifiableList(new ArrayList[EventMetrics](_metricsList)) }
+  override def value: java.util.List[EventMetrics] = java.util.Collections.unmodifiableList( _metricsList.values.toList )
+  def mapValue: Map[String,EventMetrics] = _metricsList.toMap
   def setActivationStatus( aStatus: String ) = { _activationStatus = aStatus }
 
   override def toString(): String = try {
@@ -75,11 +76,11 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
 
   override def copy(): EventAccumulator = {
     val newAcc = new EventAccumulator( _activationStatus )
-    _metricsList.synchronized { newAcc._metricsList.addAll(_metricsList) }
+    newAcc._metricsList.addAll(_metricsList)
     newAcc
   }
   override def merge( other: AccumulatorV2[EventRecord, java.util.List[EventMetrics]] ): Unit = other match {
-    case o: EventAccumulator => _metricsList.addAll(o.value)
+    case o: EventAccumulator => _metricsList.addAll( o.mapValue )
     case _ => throw new UnsupportedOperationException( s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
   }
 

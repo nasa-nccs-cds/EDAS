@@ -197,7 +197,7 @@ object EDASExecutionManager extends Loggable {
 //        val data = coordAxis.read()
 //        (coordVar, data)
 //      })
-      
+
       val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
       val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
         inputSpec.getRange(coordAxis.getFullName) match {
