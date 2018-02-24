@@ -721,7 +721,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
 
 abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) extends Kernel(options)  {
-  override def map ( context: KernelContext ) ( inputs: CDTimeSlice  ): CDTimeSlice = {
+  override def map ( context: KernelContext ) ( inputs: CDTimeSlice  ): CDTimeSlice =  KernelContext.profiler.profile(s"SingularRDDKernel.map(${KernelContext.getProcessAddress}):${inputs.toString}")( () => {
     val t0 = System.nanoTime
     val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
     val inputId: String = context.operation.inputs.headOption.getOrElse("NULL")
@@ -742,7 +742,7 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
     }
     val dt = (System.nanoTime - t0) / 1.0E9
     CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> elem), inputs.metadata)
-  }
+  })
 }
 
 abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(options)  {

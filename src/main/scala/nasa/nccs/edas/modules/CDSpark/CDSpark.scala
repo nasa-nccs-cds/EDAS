@@ -219,8 +219,7 @@ class ave extends SingularRDDKernel(Map.empty) {
   val doesAxisReduction: Boolean = true
   val description = "REDUCTION OPERATION: Computes (weighted) means of element values from input variable data over specified axes and roi"
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
-    val t0 = System.nanoTime/ 1.0E9
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = KernelContext.profiler.profile(s"ave.map(${KernelContext.getProcessAddress}):${inputs.toString}")( () => {
     val axes = context.config("axes","")
     val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId) match {
@@ -236,13 +235,12 @@ class ave extends SingularRDDKernel(Map.empty) {
               context.operation.rid + "_WEIGHTS_" -> ArraySpec(weights_sum_masked.missing, weights_sum_masked.shape, input_data.origin, weights_sum_masked.getData ))
       case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
     })
-    val t1 = System.nanoTime/ 1.0E9
 //    logger.info("T[%.2f] @P@ Executed Kernel %s map op, input = %s, time = %.4f s".format(t0, name,  id, (t1 - t0) ))
 //    context.addTimestamp( "Map Op complete" )
     val rv = CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata)
 //    logger.info("Returning result value")
     rv
-  }
+  } )
   override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
   override def hasReduceOp: Boolean = true
   override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
