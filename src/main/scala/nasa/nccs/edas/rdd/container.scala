@@ -467,6 +467,7 @@ class RDDContainer extends Loggable {
   private def vault: RDDVault = _vault.getOrElse { throw new Exception( "Unexpected attempt to access an uninitialized RDD Vault")}
   def value: TimeSliceRDD = vault.value
   def nSlices = _vault.fold( 0L ) ( _.value.nSlices )
+  def update: TimeSliceRDD = { _vault.foreach( _.value.exe ); value }
   def contents: Iterable[String] = _vault.fold( Iterable.empty[String] ) ( _.contents )
   def section( section: CDSection ): Unit = vault.map( _.section(section) )
   def release( keys: Iterable[String] ): Unit = { vault.release( keys ) }

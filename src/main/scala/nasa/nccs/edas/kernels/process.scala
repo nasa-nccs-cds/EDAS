@@ -336,7 +336,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
     val t0 = System.nanoTime()
-    val mapresult: TimeSliceRDD = context.profiler.profile("mapReduce.mapRDD") ( () => { mapRDD(input, context).exe } )
+    val mapresult: TimeSliceRDD = context.profiler.profile("mapReduce.mapRDD") ( () => { mapRDD(input, context) } )
+    if( context.profiler.activated ) { mapresult.exe }
     val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge ) } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
