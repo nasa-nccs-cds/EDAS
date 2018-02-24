@@ -101,6 +101,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   def findGrid(gridRef: String): Option[GridContext] = grids.find(item => (item._1.equalsIgnoreCase(gridRef) || item._1.split('-')(0).equalsIgnoreCase(gridRef))).flatMap(_._2)
 
   def getConfiguration: Map[String, String] = configuration ++ operation.getConfiguration
+  def relClockTime: Float = { (System.currentTimeMillis()/1000f)%10000f }
 
   def getReductionSize: Int = {
     val section: CDSection = sectionMap.head._2.getOrElse( throw new Exception(s"Can't find section for inputs of operation ${operation.identifier}") )
@@ -787,6 +788,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val rID = UID()
       val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
       val (gridFile, resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${KernelContext.getProcessAddress})")(() => {
+        logger.info(s" RRR Sending regrid request to python worker, rid = ${rID}, time = ${context.relClockTime.toString}")
         worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
         var gFile = ""
         val resultItems: Iterable[(String, ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
