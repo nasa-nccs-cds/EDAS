@@ -212,14 +212,13 @@ object EDASExecutionManager extends Loggable {
                 range
               case Some(dim) =>
                 logger.info( s" Reading coord var ${coordAxis.getFullName}, dim Length =${dim.getLength}, range = [${range.first}:${range.last}], axis shape = [${coordAxis.getShapeAll.mkString(",")}] " )
-                if ( dim.getLength < range.length ) new ma2.Range(dim.getLength) else range
+                if ( ( dim.getLength < range.length ) || ( coordAxis.getAxisType == AxisType.Time ) ) new ma2.Range(dim.getLength) else range
             }
             val data = coordAxis.read(List(newRange))
             Some(coordVar, data)
           case None => None
         }
       }).flatten
-
 
       val varDims: Array[Dimension] = axisTypes.map( aType => coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>

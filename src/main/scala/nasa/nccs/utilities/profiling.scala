@@ -57,7 +57,6 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   override def add(v: EventRecord): Unit = getMetrics( v.eventId ) += v
   override def copyAndReset(): EventAccumulator = new EventAccumulator(_activationStatus)
   override def value: java.util.List[EventMetrics] = java.util.Collections.unmodifiableList( _metricsList.values.toList )
-  def mapValue: Map[String,EventMetrics] = _metricsList.toMap
   def setActivationStatus( aStatus: String ) = { _activationStatus = aStatus }
 
   override def toString(): String = try {
@@ -80,7 +79,7 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
     newAcc
   }
   override def merge( other: AccumulatorV2[EventRecord, java.util.List[EventMetrics]] ): Unit = other match {
-    case o: EventAccumulator => _metricsList.addAll( o.mapValue )
+    case o: EventAccumulator => o.value.map( em => _metricsList.add( em.eventId -> em ) )
     case _ => throw new UnsupportedOperationException( s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
   }
 
