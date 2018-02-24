@@ -17,6 +17,7 @@ import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process._
 import nasa.nccs.utilities.{EventAccumulator, Loggable}
 import nasa.nccs.wps.{WPSProcess, WPSProcessOutput}
+import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import ucar.ma2.IndexIterator
 import ucar.nc2.Attribute
@@ -62,6 +63,12 @@ class AxisIndices( private val axisIds: Set[Int] = Set.empty ) extends Serializa
 
 object KernelContext {
   val profiler: EventAccumulator = new EventAccumulator()
+
+  def initializeProfiler( activationStatus: String, sc: SparkContext ) = {
+    KernelContext.profiler.setActivationStatus( activationStatus )
+    try { sc.register( KernelContext.profiler, "EDAS_EventAccumulator" ) } catch { case ex: IllegalStateException => Unit }
+    KernelContext.profiler.reset()
+  }
 
   def apply( operation: OperationContext, executor: WorkflowExecutor ): KernelContext = {
     val sectionMap: Map[String, Option[CDSection]] = executor.requestCx.inputs.mapValues(_.map(_.cdsection)).map(identity)
