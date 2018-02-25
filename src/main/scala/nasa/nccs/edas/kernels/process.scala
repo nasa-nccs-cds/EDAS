@@ -787,11 +787,14 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       })
 
       context.profiler.profile(s"CDMSRegridKernel.SendingRegridArrays(${KernelContext.getProcessAddress})")(() => {
-        for ((uid, input_array) <- regrid_array_map) context.getInputVariableRecord(uid) foreach { varRec =>
+        for ((uid, input_array) <- regrid_array_map) context.getInputVariableRecord(uid) foreach { varRec => {
+          val t10 = System.nanoTime
           val data_array = input_array.toHeapFltArray(varRec.gridFilePath, Map("collection" -> varRec.collection, "name" -> varRec.varName, "dimensions" -> varRec.dimensions))
-          logger.info(s" #S# Sending regrid Array ${uid} data to python worker, shape = [ ${input_array.shape.mkString(", ")} ]\n ** varRec=${varRec.toString}\n ** metadata = { ${data_array.metadata.toString} }")
+          val t11 = System.nanoTime
           worker.sendRequestInput(uid, data_array)
-        }
+          val t12 = System.nanoTime
+          logger.info(s" #TS# Sending regrid Array ${uid} data to python worker, prep time = %.2f, send time = %.2f, shape = [ ${input_array.shape.mkString(", ")} ]\n ** varRec=${varRec.toString}\n ** metadata = { ${data_array.metadata.toString} }".format((t11 - t10) / 1.0E9, (t12 - t11) / 1.0E9))
+        }}
       })
 
       val (gridFile, resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${KernelContext.getProcessAddress})")(() => {
