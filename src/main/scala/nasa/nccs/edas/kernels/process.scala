@@ -756,7 +756,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
 
 class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True", "visibility" -> "public" ), false ) {
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = context.profiler.profile(s"CDMSRegridKernel.map(${KernelContext.getProcessAddress})")(() => {
     val t0 = System.nanoTime
     val targetGrid: GridContext = context.grid
     val regridSpec: RegridSpec = context.regridSpecOpt.getOrElse(throw new Exception("Undefined target Grid in regrid operation"))
@@ -807,7 +807,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       logger.info("Gateway[T:%s]: Executed operation %s, time: %.2f, operation metadata: { %s }".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9, context_metadata.mkString(", ")))
       CDTimeSlice(inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map, inputs.metadata + ("gridspec" -> gridFile))
     }
-  }
+  })
 }
 
 class zmqPythonKernel( _module: String, _operation: String, _title: String, _description: String, options: Map[String,String], axisElimination: Boolean  ) extends Kernel(options) {
