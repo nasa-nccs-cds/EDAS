@@ -50,7 +50,7 @@ public abstract class Worker {
 
     private void addResult( String result_header, byte[] data ) {
         String elapsedTime = String.valueOf( ( System.currentTimeMillis() - requestTime )/1000.0 );
-        _portal.logger.info( "Caching result from worker:\n   " + result_header+ ", data size = " + data.length  + ", Worker time = " + elapsedTime );
+        _portal.logger.info( "Caching result from worker:   " + result_header+ ", data size = " + data.length  + ", Worker time = " + elapsedTime );
         results.add( new TransVar( result_header, data, 0 ) );
     }
 
@@ -58,6 +58,7 @@ public abstract class Worker {
 
     public TransVar getResult() throws Exception {
         _portal.logger.debug( "Waiting for result to appear from worker");
+        long t0 = System.currentTimeMillis();
         while( true ) {
             if( errorCondition != null ) {
                 throw new Exception( errorCondition );
@@ -66,6 +67,8 @@ public abstract class Worker {
             if( result == null ) try { Thread.sleep(100); } catch( Exception err ) { return null; }
             else {
                 _portal.releaseWorker( this );
+                String elapsedTime = String.valueOf( ( System.currentTimeMillis() - t0 )/1000.0 );
+                _portal.logger.debug( "Received result from worker after " + elapsedTime + " secs" );
                 return result;
             }
         }
@@ -185,10 +188,6 @@ public abstract class Worker {
             }
         }
         else _sendArrayMetadata( id, array.origin(), array.shape(), array.mdata() );
-    }
-
-    public void sendArrayData( String id, HeapFltArray array ) {
-        _sendArrayData( id, array.origin(), array.shape(), array.toByteArray(), array.mdata() );
     }
 
     public void sendArrayMetadata( String id, HeapFltArray array ) {
