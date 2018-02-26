@@ -276,10 +276,11 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
     val section = vspec.section.toString
     val collection: Collection = vspec.getCollection
     val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
-    val parallelism = Math.min( agg.files.length, nPartitions )
-    val files = agg.getIntersectingFiles( section )
-    val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
-    val rdd = filesDataset.mapPartitions( TimeSliceMultiIterator( vspec.uid, vspec.varShortName, section, agg.parms.getOrElse("base.path","") ) )
+    val files: Array[FileInput]  = agg.getIntersectingFiles( section )
+    val parallelism = Math.min( files.length, nPartitions )
+    val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, nPartitions )
+    val nTS = vspec.section.getRange(0).length()
+    val rdd = filesDataset.mapPartitions( TimeSliceMultiIterator( vspec.uid, vspec.varShortName, section, agg.parms.getOrElse("base.path",""), Math.min( nPartitions, nTS ), nTS ) )
     val optVar = agg.findVariable( vspec.varShortName )
     TimeSliceRDD( rdd, agg.parms, Map( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap)) ) )
   }
@@ -296,28 +297,54 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) {
 }
 
 object TimeSliceMultiIterator extends Loggable {
-  def apply( varId: String, varName: String, section: String, basePath: String ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
-    new TimeSliceMultiIterator( varId, varName, section, files, basePath )
+  def apply( varId: String, varName: String, section: String, basePath: String, nPartitions: Int, nTimeSteps: Int ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
+    new TimeSliceMultiIterator( varId, varName, section, files, basePath, nPartitions, nTimeSteps )
   }
 }
 
-class TimeSliceMultiIterator( val varId: String, val varName: String, val section: String, val files: Iterator[FileInput], val basePath: String ) extends Iterator[CDTimeSlice] with Loggable {
-  private var _optSliceIterator: Iterator[CDTimeSlice] = if( files.hasNext ) { getSliceIterator( files.next() ) } else { Iterator.empty }
-  private def getSliceIterator( fileInput: FileInput ): TimeSliceIterator = TimeSliceIterator( varId, varName, section,  fileInput, basePath )
+class TimeSliceMultiIterator( val varId: String, val varName: String, val section: String, val files: Iterator[FileInput], val basePath: String, val nPartitions: Int, val nTimeSteps: Int ) extends Iterator[CDTimeSlice] with Loggable {
+  private var _rowsRemaining = nTimeSteps
+  private var _partitionsRemaining = nPartitions
+  private var _currentMultiIter: Iterator[TimeSliceIterator] = Iterator.empty
+  private var _currentOptSliceIter: Option[TimeSliceIterator] = None
+  private def updateMultiIter: Unit = { _currentMultiIter = if( files.hasNext ) { getFileSliceIter( files.next ) } else { Iterator.empty } }
+  private def updateTimeSliceIter: Unit = {
+    if( _currentMultiIter.isEmpty ) { updateMultiIter }
+    _currentOptSliceIter = if( _currentMultiIter.isEmpty ) { None } else { Some( _currentMultiIter.next() ) }
+  }
+  private def currentSlicesEmpty: Boolean = _currentOptSliceIter.fold( true )( _.isEmpty )
 
-  def hasNext: Boolean = { !( _optSliceIterator.isEmpty && files.isEmpty ) }
+  def getFileSliceIter( fileInput: FileInput ): Iterator[TimeSliceIterator] = {
+    val rowsPerPartition: Float = _rowsRemaining / _partitionsRemaining.toFloat
+    val partsPerFile: Int = Math.ceil( fileInput.nRows / rowsPerPartition ).toInt
+    var nRowsRemaining = fileInput.nRows
+    var nPartsRemaining = partsPerFile
+    var currentRow = fileInput.nRows
+    var tsIters: IndexedSeq[TimeSliceIterator] = ( 0 until partsPerFile ) map ( iPartIndex => {
+      val rowsPerPart: Int = math.round( nRowsRemaining / nPartsRemaining.toFloat )
+      val tsi = TimeSliceIterator (varId, varName, section, fileInput, basePath, new ma2.Range( currentRow, currentRow + rowsPerPart ) )
+      currentRow += ( rowsPerPart + 1 )
+      nRowsRemaining -= rowsPerPart
+      nPartsRemaining -= 1
+      tsi
+    } )
+    _rowsRemaining -= fileInput.nRows
+    _partitionsRemaining -= partsPerFile
+    tsIters.toIterator
+  }
+
+  def hasNext: Boolean = { !( _currentMultiIter.isEmpty && files.isEmpty && currentSlicesEmpty ) }
 
   def next(): CDTimeSlice = {
-    if( _optSliceIterator.isEmpty ) { _optSliceIterator = getSliceIterator( files.next() ) }
-    val result = _optSliceIterator.next()
-    result
+    if( currentSlicesEmpty ) { updateTimeSliceIter }
+    _currentOptSliceIter.get.next()
   }
 
 }
 
 object TimeSliceIterator {
-  def apply( varId: String, varName: String, section: String, fileInput: FileInput, basePath: String ): TimeSliceIterator = {
-    new TimeSliceIterator( varId, varName, section, fileInput, basePath )
+  def apply( varId: String, varName: String, section: String, fileInput: FileInput, basePath: String, partitionRange: ma2.Range ): TimeSliceIterator = {
+    new TimeSliceIterator( varId, varName, section, fileInput, basePath, partitionRange )
   }
   def getMissing( variable: Variable, default_value: Float = Float.NaN ): Float = {
     Seq( "missing_value", "fmissing_value", "fill_value").foreach ( attr_name => Option( variable.findAttributeIgnoreCase(attr_name) ).foreach( attr => return attr.getNumericValue.floatValue() ) )
@@ -325,7 +352,7 @@ object TimeSliceIterator {
   }
 }
 
-class TimeSliceIterator(val varId: String, val varName: String, val section: String, val fileInput: FileInput, val basePath: String ) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceIterator(val varId: String, val varName: String, val section: String, val fileInput: FileInput, val basePath: String, val partitionRange: ma2.Range ) extends Iterator[CDTimeSlice] with Loggable {
   import TimeSliceIterator._
   private var _dateStack = new mutable.ArrayStack[(CalendarDate,Int)]()
   private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
@@ -366,7 +393,7 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
         val global_shape = variable.getShape()
         val missing: Float = getMissing(variable)
         val varSection = variable.getShapeAsSection
-        val interSect: ma2.Section = opSect.intersect(varSection)
+        val interSect: ma2.Section = opSect.intersect(varSection).insertRange(0,partitionRange)
         val timeAxis: CoordinateAxis1DTime = (NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse {
           throw new Exception(s"Can't find time axis in data file ${filePath}")
         }).section(interSect.getRange(0))
