@@ -393,8 +393,8 @@ class TimeSliceIterator(val varId: String, val varName: String, val section: Str
         val global_shape = variable.getShape()
         val missing: Float = getMissing(variable)
         val varSection = variable.getShapeAsSection
-        logger.info( s" #GS# GetSlices: opSect=[${opSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}] ")
         val interSect: ma2.Section = opSect.intersect(varSection).insertRange(0,partitionRange)
+        logger.info( s" #GS# GetSlices: opSect=[${opSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}], interSect=[${interSect.toString}] ")
         val timeAxis: CoordinateAxis1DTime = (NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse {
           throw new Exception(s"Can't find time axis in data file ${filePath}")
         }).section(interSect.getRange(0))
