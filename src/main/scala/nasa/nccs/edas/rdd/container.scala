@@ -392,7 +392,7 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
         val variable: Variable = Option(dataset.findVariable(varName)).getOrElse {
           throw new Exception(s"Can't find variable $varName in data file ${filePath}")
         }
-        val localPartitionRange = partitionRange.shiftOrigin( fileInput.firstRowIndex )
+        val localPartitionRange = partitionRange.shiftOrigin( -fileInput.firstRowIndex )
         val global_shape = variable.getShape()
         val missing: Float = getMissing(variable)
         val varSection = variable.getShapeAsSection
