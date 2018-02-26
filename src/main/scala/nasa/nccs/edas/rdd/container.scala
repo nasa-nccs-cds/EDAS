@@ -392,11 +392,12 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
         val variable: Variable = Option(dataset.findVariable(varName)).getOrElse {
           throw new Exception(s"Can't find variable $varName in data file ${filePath}")
         }
+        val localPartitionRange = partitionRange.shiftOrigin( fileInput.firstRowIndex )
         val global_shape = variable.getShape()
         val missing: Float = getMissing(variable)
         val varSection = variable.getShapeAsSection
-        val interSect: ma2.Section = opSect.intersect(varSection).insertRange(0,partitionRange)
-        logger.info( s" #GS# GetSlices: opSect=[${opSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}], " +
+        val interSect: ma2.Section = opSect.insertRange(0,localPartitionRange)
+        logger.info( s" #GS# GetSlices: opSect=[${opSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}], localPartitionRange=[${localPartitionRange.toString}], " +
           s"interSect=[${interSect.toString}], fileStartRow = ${fileInput.firstRowIndex}, fileNRows = ${fileInput.nRows} ")
         val timeAxis: CoordinateAxis1DTime = (NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse {
           throw new Exception(s"Can't find time axis in data file ${filePath}")
