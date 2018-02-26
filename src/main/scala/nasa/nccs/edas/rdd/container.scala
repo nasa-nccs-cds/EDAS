@@ -385,7 +385,7 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
       section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) =>
         if (index == 0) { new ma2.Range("time", range.first + slice_index, range.first + slice_index) } else { range } }
     }
-    opSection.flatMap( global_sect => getLocalTimeSection( global_sect, fileInput.firstRowIndex ) ) match {
+    opSection.flatMap( global_sect => getLocalTimeSection( global_sect.insertRange(0,partitionRange), fileInput.firstRowIndex ) ) match {
       case None => IndexedSeq.empty[CDTimeSlice]
       case Some(opSect) =>
         val t0 = System.nanoTime()
@@ -393,13 +393,12 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
         val variable: Variable = Option(dataset.findVariable(varName)).getOrElse {
           throw new Exception(s"Can't find variable $varName in data file ${filePath}")
         }
-        val localPartitionRange = partitionRange.shiftOrigin( -fileInput.firstRowIndex )
         val global_shape = variable.getShape()
         val missing: Float = getMissing(variable)
         val varSection = variable.getShapeAsSection
-        val interSect: ma2.Section = opSect.insertRange(0,localPartitionRange)
-        logger.info( s" #GS# GetSlices: opSect=[${opSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}], localPartitionRange=[${localPartitionRange.toString}], " +
-          s"interSect=[${interSect.toString}], fileStartRow = ${fileInput.firstRowIndex}, fileNRows = ${fileInput.nRows} ")
+        val interSect: ma2.Section = opSect
+        logger.info( s" #GS# GetSlices: opSect=[${opSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}], " +
+          s"fileStartRow = ${fileInput.firstRowIndex}, fileNRows = ${fileInput.nRows} ")
         val timeAxis: CoordinateAxis1DTime = (NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse {
           throw new Exception(s"Can't find time axis in data file ${filePath}")
         }).section(interSect.getRange(0))
