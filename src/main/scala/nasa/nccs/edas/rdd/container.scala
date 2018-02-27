@@ -321,18 +321,20 @@ class TimeSliceMultiIterator(val varId: String, val varName: String, val opSecti
   }
   private def updateTimeSliceIter: Unit = {
     if( ! _currentFileSliceIters.hasNext ) {
-      _currentFileSliceIters = if( files.hasNext ) {
+      val _sIter_ = if( files.hasNext ) {
         val fileInput = files.next
         getFileSliceIter( fileInput )
       } else {
         Iterator.empty
       }
+      _currentFileSliceIters = _sIter_
     }
     _currentSliceIter = if( _currentFileSliceIters.isEmpty ) { None } else { Some( _currentFileSliceIters.next() ) }
   }
 
   def getFileSliceIter( fileInput: FileInput ): Iterator[TimeSliceIterator] = {
-    val nFileIntersectingRows = opSection.fold( nTotalRows )(section => fileInput.intersect( section.getRange(0) ).length )
+    val intersectingRange = opSection.fold( fileInput.getRowIndexRange ) ( sect => fileInput.intersect(sect.getRange(0)) )
+    val nFileIntersectingRows = intersectingRange.length
     logger.info( s" @XX PartRange, _rowsRemaining = ${_rowsRemaining}, _partitionsRemaining = ${_partitionsRemaining}, nFileIntersectingRows = ${nFileIntersectingRows}" )
     val rowsPerPartition: Float = _rowsRemaining / _partitionsRemaining.toFloat
     val partsPerFile: Int = Math.ceil( nFileIntersectingRows / rowsPerPartition ).toInt
@@ -342,9 +344,10 @@ class TimeSliceMultiIterator(val varId: String, val varName: String, val opSecti
     var currentRow = 0
     var tsIters: IndexedSeq[TimeSliceIterator] = ( 0 until partsPerFile ) map ( iPartIndex => {
       val rowsPerPart: Int = math.round( nRowsRemaining / nPartsRemaining.toFloat )
-      val partRange = new ma2.Range( currentRow, currentRow + (rowsPerPart-1) )
+      val partStartRow = intersectingRange.first + currentRow
+      val partRange = new ma2.Range( partStartRow, partStartRow + (rowsPerPart-1) )
       logger.info( s" @XX PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, origin = ${origin}, partRange = [ ${partRange.toString} ]")
-      val tsi = TimeSliceIterator (varId, varName, opSection, fileInput, basePath, partRange.shiftOrigin( -origin ) )
+      val tsi = TimeSliceIterator (varId, varName, opSection, fileInput, basePath, partRange )
       currentRow += rowsPerPart
       nRowsRemaining -= rowsPerPart
       nPartsRemaining -= 1
@@ -352,7 +355,7 @@ class TimeSliceMultiIterator(val varId: String, val varName: String, val opSecti
     } )
     _rowsRemaining -= nFileIntersectingRows
     _partitionsRemaining -= partsPerFile
-    tsIters.filter( _.nonEmpty ).toIterator
+    tsIters.toIterator
   }
 }
 
@@ -389,7 +392,7 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
     val globalTimeRange = globalTimeSection.getRange( 0 )
     val local_start = Math.max( 0, globalTimeRange.first() - timeIndexOffest )
     val local_last = globalTimeRange.last() - timeIndexOffest
-//    logger.info(s"%SC% globalTimeSection: ${globalTimeSection.toString}, timeIndexOffest= $timeIndexOffest, local_start=$local_start, local_last=$local_last")
+    logger.info(s"%SC% globalTimeSection: ${globalTimeSection.toString}, timeIndexOffest= $timeIndexOffest, local_start=$local_start, local_last=$local_last")
     if( local_last < 0 ) None else Some( mutableSection.replaceRange( 0, new ma2.Range( local_start, local_last ) ) )
   }
 
@@ -401,45 +404,47 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
       section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) =>
         if (index == 0) { new ma2.Range("time", range.first + slice_index, range.first + slice_index) } else { range } }
     }
-    opSection.flatMap( global_sect => getLocalTimeSection( global_sect.replaceRange(0,partitionRange), fileInput.firstRowIndex ) ) match {
-      case None => IndexedSeq.empty[CDTimeSlice]
-      case Some(opSect) =>
-        val t0 = System.nanoTime()
-        val dataset = NetcdfDatasetMgr.aquireFile(filePath, 77.toString)
-        val variable: Variable = Option(dataset.findVariable(varName)).getOrElse {
-          throw new Exception(s"Can't find variable $varName in data file ${filePath}")
-        }
-        val global_shape = variable.getShape()
-        val missing: Float = getMissing(variable)
-        val varSection = variable.getShapeAsSection
-        val interSect: ma2.Section = opSect
-        logger.info( s" @XX GetSlices: opSect=[${opSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}], " +
-          s"fileStartRow = ${fileInput.firstRowIndex}, fileNRows = ${fileInput.nRows} ")
-        val globalTimeAxis = NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
-        val timeAxis: CoordinateAxis1DTime = globalTimeAxis.section(interSect.getRange(0))
-        //    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
-        val t1 = System.nanoTime()
-        val nTimesteps = timeAxis.getShape(0)
-        val slices = for (slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map( _.getMillis ) ) yield {
-          val sliceRanges = getSliceRanges(interSect, slice_index)
-          val data_section = variable.read(sliceRanges)
-          val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
-          val data_shape: Array[Int] = data_section.getShape
-          val section = variable.getShapeAsSection
-          val arraySpec = ArraySpec( missing, data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array)
-          CDTimeSlice(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
-        }
-        dataset.close()
-        if (fileInput.fileIndex % 500 == 0) {
-          val metadata = variable.getAttributes.map(_.toString).mkString(", ")
-          val sample_array = slices.head.elements.head._2.data
-          val datasize: Int = sample_array.length
-          val dataSample = sample_array(datasize / 2)
-          logger.info(s" @P@ Executing TimeSliceIterator.getSlices, nSlices = ${slices.length}, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toString}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n** metadata = $metadata")
-        }
-//        logger.info(s"%SC% nSlices = ${slices.length}, nTimesteps = ${nTimesteps}, r0 = ${interSect.getRange(0).toString}, global_shape = [${global_shape.mkString(",")}], global_sect = ${global_sect.toString}, opSect = ${opSect.toString}, fileInput = ${fileInput.path}" )
-        slices
+//    opSection.flatMap( global_sect => getLocalTimeSection( global_sect.replaceRange(0,partitionRange), fileInput.firstRowIndex ) ) match {
+//      case None =>
+//        logger.info( s" @XX TSI-EMPTY[${KernelContext.getProcessAddress}]: partitionRange=[${partitionRange.toString}], fileStartRow = ${fileInput.firstRowIndex}, fileNRows = ${fileInput.nRows}")
+//        IndexedSeq.empty[CDTimeSlice]
+//      case Some(opSect) =>
+    val t0 = System.nanoTime()
+    val dataset = NetcdfDatasetMgr.aquireFile(filePath, 77.toString)
+    val variable: Variable = Option(dataset.findVariable(varName)).getOrElse {
+      throw new Exception(s"Can't find variable $varName in data file ${filePath}")
     }
+    val global_shape = variable.getShape()
+    val missing: Float = getMissing(variable)
+    val varSection = variable.getShapeAsSection
+    val localPartRange = partitionRange.shiftOrigin( fileInput.firstRowIndex )
+    val interSect: ma2.Section = opSection.getOrElse(varSection).removeRange(0).insertRange(0,localPartRange)
+    logger.info( s" @XX GetSlices: interSect=[${interSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}], " +
+      s"fileStartRow = ${fileInput.firstRowIndex}, fileNRows = ${fileInput.nRows} ")
+    val fileTimeAxis = NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
+    val timeAxis: CoordinateAxis1DTime = fileTimeAxis.section( localPartRange )
+    val t1 = System.nanoTime()
+    val nTimesteps = timeAxis.getShape(0)
+    val slices = for (slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map( _.getMillis ) ) yield {
+      val sliceRanges = getSliceRanges(interSect, slice_index)
+      val data_section = variable.read(sliceRanges)
+      val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
+      val data_shape: Array[Int] = data_section.getShape
+      val section = variable.getShapeAsSection
+      val arraySpec = ArraySpec( missing, data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array)
+      CDTimeSlice(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
+    }
+    dataset.close()
+    if (fileInput.fileIndex % 500 == 0) {
+      val metadata = variable.getAttributes.map(_.toString).mkString(", ")
+      val sample_array = slices.head.elements.head._2.data
+      val datasize: Int = sample_array.length
+      val dataSample = sample_array(datasize / 2)
+      logger.info(s" @P@ Executing TimeSliceIterator.getSlices, nSlices = ${slices.length}, fileInput = ${fileInput.path}, datasize = ${datasize.toString}, dataSample = ${dataSample.toString}, prep time = ${(t1 - t0) / 1.0E9} sec, preFetch time = ${(System.nanoTime() - t1) / 1.0E9} sec\n** metadata = $metadata")
+    }
+    //        logger.info(s"%SC% nSlices = ${slices.length}, nTimesteps = ${nTimesteps}, r0 = ${interSect.getRange(0).toString}, global_shape = [${global_shape.mkString(",")}], global_sect = ${global_sect.toString}, opSect = ${opSect.toString}, fileInput = ${fileInput.path}" )
+    slices
+    //    }
   }
 
 
