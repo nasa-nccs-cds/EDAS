@@ -305,9 +305,9 @@ object TimeSliceMultiIterator extends Loggable {
   }
 }
 
-class TimeSliceMultiIterator( val varId: String, val varName: String, val opSection: Option[ma2.Section], var files: Iterator[FileInput], val basePath: String, val nPartitions: Int, val nTimeSteps: Int ) extends Iterator[CDTimeSlice] with Loggable {
-  private var _rowsRemaining = nTimeSteps
-  private var _partitionsRemaining = nPartitions
+class TimeSliceMultiIterator(val varId: String, val varName: String, val opSection: Option[ma2.Section], var files: Iterator[FileInput], val basePath: String, val nTotalPartitions: Int, val nTotalRows: Int ) extends Iterator[CDTimeSlice] with Loggable {
+  private var _rowsRemaining = nTotalRows
+  private var _partitionsRemaining = nTotalPartitions
   private var _currentFileSliceIters: Iterator[TimeSliceIterator] = Iterator.empty
   private var _currentSliceIter: Option[TimeSliceIterator] = None
   private def currentSlicesEmpty: Boolean = _currentSliceIter.fold( true )( _.isEmpty )
@@ -330,23 +330,25 @@ class TimeSliceMultiIterator( val varId: String, val varName: String, val opSect
   }
 
   def getFileSliceIter( fileInput: FileInput ): Iterator[TimeSliceIterator] = {
+    val nFileIntersectingRows = opSection.fold( nTotalRows )(section => fileInput.intersect( section.getRange(0) ).length )
+    logger.info( s"@@PartRange, _rowsRemaining = ${_rowsRemaining}, _partitionsRemaining = ${_partitionsRemaining}, nFileIntersectingRows = ${nFileIntersectingRows}" )
     val rowsPerPartition: Float = _rowsRemaining / _partitionsRemaining.toFloat
-    val partsPerFile: Int = Math.ceil( nTimeSteps / rowsPerPartition ).toInt
-    var nRowsRemaining = nTimeSteps
+    val partsPerFile: Int = Math.ceil( nFileIntersectingRows / rowsPerPartition ).toInt
+    var nRowsRemaining = nFileIntersectingRows
     var nPartsRemaining = partsPerFile
     val origin = opSection.fold(0)( _.getRange(0).first )
     var currentRow = 0
     var tsIters: IndexedSeq[TimeSliceIterator] = ( 0 until partsPerFile ) map ( iPartIndex => {
       val rowsPerPart: Int = math.round( nRowsRemaining / nPartsRemaining.toFloat )
       val partRange = new ma2.Range( currentRow, currentRow + (rowsPerPart-1) )
-      logger.info( s"@@PartRange[${KernelContext.getProcessAddress}][${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, origin = ${origin}, partRange = [ ${partRange.toString} ]")
+      logger.info( s"@@PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, origin = ${origin}, partRange = [ ${partRange.toString} ]")
       val tsi = TimeSliceIterator (varId, varName, opSection, fileInput, basePath, partRange.shiftOrigin( -origin ) )
       currentRow += rowsPerPart
       nRowsRemaining -= rowsPerPart
       nPartsRemaining -= 1
       tsi
     } )
-    _rowsRemaining -= fileInput.nRows
+    _rowsRemaining -= nFileIntersectingRows
     _partitionsRemaining -= partsPerFile
     tsIters.toIterator
   }
