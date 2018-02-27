@@ -280,7 +280,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val parallelism = Math.min( files.length, nPartitions )
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, parallelism )
     val nTS = vspec.section.getRange(0).length()
-    logger.info( s"Parallelize: section = ${section.toString}, nTS = ${nTS}, parallelism = ${parallelism}, nPartitions = ${nPartitions} ")
+    logger.info( s"Parallelize: section = ${section.toString}, nTS = ${nTS}, parallel file streams = ${parallelism}, nPartitions = ${nPartitions} ")
     val rdd = filesDataset.mapPartitions( TimeSliceMultiIterator( vspec.uid, vspec.varShortName, section, agg.parms.getOrElse("base.path",""), Math.min( nPartitions, nTS ), nTS ) )
     val optVar = agg.findVariable( vspec.varShortName )
     TimeSliceRDD( rdd, agg.parms, Map( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap)) ) )
