@@ -324,8 +324,8 @@ class TimeSliceMultiIterator( val varId: String, val varName: String, val opSect
     var currentRow = 0
     var tsIters: IndexedSeq[TimeSliceIterator] = ( 0 until partsPerFile ) map ( iPartIndex => {
       val rowsPerPart: Int = math.round( nRowsRemaining / nPartsRemaining.toFloat )
-      val partRange = new ma2.Range( currentRow, currentRow + rowsPerPart )
-      logger.info( s"@@PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, partRange = [ ${partRange.toString} ]")
+      val partRange = new ma2.Range( currentRow, currentRow + rowsPerPart ).shiftOrigin( -opSection.fold(0)( _.getRange(0).first ) )
+      logger.info( s"@@PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, opSection = [ ${opSection.toString} ], partRange = [ ${partRange.toString} ]")
       val tsi = TimeSliceIterator (varId, varName, opSection, fileInput, basePath, partRange )
       currentRow += ( rowsPerPart + 1 )
       nRowsRemaining -= rowsPerPart
@@ -386,7 +386,7 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
       section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) =>
         if (index == 0) { new ma2.Range("time", range.first + slice_index, range.first + slice_index) } else { range } }
     }
-    opSection.flatMap( global_sect => getLocalTimeSection( global_sect.insertRange(0,partitionRange), fileInput.firstRowIndex ) ) match {
+    opSection.flatMap( global_sect => getLocalTimeSection( global_sect.replaceRange(0,partitionRange), fileInput.firstRowIndex ) ) match {
       case None => IndexedSeq.empty[CDTimeSlice]
       case Some(opSect) =>
         val t0 = System.nanoTime()
@@ -397,12 +397,11 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
         val global_shape = variable.getShape()
         val missing: Float = getMissing(variable)
         val varSection = variable.getShapeAsSection
-        val interSect: ma2.Section = opSect
+        val interSect: ma2.Section = opSect.intersect(varSection)
         logger.info( s" #GS# GetSlices: opSect=[${opSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}], " +
           s"fileStartRow = ${fileInput.firstRowIndex}, fileNRows = ${fileInput.nRows} ")
-        val timeAxis: CoordinateAxis1DTime = (NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse {
-          throw new Exception(s"Can't find time axis in data file ${filePath}")
-        }).section(interSect.getRange(0))
+        val globalTimeAxis = NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
+        val timeAxis: CoordinateAxis1DTime = globalTimeAxis.section(interSect.getRange(0))
         //    assert( dates.length == variable.getShape()(0), s"Data shape mismatch getting slices for var $varName in file ${filePath}: sub-axis len = ${dates.length}, data array outer dim = ${variable.getShape()(0)}" )
         val t1 = System.nanoTime()
         val nTimesteps = timeAxis.getShape(0)
