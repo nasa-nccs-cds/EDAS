@@ -325,9 +325,9 @@ class TimeSliceMultiIterator( val varId: String, val varName: String, val opSect
     var currentRow = 0
     var tsIters: IndexedSeq[TimeSliceIterator] = ( 0 until partsPerFile ) map ( iPartIndex => {
       val rowsPerPart: Int = math.round( nRowsRemaining / nPartsRemaining.toFloat )
-      val partRange = new ma2.Range( currentRow, currentRow + (rowsPerPart-1) ).shiftOrigin( -origin )
+      val partRange = new ma2.Range( currentRow, currentRow + (rowsPerPart-1) )
       logger.info( s"@@PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, origin = ${origin}, partRange = [ ${partRange.toString} ]")
-      val tsi = TimeSliceIterator (varId, varName, opSection, fileInput, basePath, partRange )
+      val tsi = TimeSliceIterator (varId, varName, opSection, fileInput, basePath, partRange.shiftOrigin( -origin ) )
       currentRow += rowsPerPart
       nRowsRemaining -= rowsPerPart
       nPartsRemaining -= 1
