@@ -18,6 +18,7 @@ import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.esgf.process.{CDSection, EDASCoordSystem, ServerContext}
 import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 import org.apache.spark.rdd.RDD
+import org.spark_project.guava.io.Files
 import ucar.ma2
 import ucar.nc2.Variable
 import ucar.nc2.dataset.CoordinateAxis1DTime
@@ -304,29 +305,41 @@ object TimeSliceMultiIterator extends Loggable {
   }
 }
 
-class TimeSliceMultiIterator( val varId: String, val varName: String, val opSection: Option[ma2.Section], val files: Iterator[FileInput], val basePath: String, val nPartitions: Int, val nTimeSteps: Int ) extends Iterator[CDTimeSlice] with Loggable {
+class TimeSliceMultiIterator( val varId: String, val varName: String, val opSection: Option[ma2.Section], var files: Iterator[FileInput], val basePath: String, val nPartitions: Int, val nTimeSteps: Int ) extends Iterator[CDTimeSlice] with Loggable {
   private var _rowsRemaining = nTimeSteps
   private var _partitionsRemaining = nPartitions
-  private var _currentMultiIter: Iterator[TimeSliceIterator] = Iterator.empty
-  private var _currentOptSliceIter: Option[TimeSliceIterator] = None
-  private def updateMultiIter: Unit = { _currentMultiIter = if( files.hasNext ) { getFileSliceIter( files.next ) } else { Iterator.empty } }
-  private def updateTimeSliceIter: Unit = {
-    if( _currentMultiIter.isEmpty ) { updateMultiIter }
-    _currentOptSliceIter = if( _currentMultiIter.isEmpty ) { None } else { Some( _currentMultiIter.next() ) }
+  private var _currentFileSliceIters: Iterator[TimeSliceIterator] = Iterator.empty
+  private var _currentSliceIter: Option[TimeSliceIterator] = None
+  private def currentSlicesEmpty: Boolean = _currentSliceIter.fold( true )( _.isEmpty )
+  def hasNext: Boolean = { !( _currentFileSliceIters.isEmpty && files.isEmpty && currentSlicesEmpty ) }
+
+  def next(): CDTimeSlice = {
+    if( currentSlicesEmpty ) { updateTimeSliceIter }
+    _currentSliceIter.get.next()
   }
-  private def currentSlicesEmpty: Boolean = _currentOptSliceIter.fold( true )( _.isEmpty )
+  private def updateTimeSliceIter: Unit = {
+    if(_currentFileSliceIters.isEmpty) {
+      _currentFileSliceIters = if( files.hasNext ) {
+        val fileInput = files.next
+        getFileSliceIter( fileInput )
+      } else {
+        Iterator.empty
+      }
+    }
+    _currentSliceIter = if( _currentFileSliceIters.isEmpty ) { None } else { Some( _currentFileSliceIters.next() ) }
+  }
 
   def getFileSliceIter( fileInput: FileInput ): Iterator[TimeSliceIterator] = {
     val rowsPerPartition: Float = _rowsRemaining / _partitionsRemaining.toFloat
-    val partsPerFile: Int = Math.ceil( fileInput.nRows / rowsPerPartition ).toInt
-    var nRowsRemaining = fileInput.nRows
+    val partsPerFile: Int = Math.ceil( nTimeSteps / rowsPerPartition ).toInt
+    var nRowsRemaining = nTimeSteps
     var nPartsRemaining = partsPerFile
     val origin = opSection.fold(0)( _.getRange(0).first )
     var currentRow = 0
     var tsIters: IndexedSeq[TimeSliceIterator] = ( 0 until partsPerFile ) map ( iPartIndex => {
       val rowsPerPart: Int = math.round( nRowsRemaining / nPartsRemaining.toFloat )
       val partRange = new ma2.Range( currentRow, currentRow + (rowsPerPart-1) )
-      logger.info( s"@@PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, origin = ${origin}, partRange = [ ${partRange.toString} ]")
+      logger.info( s"@@PartRange[${KernelContext.getProcessAddress}][${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, origin = ${origin}, partRange = [ ${partRange.toString} ]")
       val tsi = TimeSliceIterator (varId, varName, opSection, fileInput, basePath, partRange.shiftOrigin( -origin ) )
       currentRow += rowsPerPart
       nRowsRemaining -= rowsPerPart
@@ -337,14 +350,6 @@ class TimeSliceMultiIterator( val varId: String, val varName: String, val opSect
     _partitionsRemaining -= partsPerFile
     tsIters.toIterator
   }
-
-  def hasNext: Boolean = { !( _currentMultiIter.isEmpty && files.isEmpty && currentSlicesEmpty ) }
-
-  def next(): CDTimeSlice = {
-    if( currentSlicesEmpty ) { updateTimeSliceIter }
-    _currentOptSliceIter.get.next()
-  }
-
 }
 
 object TimeSliceIterator {
