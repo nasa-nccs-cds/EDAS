@@ -315,6 +315,8 @@ class TimeSliceMultiIterator(val varId: String, val varName: String, val opSecti
 
   def next(): CDTimeSlice = {
     if( currentSlicesEmpty ) { updateTimeSliceIter }
+    logger.info( s" @XX TimeSliceMultiIterator Next[${KernelContext.getProcessAddress}]: _currentSliceIter.hasNext = ${_currentSliceIter.fold(false)(_.hasNext)}, " +
+      s"_currentFileSliceIters.isEmpty = ${_currentFileSliceIters.isEmpty}, files.isEmpty = ${files.isEmpty}, currentSlicesEmpty = ${currentSlicesEmpty}, nSlicesRemaining = ${_currentSliceIter.fold(0)(_.nSlicesRemaining)}" )
     _currentSliceIter.get.next()
   }
   private def updateTimeSliceIter: Unit = {
@@ -373,11 +375,13 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
 //  logger.info( s"TimeSliceIterator processing file ${filePath}")
   _sliceStack ++= getSlices
 
+  def nSlicesRemaining = _sliceStack.length
+
   def hasNext: Boolean = _sliceStack.nonEmpty
 
   def next(): CDTimeSlice =  {
     logger.info( s" @XX TimeSlice GetNext, file rowStart = ${fileInput.firstRowIndex}, file nRows = ${fileInput.nRows}, partRange = ${partitionRange.toString} ")
-    _sliceStack.pop
+     _sliceStack.pop
   }
 
   def getLocalTimeSection( globalTimeSection: ma2.Section, timeIndexOffest: Int ): Option[ma2.Section] = {
