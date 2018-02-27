@@ -321,11 +321,12 @@ class TimeSliceMultiIterator( val varId: String, val varName: String, val opSect
     val partsPerFile: Int = Math.ceil( fileInput.nRows / rowsPerPartition ).toInt
     var nRowsRemaining = fileInput.nRows
     var nPartsRemaining = partsPerFile
+    val origin = opSection.fold(0)( _.getRange(0).first )
     var currentRow = 0
     var tsIters: IndexedSeq[TimeSliceIterator] = ( 0 until partsPerFile ) map ( iPartIndex => {
       val rowsPerPart: Int = math.round( nRowsRemaining / nPartsRemaining.toFloat )
-      val partRange = new ma2.Range( currentRow, currentRow + (rowsPerPart-1) ).shiftOrigin( -opSection.fold(0)( _.getRange(0).first ) )
-      logger.info( s"@@PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, opSection = [ ${opSection.toString} ], partRange = [ ${partRange.toString} ]")
+      val partRange = new ma2.Range( currentRow, currentRow + (rowsPerPart-1) ).shiftOrigin( -origin )
+      logger.info( s"@@PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, origin = ${origin}, partRange = [ ${partRange.toString} ]")
       val tsi = TimeSliceIterator (varId, varName, opSection, fileInput, basePath, partRange )
       currentRow += rowsPerPart
       nRowsRemaining -= rowsPerPart
@@ -397,7 +398,7 @@ class TimeSliceIterator(val varId: String, val varName: String, opSection: Optio
         val global_shape = variable.getShape()
         val missing: Float = getMissing(variable)
         val varSection = variable.getShapeAsSection
-        val interSect: ma2.Section = opSect.intersect(varSection)
+        val interSect: ma2.Section = opSect
         logger.info( s" #GS# GetSlices: opSect=[${opSect.toString}], varSection=[${varSection.toString}], partitionRange=[${partitionRange.toString}], " +
           s"fileStartRow = ${fileInput.firstRowIndex}, fileNRows = ${fileInput.nRows} ")
         val globalTimeAxis = NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
