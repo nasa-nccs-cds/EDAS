@@ -310,17 +310,17 @@ class TimeSliceMultiIterator(val varId: String, val varName: String, val opSecti
   private var _partitionsRemaining = nTotalPartitions
   private var _currentFileSliceIters: Iterator[TimeSliceIterator] = Iterator.empty
   private var _currentSliceIter: Option[TimeSliceIterator] = None
-  private def currentSlicesEmpty: Boolean = _currentSliceIter.fold( true )( _.isEmpty )
-  def hasNext: Boolean = { !( _currentFileSliceIters.isEmpty && files.isEmpty && currentSlicesEmpty ) }
+  private def currentSlicesAvailable: Boolean = _currentSliceIter.fold( false )( _.hasNext )
+  def hasNext: Boolean = { files.hasNext || _currentFileSliceIters.nonEmpty || currentSlicesAvailable }
 
   def next(): CDTimeSlice = {
-    if( currentSlicesEmpty ) { updateTimeSliceIter }
+    if( !currentSlicesAvailable ) { updateTimeSliceIter }
     logger.info( s" @XX TimeSliceMultiIterator Next[${KernelContext.getProcessAddress}]: _currentSliceIter.hasNext = ${_currentSliceIter.fold(false)(_.hasNext)}, " +
-      s"_currentFileSliceIters.isEmpty = ${_currentFileSliceIters.isEmpty}, files.isEmpty = ${files.isEmpty}, currentSlicesEmpty = ${currentSlicesEmpty}, nSlicesRemaining = ${_currentSliceIter.fold(0)(_.nSlicesRemaining)}" )
+      s"_currentFileSliceIters.isEmpty = ${_currentFileSliceIters.isEmpty}, files.isEmpty = ${files.isEmpty}, currentSlicesAvailable = ${currentSlicesAvailable}, nSlicesRemaining = ${_currentSliceIter.fold(0)(_.nSlicesRemaining)}" )
     _currentSliceIter.get.next()
   }
   private def updateTimeSliceIter: Unit = {
-    if(_currentFileSliceIters.isEmpty) {
+    if( ! _currentFileSliceIters.hasNext ) {
       _currentFileSliceIters = if( files.hasNext ) {
         val fileInput = files.next
         getFileSliceIter( fileInput )
@@ -352,7 +352,7 @@ class TimeSliceMultiIterator(val varId: String, val varName: String, val opSecti
     } )
     _rowsRemaining -= nFileIntersectingRows
     _partitionsRemaining -= partsPerFile
-    tsIters.toIterator
+    tsIters.filter( _.nonEmpty ).toIterator
   }
 }
 
