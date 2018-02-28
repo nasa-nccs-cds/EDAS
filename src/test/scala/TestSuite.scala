@@ -498,7 +498,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val nco_verified_result: CDFloatArray = CDFloatArray( Array(  279.1232 ).map(_.toFloat), Float.MaxValue )
     val edas_agg_result: CDFloatArray = CDFloatArray( Array( 279.12314 ).map(_.toFloat), Float.MaxValue )
     val datainputs = s"""[domain=[{"name":"d0"}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"tyx"}]]"""
-    val result_node = executeTest(datainputs)
+    val result_node = executeTest(datainputs, Map( "profile" -> "true" ) )
     val result_data = getResultData( result_node )
     println( "Verified Result:     " + nco_verified_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
     println( "EDAS Agg Result:     " + edas_agg_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )

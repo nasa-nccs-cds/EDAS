@@ -106,10 +106,7 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
     val rv = code()
     endEvent(eventId)
     rv
-  } else {
-    logger.info( s" #EA# Ignoring unactivated profile: ${eventId}, CT=${KernelContext.relClockTime}")
-    code()
-  }
+  } else { code() }
 }
 
 // sbt "run-main nasa.nccs.utilities.ClockTest"
