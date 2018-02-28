@@ -57,8 +57,8 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   private val _startEventList: ConcurrentLinkedHashMap[ String, StartEvent] = new ConcurrentLinkedHashMap.Builder[String, StartEvent].initialCapacity(64).maximumWeightedCapacity(256).build()
   override def isZero: Boolean = _metricsList.isEmpty
   override def reset(): Unit = _metricsList.clear()
-  private def newEvent( eventId: String ): EventMetrics = { val newMetrics =  new EventMetrics( eventId ); _metricsList += ( eventId -> newMetrics); newMetrics }
-  private def getMetrics( eventId: String ): EventMetrics = _metricsList.getOrElse( eventId, newEvent(eventId) )
+  private def newEvent( eventId: String )(): EventMetrics = new EventMetrics( eventId )
+  private def getMetrics( eventId: String ): EventMetrics = _metricsList.getOrElseUpdate( eventId, newEvent(eventId) )
   private def getStartEvent( eventId: String ): Option[StartEvent] = Option( _startEventList.get( eventId ) )
   private def updateStartEvent( eventId: String ): StartEvent = getStartEvent(eventId).fold( newStartEvent(eventId) )( _.update() )
   override def add(v: EventRecord): Unit = getMetrics( v.eventId ) += v
@@ -69,7 +69,7 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   private def newStartEvent( eventId: String ): StartEvent = {
     val newStartEvent =  new StartEvent( eventId );
     _startEventList += ( eventId -> newStartEvent);
-    logger.info( s" #EA# Get new start event: ${eventId}, CT=${KernelContext.relClockTime}")
+    logger.info( s" #EA# Get new start event: ${eventId}, CT=${relClockTime}")
     newStartEvent
   }
   override def toString(): String = try {
@@ -80,11 +80,12 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
 
   def startEvent( eventId: String ): StartEvent = updateStartEvent( eventId )
   def activated: Boolean  = ! _activationStatus.isEmpty
+  def relClockTime: Float = { (System.currentTimeMillis()%10000000L)/1000f }
 
   def endEvent( eventId: String ): Unit = getStartEvent( eventId ) match {
     case Some(startEvent) =>
-      logger.info( s" #EA# Add new event: ${eventId}, CT=${KernelContext.relClockTime}")
       add( new EventRecord( eventId, startEvent.timestamp, System.nanoTime()-startEvent.timestamp, startEvent.clocktime ) )
+      logger.info( s" #EA# Add new event: ${eventId}, CT=${relClockTime}, events = ${_metricsList.keys.mkString(",")} ")
     case None =>
       logger.error(s"End event '${eventId}' without start event in current thread")
   }

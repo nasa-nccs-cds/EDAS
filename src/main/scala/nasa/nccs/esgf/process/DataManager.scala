@@ -133,6 +133,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   val profiler: EventAccumulator = new EventAccumulator()
 
   def initializeProfiler( activationStatus: String, sc: SparkContext ) = {
+    logger.info( " #EA# Initializing profiler ")
     profiler.setActivationStatus( activationStatus )
     try { sc.register( profiler, "EDAS_EventAccumulator" ) } catch { case ex: IllegalStateException => Unit }
     profiler.reset()
