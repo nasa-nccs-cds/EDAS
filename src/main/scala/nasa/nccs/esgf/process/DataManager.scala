@@ -163,7 +163,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
     val pw = new PrintWriter( new File(filePath) )
     pw.write(getTimingReport(label))
     pw.close()
-    logger.info(s"Saved Profiling data to '${filePath}"')
+    logger.info(s"Saved Profiling data to '${filePath}'")
   }
 
   def getDomain(domain_id: String): DomainContainer = domains.get(domain_id) match {
