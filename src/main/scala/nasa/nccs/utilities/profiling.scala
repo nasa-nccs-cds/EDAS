@@ -41,7 +41,12 @@ class EventMetrics( val eventId: String ) extends Serializable {
     _end = rec.timestamp + rec.duration
   }
   def clock = _clock
-  def toString( baseClockTime: Long ): String = s"[ EM(${eventId}): SumDuration=${_sumDuration}, AveDuration=${_sumDuration/_nEvents}, NEvents=${_nEvents}, MaxDuration=${_maxDuration}, MinDuration=${_minDuration}, Extent=${(_end-_start)/1.0e9} Clock=${(_clock-baseClockTime)/1000.0}]"
+  def toString( baseClockTime: Long ): String = {
+    val aveDuration = _sumDuration/_nEvents
+    val extent = (_end-_start)/1.0e9
+    val clock = (_clock-baseClockTime)/1000.0
+    f"T:$clock%6.2f SUM:$_sumDuration%6.2f AVE:$aveDuration%5.2f N:$_nEvents%4d MAX:$_maxDuration%6.2f MIN:$_minDuration%5.2f EXT:$extent%6.2f: $eventId%s"
+  }
 }
 
 class EventAccumulator( initActivationStatus: String = "active" ) extends AccumulatorV2[EventRecord, java.util.List[EventMetrics]] with Loggable {
