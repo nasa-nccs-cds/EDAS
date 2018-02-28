@@ -22,30 +22,30 @@ case class StartEvent( eventId: String )  extends Serializable {
 }
 
 class EventMetrics( val eventId: String ) extends Serializable {
-  private var _sumDuration: Float=0.0f
-  private var _nEvents: Int=0
-  private var _maxDuration: Float=0f
-  private var _minDuration: Float=Float.MaxValue
-  private var _start: Long=0
-  private var _clock: Long=0
-  private var _end: Long=0
+  private var sumDuration: Float=0.0f
+  private var nEvents: Int=0
+  private var maxDuration: Float=0f
+  private var minDuration: Float=Float.MaxValue
+  private var start: Long=0
+  private var clock: Long=0
+  private var end: Long=0
 
   def +=( rec: EventRecord ): Unit = {
     val tsec = rec.duration / 1.0e9f
-    _sumDuration += tsec
-    _nEvents += 1
-    if( tsec > _maxDuration ) { _maxDuration = tsec }
-    if( tsec < _minDuration ) { _minDuration = tsec }
-    if( _start == 0 ) { _start = rec.timestamp }
-    if( _clock == 0 ) { _clock = rec.clocktime }
-    _end = rec.timestamp + rec.duration
+    sumDuration += tsec
+    nEvents += 1
+    if( tsec > maxDuration ) { maxDuration = tsec }
+    if( tsec < minDuration ) { minDuration = tsec }
+    if( start == 0 ) { start = rec.timestamp }
+    if( clock == 0 ) { clock = rec.clocktime }
+    end = rec.timestamp + rec.duration
   }
-  def clock = _clock
+  def ctime = clock
   def toString( baseClockTime: Long ): String = {
-    val aveDuration = _sumDuration/_nEvents
-    val extent = (_end-_start)/1.0e9
-    val clock = (_clock-baseClockTime)/1000.0
-    f"T:$clock%6.2f SUM:$_sumDuration%6.2f AVE:$aveDuration%5.2f N:$_nEvents%4d MAX:$_maxDuration%6.2f MIN:$_minDuration%5.2f EXT:$extent%6.2f: $eventId%s"
+    val aveDuration = sumDuration/nEvents
+    val extent = (end-start)/1.0e9
+    val rclock = (clock-baseClockTime)/1000.0
+    f"T:$rclock%6.2f SUM:$sumDuration%6.2f AVE:$aveDuration%5.2f N:$nEvents%4d MAX:$maxDuration%6.2f MIN:$minDuration%5.2f EXT:$extent%6.2f: $eventId%s"
   }
 }
 
@@ -66,8 +66,8 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   def setActivationStatus( aStatus: String ) = { _activationStatus = aStatus }
 
   override def toString(): String = try {
-    val events: List[EventMetrics] = value.toList.sortBy( _.clock )
-    val baseClockTime = events.head.clock
+    val events: List[EventMetrics] = value.toList.sortBy( _.ctime )
+    val baseClockTime = events.head.ctime
     "EVENTS:\n ** " + events.map(_.toString(baseClockTime)).mkString( "\n ** ")
   } catch { case err: Throwable => "" }
 
