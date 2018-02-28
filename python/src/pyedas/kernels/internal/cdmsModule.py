@@ -17,7 +17,7 @@ class RegridKernel(CDMSKernel):
 
     def __init__( self ):
         Kernel.__init__( self, KernelSpec("regrid", "Regridder", "Regrids the inputs using UVCDAT", parallelize=True, visibility="public" ) )
-        self._debug = True
+        self._debug = False
 
     def getGrid( self, gridFile, latInterval=None, lonInterval=None ):
         import cdms2
@@ -41,8 +41,8 @@ class RegridKernel(CDMSKernel):
         gridSection = str( mdata.get('gridSection',"") )
         inlatBounds, inlonBounds = ingrid.getBounds()
         self.logger.info("\n Execute REGRID -> " + gridType + ", grid section: '" + str(gridSection) + "' with metadata: " + str(mdata) + "\n")
-        self.logger.info(" >> in LAT Bounds shape: " + str(inlatBounds.shape) + ", values: " + str(inlatBounds))
-        self.logger.info(" >> in LON Bounds shape: " + str(inlonBounds.shape) + ", values: " + str(inlonBounds))
+      #  self.logger.info(" >> in LAT Bounds shape: " + str(inlatBounds.shape) + ", values: " + str(inlatBounds))
+      #  self.logger.info(" >> in LON Bounds shape: " + str(inlonBounds.shape) + ", values: " + str(inlonBounds))
         toGrid = None
         if ("gaussian" in gridType):
             toGrid = cdms2.createGaussianGrid(shape[0])
@@ -71,11 +71,9 @@ class RegridKernel(CDMSKernel):
         elif( target ):
             grid_input = inputs.get( target, None )
             if not grid_input: raise Exception( "Can't find grid variable uid: " + target + ", variable uids = " + str( inputs.keys() ) )
-            self.logger.info("create Grid from target")
             toGrid = grid_input.getGrid()
         elif( gridSpec ):
             toGrid = self.getGrid( gridSpec )
-            self.logger.info("create Grid from gridSpec")
             if( gridSection ):
                 ( bounds0, bounds1 ) = self.getAxisBounds( gridSection )
                 toGrid = toGrid.subGrid( bounds0, bounds1 )
@@ -83,8 +81,8 @@ class RegridKernel(CDMSKernel):
             raise Exception( "Unable to determine target grid type in Regrid operation")
 
         outlatBounds, outlonBounds = toGrid.getBounds()
-        self.logger.info(" >> out LAT Bounds shape: " + str(outlatBounds.shape) + ", values: " + str(outlatBounds))
-        self.logger.info(" >> out LON Bounds shape: " + str(outlonBounds.shape) + ", values: " + str(outlonBounds))
+ #       self.logger.info(" >> out LAT Bounds shape: " + str(outlatBounds.shape) + ", values: " + str(outlatBounds))
+ #       self.logger.info(" >> out LON Bounds shape: " + str(outlonBounds.shape) + ", values: " + str(outlonBounds))
         return toGrid
 
     def executeOperations(self, task, _inputs):
@@ -112,16 +110,17 @@ class RegridKernel(CDMSKernel):
                     self.logger.info( "Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}".format( vid, _input.name, _input.collection, _input.gridFile ) )
                     variable = _input.getVariable()
                     ingrid = _input.getGrid()
-                    self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
+#                    self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
                     toGrid = self.getOutGrid( mdata, _inputs, ingrid )
                     if( not ingrid == toGrid ):
                         self.logger.info( " Regridding Variable {0} using grid {1} ".format( variable.id, toGrid.getType() ) )
                         if self._debug:
                             self.logger.info( " >> Input Data Sample: [ {0} ]".format( ', '.join(  [ str( variable.data.flat[i] ) for i in range(20,90) ] ) ) )
                             self.logger.info( " >> Input Variable Shape: {0}, Grid Shape: {1}, Regrid Method: {2}, Grid Type: {3} ".format( str(variable.shape), str([len(ingrid.getLatitude()),len(ingrid.getLongitude())] ), method, toGrid.getType() ))
-
+                        tr0 = time.time()
                         result_var = variable.regrid(toGrid, regridTool=regridTool, regridMethod=method)
-                        self.logger.info( " >> Gridded Data Sample: [ {0} ]".format( ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
+                        tr1 = time.time()
+                        self.logger.info( " >> Gridded Data Sample ( variable.regrid op time = {1} ): [ {0} ]".format(  (tr1 - tr0), ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
                         results.append( self.createResult( result_var, _input, task ) )
             t1 = time.time()
             self.logger.info(" @RRR@ Completed regrid operation for input variables: {0} in time {1}".format( str( _inputs.keys() ), (t1 - t0)))
