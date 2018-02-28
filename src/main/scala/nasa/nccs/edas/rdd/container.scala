@@ -278,12 +278,18 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val collection: Collection = vspec.getCollection
     val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
     val files: Array[FileInput]  = agg.getIntersectingFiles( section )
-    val file_parallelism = Math.min( files.length, nPartitions )
-    val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, file_parallelism )
     val nTS = vspec.section.getRange(0).length()
     val nUsableParts = Math.min( nTS, nPartitions )
-    val slicePartitions: RDD[TimeSlicePartition] = filesDataset.mapPartitions( TimeSliceMultiIterator( vspec.uid, vspec.varShortName, section, agg.parms.getOrElse("base.path",""), nUsableParts, nTS ) ).repartition(nUsableParts)
-    logger.info( s" @XX Parallelize: section = ${section.toString}, nTS = ${nTS}, parallel file streams = ${file_parallelism}, Available Partitions = ${nPartitions}, parallel read streams = ${slicePartitions.getNumPartitions} ")
+    var _remainingTimesteps = nTS
+    var _remainingPartitions = nUsableParts
+    val partGens: IndexedSeq[TimeSlicePartitionGenerator]  = for(fileInput <- files ) yield {
+      val tsiter = TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, section, fileInput, agg.parms.getOrElse("base.path", ""), _remainingPartitions, _remainingTimesteps )
+      _remainingTimesteps -= tsiter.nFileIntersectingRows
+      _remainingPartitions -= tsiter.partsPerFile
+      tsiter
+    }
+    val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partGens.flatMap( _.getTimeSlicePartitions ), nUsableParts )
+    logger.info( s" @XX Parallelize: section = ${section.toString}, nTS = ${nTS}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, parallel read streams = ${slicePartitions.getNumPartitions} ")
     val sliceRdd: RDD[CDTimeSlice] = kernelContext.profiler.profile("readSlices") ( () => {
       val rdd = slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
       if( kernelContext.profiler.activated) { rdd.count }
@@ -305,39 +311,26 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
   }
 }
 
-object TimeSliceMultiIterator extends Loggable {
-  def apply( varId: String, varName: String, section: String, basePath: String, nPartitions: Int, nTimeSteps: Int ) ( files: Iterator[FileInput] ): TimeSliceMultiIterator = {
+object TimeSlicePartitionGenerator extends Loggable {
+  def apply( varId: String, varName: String, section: String, fileInput: FileInput, basePath: String, nPartitions: Int, nTimeSteps: Int ): TimeSlicePartitionGenerator = {
     val opSection = CDSection.fromString(section).map(_.toSection)
-    new TimeSliceMultiIterator( varId, varName, opSection, files, basePath, nPartitions, nTimeSteps )
+    new TimeSlicePartitionGenerator( varId, varName, opSection, fileInput, basePath, nPartitions, nTimeSteps )
   }
 }
 
-class TimeSliceMultiIterator(val varId: String, val varName: String, val opSection: Option[ma2.Section], var files: Iterator[FileInput], val basePath: String, val nTotalPartitions: Int, val nTotalRows: Int ) extends Iterator[TimeSlicePartition] with Loggable {
-  private var _rowsRemaining = nTotalRows
-  private var _partitionsRemaining = nTotalPartitions
-  private var _currentFileSliceIters: Iterator[TimeSlicePartition] = Iterator.empty
-  def hasNext: Boolean = { files.hasNext || _currentFileSliceIters.nonEmpty }
+class TimeSlicePartitionGenerator(val varId: String, val varName: String, val opSection: Option[ma2.Section], val fileInput: FileInput, val basePath: String, val partitionsRemaining: Int, val rowsRemaining: Int ) extends Loggable {
+  val intersectingRange = opSection.fold( fileInput.getRowIndexRange ) ( sect => fileInput.intersect(sect.getRange(0)) )
+  val nFileIntersectingRows = intersectingRange.length
+  //    logger.info( s" @XX PartRange, _rowsRemaining = ${_rowsRemaining}, _partitionsRemaining = ${_partitionsRemaining}, nFileIntersectingRows = ${nFileIntersectingRows}" )
+  val rowsPerPartition: Float = rowsRemaining / partitionsRemaining.toFloat
+  val partsPerFile: Int = Math.ceil( nFileIntersectingRows / rowsPerPartition ).toInt
 
-  def next: TimeSlicePartition = {
-    updateFileSliceIter
-    _currentFileSliceIters.next()
-  }
-
-  def updateFileSliceIter: Unit = if( ! _currentFileSliceIters.hasNext ) {
-    _currentFileSliceIters = if( files.hasNext ) { getFileSliceIter( files.next ) } else { Iterator.empty }
-  }
-
-  def getFileSliceIter( fileInput: FileInput ): Iterator[TimeSlicePartition] = {
-    val intersectingRange = opSection.fold( fileInput.getRowIndexRange ) ( sect => fileInput.intersect(sect.getRange(0)) )
-    val nFileIntersectingRows = intersectingRange.length
-//    logger.info( s" @XX PartRange, _rowsRemaining = ${_rowsRemaining}, _partitionsRemaining = ${_partitionsRemaining}, nFileIntersectingRows = ${nFileIntersectingRows}" )
-    val rowsPerPartition: Float = _rowsRemaining / _partitionsRemaining.toFloat
-    val partsPerFile: Int = Math.ceil( nFileIntersectingRows / rowsPerPartition ).toInt
+  def getTimeSlicePartitions: IndexedSeq[TimeSlicePartition] = {
     var nRowsRemaining = nFileIntersectingRows
     var nPartsRemaining = partsPerFile
     val origin = opSection.fold(0)( _.getRange(0).first )
     var currentRow = 0
-    var tsIters: IndexedSeq[TimeSlicePartition] = ( 0 until partsPerFile ) map ( iPartIndex => {
+    ( 0 until partsPerFile ) map ( iPartIndex => {
       val rowsPerPart: Int = math.round( nRowsRemaining / nPartsRemaining.toFloat )
       val partStartRow = intersectingRange.first + currentRow
       val partRange = new ma2.Range( partStartRow, partStartRow + (rowsPerPart-1) )
@@ -348,9 +341,6 @@ class TimeSliceMultiIterator(val varId: String, val varName: String, val opSecti
       nPartsRemaining -= 1
       tsi
     } )
-    _rowsRemaining -= nFileIntersectingRows
-    _partitionsRemaining -= partsPerFile
-    tsIters.toIterator
   }
 }
 

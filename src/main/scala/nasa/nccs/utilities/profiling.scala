@@ -53,8 +53,8 @@ class EventMetrics( val eventId: String ) extends Serializable {
 
 class EventAccumulator( initActivationStatus: String = "active" ) extends AccumulatorV2[EventRecord, java.util.List[EventMetrics]] with Loggable {
   private var _activationStatus: String = initActivationStatus
-  private val _metricsList: ConcurrentLinkedHashMap[ String, EventMetrics] = new ConcurrentLinkedHashMap.Builder[String, EventMetrics].initialCapacity(64).maximumWeightedCapacity(1024).build()
-  private val _startEventList: ConcurrentLinkedHashMap[ String, StartEvent] = new ConcurrentLinkedHashMap.Builder[String, StartEvent].initialCapacity(64).maximumWeightedCapacity(1024).build()
+  private val _metricsList: ConcurrentLinkedHashMap[ String, EventMetrics] = new ConcurrentLinkedHashMap.Builder[String, EventMetrics].build()
+  private val _startEventList: ConcurrentLinkedHashMap[ String, StartEvent] = new ConcurrentLinkedHashMap.Builder[String, StartEvent].build()
   override def isZero: Boolean = _metricsList.isEmpty
   override def reset(): Unit = _metricsList.clear()
   private def newEvent( eventId: String )(): EventMetrics = new EventMetrics( eventId )
@@ -69,7 +69,8 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   private def newStartEvent( eventId: String ): StartEvent = {
     val newStartEvent =  new StartEvent( eventId );
     _startEventList += ( eventId -> newStartEvent);
-//    logger.info( s" #EA# Get new start event: ${eventId}, CT=${relClockTime}")
+    _metricsList.putIfAbsent( eventId, newEvent(eventId) )
+    logger.info( s" #EA# Get new start event: ${eventId}, CT=${relClockTime}")
     newStartEvent
   }
   override def toString(): String = try {
@@ -85,7 +86,7 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   def endEvent( eventId: String ): Unit = getStartEvent( eventId ) match {
     case Some(startEvent) =>
       add( new EventRecord( eventId, startEvent.timestamp, System.nanoTime()-startEvent.timestamp, startEvent.clocktime ) )
-//      logger.info( s" #EA# Add new event: ${eventId}, CT=${relClockTime}, events = ${_metricsList.keys.mkString(",")} ")
+      logger.info( s" #EA# Add new event: ${eventId}, CT=${relClockTime}, events = ${_metricsList.keys.mkString(",")} ")
     case None =>
       logger.error(s"End event '${eventId}' without start event in current thread")
   }
