@@ -1,4 +1,6 @@
 package nasa.nccs.esgf.process
+import java.io.{File, PrintWriter}
+
 import nasa.nccs.cdapi.cdm._
 import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, HeapDblArray, HeapLongArray}
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDDoubleArray, CDFloatArray}
@@ -156,6 +158,13 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
 
   def getTimingReport(label: String): String = profiler.toString
   def logTimingReport(label: String): Unit = logger.info(getTimingReport(label))
+
+  def saveTimingReport( filePath: String, label: String): Unit = {
+    val pw = new PrintWriter( new File(filePath) )
+    pw.write(getTimingReport(label))
+    pw.close()
+    logger.info(s"Saved Profiling data to '${filePath}"')
+  }
 
   def getDomain(domain_id: String): DomainContainer = domains.get(domain_id) match {
     case Some(domain_container) => domain_container

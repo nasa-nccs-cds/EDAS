@@ -70,7 +70,7 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
     val newStartEvent =  new StartEvent( eventId );
     _startEventList += ( eventId -> newStartEvent);
     _metricsList.putIfAbsent( eventId, newEvent(eventId) )
-    logger.info( s" #EA# Get new start event: ${eventId}, CT=${relClockTime}")
+//    logger.info( s" #EA# Get new start event: ${eventId}, CT=${relClockTime}")
     newStartEvent
   }
   override def toString(): String = try {
@@ -86,7 +86,7 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   def endEvent( eventId: String ): Unit = getStartEvent( eventId ) match {
     case Some(startEvent) =>
       add( new EventRecord( eventId, startEvent.timestamp, System.nanoTime()-startEvent.timestamp, startEvent.clocktime ) )
-      logger.info( s" #EA# Add new event: ${eventId}, CT=${relClockTime}, events = ${_metricsList.keys.mkString(",")} ")
+//      logger.info( s" #EA# Add new event: ${eventId}, CT=${relClockTime}, events = ${_metricsList.keys.mkString(",")} ")
     case None =>
       logger.error(s"End event '${eventId}' without start event in current thread")
   }

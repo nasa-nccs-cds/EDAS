@@ -279,7 +279,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
     val files: Array[FileInput]  = agg.getIntersectingFiles( section )
     val nTS = vspec.section.getRange(0).length()
-    val nUsableParts = Math.min( nTS, nPartitions )
+    val nUsableParts = if (  nTS < 1.5 * nPartitions ) { nTS } else { Math.ceil( nTS / Math.round( nTS/nPartitions.toFloat ) ).toInt }
     var _remainingTimesteps = nTS
     var _remainingPartitions = nUsableParts
     val partGens: IndexedSeq[TimeSlicePartitionGenerator]  = for(fileInput <- files ) yield {
