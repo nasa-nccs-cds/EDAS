@@ -73,6 +73,8 @@ object KernelContext {
     new KernelContext( operation, gridMapVars ++ gridMapCols, sectionMap, executor.requestCx.domains, executor.requestCx.getConfiguration, executor.workflowCx.crs, executor.getRegridSpec, executor.requestCx.profiler )
   }
 
+  def relClockTime: Float = { (System.currentTimeMillis()/1000f)%10000f }
+
   def getHostAddress: String = try {
     val ip = InetAddress.getLocalHost
     s"${ip.getHostName}(${ip.getHostAddress})"
@@ -87,6 +89,7 @@ object KernelContext {
 
 class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],
                      _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec], val profiler: EventAccumulator ) extends Loggable with Serializable with ScopeContext {
+  import KernelContext._
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
   val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
@@ -101,7 +104,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   def findGrid(gridRef: String): Option[GridContext] = grids.find(item => (item._1.equalsIgnoreCase(gridRef) || item._1.split('-')(0).equalsIgnoreCase(gridRef))).flatMap(_._2)
 
   def getConfiguration: Map[String, String] = configuration ++ operation.getConfiguration
-  def relClockTime: Float = { (System.currentTimeMillis()/1000f)%10000f }
+
 
   def getReductionSize: Int = {
     val section: CDSection = sectionMap.head._2.getOrElse( throw new Exception(s"Can't find section for inputs of operation ${operation.identifier}") )

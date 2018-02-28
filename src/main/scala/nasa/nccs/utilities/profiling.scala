@@ -6,6 +6,8 @@ import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.{AccumulatorV2, CollectionAccumulator}
 import com.googlecode.concurrentlinkedhashmap.{ConcurrentLinkedHashMap, EntryWeigher, EvictionListener}
+import nasa.nccs.edas.kernels.KernelContext
+
 import scala.collection.concurrent.TrieMap
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -56,7 +58,6 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   override def isZero: Boolean = _metricsList.isEmpty
   override def reset(): Unit = _metricsList.clear()
   private def newEvent( eventId: String ): EventMetrics = { val newMetrics =  new EventMetrics( eventId ); _metricsList += ( eventId -> newMetrics); newMetrics }
-  private def newStartEvent( eventId: String ): StartEvent = { val newStartEvent =  new StartEvent( eventId ); _startEventList += ( eventId -> newStartEvent); newStartEvent }
   private def getMetrics( eventId: String ): EventMetrics = _metricsList.getOrElse( eventId, newEvent(eventId) )
   private def getStartEvent( eventId: String ): Option[StartEvent] = Option( _startEventList.get( eventId ) )
   private def updateStartEvent( eventId: String ): StartEvent = getStartEvent(eventId).fold( newStartEvent(eventId) )( _.update() )
@@ -65,6 +66,12 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   override def value: java.util.List[EventMetrics] = java.util.Collections.unmodifiableList( _metricsList.values.toList )
   def setActivationStatus( aStatus: String ) = { _activationStatus = aStatus }
 
+  private def newStartEvent( eventId: String ): StartEvent = {
+    val newStartEvent =  new StartEvent( eventId );
+    _startEventList += ( eventId -> newStartEvent);
+    logger.info( s" #EA# Get new start event: ${eventId}, CT=${KernelContext.relClockTime}")
+    newStartEvent
+  }
   override def toString(): String = try {
     val events: List[EventMetrics] = value.toList.sortBy( _.ctime )
     val baseClockTime = events.head.ctime
@@ -75,8 +82,11 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   def activated: Boolean  = ! _activationStatus.isEmpty
 
   def endEvent( eventId: String ): Unit = getStartEvent( eventId ) match {
-    case Some(startEvent) => add( new EventRecord( eventId, startEvent.timestamp, System.nanoTime()-startEvent.timestamp, startEvent.clocktime ) )
-    case None => logger.error(s"End event '${eventId}' without start event in current thread")
+    case Some(startEvent) =>
+      logger.info( s" #EA# Add new event: ${eventId}, CT=${KernelContext.relClockTime}")
+      add( new EventRecord( eventId, startEvent.timestamp, System.nanoTime()-startEvent.timestamp, startEvent.clocktime ) )
+    case None =>
+      logger.error(s"End event '${eventId}' without start event in current thread")
   }
 
   override def copy(): EventAccumulator = {
@@ -94,7 +104,10 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
     val rv = code()
     endEvent(eventId)
     rv
-  } else { code() }
+  } else {
+    logger.info( s" #EA# Ignoring unactivated profile: ${eventId}, CT=${KernelContext.relClockTime}")
+    code()
+  }
 }
 
 // sbt "run-main nasa.nccs.utilities.ClockTest"
