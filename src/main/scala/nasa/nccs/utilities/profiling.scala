@@ -45,7 +45,7 @@ class EventMetrics( val eventId: String ) extends Serializable {
     val aveDuration = sumDuration/nEvents
     val extent = (end-start)/1.0e9
     val rclock = (clock-baseClockTime)/1000.0
-    f"T:$rclock%6.2f SUM:$sumDuration%6.2f AVE:$aveDuration%5.2f N:$nEvents%4d MAX:$maxDuration%6.2f MIN:$minDuration%5.2f EXT:$extent%6.2f: $eventId%s"
+    f"$rclock%6.2f:T $sumDuration%6.2f:SUM $aveDuration%5.2f:AVE $nEvents%3d:N $maxDuration%6.2f:MAX $minDuration%5.2f:MIN $extent%6.2f:EXT=> $eventId%s"
   }
 }
 

@@ -273,7 +273,7 @@ class VariableRecord( val varName: String, val collection: String, val gridFileP
 
 class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggable {
 
-  def parallelize( vspec: DirectRDDVariableSpec ): TimeSliceRDD = {
+  def parallelize( kernelContext: KernelContext, vspec: DirectRDDVariableSpec ): TimeSliceRDD = {
     val section = vspec.section.toString
     val collection: Collection = vspec.getCollection
     val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
@@ -282,12 +282,17 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val filesDataset: RDD[FileInput] = sc.sparkContext.parallelize( files, file_parallelism )
     val nTS = vspec.section.getRange(0).length()
     val nUsableParts = Math.min( nTS, nPartitions )
-    val slicePartitions: RDD[TimeSlicePartition] = filesDataset.mapPartitions( TimeSliceMultiIterator( vspec.uid, vspec.varShortName, section, agg.parms.getOrElse("base.path",""), nUsableParts, nTS ) )
-    val rdd: RDD[CDTimeSlice] = slicePartitions.repartition(nUsableParts).mapPartitions( _.flatMap( _.getSlices ) )
-    logger.info( s" @XX Parallelize: section = ${section.toString}, nTS = ${nTS}, parallel file streams = ${file_parallelism}, Available Partitions = ${nPartitions}, Used Paritions = ${rdd.getNumPartitions} ")
+    val slicePartitions: RDD[TimeSlicePartition] = filesDataset.mapPartitions( TimeSliceMultiIterator( vspec.uid, vspec.varShortName, section, agg.parms.getOrElse("base.path",""), nUsableParts, nTS ) ).repartition(nUsableParts)
+    logger.info( s" @XX Parallelize: section = ${section.toString}, nTS = ${nTS}, parallel file streams = ${file_parallelism}, Available Partitions = ${nPartitions}, parallel read streams = ${slicePartitions.getNumPartitions} ")
+    val sliceRdd: RDD[CDTimeSlice] = kernelContext.profiler.profile("readSlices") ( () => {
+      val rdd = slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
+      if( kernelContext.profiler.activated) { rdd.count }
+      rdd
+    } )
     val optVar = agg.findVariable( vspec.varShortName )
-    TimeSliceRDD( rdd, agg.parms, Map( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap)) ) )
+    TimeSliceRDD( sliceRdd, agg.parms, Map( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap)) ) )
   }
+
 
   def parallelize( template: TimeSliceRDD, vspec: DirectRDDVariableSpec ): TimeSliceRDD = {
     val collection: Collection = vspec.getCollection
@@ -366,18 +371,12 @@ object PartitionRange {
 case class PartitionRange( firstRow: Int, lastRow: Int ) extends Serializable {
   def toRange: ma2.Range = new ma2.Range( firstRow, lastRow )
   def toRange( origin: Int ): ma2.Range = toRange.shiftOrigin( origin )
+  override def toString = s"PR[${firstRow} ${lastRow}]"
 }
 
 class TimeSlicePartition(val varId: String, val varName: String, opSection: Option[CDSection], val fileInput: FileInput, val basePath: String, val partitionRange: PartitionRange ) extends Serializable with Loggable {
   import TimeSlicePartition._
-//  private var _dateStack = new mutable.ArrayStack[(CalendarDate,Int)]()
-//  private var _sliceStack = new mutable.ArrayStack[CDTimeSlice]()
-//  val millisPerMin = 1000*60
   val filePath: String = if( basePath.isEmpty ) { fileInput.path } else { Paths.get( basePath, fileInput.path ).toString }
-//  _sliceStack ++= getSlices
-//  def nSlicesRemaining = _sliceStack.length
-//  def hasNext: Boolean = _sliceStack.nonEmpty
-//  def next(): CDTimeSlice =  _sliceStack.pop
 
   def getGlobalOrigin( localOrigin: Array[Int], timeIndexOffest: Int ):  Array[Int] =
     localOrigin.zipWithIndex map { case ( ival, index ) => if( index == 0 ) { ival + timeIndexOffest } else {ival} }
@@ -400,6 +399,7 @@ class TimeSlicePartition(val varId: String, val varName: String, opSection: Opti
       CDTimeSlice(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
     }
     dataset.close()
+    logger.info(" [%s] Completed Read of %d timeSlices in %.4f sec, partitionRange = %s".format(KernelContext.getProcessAddress, nTimesteps, (System.nanoTime() - t0) / 1.0E9, partitionRange.toString ) )
     slices.toIterator
   }
 
@@ -407,7 +407,6 @@ class TimeSlicePartition(val varId: String, val varName: String, opSection: Opti
     section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) =>
       if (index == 0) { new ma2.Range("time", range.first + slice_index, range.first + slice_index) } else { range } }
   }
-
 }
 
 class DatesBase( val dates: List[CalendarDate] ) extends Loggable with Serializable {
@@ -534,7 +533,7 @@ class RDDContainer extends Loggable {
       val generator = new RDDGenerator( sparkContext, BatchSpec.nParts )
       val remainingVspecs = if( _vault.isEmpty ) {
         val tvspec = vSpecs.head
-        val baseRdd: TimeSliceRDD = generator.parallelize( tvspec )
+        val baseRdd: TimeSliceRDD = generator.parallelize( kernelContext, tvspec )
         initialize( baseRdd, List(tvspec.uid) )
         vSpecs.tail
       } else { vSpecs }
