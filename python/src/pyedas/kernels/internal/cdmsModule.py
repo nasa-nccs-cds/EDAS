@@ -120,7 +120,7 @@ class RegridKernel(CDMSKernel):
                         tr0 = time.time()
                         result_var = variable.regrid(toGrid, regridTool=regridTool, regridMethod=method)
                         tr1 = time.time()
-                        self.logger.info( " >> Gridded Data Sample ( variable.regrid op time = {1} ): [ {0} ]".format(  (tr1 - tr0), ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
+                        self.logger.info( " >> Gridded Data Sample ( variable.regrid op time = {0} ): [ {1} ]".format(  (tr1 - tr0), ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
                         results.append( self.createResult( result_var, _input, task ) )
             t1 = time.time()
             self.logger.info(" @RRR@ Completed regrid operation for input variables: {0} in time {1}".format( str( _inputs.keys() ), (t1 - t0)))
