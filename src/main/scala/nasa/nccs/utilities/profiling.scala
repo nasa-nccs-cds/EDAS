@@ -53,8 +53,8 @@ class EventMetrics( val eventId: String ) extends Serializable {
 
 class EventAccumulator( initActivationStatus: String = "active" ) extends AccumulatorV2[EventRecord, java.util.List[EventMetrics]] with Loggable {
   private var _activationStatus: String = initActivationStatus
-  private val _metricsList: ConcurrentLinkedHashMap[ String, EventMetrics] = new ConcurrentLinkedHashMap.Builder[String, EventMetrics].build()
-  private val _startEventList: ConcurrentLinkedHashMap[ String, StartEvent] = new ConcurrentLinkedHashMap.Builder[String, StartEvent].build()
+  private val _metricsList: ConcurrentLinkedHashMap[ String, EventMetrics] = new ConcurrentLinkedHashMap.Builder[String, EventMetrics].initialCapacity(64).maximumWeightedCapacity(10000).build()
+  private val _startEventList: ConcurrentLinkedHashMap[ String, StartEvent] = new ConcurrentLinkedHashMap.Builder[String, StartEvent].initialCapacity(64).maximumWeightedCapacity(10000).build()
   override def isZero: Boolean = _metricsList.isEmpty
   override def reset(): Unit = _metricsList.clear()
   private def newEvent( eventId: String )(): EventMetrics = new EventMetrics( eventId )
