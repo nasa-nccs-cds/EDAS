@@ -5,9 +5,10 @@ import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import ucar.ma2
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}
+import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels._
-import nasa.nccs.edas.rdd.{ArraySpec, CDTimeSlice, TimeSliceCollection}
+import nasa.nccs.edas.rdd.{ArraySpec, CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import ucar.ma2.DataType
@@ -390,9 +391,13 @@ class noOp extends Kernel(Map.empty) {
   val doesAxisReduction: Boolean = false
   override val description = "Returns the input data subset to the specified domain as the result"
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
-    val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
-    CDTimeSlice(inputs.startTime, inputs.endTime, elems.toMap, inputs.metadata)
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = { inputs }
+
+  override def execute( workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
+    val t0 = System.nanoTime
+    val result = reduce( input, context, batchIndex )
+    logger.info( s" noOp execution (reduce) time = ${(System.nanoTime-t0)/1e6} ")
+    result
   }
 }
 //class binAve extends SingularRDDKernel(Map.empty) {
