@@ -63,7 +63,7 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   private def updateStartEvent( eventId: String ): StartEvent = getStartEvent(eventId).fold( newStartEvent(eventId) )( _.update() )
   override def add(v: EventRecord): Unit = getMetrics( v.eventId ) += v
   override def copyAndReset(): EventAccumulator = new EventAccumulator(_activationStatus)
-  override def value: java.util.List[EventMetrics] = java.util.Collections.unmodifiableList( _metricsList.values.toList )
+  override def value: java.util.List[EventMetrics] = if( isZero ) { List.empty } else { java.util.Collections.unmodifiableList( _metricsList.values.toList ) }
   def setActivationStatus( aStatus: String ) = { _activationStatus = aStatus }
 
   private def newStartEvent( eventId: String ): StartEvent = {
