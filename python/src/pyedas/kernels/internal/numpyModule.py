@@ -2,7 +2,7 @@ from pyedas.kernels.Kernel import Kernel, KernelSpec
 from pyedas.edasArray import npArray
 import numpy as np
 import numpy.ma as ma
-import time
+import time, traceback
 
 class StdKernel(Kernel):
     def __init__( self ):
@@ -86,28 +86,32 @@ class WeightedAverageKernel(Kernel):
         inputs_with_weights = zip( data_inputIds, weight_inputIds )
         self.logger.info("@@@@ data_inputIds = " + str(data_inputIds) + ", weight_inputIds = " + str(weight_inputIds) + ", inputs = " + str(inputs) )
         results = []
-        for input_pair in inputs_with_weights:
-            input = inputs.get( input_pair[0] )  # npArray
-            if( input is None ): raise Exception( "Can't find input " + input_pair[0] + " in numpyModule.WeightedAverageKernel")
-            else :
-                weights = inputs.get( input_pair[1] ).array if not (input_pair[1] is None) else None
-                axes = self.getOrderedAxes(task,input)
-                self.logger.info("\n Executing average, input: " + str( input_pair[0] ) + ", shape = " + str(input.array.shape)+ ", task metadata = " + str(task.metadata) + " Input metadata: " + str( input.metadata ) )
-                t0 = time.time()
-                result = input.array
-                for axis in axes:
-                    current_shape = list( result.shape )
-                    if( current_shape[axis] > 1 ):
-                        self.logger.info(" %ZP% Exec: axis: " + str(axis) + ", shape: " + str(current_shape) )
-                        wts = None if ( weights == None ) else np.broadcast_to( weights, current_shape )
-                        ( result, weights ) = ma.average( result, axis, wts, True )
-                        current_shape[axis] = 1
-                        result = result.reshape( current_shape )
-                        weights = weights.reshape( current_shape )
+        try:
+            for input_pair in inputs_with_weights:
+                input = inputs.get( input_pair[0] )  # npArray
+                if( input is None ): raise Exception( "Can't find input " + input_pair[0] + " in numpyModule.WeightedAverageKernel")
+                else :
+                    weights = inputs.get( input_pair[1] ).array if not (input_pair[1] is None) else None
+                    axes = self.getOrderedAxes(task,input)
+                    self.logger.info("\n Executing average, input: " + str( input_pair[0] ) + ", shape = " + str(input.array.shape)+ ", task metadata = " + str(task.metadata) + " Input metadata: " + str( input.metadata ) )
+                    t0 = time.time()
+                    result = input.array
+                    for axis in axes:
+                        current_shape = list( result.shape )
+                        if( current_shape[axis] > 1 ):
+                            self.logger.info(" %ZP% Exec: axis: " + str(axis) + ", shape: " + str(current_shape) )
+                            wts = None if ( weights == None ) else np.broadcast_to( weights, current_shape )
+                            ( result, weights ) = ma.average( result, axis, wts, True )
+                            current_shape[axis] = 1
+                            result = result.reshape( current_shape )
+                            weights = weights.reshape( current_shape )
 
-                results.append( npArray.createResult( task, input, result.filled( input.array.fill_value ) ) )
-                t1 = time.time()
-                self.logger.info( " ------------------------------- AVEW KERNEL: Operating on input '{0}', shape = {1}, origin = {2}, time = {3}".format( input.name, input.shape, input.origin, t1-t0 ))
+                    results.append( npArray.createResult( task, input, result.filled( input.array.fill_value ) ) )
+                    t1 = time.time()
+                    self.logger.info( " ------------------------------- AVEW KERNEL: Operating on input '{0}', shape = {1}, origin = {2}, time = {3}".format( input.name, input.shape, input.origin, t1-t0 ))
+        except Exception as err:
+            self.logger.error("Error in WeightedAverageKernel: " + err.message + "\n" + traceback.format_exc() )
+
         return results
 
     def getOrderedAxes(self,task,input):

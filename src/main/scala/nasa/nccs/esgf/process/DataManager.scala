@@ -102,8 +102,10 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   }
 
   def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
+    val t0 = System.nanoTime()
     _inputsRDD.addFileInputs( serverContext.spark, kernelCx, vSpecs )
-    logger.info( s"addFileInputs, kernel = ${kernelCx.operation.identifier}, vSpecs = [ ${vSpecs.map(_.uid).mkString(", ")} ] ")
+    _inputsRDD.update
+    logger.info( s"addFileInputs, kernel = ${kernelCx.operation.identifier}, vSpecs = [ ${vSpecs.map(_.uid).mkString(", ")} ], time = ${(System.nanoTime()-t0)/1.0e9} ")
   }
 
   def regrid( kernelCx: KernelContext ): Unit = {

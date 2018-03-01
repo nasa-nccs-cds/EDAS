@@ -396,7 +396,7 @@ class noOp extends Kernel(Map.empty) {
   override def execute( workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
     val t0 = System.nanoTime
     val result = reduce( input, context, batchIndex )
-    logger.info( s" noOp execution (reduce) time = ${(System.nanoTime-t0)/1e6} ")
+    logger.info( s" noOp execution (reduce) time = ${(System.nanoTime-t0)/1e9} ")
     result
   }
 }
