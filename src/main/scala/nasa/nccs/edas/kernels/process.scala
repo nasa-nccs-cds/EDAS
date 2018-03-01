@@ -331,7 +331,10 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
           reduceElements.reduce(getReduceOp(context), optGroup, ordered)
         })
       } else {
-        reduceElements.collect
+        val t0 = System.nanoTime()
+        val result = reduceElements.collect
+        logger.info(" #R# Collection time: %.2f, kernel = { %s }".format( (System.nanoTime-t0)/1.0E9, this.id ))
+        result
       }
       finalize( result, context )
     }

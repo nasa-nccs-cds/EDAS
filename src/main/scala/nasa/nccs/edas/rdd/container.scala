@@ -183,7 +183,8 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
     }
     else optGroupBy match {
       case None =>
-        val rv = rdd.treeReduce(op)
+//        val rv = rdd.treeReduce(op)
+        val rv = rdd.reduce(op)
         TimeSliceCollection( rv, metadata )
       case Some( groupBy ) =>
         val groupedRdd: RDD[(Long,CDTimeSlice)] = rdd.groupBy( groupBy.group ).mapValues( TSGroup.merge(op) )
@@ -478,7 +479,6 @@ class RDDContainer extends Loggable {
     def nSlices = { _rdd.cache; _rdd.nSlices }
     def nPartitions = {  _rdd.getNumPartitions }
     def nodeList = {  _rdd.nodeList }
-
   }
   def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
 
@@ -505,14 +505,18 @@ class RDDContainer extends Loggable {
     val newVSpecs = vSpecs.filter( vspec => ! contents.contains(vspec.uid) )
     if( newVSpecs.nonEmpty ) {
       val generator = new RDDGenerator( sparkContext, BatchSpec.nParts )
+      val t0 = System.nanoTime
       val remainingVspecs = if( _vault.isEmpty ) {
         val tvspec = vSpecs.head
         val baseRdd: TimeSliceRDD = generator.parallelize( kernelContext, tvspec )
         initialize( baseRdd, List(tvspec.uid) )
         vSpecs.tail
       } else { vSpecs }
+      val t1 = System.nanoTime
       extendVault( generator, remainingVspecs )
-      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, nodes: \n  ${nodeList.mkString("\n  ")}" )
+      val t2 = System.nanoTime
+      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, times = { partition: ${(t1-t0)/1.0e9}, extend: ${(t2-t1)/1.0e9} }" )
+//      logger.info(  s"nodes: \n  ${nodeList.mkString("\n  ")}" )
     }
   }
 
