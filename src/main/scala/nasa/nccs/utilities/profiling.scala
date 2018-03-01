@@ -65,7 +65,10 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
   override def add(v: EventRecord): Unit = getMetrics( v.eventId ) += v
   override def copyAndReset(): EventAccumulator = new EventAccumulator(_activationStatus)
   override def value: java.util.List[EventMetrics] = if( isZero ) { new util.LinkedList() } else { java.util.Collections.unmodifiableList( _metricsList.values.toList ) }
-  def setActivationStatus( aStatus: String ) = { _activationStatus = aStatus }
+  def setActivationStatus( aStatus: String ) = {
+    _activationStatus = aStatus
+    if( activated ) { KernelContext.enableProfiling }
+  }
 
   private def newStartEvent( eventId: String ): StartEvent = {
     val newStartEvent =  new StartEvent( eventId );

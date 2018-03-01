@@ -6,7 +6,7 @@ import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, HeapDblArray, HeapLongArray}
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.edas.kernels.{AxisIndices, KernelContext}
+import nasa.nccs.edas.kernels.{AxisIndices, KernelContext, WorkflowMode}
 import nasa.nccs.edas.rdd.{VariableRecord, _}
 import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
@@ -102,10 +102,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   }
 
   def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
-    val t0 = System.nanoTime()
     _inputsRDD.addFileInputs( serverContext.spark, kernelCx, vSpecs )
-    _inputsRDD.update
-    logger.info( s"addFileInputs, kernel = ${kernelCx.operation.identifier}, vSpecs = [ ${vSpecs.map(_.uid).mkString(", ")} ], time = ${(System.nanoTime()-t0)/1.0e9} ")
   }
 
   def regrid( kernelCx: KernelContext ): Unit = {

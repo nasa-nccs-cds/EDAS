@@ -11,7 +11,7 @@ import nasa.nccs.cdapi.tensors.{CDArray, CDFloatArray}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RecordKey}
-import nasa.nccs.edas.kernels.{CDMSRegridKernel, Kernel, KernelContext}
+import nasa.nccs.edas.kernels.{CDMSRegridKernel, Kernel, KernelContext, WorkflowMode}
 import nasa.nccs.edas.sources.{Aggregation, Collection, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.workers.TransVar
@@ -290,8 +290,8 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val t1 = System.nanoTime
     val sliceRdd: RDD[CDTimeSlice] =  slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
     val optVar = agg.findVariable( vspec.varShortName )
-    val rddSize = sliceRdd.count()
-    logger.info( s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nPartGens = ${partGens.length}, RDD size = ${rddSize}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, parallel read streams = ${slicePartitions.count}, prep time = ${(t1-t0)/1e9} , total time = ${(System.nanoTime-t0)/1e9} ")
+    if( KernelContext.workflowMode == WorkflowMode.profiling ) { val rddSize = sliceRdd.count() }
+    logger.info( s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nPartGens = ${partGens.length}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, prep time = ${(t1-t0)/1e9} , total time = ${(System.nanoTime-t0)/1e9} ")
     TimeSliceRDD( sliceRdd, agg.parms, Map( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap)) ) )
   }
 
@@ -485,7 +485,7 @@ class RDDContainer extends Loggable {
   def regrid( context: KernelContext ): Unit = {
     val t0 = System.nanoTime()
     vault.update( regridKernel.mapRDD( vault.value, context ) )
-    update
+    if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
     logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
   }
   def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
@@ -517,6 +517,7 @@ class RDDContainer extends Loggable {
       } else { vSpecs }
       val t1 = System.nanoTime
       extendVault( generator, remainingVspecs )
+      if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
       val t2 = System.nanoTime
       logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, times = { partition: ${(t1-t0)/1.0e9}, extend: ${(t2-t1)/1.0e9} }" )
 //      logger.info(  s"nodes: \n  ${nodeList.mkString("\n  ")}" )

@@ -61,8 +61,16 @@ class AxisIndices( private val axisIds: Set[Int] = Set.empty ) extends Serializa
   override def toString = axisIds.mkString(",")
 }
 
+object WorkflowMode {
+  val streaming = 0
+  val profiling = 1
+}
 
 object KernelContext {
+  private var _workflowMode = WorkflowMode.streaming
+
+  def enableProfiling = { _workflowMode = WorkflowMode.profiling }
+  def workflowMode = _workflowMode
 
   def apply( operation: OperationContext, executor: WorkflowExecutor ): KernelContext = {
     val sectionMap: Map[String, Option[CDSection]] = executor.requestCx.inputs.mapValues(_.map(_.cdsection)).map(identity)
@@ -96,6 +104,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
   lazy val axes: AxisIndices = grid.getAxisIndices(config("axes", ""))
   private var _variableRecs: Map[String,VariableRecord] = Map.empty[String,VariableRecord]
+
 
   lazy val grid: GridContext = getTargetGridContext
   def addVariableRecords( varRecs: Map[String,VariableRecord] ): KernelContext = { _variableRecs = _variableRecs ++ varRecs; this }
@@ -342,7 +351,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
     val t0 = System.nanoTime()
     val mapresult: TimeSliceRDD = context.profiler.profile("mapReduce.mapRDD") ( () => { mapRDD(input, context) } )
-    if( context.profiler.activated ) { mapresult.exe }
+    if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
     val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge ) } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
