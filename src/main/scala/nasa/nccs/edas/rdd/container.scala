@@ -288,7 +288,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partGens.flatMap( _.getTimeSlicePartitions ) )
     val sliceRdd: RDD[CDTimeSlice] =  slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
     val optVar = agg.findVariable( vspec.varShortName )
-    logger.info( s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nFiles = ${files.length}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, parallel read streams = ${slicePartitions.getNumPartitions}, time = ${(System.nanoTime-t0)/1e6} ")
+    logger.info( s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nPartGens = ${partGens.length}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, parallel read streams = ${slicePartitions.count}, time = ${(System.nanoTime-t0)/1e6} ")
     TimeSliceRDD( sliceRdd, agg.parms, Map( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap)) ) )
   }
 
@@ -321,7 +321,7 @@ class TimeSlicePartitionGenerator(val varId: String, val varName: String, val se
       val partStartRow = if(rowsPerPartition == -1) { intersectingRange.first } else { intersectingRange.first +  iPartIndex * rowsPerPartition }
       val partEndRow = if(rowsPerPartition == -1) { intersectingRange.last } else { Math.min( partStartRow + rowsPerPartition -1, intersectingRange.last ) }
       val partRange = new ma2.Range( partStartRow, partEndRow )
-//      logger.info( s" @XX PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, origin = ${origin}, partRange = [ ${partRange.toString} ]")
+      logger.info( s" @XX PartRange[${iPartIndex}/${partsPerFile}], rowsPerPartition = ${rowsPerPartition}, partRange = [ ${partRange.toString} ]")
       TimeSlicePartition (varId, varName, section, fileInput, basePath, partRange )
     } )
 }
