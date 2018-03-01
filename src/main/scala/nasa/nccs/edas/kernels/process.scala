@@ -317,7 +317,6 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def reduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
-    val nparts = input.getNumPartitions
     EDASExecutionManager.checkIfAlive
     evaluateProductSize( input, context )
     if( !parallelizable ) { input.collect }
@@ -336,7 +335,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         logger.info(" #R# Collection time: %.2f, kernel = { %s }".format( (System.nanoTime-t0)/1.0E9, this.id ))
         result
       }
-      finalize( result, context )
+      finalize( result.sort, context )
     }
   }
 
@@ -357,13 +356,18 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def evaluateProductSize(input: TimeSliceRDD, context: KernelContext ): Unit =  if ( !context.doesTimeReduction ) {
+    val t0 = System.nanoTime()
     val result_size: Long = input.dataSize
-    logger.info( s" %E% Evaluating: Product size: ${result_size/1.0e9f} G, max product size: ${EDASPartitioner.maxProductSize/1.0e9f} G" )
+    logger.info( s" %E% Evaluating: Product size: ${result_size/1.0e9f} G, max product size: ${EDASPartitioner.maxProductSize/1.0e9f} G, time = ${(System.nanoTime()-t0)/1.0e9}" )
     if( result_size > EDASPartitioner.maxProductSize ) { throw new Exception(s"The product of this request is too large: ${result_size/1e9} G, max product size:  ${EDASPartitioner.maxProductSize/1e9} G") }
   }
 
   def finalize( mapReduceResult: TimeSliceCollection, context: KernelContext ): TimeSliceCollection = {
-    postRDDOp( mapReduceResult, context  )
+    val t0 = System.nanoTime()
+    val postOp = options.get("postOp")
+    val result = if ( postOp.isDefined ) { postRDDOp( mapReduceResult, context ) } else { mapReduceResult }
+    logger.info( s" Finalize time = ${(System.nanoTime()-t0)/1.0e9}, postOp = ${postOp.getOrElse("UNDEF")}" )
+    result
   }
 
   def addWeights( context: KernelContext ): Boolean = {
@@ -560,7 +564,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def postOp(result: DataFragment, context: KernelContext): DataFragment = result
 
   def postRDDOp( result: TimeSliceCollection, context: KernelContext ): TimeSliceCollection = {
-    val pre_result = result.sort.concatSlices
+    val pre_result = result
     pre_result.slices.headOption match {
       case None => result
       case Some(slice) =>

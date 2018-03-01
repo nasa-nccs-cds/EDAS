@@ -183,8 +183,8 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
     }
     else optGroupBy match {
       case None =>
-//        val rv = rdd.treeReduce(op)
-        val rv = rdd.reduce(op)
+        val rv = rdd.treeReduce(op)
+//        val rv = rdd.reduce(op)
         TimeSliceCollection( rv, metadata )
       case Some( groupBy ) =>
         val groupedRdd: RDD[(Long,CDTimeSlice)] = rdd.groupBy( groupBy.group ).mapValues( TSGroup.merge(op) )
