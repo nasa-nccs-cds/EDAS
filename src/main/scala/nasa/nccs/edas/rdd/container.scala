@@ -483,7 +483,10 @@ class RDDContainer extends Loggable {
   def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
 
   def regrid( context: KernelContext ): Unit = {
+    val t0 = System.nanoTime()
     vault.update( regridKernel.mapRDD( vault.value, context ) )
+    update
+    logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
   }
   def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
   def reduceBroadcast( node: Kernel, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ) )

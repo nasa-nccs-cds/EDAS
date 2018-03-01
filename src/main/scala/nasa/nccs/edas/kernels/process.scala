@@ -318,7 +318,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def reduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
     EDASExecutionManager.checkIfAlive
-    evaluateProductSize( input, context )
+//    evaluateProductSize( input, context )   // TOO SLOW!
     if( !parallelizable ) { input.collect }
     else {
       val rid = context.operation.rid.toLowerCase
