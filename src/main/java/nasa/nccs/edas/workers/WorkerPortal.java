@@ -11,17 +11,18 @@ import java.net.UnknownHostException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public abstract class WorkerPortal extends Thread {
     protected ZMQ.Context zmqContext = null;
-    protected ConcurrentLinkedQueue<Worker> availableWorkers = null;
-    protected ConcurrentLinkedQueue<Worker> busyWorkers = null;
+    protected ConcurrentLinkedQueue <Worker> availableWorkers = null;
+    protected ConcurrentLinkedQueue <Worker> busyWorkers = null;
     public Logger logger = EDASLogManager.getCurrentLogger();
 
     protected WorkerPortal(){
         zmqContext = ZMQ.context(1);
-        availableWorkers = new ConcurrentLinkedQueue<Worker>();
-        busyWorkers = new ConcurrentLinkedQueue<Worker>();
+        availableWorkers = new ConcurrentLinkedQueue <Worker>();
+        busyWorkers = new ConcurrentLinkedQueue <Worker>();
     }
 
     public String getProcessorAddress() {
@@ -36,7 +37,7 @@ public abstract class WorkerPortal extends Thread {
     public Worker getWorker() throws Exception {
         Worker worker = availableWorkers.poll();
         if( worker == null ) { worker =  newWorker(); }
-        else { logger.info( " #PW# ("+ this.getProcessorAddress() + "): Starting new Task with existing worker"); }
+        else { logger.info( " #PW# ("+ this.getProcessorAddress() + "): Starting new Task with existing worker " + worker.id() ); }
         busyWorkers.add( worker );
         return worker;
     }
@@ -44,8 +45,11 @@ public abstract class WorkerPortal extends Thread {
     protected abstract Worker newWorker() throws Exception;
 
     public void releaseWorker( Worker worker ) {
-        busyWorkers.remove( worker );
-        availableWorkers.add( worker );
+        if( busyWorkers.contains(worker) ) {
+            logger.info(" #PW# (" + this.getProcessorAddress() + "): Releasing worker " + worker.id());
+            busyWorkers.remove(worker);
+            availableWorkers.add(worker);
+        }
     }
 
     public void killWorker( Worker worker ) {

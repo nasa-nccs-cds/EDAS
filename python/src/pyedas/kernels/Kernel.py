@@ -56,7 +56,7 @@ class Kernel:
 
     def validate( self, input ) :
         if( input.array is None ):
-            raise Exception( "Missing data for input " + str(input.name) + " in Kernel " + str(self._spec) )
+            raise Exception( " @@@ Missing data for input " + str(input.name) + " in Kernel " + str(self._spec) )
 
     def executeOperation( self, task, input ): raise Exception( "Attempt to execute Kernel with undefined executeOperation method")
 
