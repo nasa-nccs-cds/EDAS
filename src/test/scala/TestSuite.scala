@@ -162,7 +162,7 @@ class DefaultTestSuite extends EDASTestSuite {
 
 
   test("pyRegridTest")  { if(test_regrid) {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"uniform","shape":"32"}]]"""
     val result_node = executeTest(datainputs )
     val result_array = CDFloatArray( getResultData( result_node ) )
     println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
@@ -170,7 +170,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }}
 
   test("pyRegridTest_MERRA")  { if(test_regrid) {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"uniform","shape":"32"}]]"""
     val result_node = executeTest(datainputs )
     val result_array = CDFloatArray( getResultData( result_node ) )
     println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
@@ -187,19 +187,19 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("pyRegrid2Test")  { if(test_regrid) {
     val t0 = System.nanoTime()
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"uniform","shape":"32"}]]"""
     val result_node = executeTest(datainputs )
     val result_array = CDFloatArray( getResultData( result_node ) )
     println(" ### First Execution, time: %.2f".format( (System.nanoTime-t0)/1.0E9 ))
     val t1 = System.nanoTime()
-    val datainputs1 = s"""[domain=[{"name":"d0","time":{"start":20,"end":30,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
+    val datainputs1 = s"""[domain=[{"name":"d0","time":{"start":20,"end":30,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"uniform","shape":"32"}]]"""
     val result_node1 = executeTest(datainputs1 )
     val result_array1 = CDFloatArray( getResultData( result_node1 ) )
     println(" ### Second Execution, time: %.2f".format( (System.nanoTime-t1)/1.0E9 ))
   }}
 
   test("pyRegridTest1")  { if(test_regrid) {
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":20,"end":40,"system":"indices"},"lon":{"start":10,"end":50,"system":"indices"},"time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"gaussian","shape":"32"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":20,"end":40,"system":"indices"},"lon":{"start":10,"end":50,"system":"indices"},"time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"uniform","shape":"32"}]]"""
     val result_node = executeTest(datainputs, Map( "saveLocalFile" -> "true" ) )
     val result_array = CDFloatArray( getResultData( result_node ) )
     println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
@@ -277,7 +277,7 @@ class DefaultTestSuite extends EDASTestSuite {
   //    val GISS_H_variables     = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss_r${index}i1p1","name":"tas:${GISS_H_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
   //    val datainputs = s"""[
   //             variable=[$GISS_H_variables],
-  //             domain=[       {"name":"d0","time":{"start":"1985-01-01T00:00:00Z","end":"1985-04-04T00:00:00Z","system":"values"}},{"name":"d1","crs":"gaussian~128"}],
+  //             domain=[       {"name":"d0","time":{"start":"1985-01-01T00:00:00Z","end":"1985-04-04T00:00:00Z","system":"values"}},{"name":"d1","crs":"uniform~128"}],
   //             operation=[    {"name":"CDSpark.multiAverage","input":"${GISS_H_vids.mkString(",")}","domain":"d0","id":"eaGISS-H"} ]
   //            ]""".replaceAll("\\s", "")
   //    val result_node = executeTest(datainputs)
@@ -316,7 +316,7 @@ class DefaultTestSuite extends EDASTestSuite {
   //      val GISS_E2R_variables = ( ( 1 to nExp ) map { index =>  s"""{"uri":"collection:/giss-e2-r_r${index}i1p1","name":"tas:${GISS_E2R_vids(index-1)}","domain":"d0"}""" } ).mkString(",")
   //      val datainputs = s"""[
   //             variable=[$GISS_H_variables,$GISS_E2R_variables],
-  //             domain=[       {"name":"d0","time":{"start":"1985-01-01T00:00:00Z","end":"1985-04-04T00:00:00Z","system":"values"}},{"name":"d1","crs":"gaussian~128"}],
+  //             domain=[       {"name":"d0","time":{"start":"1985-01-01T00:00:00Z","end":"1985-04-04T00:00:00Z","system":"values"}},{"name":"d1","crs":"uniform~128"}],
   //             operation=[    {"name":"CDSpark.multiAverage","input":"${GISS_H_vids.mkString(",")}","domain":"d0","id":"eaGISS-H"},
   //                            {"name":"CDSpark.multiAverage","input":"${GISS_E2R_vids.mkString(",")}","domain":"d0","id":"eaGISS-E2R"},
   //                            {"name":"CDSpark.multiAverage","input":"eaGISS-E2R,eaGISS-H","domain":"d1","result":"esgfDemo"} ]
