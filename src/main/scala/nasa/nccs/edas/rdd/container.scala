@@ -285,7 +285,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
 //    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.ceil(  nTS/nPartitions.toFloat ).toInt }
     val nUsableParts = if (  nTSperPart == -1 ) { nPartitions } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
     val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), nTSperPart ) )
-    val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partGens.flatMap( _.getTimeSlicePartitions ), nUsableParts )
+    val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partGens.flatMap( _.getTimeSlicePartitions ) )
     val t1 = System.nanoTime
     val sliceRdd: RDD[CDTimeSlice] =  slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
     val optVar = agg.findVariable( vspec.varShortName )
