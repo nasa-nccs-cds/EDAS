@@ -245,7 +245,7 @@ object EDASExecutionManager extends Loggable {
         }
       }
       variables.foreach { case (variable, maskedTensor) => {
-        logger.info(" %V% Writing var %s: var shape = [%s], data Shape = %s, data sample = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
+        logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s, data sample = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
         writer.write(variable, maskedTensor)
       } }
       logger.info("Done writing output to file %s".format(path))
