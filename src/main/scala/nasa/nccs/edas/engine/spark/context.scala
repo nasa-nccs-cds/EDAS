@@ -37,7 +37,6 @@ object CDSparkContext extends Loggable {
   val default_executor_memory = (totalRAM-10).toString + "m"
   val default_executor_cores = (runtime.availableProcessors-1).toString
   val default_num_executors = "1"
-  private var _coresPerExecutor: Int = 0
 
   def apply( appName: String="EDAS", logConf: Boolean = true, enableMetrics: Boolean = false ) : CDSparkContext = {
 //    val cl = ClassLoader.getSystemClassLoader
@@ -135,14 +134,7 @@ object CDSparkContext extends Loggable {
     }
   }
 
-//  def coresPerExecutor(sc: SparkContext): Int =
-//    synchronized {
-//      if (_coresPerExecutor == 0)
-//        sc.range(0, 1).map(_ => java.lang.Runtime.getRuntime.availableProcessors).collect.head
-//      else _coresPerExecutor
-//    }
-
-  //  def coalesce(rdd: RDD[CDTimeSlice], context: KernelContext ): RDD[CDTimeSlice] = {
+//  def coalesce(rdd: RDD[CDTimeSlice], context: KernelContext ): RDD[CDTimeSlice] = {
 //    if ( rdd.getNumPartitions > 1 ) {
 //      getPartitioner(rdd) match {
 //        case Some(partitioner) =>
@@ -177,7 +169,6 @@ class CDSparkContext(  val session: SparkSession ) extends Loggable {
   }
 
   def totalClusterCores: Int = sparkContext.defaultParallelism
-//  def coresPerExecutor: Int = CDSparkContext.coresPerExecutor(sparkContext)
 
   def getConf: SparkConf = sparkContext.getConf
 

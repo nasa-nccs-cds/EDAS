@@ -519,7 +519,7 @@ class RDDContainer extends Loggable {
       if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
       val t2 = System.nanoTime
       logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, times = { partition: ${(t1-t0)/1.0e9}, extend: ${(t2-t1)/1.0e9} }" )
-      logger.info(  s"nodes: \n  ${nodeList.mkString("\n  ")}" )
+//      logger.info(  s"nodes: \n  ${nodeList.mkString("\n  ")}" )
     }
   }
 

@@ -45,6 +45,7 @@ class Worker(object):
                 try:
                     withData = int(self.getMessageField(header,5))
                     data = self.request_socket.recv() if withData else None
+                    self.logger.info(" @@@ Creating data input '{0}', withData: {1}".format( header, withData ) )
                     array = npArray.createInput(header,data)
                     self.cached_inputs[array.uid()] = array
                 except Exception as err:
