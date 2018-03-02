@@ -281,8 +281,8 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
     val files: Array[FileInput]  = agg.getIntersectingFiles( timeRange )
     val nTS = timeRange.length()
-//    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.max( 1, Math.round( nTS/nPartitions.toFloat ) ) }
-    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.ceil(  nTS/nPartitions.toFloat ).toInt }
+    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.max( 1, Math.round( nTS/nPartitions.toFloat ) ) }
+//    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.ceil(  nTS/nPartitions.toFloat ).toInt }
     val nUsableParts = if (  nTSperPart == -1 ) { files.length } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
     val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), nTSperPart ) )
     val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partGens.flatMap( _.getTimeSlicePartitions ), nUsableParts )
@@ -519,7 +519,7 @@ class RDDContainer extends Loggable {
       if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
       val t2 = System.nanoTime
       logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, times = { partition: ${(t1-t0)/1.0e9}, extend: ${(t2-t1)/1.0e9} }" )
-//      logger.info(  s"nodes: \n  ${nodeList.mkString("\n  ")}" )
+      logger.info(  s"nodes: \n  ${nodeList.mkString("\n  ")}" )
     }
   }
 
