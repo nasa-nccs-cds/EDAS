@@ -135,12 +135,12 @@ object CDSparkContext extends Loggable {
     }
   }
 
-  def coresPerExecutor(sc: SparkContext): Int =
-    synchronized {
-      if (_coresPerExecutor == 0)
-        sc.range(0, 1).map(_ => java.lang.Runtime.getRuntime.availableProcessors).collect.head
-      else _coresPerExecutor
-    }
+//  def coresPerExecutor(sc: SparkContext): Int =
+//    synchronized {
+//      if (_coresPerExecutor == 0)
+//        sc.range(0, 1).map(_ => java.lang.Runtime.getRuntime.availableProcessors).collect.head
+//      else _coresPerExecutor
+//    }
 
   //  def coalesce(rdd: RDD[CDTimeSlice], context: KernelContext ): RDD[CDTimeSlice] = {
 //    if ( rdd.getNumPartitions > 1 ) {
@@ -177,7 +177,7 @@ class CDSparkContext(  val session: SparkSession ) extends Loggable {
   }
 
   def totalClusterCores: Int = sparkContext.defaultParallelism
-  def coresPerExecutor: Int = CDSparkContext.coresPerExecutor(sparkContext)
+//  def coresPerExecutor: Int = CDSparkContext.coresPerExecutor(sparkContext)
 
   def getConf: SparkConf = sparkContext.getConf
 

@@ -62,7 +62,7 @@ class CacheChunk(val offset: Int,
 object BatchSpec extends Loggable {
   lazy val serverContext = edasServiceProvider.cds2ExecutionManager.serverContext
   lazy val nExec = getNumExecutors
-  lazy val nPartsPerNode = appParameters( "parts.per.node" ).fold( serverContext.spark.coresPerExecutor )(_.toInt)
+  lazy val nPartsPerNode = appParameters( "parts.per.node" ).fold( Runtime.getRuntime.availableProcessors )(_.toInt)
   lazy val nNodes = appParameters( "num.cluster.nodes" ).fold( nExec )(_.toInt)
   lazy val nParts = appParameters( "num.partitions" ).fold( nPartsPerNode * nNodes )( _.toInt )
   def apply( index: Int ): BatchSpec = { new BatchSpec( index*nParts, nParts ) }
