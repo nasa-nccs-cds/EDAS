@@ -1,14 +1,19 @@
 package nasa.nccs.edas.modules.CDSpark
 
+import java.io.{File, IOException}
+
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
 import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
-import ucar.ma2
+import ucar.{ma2, nc2}
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}
-import nasa.nccs.edas.engine.Workflow
+import nasa.nccs.edas.engine.EDASExecutionManager.logger
+import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.engine.spark.RecordKey
+import nasa.nccs.edas.kernels.Kernel.getResultDir
 import nasa.nccs.edas.kernels._
-import nasa.nccs.edas.rdd.{ArraySpec, CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
+import nasa.nccs.edas.rdd._
+import nasa.nccs.esgf.process.{DataFragmentSpec, WorkflowExecutor}
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import ucar.ma2.DataType
@@ -16,8 +21,12 @@ import org.apache.spark.mllib.linalg.{DenseVector, Vector}
 import org.apache.spark.mllib.linalg.Matrix
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
 import org.apache.spark.mllib.linalg.SingularValueDecomposition
+import ucar.nc2.constants.AxisType
+import ucar.nc2.{Attribute, Dimension}
+import ucar.nc2.dataset.{CoordinateAxis, NetcdfDataset}
+import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingStrategyNone}
 
-import scala.collection.immutable.TreeMap
+import scala.collection.immutable.{Map, TreeMap}
 import scala.reflect.runtime.{universe => u}
 
 //package object CDSpark {
@@ -145,6 +154,147 @@ class eDiv extends CombineRDDsKernel(Map("mapOp" -> "divide")) {
   val doesAxisReduction: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise divisions for input variables data over specified roi"
 }
+
+class write extends CombineRDDsKernel( Map.empty ) {
+  override val status = KernelStatus.public
+  val inputs = List( WPSDataInput("input variables", 2, 2 ) )
+  val outputs = List( WPSProcessOutput( "operation result" ) )
+  val title = "Write Result data"
+  val doesAxisReduction: Boolean = false
+  val description = "Writes the result data to disk on server as a data collection"
+
+  override def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
+    EDASExecutionManager.checkIfAlive
+    context.operation.config("groupBy") map TSGroup.getGroup match {
+      case Some( groupBy ) => input.rdd.groupBy( groupBy.group ).mapValues( slices=> writeSlicesToFile( context ) ( slices.toIterator ) )
+      case None => input.rdd.mapPartitions( writeSlicesToFile(context) )
+    }
+    input
+  }
+
+  def writeSlicesToFile(context: KernelContext)(slices: Iterator[CDTimeSlice]): Iterator[String] = {
+/*    val gridFile = context.grid.gridFile
+    val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
+    val resultName = context.operation.config("name").getOrElse( context.operation.rid )
+    val resultDir = new File( getResultDir.toString + s"/$resultName" )
+    resultDir.mkdirs()
+    val resultFile = Kernel.getResultFile(resultId, true)
+    val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
+    val path = resultFile.getAbsolutePath
+    var optGridDest: Option[NetcdfDataset] = None
+    try {
+      val inputSpec: DataFragmentSpec = context.operation..requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
+      val shape: Array[Int] = dataMap.values.head.getShape
+      val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
+      val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
+      val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = gridFileOpt match {
+        case Some( gridFilePath ) =>
+          val gridDSet = NetcdfDataset.openDataset(gridFilePath)
+          val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
+          val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
+          val gblTimeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+          val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
+          val dims0 = space_dims :+ new Dimension(timeCoordAxis.getShortName, inputSpec.roi.getRange(0).length )
+          val newdims = dims0.map( dim => {
+            val newdim = writer.addDimension(null, dim.getShortName, dim.getLength)
+            logger.info(s"Writer addDimension ${dim.getShortName} ${dim.getLength.toString}")
+            newdim
+          })
+          optGridDest = Option(gridDSet)
+          ( coordAxes :+ timeCoordAxis, newdims )
+        case None =>
+          val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => {
+            val aname = targetGrid.grid.getAxisSpec(idim).getAxisName
+            val dim = writer.addDimension(null, aname, shape(idim))
+            logger.info(s"Writer addDimension ${aname} ${shape(idim).toString}")
+            dim
+          })
+          val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
+          ( coordAxes, dims )
+      }
+      val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getShortName -> dim)): _*)
+      val coordsMap: Map[String, Dimension] = Map( coordAxes.map(axis =>
+        axis.getAxisType.getCFAxisName -> axis.getDimensions.headOption.map(
+          dim => dimsMap.getOrElse( dim.getShortName, throw new Exception(s"Missing dimension: ${axis.getDimension(0).getShortName}") ))): _* ).flatMap( item => item._2.map( dim => item._1 -> dim ) )
+
+      logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], varMetadata={ %s }".format(
+        resultId, path, dataMap.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
+        coordAxes.map { caxis => "%s: (%s)".format(caxis.getShortName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString, varMetadata.mkString("; ") ) )
+
+
+      //      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.map( coordAxis => {
+      //        val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getShortName, coordAxis.getDataType, coordAxis.getShortName)
+      //        for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
+      //        val data = coordAxis.read()
+      //        (coordVar, data)
+      //      })
+
+      val optInputSpec: Option[DataFragmentSpec] = executor.requestCx.getInputSpec()
+      val axisTypes = if( shape.length == 4 ) Array("T", "Z", "Y", "X" )  else Array("T", "Y", "X" )
+      logger.info( s" InputSpec: {${optInputSpec.fold("")(_.getMetadata().mkString(", "))}} ")
+      val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
+        inputSpec.getRange(coordAxis.getFullName) match {
+          case Some(range) =>
+            val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
+            for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
+            val newRange = dimsMap.get(coordAxis.getFullName) match {
+              case None =>
+                logger.info( s" Reading coord var ${coordAxis.getFullName}, range = [${range.first}:${range.last}], axis shape = [${coordAxis.getShapeAll.mkString(",")}] " )
+                range
+              case Some(dim) =>
+                logger.info( s" Reading coord var ${coordAxis.getFullName}, dim Length =${dim.getLength}, range = [${range.first}:${range.last}], axis shape = [${coordAxis.getShapeAll.mkString(",")}] " )
+                if( coordAxis.getAxisType == AxisType.Time ) { new ma2.Range( range.getName, 0, dim.getLength-1 ) }
+                else if( dim.getLength == 1 ) { val center = (range.first+range.last)/2; new ma2.Range( range.getName, center, center ) }
+                else { range }
+              //               if ( ( dim.getLength < range.length ) || ( coordAxis.getAxisType == AxisType.Time ) ) new ma2.Range(dim.getLength) else range
+            }
+            val data = coordAxis.read(List(newRange))
+            Some(coordVar, data)
+          case None => None
+        }
+      }).flatten
+
+      val varDims: Array[Dimension] = axisTypes.map( aType => coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
+      val variables = dataMap.map { case ( tname, maskedTensor ) =>
+        val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
+        val varname = baseName + "-" + tname
+        logger.info("Creating var %s: dims = [%s], data sample = [ %s ]".format(varname, varDims.map( _.getShortName).mkString(", "), maskedTensor.getSectionArray( Math.min(10,maskedTensor.getSize.toInt) ).mkString(", ") ) )
+        val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, varDims.toList )
+        varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }
+        variable.addAttribute(new nc2.Attribute("missing_value", maskedTensor.getInvalid))
+        dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
+        ( variable, maskedTensor )
+      }
+
+      writer.create()
+
+      for (newCoordVar <- newCoordVars) {
+        newCoordVar match {
+          case (coordVar, coordData) =>
+            logger.info("Writing cvar %s: shape = [%s], dataType = %s".format(coordVar.getShortName, coordData.getShape.mkString(","), coordVar.getDataType.toString))
+            writer.write(coordVar, coordData)
+        }
+      }
+      variables.foreach { case (variable, maskedTensor) => {
+        logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
+        writer.write(variable, maskedTensor)
+      } }
+      logger.info("Done writing output to file %s".format(path))
+    } catch {
+      case ex: IOException =>
+        logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
+        ex.printStackTrace(logger.writer)
+        ex.printStackTrace()
+        throw ex
+    }
+    writer.close()
+    optGridDest.foreach( _.close )
+    path*/
+    Iterator.empty
+  }
+}
+
+
 
 class eAve extends Kernel(Map.empty) {
   override val status = KernelStatus.public
