@@ -53,9 +53,13 @@ class RegridKernel(CDMSKernel):
         elif ("uniform" in gridType):
             origin = sa2f(self.getListParm(mdata, "origin", "0,-90"))
             if (shape):
+                assert len(shape) > 1, "Shape must have two dimensions: " + str(shape)
+                assert len(origin) > 1, "Origin must have two dimensions: " + str(origin)
                 if (not res): res = [(90.0 - origin[0]) / shape[0], (360.0 - origin[1]) / shape[1]]
             else:
                 if (not res):  raise Exception("Must define either 'shape' or 'res' parameter in regrid kernel")
+                assert len(res) > 1, "Res must have two dimensions: " + str(res)
+                assert len(origin) > 1, "Origin must have two dimensions: " + str(origin)
                 shape = [int(round((90.0 - origin[0]) / res[0])), int(round((360.0 - origin[1]) / res[1]))]
             toGrid = cdms2.createUniformGrid(origin[0], shape[0], res[0], origin[1], shape[1], res[1])
             outlatBounds, outlonBounds = toGrid.getBounds()

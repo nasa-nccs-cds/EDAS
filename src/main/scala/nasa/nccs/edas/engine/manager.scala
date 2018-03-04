@@ -184,7 +184,9 @@ object EDASExecutionManager extends Loggable {
           ( coordAxes, dims )
       }
       val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getShortName -> dim)): _*)
-      val coordsMap: Map[String, Dimension ] = Map(coordAxes.map(axis => (axis.getAxisType.getCFAxisName -> dimsMap.getOrElse( axis.getDimension(0).getShortName, throw new Exception(s"Misising dimenssion: ${axis.getDimension(0).getShortName}") ) )): _*)
+      val coordsMap: Map[String, Dimension] = Map( coordAxes.map(axis =>
+        axis.getAxisType.getCFAxisName -> axis.getDimensions.headOption.map(
+          dim => dimsMap.getOrElse( dim.getShortName, throw new Exception(s"Missing dimension: ${axis.getDimension(0).getShortName}") ))): _* ).flatMap( item => item._2.map( dim => item._1 -> dim ) )
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], varMetadata={ %s }".format(
         resultId, path, dataMap.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
