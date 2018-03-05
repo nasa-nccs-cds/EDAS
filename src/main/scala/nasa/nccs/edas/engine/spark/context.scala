@@ -163,6 +163,7 @@ class CDSparkContext(  val session: SparkSession ) extends Loggable {
   implicit val strRep: LongRange.StrRep = CalendarDate.of(_).toString
   lazy val sparkContext = session.sparkContext
 
+
   def setLocalProperty(key: String, value: String): Unit = {
     sparkContext.setLocalProperty(key, value)
   }

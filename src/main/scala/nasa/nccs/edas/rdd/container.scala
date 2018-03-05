@@ -11,7 +11,7 @@ import nasa.nccs.cdapi.tensors.{CDArray, CDFloatArray}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.engine.spark.{CDSparkContext, RecordKey}
-import nasa.nccs.edas.kernels.{CDMSRegridKernel, Kernel, KernelContext}
+import nasa.nccs.edas.kernels.{CDMSRegridKernel, Kernel, KernelContext, WorkflowMode}
 import nasa.nccs.edas.sources.{Aggregation, Collection, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.workers.TransVar
@@ -169,7 +169,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
   def release( keys: Iterable[String] ): TimeSliceRDD = TimeSliceRDD( rdd.map( _.release(keys) ), metadata, variableRecords )
   def map( op: CDTimeSlice => CDTimeSlice ): TimeSliceRDD = TimeSliceRDD( rdd map op , metadata, variableRecords )
   def getNumPartitions = rdd.getNumPartitions
-  def nodeList: Array[String] = rdd.mapPartitionsWithIndex { case ( index, tsIter )  => Seq( s"{P${index}-(${KernelContext.getProcessAddress}), size: ${tsIter.length}}" ).toIterator  } collect
+  def nodeList: Array[String] = rdd.mapPartitionsWithIndex { case ( index, tsIter )  => if(tsIter.isEmpty) { Iterator.empty } else { Seq( s"{P${index}-(${KernelContext.getProcessAddress}), size: ${tsIter.length}}" ).toIterator }  } collect
   def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata, variableRecords )
 
@@ -184,6 +184,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
     else optGroupBy match {
       case None =>
         val rv = rdd.treeReduce(op)
+//        val rv = rdd.reduce(op)
         TimeSliceCollection( rv, metadata )
       case Some( groupBy ) =>
         val groupedRdd: RDD[(Long,CDTimeSlice)] = rdd.groupBy( groupBy.group ).mapValues( TSGroup.merge(op) )
@@ -274,29 +275,22 @@ class VariableRecord( val varName: String, val collection: String, val gridFileP
 class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggable {
 
   def parallelize( kernelContext: KernelContext, vspec: DirectRDDVariableSpec ): TimeSliceRDD = {
-    val section = vspec.section.toString
+    val t0 = System.nanoTime
+    val timeRange = vspec.section.getRange(0)
     val collection: Collection = vspec.getCollection
     val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
-    val files: Array[FileInput]  = agg.getIntersectingFiles( section )
-    val nTS = vspec.section.getRange(0).length()
-    val nUsableParts = if (  nTS < 1.5 * nPartitions ) { nTS } else { Math.ceil( nTS / Math.round( nTS/nPartitions.toFloat ) ).toInt }
-//    val nUsableParts = Math.min( nTS, nPartitions )
-    var _remainingTimesteps = nTS
-    var _remainingPartitions = nUsableParts
-    val partGens: IndexedSeq[TimeSlicePartitionGenerator]  = for(fileInput <- files ) yield {
-      val tsiter = TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, section, fileInput, agg.parms.getOrElse("base.path", ""), _remainingPartitions, _remainingTimesteps )
-      _remainingTimesteps -= tsiter.nFileIntersectingRows
-      _remainingPartitions -= tsiter.partsPerFile
-      tsiter
-    }
-    val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partGens.flatMap( _.getTimeSlicePartitions ), nUsableParts )
-    logger.info( s" @XX Parallelize: section = ${section.toString}, nTS = ${nTS}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, parallel read streams = ${slicePartitions.getNumPartitions} ")
-    val sliceRdd: RDD[CDTimeSlice] = kernelContext.profiler.profile("readSlices") ( () => {
-      val rdd = slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
-      if( kernelContext.profiler.activated) { rdd.count }
-      rdd
-    } )
+    val files: Array[FileInput]  = agg.getIntersectingFiles( timeRange )
+    val nTS = timeRange.length()
+//    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.max( 1, Math.round( nTS/nPartitions.toFloat ) ) }
+    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.ceil(  nTS/nPartitions.toFloat ).toInt }
+    val nUsableParts = if (  nTSperPart == -1 ) { nPartitions } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
+    val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), nTSperPart ) )
+    val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partGens.flatMap( _.getTimeSlicePartitions ) )
+    val t1 = System.nanoTime
+    val sliceRdd: RDD[CDTimeSlice] =  slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
     val optVar = agg.findVariable( vspec.varShortName )
+    if( KernelContext.workflowMode == WorkflowMode.profiling ) { val rddSize = sliceRdd.count() }
+    logger.info( s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nPartGens = ${partGens.length}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, prep time = ${(t1-t0)/1e9} , total time = ${(System.nanoTime-t0)/1e9} ")
     TimeSliceRDD( sliceRdd, agg.parms, Map( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap)) ) )
   }
 
@@ -313,41 +307,30 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
 }
 
 object TimeSlicePartitionGenerator extends Loggable {
-  def apply( varId: String, varName: String, section: String, fileInput: FileInput, basePath: String, nPartitions: Int, nTimeSteps: Int ): TimeSlicePartitionGenerator = {
-    val opSection = CDSection.fromString(section).map(_.toSection)
-    new TimeSlicePartitionGenerator( varId, varName, opSection, fileInput, basePath, nPartitions, nTimeSteps )
+  def apply( varId: String, varName: String, section: CDSection, fileInput: FileInput, basePath: String, rowsPerPartition: Int ): TimeSlicePartitionGenerator = {
+    new TimeSlicePartitionGenerator( varId, varName, section, fileInput, basePath, rowsPerPartition )
   }
 }
 
-class TimeSlicePartitionGenerator(val varId: String, val varName: String, val opSection: Option[ma2.Section], val fileInput: FileInput, val basePath: String, val partitionsRemaining: Int, val rowsRemaining: Int ) extends Loggable {
-  val intersectingRange = opSection.fold( fileInput.getRowIndexRange ) ( sect => fileInput.intersect(sect.getRange(0)) )
+class TimeSlicePartitionGenerator(val varId: String, val varName: String, val section: CDSection, val fileInput: FileInput, val basePath: String,  val rowsPerPartition: Int = -1 ) extends Loggable {
+  val timeRange = section.getRange(0)
+  val intersectingRange = fileInput.intersect( timeRange )
   val nFileIntersectingRows = intersectingRange.length
   //    logger.info( s" @XX PartRange, _rowsRemaining = ${_rowsRemaining}, _partitionsRemaining = ${_partitionsRemaining}, nFileIntersectingRows = ${nFileIntersectingRows}" )
-  val rowsPerPartition: Float = rowsRemaining / partitionsRemaining.toFloat
-  val partsPerFile: Int = Math.ceil( nFileIntersectingRows / rowsPerPartition ).toInt
+  val partsPerFile: Int = if(rowsPerPartition == -1) { 1 } else { Math.ceil( nFileIntersectingRows / rowsPerPartition.toFloat ).toInt }
 
-  def getTimeSlicePartitions: IndexedSeq[TimeSlicePartition] = {
-    var nRowsRemaining = nFileIntersectingRows
-    var nPartsRemaining = partsPerFile
-    val origin = opSection.fold(0)( _.getRange(0).first )
-    var currentRow = 0
-    ( 0 until partsPerFile ) map ( iPartIndex => {
-      val rowsPerPart: Int = math.round( nRowsRemaining / nPartsRemaining.toFloat )
-      val partStartRow = intersectingRange.first + currentRow
-      val partRange = new ma2.Range( partStartRow, partStartRow + (rowsPerPart-1) )
-//      logger.info( s" @XX PartRange[${iPartIndex}/${partsPerFile}], currentRow = ${currentRow}, partsPerFile = ${partsPerFile}, rowsPerPartition = ${rowsPerPartition}, nRowsRemaining = ${nRowsRemaining}, nPartsRemaining = ${nPartsRemaining}, rowsPerPart = ${rowsPerPart}, origin = ${origin}, partRange = [ ${partRange.toString} ]")
-      val tsi = TimeSlicePartition (varId, varName, opSection, fileInput, basePath, partRange )
-      currentRow += rowsPerPart
-      nRowsRemaining -= rowsPerPart
-      nPartsRemaining -= 1
-      tsi
+  def getTimeSlicePartitions: IndexedSeq[TimeSlicePartition] = ( 0 until partsPerFile ) map ( iPartIndex => {
+      val partStartRow = if(rowsPerPartition == -1) { intersectingRange.first } else { intersectingRange.first +  iPartIndex * rowsPerPartition }
+      val partEndRow = if(rowsPerPartition == -1) { intersectingRange.last } else { Math.min( partStartRow + rowsPerPartition -1, intersectingRange.last ) }
+      val partRange = new ma2.Range( partStartRow, partEndRow )
+//      logger.info( s" @XX PartRange[${iPartIndex}/${partsPerFile}], rowsPerPartition = ${rowsPerPartition}, partRange = [ ${partRange.toString} ]")
+      TimeSlicePartition (varId, varName, section, fileInput, basePath, partRange )
     } )
-  }
 }
 
 object TimeSlicePartition {
-  def apply( varId: String, varName: String, opSection: Option[ma2.Section], fileInput: FileInput, basePath: String, partitionRange: ma2.Range ): TimeSlicePartition = {
-    new TimeSlicePartition( varId, varName, opSection.map(s=>CDSection(s)), fileInput, basePath, PartitionRange(partitionRange) )
+  def apply( varId: String, varName: String, cdsection: CDSection, fileInput: FileInput, basePath: String, partitionRange: ma2.Range ): TimeSlicePartition = {
+    new TimeSlicePartition( varId, varName, cdsection, fileInput, basePath, PartitionRange(partitionRange) )
   }
   def getMissing( variable: Variable, default_value: Float = Float.NaN ): Float = {
     Seq( "missing_value", "fmissing_value", "fill_value").foreach ( attr_name => Option( variable.findAttributeIgnoreCase(attr_name) ).foreach( attr => return attr.getNumericValue.floatValue() ) )
@@ -365,7 +348,7 @@ case class PartitionRange( firstRow: Int, lastRow: Int ) extends Serializable {
   override def toString = s"PR[${firstRow} ${lastRow}]"
 }
 
-class TimeSlicePartition(val varId: String, val varName: String, opSection: Option[CDSection], val fileInput: FileInput, val basePath: String, val partitionRange: PartitionRange ) extends Serializable with Loggable {
+class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSection, val fileInput: FileInput, val basePath: String, val partitionRange: PartitionRange ) extends Serializable with Loggable {
   import TimeSlicePartition._
   val filePath: String = if( basePath.isEmpty ) { fileInput.path } else { Paths.get( basePath, fileInput.path ).toString }
 
@@ -377,7 +360,7 @@ class TimeSlicePartition(val varId: String, val varName: String, opSection: Opti
     val dataset = NetcdfDatasetMgr.aquireFile(filePath, 77.toString)
     val variable: Variable = Option(dataset.findVariable(varName)).getOrElse { throw new Exception(s"Can't find variable $varName in data file ${filePath}") }
     val localPartRange = partitionRange.toRange( fileInput.firstRowIndex )
-    val interSect: ma2.Section = opSection.fold( variable.getShapeAsSection )( _.toSection ).replaceRange(0,localPartRange)
+    val interSect: ma2.Section = cdsection.toSection.replaceRange(0,localPartRange)
     val fileTimeAxis = NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
     val timeAxis: CoordinateAxis1DTime = fileTimeAxis.section( localPartRange )
     val nTimesteps = timeAxis.getShape(0)
@@ -495,12 +478,14 @@ class RDDContainer extends Loggable {
     def nSlices = { _rdd.cache; _rdd.nSlices }
     def nPartitions = {  _rdd.getNumPartitions }
     def nodeList = {  _rdd.nodeList }
-
   }
   def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
 
   def regrid( context: KernelContext ): Unit = {
+    val t0 = System.nanoTime()
     vault.update( regridKernel.mapRDD( vault.value, context ) )
+    if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
+    logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
   }
   def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
   def reduceBroadcast( node: Kernel, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ) )
@@ -522,14 +507,19 @@ class RDDContainer extends Loggable {
     val newVSpecs = vSpecs.filter( vspec => ! contents.contains(vspec.uid) )
     if( newVSpecs.nonEmpty ) {
       val generator = new RDDGenerator( sparkContext, BatchSpec.nParts )
+      val t0 = System.nanoTime
       val remainingVspecs = if( _vault.isEmpty ) {
         val tvspec = vSpecs.head
         val baseRdd: TimeSliceRDD = generator.parallelize( kernelContext, tvspec )
         initialize( baseRdd, List(tvspec.uid) )
         vSpecs.tail
       } else { vSpecs }
+      val t1 = System.nanoTime
       extendVault( generator, remainingVspecs )
-      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, nodes: \n  ${nodeList.mkString("\n  ")}" )
+      if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
+      val t2 = System.nanoTime
+      logger.info( s"Generating file inputs with ${BatchSpec.nParts} partitions available, ${nPartitions} partitions created, inputs = [ ${vSpecs.map( _.uid ).mkString(", ")} ], BatchSpec = ${BatchSpec.toString}, times = { partition: ${(t1-t0)/1.0e9}, extend: ${(t2-t1)/1.0e9} }" )
+//      logger.info(  s"nodes: \n  ${nodeList.mkString("\n  ")}" )
     }
   }
 

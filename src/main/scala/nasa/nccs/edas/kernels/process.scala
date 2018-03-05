@@ -61,8 +61,16 @@ class AxisIndices( private val axisIds: Set[Int] = Set.empty ) extends Serializa
   override def toString = axisIds.mkString(",")
 }
 
+object WorkflowMode {
+  val streaming = 0
+  val profiling = 1
+}
 
 object KernelContext {
+  private var _workflowMode = WorkflowMode.streaming
+
+  def enableProfiling = { _workflowMode = WorkflowMode.profiling }
+  def workflowMode = _workflowMode
 
   def apply( operation: OperationContext, executor: WorkflowExecutor ): KernelContext = {
     val sectionMap: Map[String, Option[CDSection]] = executor.requestCx.inputs.mapValues(_.map(_.cdsection)).map(identity)
@@ -96,6 +104,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
   lazy val axes: AxisIndices = grid.getAxisIndices(config("axes", ""))
   private var _variableRecs: Map[String,VariableRecord] = Map.empty[String,VariableRecord]
+
 
   lazy val grid: GridContext = getTargetGridContext
   def addVariableRecords( varRecs: Map[String,VariableRecord] ): KernelContext = { _variableRecs = _variableRecs ++ varRecs; this }
@@ -317,9 +326,8 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def reduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
-    val nparts = input.getNumPartitions
     EDASExecutionManager.checkIfAlive
-    evaluateProductSize( input, context )
+//    evaluateProductSize( input, context )   // TOO SLOW!
     if( !parallelizable ) { input.collect }
     else {
       val rid = context.operation.rid.toLowerCase
@@ -331,16 +339,19 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
           reduceElements.reduce(getReduceOp(context), optGroup, ordered)
         })
       } else {
-        reduceElements.collect
+        val t0 = System.nanoTime()
+        val result = reduceElements.collect
+        logger.info(" #R# Collection time: %.2f, kernel = { %s }".format( (System.nanoTime-t0)/1.0E9, this.id ))
+        result
       }
-      finalize( result, context )
+      finalize( result.sort, context )
     }
   }
 
   def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
     val t0 = System.nanoTime()
     val mapresult: TimeSliceRDD = context.profiler.profile("mapReduce.mapRDD") ( () => { mapRDD(input, context) } )
-    if( context.profiler.activated ) { mapresult.exe }
+    if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
     val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge ) } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
@@ -354,13 +365,30 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   }
 
   def evaluateProductSize(input: TimeSliceRDD, context: KernelContext ): Unit =  if ( !context.doesTimeReduction ) {
+    val t0 = System.nanoTime()
     val result_size: Long = input.dataSize
-    logger.info( s" %E% Evaluating: Product size: ${result_size/1.0e9f} G, max product size: ${EDASPartitioner.maxProductSize/1.0e9f} G" )
+    logger.info( s" %E% Evaluating: Product size: ${result_size/1.0e9f} G, max product size: ${EDASPartitioner.maxProductSize/1.0e9f} G, time = ${(System.nanoTime()-t0)/1.0e9}" )
     if( result_size > EDASPartitioner.maxProductSize ) { throw new Exception(s"The product of this request is too large: ${result_size/1e9} G, max product size:  ${EDASPartitioner.maxProductSize/1e9} G") }
   }
 
   def finalize( mapReduceResult: TimeSliceCollection, context: KernelContext ): TimeSliceCollection = {
-    postRDDOp( mapReduceResult, context  )
+    val t0 = System.nanoTime()
+    val postOp = options.get("postOp")
+    val result = postRDDOp( mapReduceResult, context )
+    logger.info( s" Finalize time = ${(System.nanoTime()-t0)/1.0e9}, postOp = ${postOp.getOrElse("UNDEF")}" )
+    result
+  }
+
+  def finalize1( mapReduceResult: TimeSliceCollection, context: KernelContext ): TimeSliceCollection = {
+    val t0 = System.nanoTime()
+    val postOp = options.get("postOp")
+    val result = if ( postOp.isDefined ) {
+      postRDDOp( mapReduceResult, context )
+    } else {
+      mapReduceResult
+    }
+    logger.info( s" Finalize time = ${(System.nanoTime()-t0)/1.0e9}, postOp = ${postOp.getOrElse("UNDEF")}" )
+    result
   }
 
   def addWeights( context: KernelContext ): Boolean = {
@@ -556,45 +584,43 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def postOp(result: DataFragment, context: KernelContext): DataFragment = result
 
-  def postRDDOp( result: TimeSliceCollection, context: KernelContext ): TimeSliceCollection = {
-    val pre_result = result.sort.concatSlices
-    pre_result.slices.headOption match {
-      case None => result
-      case Some(slice) =>
-        val elements: Map[String, ArraySpec] = pre_result.slices.headOption.fold(Map.empty[String, ArraySpec])(_.elements.toMap)
-        options.get("postOp") match {
-          case Some(postOp) =>
-            val postOpKey = PostOpOperations.get(postOp)
-            val key_lists = elements.keys.partition(_.endsWith("_WEIGHTS_"))
-            val weights_key_opt: Option[String] = key_lists._1.headOption
-            val values_key: String = key_lists._2.headOption.getOrElse(throw new Exception(s"Can't find values key in postRDDOp for Kernel $identifier, keys: " + elements.keys.mkString(",")))
-            val weights_opt: Option[ArraySpec] = weights_key_opt.flatMap( weights_key => elements.get(weights_key) )
-            val values: ArraySpec = elements.getOrElse(values_key, missing_element(values_key))
-            val values_iter: Iterator[Float] = values.data.iterator
-            val weights_iter: Iterator[Float] = weights_opt.fold( EmptyFloatIterator() )( _.data.iterator )
-            val undef: Float = values.missing
-            val resultValues = FloatBuffer.allocate(values.data.length )
-            while (values_iter.hasNext) {
-              val value = values_iter.next()
-              if (value == undef || value.isNaN) { undef }
-              else postOpKey match {
-                case PostOpOperations.normw =>
-                  val wval = weights_iter.next()
-                  resultValues.put(value / wval)
-                case PostOpOperations.sqrt =>
-                  resultValues.put(Math.sqrt(value).toFloat)
-                case PostOpOperations.rms =>
-                  val norm = context.getReductionSize
-                  resultValues.put(Math.sqrt( value / norm ).toFloat)
-                case x => Unit // Never reached.
-              }
+  def postRDDOp( result: TimeSliceCollection, context: KernelContext ): TimeSliceCollection = options.get("postOp") match {
+    case None => result
+    case Some(postOp) =>
+      val pre_result = result
+      pre_result.slices.headOption match {
+        case None => result
+        case Some(slice) =>
+          val elements: Map[String, ArraySpec] = pre_result.slices.headOption.fold(Map.empty[String, ArraySpec])(_.elements.toMap)
+          val postOpKey = PostOpOperations.get(postOp)
+          val key_lists = elements.keys.partition(_.endsWith("_WEIGHTS_"))
+          val weights_key_opt: Option[String] = key_lists._1.headOption
+          val values_key: String = key_lists._2.headOption.getOrElse(throw new Exception(s"Can't find values key in postRDDOp for Kernel $identifier, keys: " + elements.keys.mkString(",")))
+          val weights_opt: Option[ArraySpec] = weights_key_opt.flatMap( weights_key => elements.get(weights_key) )
+          val values: ArraySpec = elements.getOrElse(values_key, missing_element(values_key))
+          val values_iter: Iterator[Float] = values.data.iterator
+          val weights_iter: Iterator[Float] = weights_opt.fold( EmptyFloatIterator() )( _.data.iterator )
+          val undef: Float = values.missing
+          val resultValues = FloatBuffer.allocate(values.data.length )
+          while (values_iter.hasNext) {
+            val value = values_iter.next()
+            if (value == undef || value.isNaN) { undef }
+            else postOpKey match {
+              case PostOpOperations.normw =>
+                val wval = weights_iter.next()
+                resultValues.put(value / wval)
+              case PostOpOperations.sqrt =>
+                resultValues.put(Math.sqrt(value).toFloat)
+              case PostOpOperations.rms =>
+                val norm = context.getReductionSize
+                resultValues.put(Math.sqrt( value / norm ).toFloat)
+              case x => Unit // Never reached.
             }
-            val new_elems: Map[String, ArraySpec] = Seq( values_key -> ArraySpec( values.missing, values.shape, values.origin, resultValues.array() ) ).toMap
-            val new_slice: CDTimeSlice = CDTimeSlice(slice.startTime, slice.endTime, new_elems, slice.metadata)
-            TimeSliceCollection( Array( new_slice ), result.metadata )
-          case None => pre_result
-        }
-    }
+          }
+          val new_elems: Map[String, ArraySpec] = Seq( values_key -> ArraySpec( values.missing, values.shape, values.origin, resultValues.array() ) ).toMap
+          val new_slice: CDTimeSlice = CDTimeSlice(slice.startTime, slice.endTime, new_elems, slice.metadata)
+          TimeSliceCollection( Array( new_slice ), result.metadata )
+      }
   }
 
   def reduceOp(context: KernelContext)(a0op: Option[DataFragment], a1op: Option[DataFragment]): Option[DataFragment] = {

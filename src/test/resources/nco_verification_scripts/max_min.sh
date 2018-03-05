@@ -14,7 +14,8 @@ ncdump ~/test/out/subset.nc
 #ncwa -O -v tas -d time,0,100 -a lat,lon -y min ${datafile} ~/test/out/subset.nc
 #ncdump ~/test/out/subset.nc
 
-# ncwa -O -v tas -d time,10,10 -a lat,lon -y sum ${datafile} ~/test/out/sumval.nc
+#ncwa -O -v tas -d time,10,10 -a lat,lon -y sum ${datafile} ~/test/out/sumval.nc
+#ncdump ~/test/out/sumval.nc
 
 # ncwa -O -v tas -d lat,5,8 -d lon,5,8 -d time,0,100 -a time -y min ${datafile} ~/test/out/minval.nc
 

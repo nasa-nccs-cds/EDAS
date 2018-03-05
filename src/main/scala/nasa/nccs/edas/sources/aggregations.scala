@@ -445,7 +445,8 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     if( fileInputs.isEmpty ) { rangeMap } else { getRangeMap(time_index + fileInputs.head.nRows + 1, fileInputs.tail,  rangeMap ++ List( new ma2.Range( time_index, time_index + fileInputs.head.nRows ) -> fileInputs.head ) ) }
   }
 
-  def getIntersectingFiles( sectionString: String ): Array[FileInput] = CDSection.fromString(sectionString).map( _.toSection.getRange(0) ).fold( files )( timeRange => files.filter( _.intersects(timeRange) ) )
+  def getIntersectingFiles( sectionString: String ): Array[FileInput] = CDSection.fromString(sectionString).map( _.toSection.getRange(0) ).fold( files )( getIntersectingFiles )
+  def getIntersectingFiles( timeRange: ma2.Range ): Array[FileInput] =  files.filter( _.intersects(timeRange) )
 
 }
 

@@ -40,12 +40,15 @@ class Worker(object):
         while active:
             header = self.request_socket.recv()
             type = self.getMessageField(header,0)
-            self.logger.info( "Received '{0}' message: {1}".format( type, header ) )
+            self.logger.info( " Received '{0}' message: {1}".format( type, header ) )
             if type == "array":
                 try:
                     withData = int(self.getMessageField(header,5))
                     data = self.request_socket.recv() if withData else None
+                    self.logger.info(" @@@ Creating data input '{0}', withData: {1}".format( header, withData ) )
                     array = npArray.createInput(header,data)
+                    if( withData ):
+                        self.logger.info(" @@@ Array shape: '{0}', data is None: {1}".format( mParse.ia2s(array.shape), str(data is None) ) )
                     self.cached_inputs[array.uid()] = array
                 except Exception as err:
                     self.sendError( err )

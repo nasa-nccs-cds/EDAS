@@ -148,9 +148,9 @@ public abstract class Worker {
     public void finalize() { quit(); }
 
     public void sendDataPacket( String header, byte[] data ) {
-        _portal.logger.debug("Sending header: " + header);
+        _portal.logger.debug(" #PW# " + this.id() + " Sending header: " + header);
         request_socket.send(header.getBytes(), 0 );
-        _portal.logger.debug( String.format( "Sending data, nbytes = %d", data.length ) );
+        _portal.logger.debug( String.format( " #PW#  " + this.id() + " Sending data, nbytes = %d", data.length ) );
         request_socket.send(data, 0 );
     }
 
