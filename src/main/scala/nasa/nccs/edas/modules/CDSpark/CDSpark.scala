@@ -294,7 +294,51 @@ class write extends CombineRDDsKernel( Map.empty ) {
   }
 }
 
+class norm extends Kernel(Map.empty) {
+  override val status = KernelStatus.public
+  val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
+  val outputs = List( WPSProcessOutput( "operation result" ) )
+  val title = "Normalize"
+  val doesAxisElimination: Boolean = false
+  val description = "Normalize and center all cells as independent timeseries"
+  override val doesAxisReduction: Boolean = false
 
+  override def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
+    EDASExecutionManager.checkIfAlive
+    val aveK = new ave()
+    val aveRDD = aveK.mapRDD( input, context.addConfig( "axes" -> "t" ) )
+//    val diffK = new eDiff()
+//    diffK.mapRDD( input. aveRDD )
+    aveRDD
+  }
+
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
+    val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
+    val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
+    CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata)
+  }
+  override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
+  override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
+}
+
+
+class cor extends Kernel(Map.empty) {
+  override val status = KernelStatus.public
+  val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
+  val outputs = List( WPSProcessOutput( "operation result" ) )
+  val title = "Correlations"
+  val doesAxisElimination: Boolean = false
+  val description = "Computes unique values of correlation matrix"
+  override val doesAxisReduction: Boolean = false
+
+  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
+    val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
+    val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
+    CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata)
+  }
+  override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
+  override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
+}
 
 class eAve extends Kernel(Map.empty) {
   override val status = KernelStatus.public

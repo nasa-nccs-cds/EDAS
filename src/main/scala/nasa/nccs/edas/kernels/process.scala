@@ -113,7 +113,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   def findGrid(gridRef: String): Option[GridContext] = grids.find(item => (item._1.equalsIgnoreCase(gridRef) || item._1.split('-')(0).equalsIgnoreCase(gridRef))).flatMap(_._2)
 
   def getConfiguration: Map[String, String] = configuration ++ operation.getConfiguration
-
+  def addConfig( new_config_elems: (String,String)* ) = new KernelContext( operation, grids, sectionMap, domains, _configuration ++ new_config_elems, crsOpt, regridSpecOpt, profiler )
 
   def getReductionSize: Int = {
     val section: CDSection = sectionMap.head._2.getOrElse( throw new Exception(s"Can't find section for inputs of operation ${operation.identifier}") )

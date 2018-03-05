@@ -146,7 +146,8 @@ object TSGroup {
     if( groupBy.equalsIgnoreCase("monthofyear") ) { new TSGroup ( cal => cal.get( Calendar.MONTH ) ) }
     else if( groupBy.equalsIgnoreCase("month") ) { new TSGroup ( cal =>  cal.get( Calendar.YEAR )*12L + cal.get( Calendar.MONTH ) ) }
     else if( groupBy.equalsIgnoreCase("hourofday") ) { new TSGroup ( cal =>  cal.get( Calendar.HOUR_OF_DAY ) ) }
-    else if( groupBy.equalsIgnoreCase("season") ) { new TSGroup ( cal =>  season( cal.get( Calendar.MONTH ) ) ) }
+    else if( groupBy.equalsIgnoreCase("season") ) { new TSGroup ( cal =>  cal.get( Calendar.YEAR )*4L + season( cal.get( Calendar.MONTH ) ) ) }
+    else if( groupBy.equalsIgnoreCase("seasonofyear") ) { new TSGroup ( cal =>  season( cal.get( Calendar.MONTH ) ) ) }
     else if( groupBy.equalsIgnoreCase("day") ) { new TSGroup ( cal =>  cal.get( Calendar.YEAR )*370L + cal.get( Calendar.DAY_OF_YEAR ) ) }
     else if( groupBy.equalsIgnoreCase("dayofyear") ) { new TSGroup ( cal => cal.get( Calendar.DAY_OF_YEAR ) ) }
     else { throw new Exception(s"Unrecognized groupBy argument: ${groupBy}") }
