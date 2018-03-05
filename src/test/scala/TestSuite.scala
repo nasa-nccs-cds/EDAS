@@ -383,7 +383,7 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("time-ave-giss") {
     val datainputs =
-      s"""[domain=[ {"name":"d0", "time": {"start":"1980-01-01T00:00:00", "end":"1981-01-01T00:00:00", "crs": "timestamps"}} ],
+      s"""[domain=[ {"name":"d0", "time": {"start":"1980-01-01T00:00:00Z", "end":"1980-01-31T23:00:00Z", "crs": "timestamps"}} ],
           variable=[ {"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"}],
           operation=[ {"name":"CDSpark.ave","input":"v0","axes":"t"} ] ]""".stripMargin
     val result_node = executeTest( datainputs )

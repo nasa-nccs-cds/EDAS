@@ -242,7 +242,7 @@ object cdsutils {
 
     def parse(input: String): CalendarDate = {
       val caldates = mutable.ListBuffer[CalendarDate]()
-      val full_date = if( input.toLowerCase.contains("t") ) { input } else { input + "T00:00:00Z" }
+      val full_date = input
       val groups = parser.parse( full_date ).toList
       for (group: natty.DateGroup <- groups; date: java.util.Date <- group.getDates.toList) caldates += CalendarDate.of(date)
       assert( caldates.size == 1, " DateTime Parser Error: parsing '%s'".format(input) )
