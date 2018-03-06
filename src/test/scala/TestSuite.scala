@@ -368,7 +368,7 @@ class DefaultTestSuite extends EDASTestSuite {
   }
 
   test("anomaly-seasonal") {
-    val datainputs = s"""[domain=[{"name":"d0", "lat":{"start":40,"end":40,"system":"values"}, "lon":{"start":260,"end":260,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave","groupBy":"season"},{"name":"CDSpark.eDiff","input":"v1,v1ave"}]]"""
+    val datainputs = s"""[domain=[{"name":"d0", "lat":{"start":40,"end":40,"system":"values"}, "lon":{"start":260,"end":260,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave","groupBy":"seasonOfYear"},{"name":"CDSpark.eDiff","input":"v1,v1ave"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )

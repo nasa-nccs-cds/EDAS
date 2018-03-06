@@ -95,38 +95,51 @@ case class CDTimeInterval(startTime: Long, endTime: Long ) {
 
 object CDTimeSlice {
   type ReduceOp = (CDTimeSlice,CDTimeSlice)=>CDTimeSlice
-  def empty = new CDTimeSlice(-1, 0, Map.empty[String,ArraySpec], Map.empty[String, String] )
+  def empty = new CDTimeSlice(-1, 0, Map.empty[String,ArraySpec], Map.empty[String, String], None )
 }
 
-case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String, ArraySpec], metadata: Map[String, String]) {
-  def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice(startTime, endTime, elements ++ other.elements, metadata) }
+case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String, ArraySpec], metadata: Map[String, String], groupOpt: Option[TSGroupIdentifier] ) {
+  def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice(startTime, endTime, elements ++ other.elements, metadata, groupOpt) }
   def <+( other: CDTimeSlice ): CDTimeSlice = append( other )
-  def clear: CDTimeSlice = { new CDTimeSlice(startTime, endTime, Map.empty[String,ArraySpec], metadata) }
+  def clear: CDTimeSlice = { new CDTimeSlice(startTime, endTime, Map.empty[String,ArraySpec], metadata, groupOpt) }
   def midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDTimeSlice ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDTimeSlice ): Long = Math.max( endTime, other.endTime )
   def section( section: CDSection ): Option[CDTimeSlice] = {
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
-    if( new_elements.isEmpty ) { None } else { Some( new CDTimeSlice(startTime, endTime, new_elements, metadata) ) }
+    if( new_elements.isEmpty ) { None } else { Some( new CDTimeSlice(startTime, endTime, new_elements, metadata, groupOpt) ) }
   }
-  def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
-  def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)
-  def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice(startTime, endTime, elements.filterKeys(key => op(key) ), metadata)
+  def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata, groupOpt) }
+  def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata, groupOpt)
+  def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice(startTime, endTime, elements.filterKeys(key => op(key) ), metadata, groupOpt)
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def element( id: String ): Option[ArraySpec] =  elements find { case (key,value) => key.split(':').last.equals(id) } map ( _._2 )
   def isEmpty = elements.isEmpty
   def findElements( id: String ): Iterable[ArraySpec] = ( elements filter { case (key,array) => key.split(':').last.equals(id) } ) values
-  def contains( other_startTime: Long ): Boolean = { ( other_startTime >= startTime ) && ( other_startTime <= endTime ) }
-  def contains( other: CDTimeSlice ): Boolean = { contains( other.startTime ) }
+  def contains( other_startTime: Long ): Boolean = {
+    ( other_startTime >= startTime ) && ( other_startTime <= endTime )
+  }
+  def setGroupId( groupId: TSGroupIdentifier ): CDTimeSlice = new CDTimeSlice( startTime, endTime, elements, metadata, Some(groupId) )
+  def contains( other: CDTimeSlice ): Boolean = other.groupOpt match {
+    case Some( groupId ) => groupId.matches( this )
+    case None => groupOpt match {
+      case Some(groupId) => groupId.matches(other)
+      case None => contains( other.startTime )
+    }
+  }
   def ~( other: CDTimeSlice ) =  { assert( (endTime == other.endTime) && (startTime == other.startTime) , s"Mismatched Time slices: { $startTime $endTime } vs { ${other.startTime} ${other.endTime} }" ) }
   def precedes( other: CDTimeSlice ) = {assert(  startTime < other.startTime, s"Disordered Time slices: { $startTime $endTime -> ${startTime+endTime} } vs { ${other.startTime} ${other.endTime} }" ) }
-  def append( other: CDTimeSlice ): CDTimeSlice = { this precedes other; new CDTimeSlice(mergeStart( other ), mergeEnd( other ), elements.flatMap { case (key,array0) => other.elements.get(key).map(array1 => key -> ( array0 ++ array1 ) ) }, metadata) }
-  def addExtractedSlice( collection: TimeSliceCollection ): CDTimeSlice = collection.slices.find( _.contains( this ) ) match {
-    case None =>
-      throw new Exception( s"Missing matching slice in broadcast: { ${startTime}, ${endTime} }")
-    case Some( extracted_slice ) =>
-      CDTimeSlice(startTime, endTime, elements ++ extracted_slice.elements, metadata)
+  def append( other: CDTimeSlice ): CDTimeSlice = {
+    this precedes other;
+    new CDTimeSlice(mergeStart( other ), mergeEnd( other ), elements.flatMap { case (key,array0) => other.elements.get(key).map(array1 => key -> ( array0 ++ array1 ) ) }, metadata, groupOpt.orElse(other.groupOpt))
   }
+  def addExtractedSlice( collection: TimeSliceCollection ): CDTimeSlice =
+    collection.slices.find( _.contains( this ) ) match {
+      case None =>
+        throw new Exception( s"Missing matching slice in broadcast: { ${startTime}, ${endTime} }")
+      case Some( extracted_slice ) =>
+        CDTimeSlice(startTime, endTime, elements ++ extracted_slice.elements, metadata, groupOpt.orElse(extracted_slice.groupOpt) )
+    }
 }
 
 class DataCollection( val metadata: Map[String,String] ) extends Serializable {
@@ -141,23 +154,32 @@ object TimeSliceRDD {
 object TSGroup {
   def sortedMerge(  op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice )(slices: Iterable[CDTimeSlice]): CDTimeSlice = { slices.toSeq.sortBy( _.startTime ).fold(CDTimeSlice.empty)(op) }
   def merge(  op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice )(slices: Iterable[CDTimeSlice]): CDTimeSlice = { slices.toSeq.reduce(op) }
-  def season( month: Int ): Int = ( month % 12 )/3
+  def season( month: Int ): Int = {
+    val rv = ( (month+1) % 12 )/3
+    rv
+  }
   def getGroup( groupBy: String ): TSGroup = {
-    if( groupBy.equalsIgnoreCase("monthofyear") ) { new TSGroup ( cal => cal.get( Calendar.MONTH ) ) }
-    else if( groupBy.equalsIgnoreCase("month") ) { new TSGroup ( cal =>  cal.get( Calendar.YEAR )*12L + cal.get( Calendar.MONTH ) ) }
-    else if( groupBy.equalsIgnoreCase("hourofday") ) { new TSGroup ( cal =>  cal.get( Calendar.HOUR_OF_DAY ) ) }
-    else if( groupBy.equalsIgnoreCase("season") ) { new TSGroup ( cal =>  cal.get( Calendar.YEAR )*4L + season( cal.get( Calendar.MONTH ) ) ) }
-    else if( groupBy.equalsIgnoreCase("seasonofyear") ) { new TSGroup ( cal =>  season( cal.get( Calendar.MONTH ) ) ) }
-    else if( groupBy.equalsIgnoreCase("day") ) { new TSGroup ( cal =>  cal.get( Calendar.YEAR )*370L + cal.get( Calendar.DAY_OF_YEAR ) ) }
-    else if( groupBy.equalsIgnoreCase("dayofyear") ) { new TSGroup ( cal => cal.get( Calendar.DAY_OF_YEAR ) ) }
+    if( groupBy.equalsIgnoreCase("monthofyear") ) { new TSGroup ( cal => cal.get( Calendar.MONTH ), true ) }
+    else if( groupBy.equalsIgnoreCase("month") ) { new TSGroup ( cal =>  cal.get( Calendar.YEAR )*12L + cal.get( Calendar.MONTH ), false ) }
+    else if( groupBy.equalsIgnoreCase("hourofday") ) { new TSGroup ( cal =>  cal.get( Calendar.HOUR_OF_DAY ), true ) }
+    else if( groupBy.equalsIgnoreCase("season") ) { new TSGroup ( cal =>  cal.get( Calendar.YEAR )*4L + season( cal.get( Calendar.MONTH ) ), false ) }
+    else if( groupBy.equalsIgnoreCase("seasonofyear") ) { new TSGroup ( cal =>  season( cal.get( Calendar.MONTH ) ), true ) }
+    else if( groupBy.equalsIgnoreCase("day") ) { new TSGroup ( cal =>  cal.get( Calendar.YEAR )*370L + cal.get( Calendar.DAY_OF_YEAR ), false ) }
+    else if( groupBy.equalsIgnoreCase("dayofyear") ) { new TSGroup ( cal => cal.get( Calendar.DAY_OF_YEAR ), true ) }
     else { throw new Exception(s"Unrecognized groupBy argument: ${groupBy}") }
   }
 }
 
-class TSGroup( val calOp: (Calendar) => Long  ) extends Serializable {
+class TSGroup( val calOp: (Calendar) => Long, val isCyclic: Boolean  ) extends Serializable {
   lazy val calendar = Calendar.getInstance()
   def group( slice: CDTimeSlice ): Long = { calendar.setTimeInMillis(slice.midpoint); calOp( calendar ) }
+}
 
+class TSGroupIdentifier( val group: TSGroup, val group_index: Long )  extends Serializable {
+  def matches( slice: CDTimeSlice ): Boolean = {
+    val index = group.group( slice )
+    index == group_index
+  }
 }
 
 class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val variableRecords: Map[String,VariableRecord] ) extends DataCollection(metadata) with Loggable {
@@ -188,11 +210,9 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
 //        val rv = rdd.reduce(op)
         TimeSliceCollection( rv, metadata )
       case Some( groupBy ) =>
-        val ns0 = rdd.count
-        val groupedRdd: RDD[(Long,CDTimeSlice)] = rdd.groupBy( groupBy.group ).mapValues( TSGroup.merge(op) )
-        val ns1 = groupedRdd.count
-        logger.info( s" ^^G Reducing RDD with groupBy: ${ns0} -> ${ns1}")
-        TimeSliceCollection( groupedRdd.map( _._2 ).collect.sortBy( _.startTime ), metadata )
+        val groupedRdd: RDD[CDTimeSlice] = rdd.keyBy( groupBy.group ).reduceByKey( op ).map{ case (key,slice) => slice.setGroupId( new TSGroupIdentifier(groupBy,key)) }
+        val rv = TimeSliceCollection( groupedRdd.collect.sortBy( _.startTime ), metadata )
+        rv
     }
   }
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
@@ -373,7 +393,7 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
       val data_shape: Array[Int] = data_section.getShape
       val arraySpec = ArraySpec( getMissing(variable), data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array)
-      CDTimeSlice(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
+      CDTimeSlice(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ), None )
     }
     dataset.close()
     logger.info(" [%s] Completed Read of %d timeSlices in %.4f sec, partitionRange = %s".format(KernelContext.getProcessAddress, nTimesteps, (System.nanoTime() - t0) / 1.0E9, partitionRange.toString ) )
@@ -439,7 +459,7 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
     val data_shape: Array[Int] = data_section.getShape
     val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array )
-    CDTimeSlice(template_slice.startTime, template_slice.endTime, Map( varId -> arraySpec ), template_slice.metadata)
+    CDTimeSlice(template_slice.startTime, template_slice.endTime, Map( varId -> arraySpec ), template_slice.metadata, None)
   }
 
   def getMissing( variable: Variable, default_value: Float = Float.NaN ): Float = {

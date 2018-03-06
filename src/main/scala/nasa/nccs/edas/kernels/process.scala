@@ -441,7 +441,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         }
         case None => None
       }}
-      CDTimeSlice(rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*), rec0.metadata)
+      CDTimeSlice(rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*), rec0.metadata, rec0.groupOpt.orElse(rec1.groupOpt) )
     })
   }
 
@@ -618,7 +618,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
             }
           }
           val new_elems: Map[String, ArraySpec] = Seq( values_key -> ArraySpec( values.missing, values.shape, values.origin, resultValues.array() ) ).toMap
-          val new_slice: CDTimeSlice = CDTimeSlice(slice.startTime, slice.endTime, new_elems, slice.metadata)
+          val new_slice: CDTimeSlice = CDTimeSlice(slice.startTime, slice.endTime, new_elems, slice.metadata, slice.groupOpt )
           TimeSliceCollection( Array( new_slice ), result.metadata )
       }
   }
@@ -716,7 +716,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       }
     }
     val t3 = System.nanoTime
-    new CDTimeSlice(a0.mergeStart(a1), a0.mergeEnd(a1), elems, a0.metadata)
+    new CDTimeSlice(a0.mergeStart(a1), a0.mergeEnd(a1), elems, a0.metadata, a0.groupOpt.orElse(a1.groupOpt) )
   }
 
 
@@ -727,7 +727,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
         val newData = arraySpec.toFastMaskedArray / wts.toFastMaskedArray
         key -> new ArraySpec(newData.missing, newData.shape, arraySpec.origin, newData.getData)
       }
-      CDTimeSlice(slice.startTime, slice.endTime, new_elements, slice.metadata)
+      CDTimeSlice(slice.startTime, slice.endTime, new_elements, slice.metadata, slice.groupOpt )
     }
     new TimeSliceCollection( new_slices, result.metadata )
   }
@@ -766,7 +766,7 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
       case None => throw new Exception( "Missing input to '" + this.getClass.getName + "' map op: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(",") )
     }
     val dt = (System.nanoTime - t0) / 1.0E9
-    CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> elem), inputs.metadata)
+    CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> elem), inputs.metadata, inputs.groupOpt )
   })
 }
 
@@ -776,7 +776,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
       val input_arrays: List[ArraySpec] = getInputArrays( inputs, context )
       val result_array: ArraySpec = input_arrays.reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1 ) )
-      CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> result_array), inputs.metadata)
+      CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> result_array), inputs.metadata, inputs.groupOpt)
     } else { inputs }
   }
 }
@@ -845,7 +845,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
       val reprocessed_input_map = resultArrays.toMap
       logger.info("Gateway[T:%s]: Executed operation %s, time: %.2f".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9))
-      CDTimeSlice(inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map, inputs.metadata + ("gridspec" -> gridFile))
+      CDTimeSlice(inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map, inputs.metadata + ("gridspec" -> gridFile), inputs.groupOpt)
     }
   })
 }
@@ -891,7 +891,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
         val result = ArraySpec(tvar)
         context.operation.rid + ":" + uid + "~" + tvar.id() -> result
       }
-      CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ resultItems, inputs.metadata)
+      CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ resultItems, inputs.metadata, inputs.groupOpt)
     } finally {
       workerManager.releaseWorker(worker)
     }
