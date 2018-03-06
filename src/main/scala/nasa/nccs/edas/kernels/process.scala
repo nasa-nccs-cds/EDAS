@@ -104,7 +104,8 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
   lazy val axes: AxisIndices = grid.getAxisIndices(config("axes", ""))
   private var _variableRecs: Map[String,VariableRecord] = Map.empty[String,VariableRecord]
-
+  def getGroup: Option[TSGroup]  = operation.config("groupBy") map TSGroup.getGroup
+  def nonCyclicGroupOp: Boolean = getGroup.fold( false )( _.isNonCyclic )
 
   lazy val grid: GridContext = getTargetGridContext
   def addVariableRecords( varRecs: Map[String,VariableRecord] ): KernelContext = { _variableRecs = _variableRecs ++ varRecs; this }
@@ -325,6 +326,25 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     mapReduce(input, context, batchIndex )
   }
 
+//  def mapSliceElems( slice: TimeSliceRDD, rid: String, )
+
+//  def reduceParition(inputs: Iterator[TimeSliceRDD], context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
+//    EDASExecutionManager.checkIfAlive
+//    val rid = context.operation.rid.toLowerCase
+//    val reduceElements: TimeSliceRDD = inputs.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
+//    val axes = context.getAxes
+//    val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
+//      context.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
+//        reduceElements.reduce(getReduceOp(context), context.getGroup, ordered)
+//      })
+//    } else {
+//      val t0 = System.nanoTime()
+//      val result = reduceElements.collect
+//      logger.info(" #R# Collection time: %.2f, kernel = { %s }".format( (System.nanoTime-t0)/1.0E9, this.id ))
+//      result
+//    }
+//  }
+
   def reduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
     EDASExecutionManager.checkIfAlive
 //    evaluateProductSize( input, context )   // TOO SLOW!
@@ -335,8 +355,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val axes = context.getAxes
       val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
         context.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
-          val optGroup = context.operation.config("groupBy") map TSGroup.getGroup
-          reduceElements.reduce(getReduceOp(context), optGroup, ordered)
+          reduceElements.reduce(getReduceOp(context), context.getGroup, ordered)
         })
       } else {
         val t0 = System.nanoTime()
@@ -357,11 +376,25 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     rv
   }
 
+  def mapGroup(context: KernelContext, group: TSGroup)( value: ( Long, Iterable[CDTimeSlice]) ): Iterable[CDTimeSlice] = value._2
+
   def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: TimeSliceRDD): TimeSliceRDD = {
     assert( batchIndex == 0, "reduceBroadcast is not supported over multiple batches")
-    val reducedCollection = reduce( input, context, batchIndex )
-    val new_rdd = input.rdd.map ( tslice => tslice.addExtractedSlice( reducedCollection ) )
-    new TimeSliceRDD( new_rdd, input.metadata, input.variableRecords )
+//    val new_rdd =  if( context.nonCyclicGroupOp ) {
+//      val groupBy = context.getGroup.get
+//      val new_rd: RDD[CDTimeSlice] = input.rdd.groupBy( groupBy.group ).map( mapGroup(context,groupBy) ).
+////      input.getGroupedRdd( context.getGroup.get, getReduceOp(context) )
+//    } else {
+//      val groupOpt = context.getGroup
+//      val reducedCollection = reduce(input, context, batchIndex)
+//      input.rdd.map(tslice => tslice.addExtractedSlice(reducedCollection))
+//    }
+
+    val groupOpt = context.getGroup
+    val reducedCollection = reduce(input, context, batchIndex)
+    val new_rdd = input.rdd.map(tslice => tslice.addExtractedSlice(reducedCollection))
+
+    new TimeSliceRDD(new_rdd, input.metadata, input.variableRecords)
   }
 
   def evaluateProductSize(input: TimeSliceRDD, context: KernelContext ): Unit =  if ( !context.doesTimeReduction ) {

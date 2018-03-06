@@ -153,7 +153,8 @@ abstract class OperationDataInput( val fragmentSpec: DataFragmentSpec, val metad
   def contains( requestedSection: ma2.Section ): Boolean = fragmentSpec.roi.contains( requestedSection )
   def getVariableMetadata(serverContext: ServerContext): Map[String,nc2.Attribute] = { fragmentSpec.getVariableMetadata(serverContext) ++ metadata }
   def getDatasetMetadata(serverContext: ServerContext): List[nc2.Attribute] = { fragmentSpec.getDatasetMetadata(serverContext) }
-  override def matchesReference( objRef: Option[String] ): Boolean = fragmentSpec.matchesReference( objRef )
+  override def matchesReference( objRef: Option[String] ): Boolean =
+    fragmentSpec.matchesReference( objRef )
   def getGrid: TargetGrid = fragmentSpec.targetGridOpt match  {
     case Some( myGrid ) => myGrid
     case None => throw new Exception( "Undefined target grid in matchGrids for input " + fragmentSpec.uid )

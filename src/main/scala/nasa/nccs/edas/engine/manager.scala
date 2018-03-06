@@ -157,7 +157,7 @@ object EDASExecutionManager extends Loggable {
       val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
       val shape: Array[Int] = dataMap.values.head.getShape
       val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
-      val targetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
+      val targetGrid: TargetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
       val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = gridFileOpt match {
         case Some( gridFilePath ) =>
           val gridDSet = NetcdfDataset.openDataset(gridFilePath)

@@ -119,7 +119,7 @@ case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String, Arr
   def contains( other_startTime: Long ): Boolean = {
     ( other_startTime >= startTime ) && ( other_startTime <= endTime )
   }
-  def setGroupId( groupId: TSGroupIdentifier ): CDTimeSlice = new CDTimeSlice( startTime, endTime, elements, metadata, Some(groupId) )
+  def setGroupId( group: TSGroup, group_index: Long ): CDTimeSlice = new CDTimeSlice( startTime, endTime, elements, metadata, Some( new TSGroupIdentifier(group,group_index) ) )
   def contains( other: CDTimeSlice ): Boolean = other.groupOpt match {
     case Some( groupId ) => groupId.matches( this )
     case None => groupOpt match {
@@ -173,6 +173,7 @@ object TSGroup {
 class TSGroup( val calOp: (Calendar) => Long, val isCyclic: Boolean  ) extends Serializable {
   lazy val calendar = Calendar.getInstance()
   def group( slice: CDTimeSlice ): Long = { calendar.setTimeInMillis(slice.midpoint); calOp( calendar ) }
+  def isNonCyclic = !isCyclic
 }
 
 class TSGroupIdentifier( val group: TSGroup, val group_index: Long )  extends Serializable {
@@ -195,6 +196,9 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
   def nodeList: Array[String] = rdd.mapPartitionsWithIndex { case ( index, tsIter )  => if(tsIter.isEmpty) { Iterator.empty } else { Seq( s"{P${index}-(${KernelContext.getProcessAddress}), size: ${tsIter.length}}" ).toIterator }  } collect
   def collect: TimeSliceCollection = TimeSliceCollection( rdd.collect, metadata )
   def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata, variableRecords )
+  def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
+  def selectElement( elemId: String ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElement( elemId ) ), metadata, variableRecords )
+  def selectElements(  op: String => Boolean  ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElements( op ) ), metadata, variableRecords )
 
   def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice, optGroupBy: Option[TSGroup], ordered: Boolean = false ): TimeSliceCollection = {
     if (ordered) optGroupBy match {
@@ -210,14 +214,12 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
 //        val rv = rdd.reduce(op)
         TimeSliceCollection( rv, metadata )
       case Some( groupBy ) =>
-        val groupedRdd: RDD[CDTimeSlice] = rdd.keyBy( groupBy.group ).reduceByKey( op ).map{ case (key,slice) => slice.setGroupId( new TSGroupIdentifier(groupBy,key)) }
-        val rv = TimeSliceCollection( groupedRdd.collect.sortBy( _.startTime ), metadata )
-        rv
+        val grouped_slices: Array[CDTimeSlice] = getGroupedRdd( groupBy, op ).collect.sortBy( _.startTime )
+        TimeSliceCollection( grouped_slices, metadata )
     }
   }
-  def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
-  def selectElement( elemId: String ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElement( elemId ) ), metadata, variableRecords )
-  def selectElements(  op: String => Boolean  ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElements( op ) ), metadata, variableRecords )
+  def getGroupedRdd( groupBy: TSGroup, op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): RDD[CDTimeSlice] =
+    rdd.keyBy( groupBy.group ).reduceByKey( op ) map { case (key,slice) => slice.setGroupId( groupBy, key ) }
 }
 
 object TimeSliceCollection {

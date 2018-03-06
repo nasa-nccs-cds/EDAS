@@ -141,7 +141,8 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
   def getCollectionIds: List[String] = Set( inputs.keys.flatMap( id => getDataFragmentSpec(id)).map ( _.collection.collId ).toSeq: _* ).toList
 
   def getGridRefInput: Option[OperationDataInput] = {
-    val opGridSpec = inputs.values.find(_.matchesReference(getGridObjectRef)).asInstanceOf[Option[OperationDataInput]]
+    val optGridObjectRef = getGridObjectRef
+    val opGridSpec = inputs.values.find(_.matchesReference(optGridObjectRef)).asInstanceOf[Option[OperationDataInput]]
     if( opGridSpec.isEmpty ) { getOperationDataInput } else { opGridSpec }
   }
   def getOperationDataInput: Option[OperationDataInput] = {

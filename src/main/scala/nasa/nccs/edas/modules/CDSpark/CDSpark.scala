@@ -1,7 +1,9 @@
 package nasa.nccs.edas.modules.CDSpark
 
 import java.io.{File, IOException}
-
+import java.nio.file.Paths
+import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
 import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
@@ -21,6 +23,7 @@ import org.apache.spark.mllib.linalg.{DenseVector, Vector}
 import org.apache.spark.mllib.linalg.Matrix
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
 import org.apache.spark.mllib.linalg.SingularValueDecomposition
+import org.joda.time.DateTime
 import ucar.nc2.constants.AxisType
 import ucar.nc2.{Attribute, Dimension}
 import ucar.nc2.dataset.{CoordinateAxis, NetcdfDataset}
@@ -165,23 +168,56 @@ class write extends CombineRDDsKernel( Map.empty ) {
 
   override def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
+    val resultId = context.operation.rid
+    val resultName = context.operation.config("name").getOrElse( resultId )
+    val resultDir = new File( getResultDir.toString + s"/$resultName" )
+    resultDir.mkdirs()
     context.operation.config("groupBy") map TSGroup.getGroup match {
-      case Some( groupBy ) => input.rdd.groupBy( groupBy.group ).mapValues( slices=> writeSlicesToFile( context ) ( slices.toIterator ) )
-      case None => input.rdd.mapPartitions( writeSlicesToFile(context) )
+      case Some( groupBy ) => input.rdd.groupBy( groupBy.group ).mapValues( slices=> writeSlicesToFile( context, resultName, resultDir )( slices.toIterator ) )
+      case None => input.rdd.mapPartitions( writeSlicesToFile( context, resultName, resultDir ) )
     }
     input
   }
 
-  def writeSlicesToFile(context: KernelContext)(slices: Iterator[CDTimeSlice]): Iterator[String] = {
-/*    val gridFile = context.grid.gridFile
+  def writeSlicesToFile(context: KernelContext, resultName: String, resultDir: File )( slices: Iterator[CDTimeSlice]): Iterator[String] = {
+    val gridFilePath = context.grid.gridFile
+    val gridDSet = NetcdfDataset.openDataset(gridFilePath)
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
-    val resultName = context.operation.config("name").getOrElse( context.operation.rid )
-    val resultDir = new File( getResultDir.toString + s"/$resultName" )
-    resultDir.mkdirs()
-    val resultFile = Kernel.getResultFile(resultId, true)
-    val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
-    val path = resultFile.getAbsolutePath
-    var optGridDest: Option[NetcdfDataset] = None
+    var writer: nc2.NetcdfFileWriter = null
+    val resultFile = ""
+    var varTups: Map[ArraySpec, nc2.Variable] = Map.empty
+    for (slice <- slices) {
+      if (writer == null) {
+        val startDate = new DateTime(slice.startTime)
+        val resultFile = Paths.get(resultDir.getCanonicalPath, resultName + startDate.toString("yyyy-MM-dd:HH") + ".nc").toString
+        writer = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile, chunker)
+        val varDims: List[Dimension] = gridDSet.getDimensions.toList
+        val newdims = varDims.map( dim => writer.addDimension(null, dim.getShortName, dim.getLength) )
+        varTups = slice.elements.map(elem => (elem._2, writer.addVariable(null, elem._1, ma2.DataType.FLOAT, newdims)))
+        writer.create()
+      }
+      varTups.foreach { case (arraySpec, variable) => writer.write(variable, arraySpec.toCDFloatArray) }
+    }
+    Iterator( resultFile )
+  }
+
+//        val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = {
+//            val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
+//            val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
+//            val gblTimeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+//            val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
+//            val dims0 = space_dims :+ new Dimension(timeCoordAxis.getShortName, inputSpec.roi.getRange(0).length )
+//            val newdims = dims0.map( dim => {
+//              val newdim = writer.addDimension(null, dim.getShortName, dim.getLength)
+//              logger.info(s"Writer addDimension ${dim.getShortName} ${dim.getLength.toString}")
+//              newdim
+//            })
+//            optGridDest = Option(gridDSet)
+//            ( coordAxes :+ timeCoordAxis, newdims )
+//      }
+//    }
+
+    /*
     try {
       val inputSpec: DataFragmentSpec = context.operation..requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
       val shape: Array[Int] = dataMap.values.head.getShape
@@ -290,8 +326,6 @@ class write extends CombineRDDsKernel( Map.empty ) {
     writer.close()
     optGridDest.foreach( _.close )
     path*/
-    Iterator.empty
-  }
 }
 
 class norm extends Kernel(Map.empty) {
