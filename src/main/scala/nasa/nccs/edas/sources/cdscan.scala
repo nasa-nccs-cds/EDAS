@@ -5,7 +5,7 @@ import java.net.URI
 import java.nio.file.{FileSystems, Path, Paths}
 import java.util.Formatter
 import java.util.concurrent.{Executors, Future, TimeUnit}
-
+import scala.concurrent.ExecutionContext.Implicits.global
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
@@ -21,7 +21,6 @@ import scala.collection.mutable
 import collection.mutable.{HashMap, ListBuffer}
 import collection.JavaConversions._
 import collection.JavaConversions._
-import scala.concurrent.Future
 import scala.io.Source
 import scala.util.matching.Regex
 import scala.xml.Utility
@@ -259,7 +258,7 @@ object CDMultiScan extends Loggable {
           }
         }
         for( dir <- aggPath.listFiles.filter( _.isDirectory ) ) {
-          Future { AggregationWriter.extractAggregations( args(0) + "-" + dir.getName, dir.toPath, optionMap.toMap ) }
+          scala.concurrent.Future[Unit] { AggregationWriter.extractAggregations( args(0) + "-" + dir.getName, dir.toPath, optionMap.toMap ) }
         }
       }
     } else {
@@ -322,7 +321,7 @@ object CDScanTest {
   def main(args: Array[String]) {
     val collectionId = "giss-test"
     val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H"
-    CDMultiScan.main( Array( collectionId, dataPath ))
+    CDMultiScan.main( Array( collectionId, dataPath))
   }
 }
 
