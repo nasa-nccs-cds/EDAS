@@ -103,7 +103,8 @@ object AggregationWriter extends Loggable {
     files ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( rootPath.relativize(dir.toPath) ) ) )
   }
 
-  def extractAggregations(collectionId: String, dataLocation: Path, options: Map[String,String] = Map.empty ): Unit = {
+  def extractAggregations(collectionId: String, dataPath: Path, options: Map[String,String] = Map.empty ): Unit = {
+    val dataLocation: Path = if(dataPath.toFile.exists) { dataPath } else { Paths.get( new java.io.File(".").getCanonicalPath, dataPath.toString ) }
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
     //    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)

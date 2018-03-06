@@ -209,7 +209,7 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
 
 object CDScan extends Loggable {
   val usage = """
-    Usage: mkcoll [-d {collectionBifurcationDepth: Int)}] [-t {collectionNameTemplate: RegExp}] <collectionID> <datPath>
+    Usage: mkcol [-d {collectionBifurcationDepth: Int)}] [-t {collectionNameTemplate: RegExp}] <collectionID> <datPath>
   """
 
   def main(args: Array[String]) {
@@ -228,7 +228,7 @@ object CDScan extends Loggable {
     }
     if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
     val collectionId = inputs(0).toLowerCase
-    val pathFile = new File(inputs(1))
+    val pathFile = new File( inputs(1) )
     AggregationWriter.extractAggregations( collectionId, pathFile.toPath, optionMap.toMap )
     FileHeader.term()
   }
@@ -236,14 +236,34 @@ object CDScan extends Loggable {
 
 object CDMultiScan extends Loggable {
   def main(args: Array[String]) {
-    if( args.length < 1 ) { println( "Usage: 'mkcolls <collectionsMetaFile>'"); return }
+    if( args.length < 1 ) { println( "Usage: 'mkcols <collectionsMetaFile>' or  'mkcols <aggId> <aggregationsDirectory> <args>'"); return }
     EDASLogManager.isMaster
     val collectionsMetaFile = new File(args(0))    // cols:  depth, template, collectionID, collectionRootPath
-    if( !collectionsMetaFile.isFile ) { throw new Exception("Collections file does not exits: " + collectionsMetaFile.toString) }
-    val ncmlDir = Collections.getAggregationPath.toFile
-    ncmlDir.mkdirs
-    AggregationWriter.generateAggregations( collectionsMetaFile )
-    FileHeader.term()
+    if( collectionsMetaFile.isFile ) {
+      val ncmlDir = Collections.getAggregationPath.toFile
+      ncmlDir.mkdirs
+      AggregationWriter.generateAggregations(collectionsMetaFile)
+      FileHeader.term()
+    } else if( args.length > 1 ) {
+      val aggPath = new File(args(1))
+      if( aggPath.isDirectory ) {
+        var optionMap = mutable.HashMap.empty[String, String]
+        val argIter = args.slice(2,args.length).iterator
+        while( argIter.hasNext ) {
+          val arg = argIter.next
+          if(arg(0) == '-') arg match {
+            case "-d" => optionMap += (( "depth", argIter.next ))
+            case "-t" => optionMap += (( "template", argIter.next ))
+            case x => throw new Exception( "Unrecognized option: " + x )
+          }
+        }
+        for( dir <- aggPath.listFiles.filter( _.isDirectory ) ) {
+          AggregationWriter.extractAggregations( args(0) + "-" + dir.getName, dir.toPath, optionMap.toMap )
+        }
+      }
+    } else {
+      throw new Exception( "CollectionsMetaFile does not exist: " + collectionsMetaFile.toString )
+    }
   }
 }
 
@@ -299,11 +319,9 @@ class FileHeaderGenerator(file: String, timeRegular: Boolean ) extends Runnable 
 
 object CDScanTest {
   def main(args: Array[String]) {
-    val collectionId = "giss_r1i1p1_agg-test"
-    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1_agg"
-    val pathFile = new File(dataPath)
-    AggregationWriter.extractAggregations(collectionId, pathFile.toPath )
-    FileHeader.term()
+    val collectionId = "giss-test"
+    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H"
+    CDMultiScan.main( Array( collectionId, dataPath ))
   }
 }
 

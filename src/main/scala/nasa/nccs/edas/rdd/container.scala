@@ -188,8 +188,10 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
 //        val rv = rdd.reduce(op)
         TimeSliceCollection( rv, metadata )
       case Some( groupBy ) =>
+        val ns0 = rdd.count
         val groupedRdd: RDD[(Long,CDTimeSlice)] = rdd.groupBy( groupBy.group ).mapValues( TSGroup.merge(op) )
-        val ns = groupedRdd.count
+        val ns1 = groupedRdd.count
+        logger.info( s" ^^G Reducing RDD with groupBy: ${ns0} -> ${ns1}")
         TimeSliceCollection( groupedRdd.map( _._2 ).collect.sortBy( _.startTime ), metadata )
     }
   }
