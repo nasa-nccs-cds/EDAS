@@ -21,6 +21,7 @@ import scala.collection.mutable
 import collection.mutable.{HashMap, ListBuffer}
 import collection.JavaConversions._
 import collection.JavaConversions._
+import scala.concurrent.Future
 import scala.io.Source
 import scala.util.matching.Regex
 import scala.xml.Utility
@@ -258,7 +259,7 @@ object CDMultiScan extends Loggable {
           }
         }
         for( dir <- aggPath.listFiles.filter( _.isDirectory ) ) {
-          AggregationWriter.extractAggregations( args(0) + "-" + dir.getName, dir.toPath, optionMap.toMap )
+          Future { AggregationWriter.extractAggregations( args(0) + "-" + dir.getName, dir.toPath, optionMap.toMap ) }
         }
       }
     } else {
