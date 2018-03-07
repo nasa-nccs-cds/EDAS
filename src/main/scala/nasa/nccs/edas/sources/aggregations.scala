@@ -434,7 +434,7 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     val endIndex: BoundedIndex = fileInputsFromTimeValue( t1 ).toRowIndex( t1, BoundedIndex.RangeEnd )
     if( endIndex.isBelowRange || startIndex.isAboveRange ) { None }
     else {
-//      logger.info( s" @@@ FindRowIndicesFromCalendarDates: startRow=${startIndex.index.toInt} endRow=${endIndex.index.toInt}")
+      logger.info( s" @DSX: FindRowIndicesFromCalendarDates: startRow=${startIndex.index.toInt} endRow=${endIndex.index.toInt}")
       Some((startIndex.index.toInt, endIndex.index.toInt ))
     }
   }

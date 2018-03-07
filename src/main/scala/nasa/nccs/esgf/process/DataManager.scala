@@ -478,6 +478,7 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
         }
       }
     }
+    logger.info( s" @DSX: TG.getSubSection -> ${ranges(0).toString}")
     Some( new ma2.Section( ranges: _* ) )
   }
 }
