@@ -334,7 +334,7 @@ case class BoundedIndex( index: Long, boundsStatus: Int ) {
   def isAboveRange: Boolean = boundsStatus ==  BoundedIndex.AboveRange
 }
 
-case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: Int, boundsStatus: Int ) {
+case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: Int, boundsStatus: Int ) extends Loggable {
   import BoundedIndex._
   val time_duration = lastValue - firstValue
   def dt = time_duration / nRows.toFloat
@@ -343,6 +343,7 @@ case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: I
     case BoundedIndex.InRange =>
       val r0 = (time_value - firstValue)/dt
       val rval = if( range_position == RangeStart ) { r0 + 0.5 } else { r0 - 0.5 }
+      logger.info( s" @DSX: toRowIndex: firstValue: ${firstValue}, lastValue: ${lastValue}, firstRow: ${firstRow}, nRows: ${nRows}, time_value: ${time_value}, r0: ${r0}, rval: ${rval}, result: ${firstRow + rval}, boundsStatus: ${boundsStatus} ")
       BoundedIndex( firstRow + rval.toLong, boundsStatus )
     case BoundedIndex.AboveRange =>
       BoundedIndex( firstRow, boundsStatus)
@@ -405,7 +406,7 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     } else {
       val file1 = files(estimated_file_index + 1)
       if (time_value >= file1.startTime) { return _fileInputsFromTimeValue(time_value, estimated_file_index + 1) }
-      logger.info( s" @DSX: MappingTimeValue: estimated_file_index=${estimated_file_index} startTime=${file0.startTime} timeRange=[${time_start},${time_end}], row=${file0.firstRowIndex} date=${CalendarDate.of(file1.startTime).toString}")
+      logger.info( s" @DSX: MappingTimeValue: estimated_file_index=${estimated_file_index} startTime=${file0.startTime} timeRange=[${time_start},${time_end}], row=${file0.firstRowIndex}, date range=[ ${CalendarDate.of(file0.startTime).toString} <-> ${CalendarDate.of(file1.startTime).toString} ]")
       TimeRange(file0.startTime, file1.startTime, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange)
     }
   }
