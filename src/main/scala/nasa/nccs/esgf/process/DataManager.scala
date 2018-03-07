@@ -281,7 +281,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   def getTimeCoordIndices( tvalStart: String, tvalEnd: String, strict: Boolean = false): Option[ma2.Range] = {
     val startDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalStart)
     val endDate: CalendarDate = cdsutils.dateTimeParser.parse(tvalEnd)
-    logger.info( s" @DSX: getTimeCoordIndices: ${startDate.formatted("yyyy-MM-dd:HH")} <-> ${endDate.formatted("yyyy-MM-dd:HH")} ")
+ //   logger.info( s" @DSX: getTimeCoordIndices: ${startDate.formatted("yyyy-MM-dd:HH")} <-> ${endDate.formatted("yyyy-MM-dd:HH")} ")
     findTimeIndicesFromCalendarDates( startDate, endDate ) map { case (start,end) => new ma2.Range( getCFAxisName, start, end ) }
   }
 
@@ -358,7 +358,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   }
 
   def getIndexBounds( startval: GenericNumber, endval: GenericNumber, strict: Boolean = false): Option[ma2.Range] = {
-    logger.info( s" @DSX: getIndexBounds: ${startval.toString} <-> ${endval.toString} ")
+//    logger.info( s" @DSX: getIndexBounds: ${startval.toString} <-> ${endval.toString} ")
     val rv = if (coordAxis.getAxisType == nc2.constants.AxisType.Time) getTimeCoordIndices( startval.toString, endval.toString ) else getGridIndexBounds( startval, endval )
     rv
     //    assert(indexRange.last >= indexRange.first, "CDS2-CDSVariable: Coordinate bounds appear to be inverted: start = %s, end = %s".format(startval.toString, endval.toString))
@@ -480,7 +480,7 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
         }
       }
     }
-    logger.info( s" @DSX: TG.getSubSection -> ${ranges(0).toString}")
+//    logger.info( s" @DSX: TG.getSubSection -> ${ranges(0).toString}")
     Some( new ma2.Section( ranges: _* ) )
   }
 }

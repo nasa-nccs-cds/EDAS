@@ -312,7 +312,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val nUsableParts = if (  nTSperPart == -1 ) { nPartitions } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
     val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), nTSperPart ) )
     val partitions = partGens.flatMap( _.getTimeSlicePartitions )
-    if( debug ) { logger.info( "\n @DSX: " + partitions.map(_.toString).mkString("\n @DSX: ") + "\n" ) }
+//    if( debug ) { logger.info( "\n @DSX: " + partitions.map(_.toString).mkString("\n @DSX: ") + "\n" ) }
     val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partitions )
     val t1 = System.nanoTime
     val sliceRdd: RDD[CDTimeSlice] =  slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
@@ -344,7 +344,7 @@ class TimeSlicePartitionGenerator(val varId: String, val varName: String, val se
   val timeRange = section.getRange(0)
   val intersectingRange = fileInput.intersect( timeRange )
   val nFileIntersectingRows = intersectingRange.length
-  logger.info( s" @DSX PartIntersect, fileInput = ${fileInput.path}, nFileIntersectingRows = ${nFileIntersectingRows}, intersectingRange = ${intersectingRange.toString}, timeRange = ${timeRange.toString}" )
+//  logger.info( s" @DSX PartIntersect, fileInput = ${fileInput.path}, nFileIntersectingRows = ${nFileIntersectingRows}, intersectingRange = ${intersectingRange.toString}, timeRange = ${timeRange.toString}" )
   val partsPerFile: Int = if(rowsPerPartition == -1) { 1 } else { Math.ceil( nFileIntersectingRows / rowsPerPartition.toFloat ).toInt }
 
   def getTimeSlicePartitions: IndexedSeq[TimeSlicePartition] = ( 0 until partsPerFile ) map ( iPartIndex => {
@@ -389,6 +389,7 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
     val timeAxis: CoordinateAxis1DTime = fileTimeAxis.section( localPartRange )
     val slice0 = getSliceRanges(interSect, 0).head
     val slice1 = getSliceRanges(interSect, timeAxis.getShape(0)-1).head
+    dataset.close()
     s"SliceRange[${slice0.first}:${slice1.first}]"
   }
 

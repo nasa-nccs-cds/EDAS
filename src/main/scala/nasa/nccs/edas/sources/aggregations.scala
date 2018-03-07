@@ -344,7 +344,7 @@ case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: I
       val r0 = (time_value - firstValue)/dt
       val ri: Int = Math.round( r0 - 0.001 ).toInt
       val rval = if( range_position == RangeStart ) { ri } else { ri - 1 }
-      logger.info( s" @DSX: toRowIndex: firstValue: ${CalendarDate.of(firstValue).toString}, lastValue: ${CalendarDate.of(lastValue).toString}, firstRow: ${firstRow}, nRows: ${nRows}, time_value: ${CalendarDate.of(time_value).toString}, r0: ${r0}, rval: ${rval}, result: ${firstRow + rval}, boundsStatus: ${boundsStatus} ")
+//      logger.info( s" @DSX: toRowIndex: firstValue: ${CalendarDate.of(firstValue).toString}, lastValue: ${CalendarDate.of(lastValue).toString}, firstRow: ${firstRow}, nRows: ${nRows}, time_value: ${CalendarDate.of(time_value).toString}, r0: ${r0}, rval: ${rval}, result: ${firstRow + rval}, boundsStatus: ${boundsStatus} ")
       BoundedIndex( firstRow + rval.toLong, boundsStatus )
     case BoundedIndex.AboveRange =>
       BoundedIndex( firstRow, boundsStatus)
@@ -407,7 +407,7 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     } else {
       val file1 = files(estimated_file_index + 1)
       if (time_value >= file1.startTime) { return _fileInputsFromTimeValue(time_value, estimated_file_index + 1) }
-      logger.info( s" @DSX: MappingTimeValue: estimated_file_index=${estimated_file_index} file start Time=${file0.startTime} agg time range=[ ${CalendarDate.of(time_start).toString} <-> ${CalendarDate.of(time_end).toString} ], row=${file0.firstRowIndex}, file time range=[ ${CalendarDate.of(file0.startTime).toString} <-> ${CalendarDate.of(file1.startTime).toString} ]")
+//      logger.info( s" @DSX: MappingTimeValue: estimated_file_index=${estimated_file_index} file start Time=${file0.startTime} agg time range=[ ${CalendarDate.of(time_start).toString} <-> ${CalendarDate.of(time_end).toString} ], row=${file0.firstRowIndex}, file time range=[ ${CalendarDate.of(file0.startTime).toString} <-> ${CalendarDate.of(file1.startTime).toString} ]")
       TimeRange(file0.startTime, file1.startTime, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange)
     }
 
@@ -437,7 +437,7 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     val endIndex: BoundedIndex = fileInputsFromTimeValue( t1 ).toRowIndex( t1, BoundedIndex.RangeEnd )
     if( endIndex.isBelowRange || startIndex.isAboveRange ) { None }
     else {
-      logger.info( s" @DSX: FindRowIndicesFromCalendarDates: startRow=${startIndex.index.toInt} endRow=${endIndex.index.toInt}")
+//      logger.info( s" @DSX: FindRowIndicesFromCalendarDates: startRow=${startIndex.index.toInt} endRow=${endIndex.index.toInt}")
       Some((startIndex.index.toInt, endIndex.index.toInt ))
     }
   }
