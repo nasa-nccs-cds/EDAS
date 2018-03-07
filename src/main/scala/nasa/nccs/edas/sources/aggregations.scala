@@ -342,7 +342,8 @@ case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: I
   def toRowIndex( time_value: Long, range_position: Int ): BoundedIndex = boundsStatus match {
     case BoundedIndex.InRange =>
       val r0 = (time_value - firstValue)/dt
-      val rval = if( range_position == RangeStart ) { r0 + 0.5 } else { r0 - 0.5 }
+      val ri: Int = Math.round( r0 - 0.001 ).toInt
+      val rval = if( range_position == RangeStart ) { ri } else { ri - 1 }
       logger.info( s" @DSX: toRowIndex: firstValue: ${firstValue}, lastValue: ${lastValue}, firstRow: ${firstRow}, nRows: ${nRows}, time_value: ${time_value}, r0: ${r0}, rval: ${rval}, result: ${firstRow + rval}, boundsStatus: ${boundsStatus} ")
       BoundedIndex( firstRow + rval.toLong, boundsStatus )
     case BoundedIndex.AboveRange =>
