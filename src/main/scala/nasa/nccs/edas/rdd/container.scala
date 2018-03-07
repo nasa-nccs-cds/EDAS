@@ -300,7 +300,6 @@ class VariableRecord( val varName: String, val collection: String, val gridFileP
 class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggable {
 
   def parallelize( kernelContext: KernelContext, vspec: DirectRDDVariableSpec ): TimeSliceRDD = {
-    val debug = true
     val t0 = System.nanoTime
     val timeRange = vspec.section.getRange(0)
     val collection: Collection = vspec.getCollection
@@ -312,7 +311,8 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val nUsableParts = if (  nTSperPart == -1 ) { nPartitions } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
     val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), nTSperPart ) )
     val partitions = partGens.flatMap( _.getTimeSlicePartitions )
-//    if( debug ) { logger.info( "\n @DSX: " + partitions.map(_.toString).mkString("\n @DSX: ") + "\n" ) }
+    logger.info( " @DSX FIRST Partition: " + partitions.headOption.fold("")(_.toString) )
+    logger.info( " @DSX LAST Partition:  " + partitions.lastOption.fold("")(_.toString) )
     val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partitions )
     val t1 = System.nanoTime
     val sliceRdd: RDD[CDTimeSlice] =  slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
@@ -379,7 +379,7 @@ case class PartitionRange( firstRow: Int, lastRow: Int ) extends Serializable {
 class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSection, val fileInput: FileInput, val basePath: String, val partitionRange: PartitionRange ) extends Serializable with Loggable {
   import TimeSlicePartition._
   val filePath: String = if( basePath.isEmpty ) { fileInput.path } else { Paths.get( basePath, fileInput.path ).toString }
-  override def toString = s"Partition{ Var[${varName}], ${fileInput.toString}, ${partitionRange.toString}, ${cdsection.toString()}, ${getTimeSliceRange} }"
+  override def toString = s"Partition{ Var[${varName}], ${fileInput.toString}, ${partitionRange.toString}, localPartRange: ${partitionRange.toRange( fileInput.firstRowIndex ).toString} }"
 
   def getTimeSliceRange = {
     val localPartRange = partitionRange.toRange( fileInput.firstRowIndex )
