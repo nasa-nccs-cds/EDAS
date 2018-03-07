@@ -184,10 +184,12 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
         case Some(osect) => domain_section.intersect( osect )
         case None =>domain_section
       }
-      fragmentSpec.cutIntersection( sub_section ) match {
+      val result_section = fragmentSpec.cutIntersection( sub_section ) match {
         case Some( cut_spec: DataFragmentSpec ) => Some( ( cut_spec, cut_spec.roi ) )
         case None =>None
       }
+      logger.info( s" @DSX: result_section: ${result_section.fold(-1)(_._2.getRange(0).first())}, fragmentSpec.domainSect: ${fragmentSpec.domainSectOpt.fold(-1)(_.getRange(0).first())}, sub_section: ${sub_section.getRange(0).first()}, domain_section: ${domain_section.getRange(0).first()}, fragmentSpec.roi: ${fragmentSpec.roi.getRange(0).first()}" )
+      result_section
     } catch {
       case ex: Exception =>
         logger.warn( s"Failed getting data fragment: " + ex.toString )
