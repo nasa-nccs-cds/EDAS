@@ -312,7 +312,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val nUsableParts = if (  nTSperPart == -1 ) { nPartitions } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
     val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), nTSperPart ) )
     val partitions = partGens.flatMap( _.getTimeSlicePartitions )
-    if( debug ) { logger.info( " @PPX => " + partitions.map(_.toString).mkString(", ") ) }
+    if( debug ) { logger.info( " @DSX: " + partitions.map(_.toString).mkString("\n @DSX: ") + "\n" ) }
     val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partitions )
     val t1 = System.nanoTime
     val sliceRdd: RDD[CDTimeSlice] =  slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
