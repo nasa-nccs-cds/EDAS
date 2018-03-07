@@ -24,6 +24,7 @@ case class FileInput(fileIndex: Int, startTime: Long, firstRowIndex: Int, nRows:
   def getRowIndexRange: ma2.Range = new ma2.Range( firstRowIndex, firstRowIndex + nRows - 1 )
   def intersects( row_index_range: ma2.Range ) = getRowIndexRange.intersects( row_index_range )
   def intersect( row_index_range: ma2.Range ): ma2.Range = getRowIndexRange.intersect( row_index_range )
+  override def toString = s"FileInput(${fileIndex})[ ${path}, firstRow: ${firstRowIndex}, nRows: ${nRows}, time: ${startTime} ]"
 }
 
 case class Variable( name: String, shape: Array[Int], dims: String, units: String ) extends Serializable {

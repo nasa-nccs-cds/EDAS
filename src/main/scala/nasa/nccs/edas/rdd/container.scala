@@ -300,6 +300,7 @@ class VariableRecord( val varName: String, val collection: String, val gridFileP
 class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggable {
 
   def parallelize( kernelContext: KernelContext, vspec: DirectRDDVariableSpec ): TimeSliceRDD = {
+    val debug = true
     val t0 = System.nanoTime
     val timeRange = vspec.section.getRange(0)
     val collection: Collection = vspec.getCollection
@@ -310,7 +311,9 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.ceil(  nTS/nPartitions.toFloat ).toInt }
     val nUsableParts = if (  nTSperPart == -1 ) { nPartitions } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
     val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), nTSperPart ) )
-    val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partGens.flatMap( _.getTimeSlicePartitions ) )
+    val partitions = partGens.flatMap( _.getTimeSlicePartitions )
+    if( debug ) { logger.info( " @PPX => " + partitions.map(_.toString).mkString(", ") ) }
+    val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partitions )
     val t1 = System.nanoTime
     val sliceRdd: RDD[CDTimeSlice] =  slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
     val optVar = agg.findVariable( vspec.varShortName )
@@ -376,6 +379,18 @@ case class PartitionRange( firstRow: Int, lastRow: Int ) extends Serializable {
 class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSection, val fileInput: FileInput, val basePath: String, val partitionRange: PartitionRange ) extends Serializable with Loggable {
   import TimeSlicePartition._
   val filePath: String = if( basePath.isEmpty ) { fileInput.path } else { Paths.get( basePath, fileInput.path ).toString }
+  override def toString = s"Partition{ Var[${varName}], ${fileInput.toString}, ${partitionRange.toString}, ${cdsection.toString()}, ${getTimeSliceRange} }"
+
+  def getTimeSliceRange = {
+    val localPartRange = partitionRange.toRange( fileInput.firstRowIndex )
+    val interSect: ma2.Section = cdsection.toSection.replaceRange(0,localPartRange)
+    val dataset = NetcdfDatasetMgr.aquireFile(filePath, 77.toString)
+    val fileTimeAxis = NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
+    val timeAxis: CoordinateAxis1DTime = fileTimeAxis.section( localPartRange )
+    val slice0 = getSliceRanges(interSect, 0).head
+    val slice1 = getSliceRanges(interSect, timeAxis.getShape(0)-1).head
+    s"SliceRange[${slice0.first}:${slice1.first}]"
+  }
 
   def getGlobalOrigin( localOrigin: Array[Int], timeIndexOffest: Int ):  Array[Int] =
     localOrigin.zipWithIndex map { case ( ival, index ) => if( index == 0 ) { ival + timeIndexOffest } else {ival} }
