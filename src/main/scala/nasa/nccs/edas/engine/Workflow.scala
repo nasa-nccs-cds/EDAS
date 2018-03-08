@@ -145,6 +145,7 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
     val opGridSpec = inputs.values.find(_.matchesReference(optGridObjectRef)).asInstanceOf[Option[OperationDataInput]]
     if( opGridSpec.isEmpty ) { getOperationDataInput } else { opGridSpec }
   }
+
   def getOperationDataInput: Option[OperationDataInput] = {
     inputs.values.foreach { case opInput: OperationDataInput => return Some(opInput); case _ => Unit }
     None

@@ -96,7 +96,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def streamMapReduce(node: WorkflowNode, kernelCx: KernelContext, serverContext: ServerContext, batchIndex: Int ) =  {
      _inputsRDD.map( node.kernel, kernelCx )
       releaseInputs( node, kernelCx )
-      if( node.doesTimeReduction ) {
+      if( node.doesTimeReduction && node.kernel.hasReduceOp ) {
         _inputsRDD.reduceBroadcast( node.kernel, kernelCx, serverContext, batchIndex )
       }
   }

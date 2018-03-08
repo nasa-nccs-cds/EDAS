@@ -349,10 +349,9 @@ class norm extends Kernel(Map.empty) {
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
     val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
-    CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata, inputs.groupOpt)
+    CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
   }
   override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
-  override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
 }
 
 
@@ -368,10 +367,9 @@ class cor extends Kernel(Map.empty) {
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
     val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
-    CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata, inputs.groupOpt)
+    CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
   }
   override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
-  override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
 }
 
 class eAve extends Kernel(Map.empty) {
@@ -387,19 +385,19 @@ class eAve extends Kernel(Map.empty) {
     val axes: String = context.config("axes","")
     val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
+    val groupOpt = input_arrays.headOption.flatMap( _.optGroup )
     val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
     assert( input_fastArrays.size > 1, "Missing input(s) to operation " + id + ": required inputs=(%s), available inputs=(%s)".format( context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",") ) )
     logger.info(" -----> Executing Kernel %s, inputs = %s, input shapes = [ %s ]".format(name, context.operation.inputs.mkString(","), input_arrays.map( _.shape.mkString("(",",",")")).mkString(", ") ) )
     val input_array = input_arrays.head
     val ( resultArray, weightArray ) = FastMaskedArray.weightedSum( input_fastArrays )
     val elems: Map[String,ArraySpec] = Seq(
-      context.operation.rid -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, resultArray.getData ),
-      context.operation.rid + "_WEIGHTS_" -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, weightArray.getData )
+      context.operation.rid -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, resultArray.getData, groupOpt ),
+      context.operation.rid + "_WEIGHTS_" -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, weightArray.getData, groupOpt )
     ).toMap
-    CDTimeSlice(inputs.startTime, inputs.endTime, elems, inputs.metadata, inputs.groupOpt)
+    CDTimeSlice(inputs.startTime, inputs.endTime, elems, inputs.metadata )
   }
   override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
-  override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
 }
 
 class min extends SingularRDDKernel(Map("mapreduceOp" -> "min")) {
@@ -440,7 +438,7 @@ class rms extends SingularRDDKernel( Map("mapOp" -> "sqAdd", "reduceOp" -> "sum"
   val description = "REDUCTION OPERATION: Computes root mean square of input variable over specified axes and roi"
 }
 
-class ave extends SingularRDDKernel(Map.empty) {
+class ave extends SingularRDDKernel( Map( "postOp"->"normw" ) ) {
   override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
@@ -460,19 +458,18 @@ class ave extends SingularRDDKernel(Map.empty) {
         } else {
           input_array.weightedSum(axisIndices,None)
         }
-        List( context.operation.rid -> ArraySpec(weighted_value_sum_masked.missing, weighted_value_sum_masked.shape, input_data.origin, weighted_value_sum_masked.getData ),
-              context.operation.rid + "_WEIGHTS_" -> ArraySpec(weights_sum_masked.missing, weights_sum_masked.shape, input_data.origin, weights_sum_masked.getData ))
+        List( context.operation.rid -> ArraySpec(weighted_value_sum_masked.missing, weighted_value_sum_masked.shape, input_data.origin, weighted_value_sum_masked.getData, input_data.optGroup ),
+              context.operation.rid + "_WEIGHTS_" -> ArraySpec(weights_sum_masked.missing, weights_sum_masked.shape, input_data.origin, weights_sum_masked.getData, input_data.optGroup ))
       case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
     })
 //    logger.info("T[%.2f] @P@ Executed Kernel %s map op, input = %s, time = %.4f s".format(t0, name,  id, (t1 - t0) ))
 //    context.addTimestamp( "Map Op complete" )
-    val rv = CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata, inputs.groupOpt)
+    val rv = CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata )
 //    logger.info("Returning result value")
     rv
   } )
   override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
   override def hasReduceOp: Boolean = true
-  override def postRDDOp(pre_result: TimeSliceCollection, context: KernelContext ):  TimeSliceCollection = weightedValueSumRDDPostOp( pre_result, context )
 }
 
 class subset extends Kernel(Map.empty) {
@@ -485,7 +482,7 @@ class subset extends Kernel(Map.empty) {
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
-    CDTimeSlice(inputs.startTime, inputs.endTime, elems.toMap, inputs.metadata, inputs.groupOpt)
+    CDTimeSlice(inputs.startTime, inputs.endTime, elems.toMap, inputs.metadata )
   }
 }
 //

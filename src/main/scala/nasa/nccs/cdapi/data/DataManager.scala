@@ -226,6 +226,7 @@ object FastMaskedArray {
   def apply( shape: Array[Int], data:  Array[Float], missing: Float ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, shape, data ), missing )
   def apply( shape: Array[Int], init_value: Float, missing: Float ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, shape, Array.fill[Float](shape.product)(init_value) ), missing )
   def apply( fltArray: CDFloatArray ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, fltArray.getShape, fltArray.getArrayData() ), fltArray.getInvalid )
+  def empty = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, Array(0) ), Float.NaN )
 
   def weightedSum( arrays: Array[FastMaskedArray], wtsOpt: Option[FastMaskedArray] = None, axes: Array[Int] = Array.emptyIntArray ): ( FastMaskedArray, FastMaskedArray ) = {
     val input0: FastMaskedArray = arrays.head
@@ -459,6 +460,17 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     } )
     FastMaskedArray( vTot, missing )
   }
+
+  def sqrt(): FastMaskedArray = {
+    val vTot = new ma2.ArrayFloat( array.getShape )
+    (0 until array.getSize.toInt ) foreach ( index => {
+      val uv0: Float = array.getFloat(index)
+      if( (uv0==missing) || uv0.isNaN ) { vTot.setFloat(index, missing ) }
+      else {  vTot.setFloat( index, Math.sqrt(uv0).toFloat )  }
+    } )
+    FastMaskedArray( vTot, missing )
+  }
+
 
   def shape = array.getShape
   def toCDFloatArray = CDFloatArray.factory(array,missing)
