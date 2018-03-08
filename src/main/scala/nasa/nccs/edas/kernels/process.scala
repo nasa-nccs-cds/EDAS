@@ -380,19 +380,15 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: TimeSliceRDD): TimeSliceRDD = {
     assert( batchIndex == 0, "reduceBroadcast is not supported over multiple batches")
-//    val new_rdd =  if( context.nonCyclicGroupOp ) {
-//      val groupBy = context.getGroup.get
-//      val new_rd: RDD[CDTimeSlice] = input.rdd.groupBy( groupBy.group ).map( mapGroup(context,groupBy) ).
-////      input.getGroupedRdd( context.getGroup.get, getReduceOp(context) )
-//    } else {
-//      val groupOpt = context.getGroup
-//      val reducedCollection = reduce(input, context, batchIndex)
-//      input.rdd.map(tslice => tslice.addExtractedSlice(reducedCollection))
-//    }
-
-    val groupOpt = context.getGroup
-    val reducedCollection = reduce(input, context, batchIndex)
-    val new_rdd = input.rdd.map(tslice => tslice.addExtractedSlice(reducedCollection))
+    val new_rdd =  if( context.nonCyclicGroupOp ) {
+      val groupBy = context.getGroup.get
+      val new_rd: RDD[CDTimeSlice] = input.rdd.keyBy( groupBy.group ).reduceByKey( )
+//      input.getGroupedRdd( context.getGroup.get, getReduceOp(context) )
+    } else {
+      val groupOpt = context.getGroup
+      val reducedCollection = reduce(input, context, batchIndex)
+      input.rdd.map(tslice => tslice.addExtractedSlice(reducedCollection))
+    }
 
     new TimeSliceRDD(new_rdd, input.metadata, input.variableRecords)
   }

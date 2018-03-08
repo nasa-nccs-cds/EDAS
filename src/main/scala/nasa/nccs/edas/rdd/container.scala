@@ -17,6 +17,7 @@ import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.esgf.process.{CDSection, EDASCoordSystem, ServerContext}
 import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
+import org.apache.spark.Partitioner
 import org.apache.spark.rdd.RDD
 import org.spark_project.guava.io.Files
 import ucar.ma2
@@ -183,6 +184,19 @@ class TSGroupIdentifier( val group: TSGroup, val group_index: Long )  extends Se
   }
 }
 
+
+class KeyPartitioner( val nParts: Int ) extends Partitioner {
+  def fromLong( key: Long ): Int = ( key % Int.MaxValue ).toInt
+  def fromDouble( key: Double ): Int = fromLong( Math.round(key) )
+  def numPartitions: Int = nParts
+
+  def getPartition( key: Any ): Int = key match {
+    case ikey: Int => ikey
+    case lkey: Long => fromLong(lkey)
+    case _ => fromDouble( key.toString.toDouble )
+  }
+}
+
 class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val variableRecords: Map[String,VariableRecord] ) extends DataCollection(metadata) with Loggable {
   import TimeSliceRDD._
   def cache() = rdd.cache()
@@ -203,7 +217,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
   def reduce( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice, optGroupBy: Option[TSGroup], ordered: Boolean = false ): TimeSliceCollection = {
     if (ordered) optGroupBy match {
       case None =>
-        val partialProduct = rdd.mapPartitions(slices => Iterator(merge(slices.toArray, op))).collect
+        val partialProduct = rdd.mapPartitions( slices => Iterator(merge(slices.toArray, op)) ).collect
         TimeSliceCollection(merge(partialProduct, op), metadata)
       case Some( groupBy ) =>
         TimeSliceCollection( rdd.groupBy( groupBy.group ).mapValues( TSGroup.sortedMerge(op) ).map( _._2 ).collect.sortBy( _.startTime ), metadata )
@@ -218,8 +232,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
         TimeSliceCollection( grouped_slices, metadata )
     }
   }
-  def getGroupedRdd( groupBy: TSGroup, op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): RDD[CDTimeSlice] =
-    rdd.keyBy( groupBy.group ).reduceByKey( op ) map { case (key,slice) => slice.setGroupId( groupBy, key ) }
+  def getGroupedRdd( groupBy: TSGroup, op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice ): RDD[CDTimeSlice] = rdd.keyBy( groupBy.group ).reduceByKey( op ) map { case (key,slice) => slice.setGroupId( groupBy, key ) }
 }
 
 object TimeSliceCollection {
