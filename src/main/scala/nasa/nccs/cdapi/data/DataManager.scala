@@ -390,7 +390,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     }
   }
 
-  def merge(other: FastMaskedArray, op: FastMaskedArray.ReduceOp ): FastMaskedArray = {
+  def merge(other: FastMaskedArray, op: FastMaskedArray.ReduceOp, weighted: Boolean ): FastMaskedArray = {
     val ( shape_comparison, axes ) = compareShapes( other.array.getShape )
     if( shape_comparison == 0 ) {
       val vTot: Array[Float] = new Array(array.getSize.toInt)

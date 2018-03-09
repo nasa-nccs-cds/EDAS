@@ -43,6 +43,7 @@ import scala.reflect.runtime.{universe => u}
 class max extends SingularRDDKernel(Map("mapreduceOp" -> "max")) {
   override val status = KernelStatus.public
   val doesAxisReduction: Boolean = true
+  val weighted: Boolean = false
 
 //  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
@@ -110,6 +111,7 @@ class eMin extends CombineRDDsKernel(Map("mapOp" -> "min")) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Minimum"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise minimum values for input variables data over specified roi"
 }
 
@@ -119,6 +121,7 @@ class eMax extends CombineRDDsKernel(Map("mapOp" -> "max")) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Maximum"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise maximum values for input variables data over specified roi"
 }
 
@@ -128,6 +131,7 @@ class eSum extends CombineRDDsKernel(Map("mapOp" -> "sum")) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Maximum"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise sums for input variables data over specified roi"
 }
 
@@ -137,6 +141,7 @@ class eDiff extends CombineRDDsKernel(Map("mapOp" -> "subt")) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Difference"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise diffs for input variables over specified roi"
 }
 
@@ -146,6 +151,7 @@ class eMult extends CombineRDDsKernel(Map("mapOp" -> "mult")) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Product"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise products for input variables data over specified roi"
 }
 
@@ -155,6 +161,7 @@ class eDiv extends CombineRDDsKernel(Map("mapOp" -> "divide")) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Division"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise divisions for input variables data over specified roi"
 }
 
@@ -164,6 +171,7 @@ class write extends CombineRDDsKernel( Map.empty ) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Write Result data"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
   val description = "Writes the result data to disk on server as a data collection"
 
   override def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
@@ -335,7 +343,8 @@ class norm extends Kernel(Map.empty) {
   val title = "Normalize"
   val doesAxisElimination: Boolean = false
   val description = "Normalize and center all cells as independent timeseries"
-  override val doesAxisReduction: Boolean = false
+  val doesAxisReduction: Boolean = false
+  val weighted: Boolean = true
 
   override def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
@@ -351,7 +360,6 @@ class norm extends Kernel(Map.empty) {
     val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
     CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
   }
-  override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
 }
 
 
@@ -362,14 +370,14 @@ class cor extends Kernel(Map.empty) {
   val title = "Correlations"
   val doesAxisElimination: Boolean = false
   val description = "Computes unique values of correlation matrix"
-  override val doesAxisReduction: Boolean = false
+  val doesAxisReduction: Boolean = false
+  val weighted: Boolean = true
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
     val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
     CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
   }
-  override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
 }
 
 class eAve extends Kernel(Map.empty) {
@@ -379,7 +387,8 @@ class eAve extends Kernel(Map.empty) {
   val title = "Ensemble Mean"
   val doesAxisElimination: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes ensemble averages over inputs withing specified ROI"
-  override val doesAxisReduction: Boolean = false
+  val doesAxisReduction: Boolean = false
+  val weighted: Boolean = true
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val axes: String = context.config("axes","")
@@ -397,7 +406,6 @@ class eAve extends Kernel(Map.empty) {
     ).toMap
     CDTimeSlice(inputs.startTime, inputs.endTime, elems, inputs.metadata )
   }
-  override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
 }
 
 class min extends SingularRDDKernel(Map("mapreduceOp" -> "min")) {
@@ -406,6 +414,7 @@ class min extends SingularRDDKernel(Map("mapreduceOp" -> "min")) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Minimum"
   val doesAxisReduction: Boolean = true
+  val weighted: Boolean = false
   val description = "REDUCTION OPERATION: CComputes minimum element value from input variable data over specified axes and roi"
   override val initValue: Float = Float.MaxValue
 
@@ -417,6 +426,7 @@ class sum extends SingularRDDKernel(Map("mapreduceOp" -> "sum")) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Sum"
   val doesAxisReduction: Boolean = true
+  val weighted: Boolean = false
   val description = "REDUCTION OPERATION: Computes sums of element values from input variable data over specified axes and roi"
   override val initValue: Float = 0f
 }
@@ -426,6 +436,7 @@ class rmSum extends SingularRDDKernel(Map("mapreduceOp" -> "sum","postOp"->"rms"
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Root Mean Sum"
   val doesAxisReduction: Boolean = true
+  val weighted: Boolean = true
   val description = "REDUCTION OPERATION: Computes root mean sum of input variable over specified axes and roi"
 }
 
@@ -435,15 +446,17 @@ class rms extends SingularRDDKernel( Map("mapOp" -> "sqAdd", "reduceOp" -> "sum"
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Element-wise Root Mean Square"
   val doesAxisReduction: Boolean = true
+  val weighted: Boolean = true
   val description = "REDUCTION OPERATION: Computes root mean square of input variable over specified axes and roi"
 }
 
-class ave extends SingularRDDKernel( Map( "postOp"->"normw" ) ) {
+class ave extends SingularRDDKernel( Map( "mapOp" -> "avew", "reduceOp" -> "avew", "postOp"->"normw" ) ) {
   override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Space/Time Mean"
   val doesAxisReduction: Boolean = true
+  val weighted: Boolean = true
   val description = "REDUCTION OPERATION: Computes (weighted) means of element values from input variable data over specified axes and roi"
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = context.profiler.profile(s"ave.map(${KernelContext.getProcessAddress}):${inputs.toString}")( () => {
@@ -468,7 +481,6 @@ class ave extends SingularRDDKernel( Map( "postOp"->"normw" ) ) {
 //    logger.info("Returning result value")
     rv
   } )
-  override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
   override def hasReduceOp: Boolean = true
 }
 
@@ -479,6 +491,7 @@ class subset extends Kernel(Map.empty) {
   val title = "Space/Time Subset"
   val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
@@ -614,6 +627,7 @@ class noOp extends Kernel(Map.empty) {
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "NoOperation"
   val doesAxisReduction: Boolean = false
+  val weighted = false
   override val description = "Returns the input data subset to the specified domain as the result"
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = { inputs }

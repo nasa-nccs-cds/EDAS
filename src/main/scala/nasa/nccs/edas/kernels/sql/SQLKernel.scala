@@ -19,6 +19,7 @@ class SQLKernel extends Kernel {
   val outputs = List(WPSProcessOutput("operation result"))
   val title = "SQLKernel"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
   val description = "Implement SparkSQL operations"
 
   override def execute(workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {

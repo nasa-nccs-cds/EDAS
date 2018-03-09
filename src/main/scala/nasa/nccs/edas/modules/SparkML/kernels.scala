@@ -14,6 +14,7 @@ class svd extends Kernel {
   val outputs = List(WPSProcessOutput("operation result"))
   val title = "SVD"
   val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
   val description = "Implement Singular Value Decomposition"
 
   override def execute(workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {

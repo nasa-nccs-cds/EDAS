@@ -286,6 +286,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val identifiers = this.getClass.getName.split('$').flatMap(_.split('.'))
   val status = options.get("visibility").fold(KernelStatus.developmental)( opVal => KernelStatus.parse(opVal) )
   val doesAxisReduction: Boolean
+  val weighted: Boolean
   def operation: String = identifiers.last.toLowerCase
   def module: String = identifiers.dropRight(1).mkString(".")
   def id = identifiers.mkString(".")
@@ -452,7 +453,29 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     for ( ( id, array ) <- inputs ) array.metadata.get("gridfile") match { case Some(gridfile) => return gridfile; case None => Unit }
     throw new Exception( " Missing gridfile in kernel inputs: " + name )
   }
-  
+
+  def weightedValueSumRDDCombiner( context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = {
+    val axes = context.getAxes
+    val t0 = System.nanoTime
+    val elems = a0.elements flatMap { case (key, data0) =>
+      a1.elements.get( key ) match {
+        case Some( data1 ) =>
+          val wKey = key + "_WEIGHTS_"
+          val vTot: FastMaskedArray = data0.toFastMaskedArray + data1.toFastMaskedArray
+          val t1 = System.nanoTime
+          val w0Opt: Option[ArraySpec] = a0.elements.get( wKey )
+          val w1Opt: Option[ArraySpec] = a1.elements.get( wKey )
+          val wTotOpt: Option[FastMaskedArray] = if(w0Opt.isDefined && w1Opt.isDefined) Option( w0Opt.get.toFastMaskedArray + w1Opt.get.toFastMaskedArray ) else None
+          val t2 = System.nanoTime
+          val resultList0 = List( key -> ArraySpec( vTot.missing, vTot.shape, data0.origin, vTot.getData, data0.optGroup ) )
+          wTotOpt.fold( resultList0 )( wTot => resultList0 ++ List( wKey -> ArraySpec(wTot.missing, wTot.shape, data0.origin, wTot.getData, data0.optGroup ) ) )
+        case None => logger.warn("Missing elemint in Record combine: " + key); List.empty[(String,ArraySpec)]
+      }
+    }
+    val t3 = System.nanoTime
+    new CDTimeSlice(a0.mergeStart(a1), a0.mergeEnd(a1), elems, a0.metadata )
+  }
+
   def combineRDD(context: KernelContext)(rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = {
     if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else context.profiler.profile[CDTimeSlice]( "Kernel.combineRDD" ) ( () => {
       val axes = context.getAxes
@@ -460,7 +483,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       val new_elements: Iterator[(String, ArraySpec)] = rec0.elements.iterator flatMap { case (key0, array0) => rec1.elements.get(key0) match {
         case Some(array1) => reduceCombineOp match {
           case Some(combineOp) =>
-            if (axes.includes(0)) Some( key0 -> array0.combine( combineOp, array1 ) )
+            if (axes.includes(0)) Some( key0 -> array0.combine( combineOp, array1, weighted ) )
             else Some( key0 -> (array0 ++ array1) )
           case None => Some( key0 -> (array0 ++ array1) )
         }
@@ -630,7 +653,14 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
 
   def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =
-    if( a0.isEmpty ) { a1 } else  if( a1.isEmpty ) { a0 } else { combineRDD(context)( a0, a1 ) }
+    if( a0.isEmpty ) {
+      a1
+    } else  if(
+      a1.isEmpty ) {
+      a0
+    } else {
+      combineRDD(context)( a0, a1 )
+    }
 
   def getDataSample(result: CDFloatArray, sample_size: Int = 20): Array[Float] = {
     val result_array = result.floatStorage.array
@@ -681,29 +711,6 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
-  def weightedValueSumRDDCombiner( context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = {
-    val axes = context.getAxes
-    val t0 = System.nanoTime
-    val elems = a0.elements flatMap { case (key, data0) =>
-      a1.elements.get( key ) match {
-        case Some( data1 ) =>
-          val wKey = key + "_WEIGHTS_"
-          val vTot: FastMaskedArray = data0.toFastMaskedArray + data1.toFastMaskedArray
-          val t1 = System.nanoTime
-          val w0Opt: Option[ArraySpec] = a0.elements.get( wKey )
-          val w1Opt: Option[ArraySpec] = a1.elements.get( wKey )
-          val wTotOpt: Option[FastMaskedArray] = if(w0Opt.isDefined && w1Opt.isDefined) Option( w0Opt.get.toFastMaskedArray + w1Opt.get.toFastMaskedArray ) else None
-          val t2 = System.nanoTime
-          val resultList0 = List( key -> ArraySpec( vTot.missing, vTot.shape, data0.origin, vTot.getData, data0.optGroup ) )
-          wTotOpt.fold( resultList0 )( wTot => resultList0 ++ List( wKey -> ArraySpec(wTot.missing, wTot.shape, data0.origin, wTot.getData, data0.optGroup ) ) )
-        case None => logger.warn("Missing elemint in Record combine: " + key); List.empty[(String,ArraySpec)]
-      }
-    }
-    val t3 = System.nanoTime
-    new CDTimeSlice(a0.mergeStart(a1), a0.mergeEnd(a1), elems, a0.metadata )
-  }
-
-
 //  def getMontlyBinMap(id: String, context: KernelContext): CDCoordMap = {
 //    context.sectionMap.get(id).flatten.map( _.toSection ) match  {
 //      case Some( section ) =>
@@ -747,7 +754,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(op
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
       val input_arrays: List[ArraySpec] = getInputArrays( inputs, context )
-      val result_array: ArraySpec = input_arrays.reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1 ) )
+      val result_array: ArraySpec = input_arrays.reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
       CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> result_array), inputs.metadata )
     } else { inputs }
   }
@@ -832,7 +839,8 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
   override def id = _module + "." + _operation
 
   override val identifier = name
-  override val doesAxisReduction: Boolean = axisElimination;
+  val doesAxisReduction: Boolean = axisElimination;
+  val weighted = false
   val outputs = List(WPSProcessOutput("operation result"))
   val title = _title
   val description = _description

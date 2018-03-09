@@ -71,8 +71,8 @@ case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], dat
     }
   }
 
-  def combine( combineOp: CDArray.ReduceOp[Float], other: ArraySpec ): ArraySpec = {
-    val result: FastMaskedArray = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp )
+  def combine( combineOp: CDArray.ReduceOp[Float], other: ArraySpec, weighted: Boolean ): ArraySpec = {
+    val result: FastMaskedArray = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp, weighted )
     ArraySpec( missing, result.shape, origin, result.getData, optGroup  )
   }
 
@@ -191,7 +191,10 @@ class KeyPartitioner( val nParts: Int ) extends Partitioner {
 
 object TimeSliceRDD extends Serializable {
   def apply( rdd: RDD[CDTimeSlice], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ): TimeSliceRDD = new TimeSliceRDD( rdd, metadata, variableRecords )
-  def sortedReducePartition(op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice )(slices: Iterable[CDTimeSlice]): CDTimeSlice = { slices.toSeq.sortBy( _.startTime ).fold(CDTimeSlice.empty)(op) }
+  def sortedReducePartition(op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice )(slices: Iterable[CDTimeSlice]): CDTimeSlice = {
+    val nSlices = slices.size
+    slices.toSeq.sortBy( _.startTime ).fold(CDTimeSlice.empty)(op)
+  }
   def reducePartition(op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice )(slices: Iterable[CDTimeSlice]): CDTimeSlice = { slices.toSeq.reduce(op) }
 
   def weightedValueSumRDDPostOp(slice: CDTimeSlice): CDTimeSlice = {
@@ -262,7 +265,9 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
     if (ordered) optGroupBy match {
       case None =>
         val partialProduct = filteredRdd.mapPartitions( slices => Iterator( TimeSliceRDD.sortedReducePartition(op)(slices.toIterable) ) ).collect
-        val slice: CDTimeSlice = postOp( postOpId )( TimeSliceRDD.sortedReducePartition(op)(partialProduct) )
+        val slice: CDTimeSlice = postOp( postOpId )(
+          TimeSliceRDD.sortedReducePartition(op)(partialProduct)
+        )
         TimeSliceCollection( slice, metadata)
       case Some( groupBy ) =>
         val partialProduct = filteredRdd.groupBy( groupBy.group ).mapValues( TimeSliceRDD.sortedReducePartition(op) ).map( item => postOp( postOpId )( item._2 ) )
