@@ -246,8 +246,8 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
   def selectElements(  elemFilter: String => Boolean  ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElements( elemFilter ) ), metadata, variableRecords )
 
   def reduceByGroup( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): TimeSliceRDD = {
-    val keyedRDD: RDD[(Int,CDTimeSlice)] = rdd.map( _.selectElements( elemFilter ) ).keyBy( groupBy.group )
-    val groupedRDD:  RDD[(Int,CDTimeSlice)] = TimeSliceRDD.reduceKeyedRddByGroup( keyedRDD, op, postOpId, groupBy )
+    val keyedRDD: RDD[(Int,CDTimeSlice)] = rdd.keyBy( groupBy.group )
+    val groupedRDD:  RDD[(Int,CDTimeSlice)] = TimeSliceRDD.reduceKeyedRddByGroup( keyedRDD.mapValues( _.selectElements( elemFilter ) ), op, postOpId, groupBy )
     val result_rdd = keyedRDD.join( groupedRDD ) map { case ( key, (slice0, slice1) ) => slice0 ++ slice1 }
     new TimeSliceRDD( result_rdd, metadata, variableRecords )
   }
@@ -436,7 +436,7 @@ case class PartitionRange( firstRow: Int, lastRow: Int ) extends Serializable {
 class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSection, val fileInput: FileInput, val basePath: String, val partitionRange: PartitionRange ) extends Serializable with Loggable {
   import TimeSlicePartition._
   val filePath: String = if( basePath.isEmpty ) { fileInput.path } else { Paths.get( basePath, fileInput.path ).toString }
-  override def toString = s"Partition{ Var[${varName}], ${fileInput.toString}, ${partitionRange.toString}, localPartRange: ${partitionRange.toRange( fileInput.firstRowIndex ).toString} }"
+  override def toString = s"Partition{ Var[${varName}], ${fileInput.toString}, ${cdsection.toString}, ${partitionRange.toString}, localPartRange: ${partitionRange.toRange( fileInput.firstRowIndex ).toString} }"
 
   def getTimeSliceRange = {
     val localPartRange = partitionRange.toRange( fileInput.firstRowIndex )
@@ -468,6 +468,8 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
       val data_shape: Array[Int] = data_section.getShape
       val arraySpec = ArraySpec( getMissing(variable), data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array, None )
+      val time_index = sliceRanges.head.first
+      if( time_index < 11 ) { logger.info( s" @DSX time index: ${time_index}, value: ${data_array(0)}") }
       CDTimeSlice(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
     }
     dataset.close()

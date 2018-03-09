@@ -60,20 +60,20 @@ class DefaultTestSuite extends EDASTestSuite {
     println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
   }}
 
-  test("DiffWithRegrid")  { if(test_regrid)  {
-    print( s"Running test DiffWithRegrid" )
-    val MERRA_mon_variable = s"""{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v0","domain":"d0"}"""
-    val CFSR_mon_variable   = s"""{"uri":"collection:/cip_cfsr_mon_1980-1995","name":"tas:v1","domain":"d0"}"""
-    val ECMWF_mon_variable = s"""{"uri":"collection:/cip_ecmwf_mon_1980-2015","name":"tas:v2","domain":"d0"}"""
-    val datainputs =
-      s"""[   variable=[$MERRA_mon_variable,$CFSR_mon_variable],
-              domain=[  {"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1991-01-01T00:00:00Z","system":"values"}},
-                        {"name":"d1","time":{"start":"1990-01-01T00:00:00Z","end":"1991-01-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":50,"system":"values"},"lon":{"start":30,"end":40,"system":"values"}} ],
-              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d0","crs":"~cip_merra2_mon_1980-2015"}]]""".stripMargin.replaceAll("\\s", "")
-    val result_node = executeTest(datainputs)
-    val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
-    println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
-  } }
+//  test("DiffWithRegrid")  { if(test_regrid)  {
+//    print( s"Running test DiffWithRegrid" )
+//    val MERRA_mon_variable = s"""{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v0","domain":"d0"}"""
+//    val CFSR_mon_variable   = s"""{"uri":"collection:/cip_cfsr_mon_1980-1995","name":"tas:v1","domain":"d0"}"""
+//    val ECMWF_mon_variable = s"""{"uri":"collection:/cip_ecmwf_mon_1980-2015","name":"tas:v2","domain":"d0"}"""
+//    val datainputs =
+//      s"""[   variable=[$MERRA_mon_variable,$CFSR_mon_variable],
+//              domain=[  {"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1991-01-01T00:00:00Z","system":"values"}},
+//                        {"name":"d1","time":{"start":"1990-01-01T00:00:00Z","end":"1991-01-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":50,"system":"values"},"lon":{"start":30,"end":40,"system":"values"}} ],
+//              operation=[{"name":"CDSpark.eDiff","input":"v0,v1","domain":"d0","crs":"~cip_merra2_mon_1980-2015"}]]""".stripMargin.replaceAll("\\s", "")
+//    val result_node = executeTest(datainputs)
+//    val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
+//    println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
+//  } }
 
   test("TimeConvertedDiff")  { if( use_6hr_data ) {
     print( s"Running test TimeConvertedDiff" )
@@ -374,7 +374,7 @@ class DefaultTestSuite extends EDASTestSuite {
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
   }
 
-  test("anomaly-seasonal-files") {
+  test("anomaly-seasonal-write-output") {
     val datainputs = s"""[domain=[{"name":"d0", "lat":{"start":0,"end":90,"system":"values"}, "lon":{"start":0,"end":90,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave","groupBy":"seasonOfYear"},{"name":"CDSpark.write","input":"v1ave"}]]"""
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )

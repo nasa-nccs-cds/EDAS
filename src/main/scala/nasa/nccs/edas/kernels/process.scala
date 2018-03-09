@@ -386,7 +386,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     val t0 = System.nanoTime()
     val mapresult: TimeSliceRDD = context.profiler.profile("mapReduce.mapRDD") ( () => { mapRDD(input, context) } )
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
-    val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge ) } )
+    val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge || orderedReduce(context) ) } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
   }
@@ -426,6 +426,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
+  def orderedReduce(context: KernelContext) = { reduceCombineOp.isEmpty || ! context.getAxes.includes(0) }
   def getOpName(context: KernelContext): String = "%s(%s)".format(name, context.operation.inputs.mkString(","))
   def map(context: KernelContext )( rec: CDTimeSlice ): CDTimeSlice
   def aggregate(context: KernelContext )( rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = { rec0 }

@@ -111,7 +111,7 @@ class WeightedAverageKernel(Kernel):
                     self.logger.info( " ------------------------------- AVEW KERNEL: Operating on input '{0}', shape = {1}, origin = {2}, time = {3}".format( input.name, input.shape, input.origin, t1-t0 ))
         except Exception as err:
             self.logger.error("Error in WeightedAverageKernel: " + err.message + "\n" + traceback.format_exc() )
-            results.append( npArray.empty() )
+            results.append( npArray.empty( task.rId ) )
 
         return results
 
