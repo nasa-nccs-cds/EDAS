@@ -73,7 +73,7 @@ class max extends SingularRDDKernel(Map("mapreduceOp" -> "max")) {
 //  }
 
 
-//class filter extends Kernel() {
+//class filter extends KernelImpl() {
 //  override val status = KernelStatus.restricted
 //  val inputs = List(WPSDataInput("input variable", 1, 1))
 //  val outputs = List(WPSProcessOutput("operation result"))
@@ -336,7 +336,7 @@ class write extends CombineRDDsKernel( Map.empty ) {
     path*/
 }
 
-class norm extends Kernel(Map.empty) {
+class norm extends KernelImpl(Map.empty) {
   override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
@@ -363,7 +363,7 @@ class norm extends Kernel(Map.empty) {
 }
 
 
-class cor extends Kernel(Map.empty) {
+class cor extends KernelImpl(Map.empty) {
   override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
@@ -380,7 +380,7 @@ class cor extends Kernel(Map.empty) {
   }
 }
 
-class eAve extends Kernel(Map.empty) {
+class eAve extends KernelImpl(Map.empty) {
   override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
@@ -484,7 +484,7 @@ class ave extends SingularRDDKernel( Map( "mapOp" -> "avew", "reduceOp" -> "avew
   override def hasReduceOp: Boolean = true
 }
 
-class subset extends Kernel(Map.empty) {
+class subset extends KernelImpl(Map.empty) {
   override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
@@ -514,7 +514,7 @@ class subset extends Kernel(Map.empty) {
 //}
 //
 //
-//class binAve extends Kernel(Map.empty) {
+//class binAve extends KernelImpl(Map.empty) {
 //  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
 //  val outputs = List( WPSProcessOutput( "operation result" ) )
 //  val title = "Binning"
@@ -573,7 +573,7 @@ class subset extends Kernel(Map.empty) {
 //  }
 //}
 //
-//class bin extends Kernel(Map.empty) {
+//class bin extends KernelImpl(Map.empty) {
 //  object BinKeyUtils {
 //    implicit object BinKeyOrdering extends Ordering[String] {
 //      def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
@@ -621,7 +621,7 @@ class subset extends Kernel(Map.empty) {
 //  }
 //}
 
-class noOp extends Kernel(Map.empty) {
+class noOp extends KernelImpl(Map.empty) {
   override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )

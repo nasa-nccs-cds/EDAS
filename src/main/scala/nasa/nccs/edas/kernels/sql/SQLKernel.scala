@@ -2,7 +2,7 @@ package nasa.nccs.edas.kernels.sql
 
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.engine.spark.RecordKey
-import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelStatus}
+import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelImpl, KernelStatus}
 import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
 import nasa.nccs.edas.sources.netcdf.{EDASOptions, RDDSimpleRecordsConverter}
 import nasa.nccs.edas.utilities.runtime
@@ -13,7 +13,7 @@ import org.apache.spark.sql.{Column, Dataset, Encoders}
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.StructType
 
-class SQLKernel extends Kernel {
+class SQLKernel extends KernelImpl {
   override val status = KernelStatus.restricted
   val inputs = List(WPSDataInput("input variable", 1, 1))
   val outputs = List(WPSProcessOutput("operation result"))

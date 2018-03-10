@@ -584,7 +584,7 @@ class RDDContainer extends Loggable {
     def nPartitions = {  _rdd.getNumPartitions }
     def nodeList = {  _rdd.nodeList }
   }
-  def map( kernel: Kernel, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
+  def map( kernel: KernelImpl, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
 
   def regrid( context: KernelContext ): Unit = {
     val t0 = System.nanoTime()
@@ -592,8 +592,8 @@ class RDDContainer extends Loggable {
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
     logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
   }
-  def execute( workflow: Workflow, node: Kernel, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
-  def reduceBroadcast( node: Kernel, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ) )
+  def execute( workflow: Workflow, node: KernelImpl, context: KernelContext, batchIndex: Int ): TimeSliceCollection = node.execute( workflow, value, context, batchIndex )
+  def reduceBroadcast( node: KernelImpl, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ) )
   def nPartitions: Int = _vault.fold(0)(_.nPartitions)
   def nodeList: Array[String] = _vault.fold( Array.empty[String] )( _.nodeList )
 

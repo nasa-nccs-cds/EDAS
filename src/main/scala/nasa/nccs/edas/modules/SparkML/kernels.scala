@@ -1,6 +1,6 @@
 package nasa.nccs.edas.modules.SparkML
 import nasa.nccs.edas.engine.Workflow
-import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelStatus}
+import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelImpl, KernelStatus}
 import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
 import nasa.nccs.edas.sources.netcdf.{CDTimeSliceConverter, CDTimeSlicesConverter, EDASOptions, RDDSimpleRecordsConverter}
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
@@ -8,7 +8,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.{avg, col}
 import org.apache.spark.sql.{DataFrame, Dataset, Encoders, Row}
 
-class svd extends Kernel {
+class svd extends KernelImpl {
   override val status = KernelStatus.restricted
   val inputs = List(WPSDataInput("input variable", 1, 1))
   val outputs = List(WPSProcessOutput("operation result"))

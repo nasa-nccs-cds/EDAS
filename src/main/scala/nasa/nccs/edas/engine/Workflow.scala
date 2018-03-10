@@ -16,7 +16,7 @@ import scala.util.Try
 
 object WorkflowNode {
   private val _nodeProducts = new mutable.HashMap[String,TimeSliceCollection]
-  def apply( operation: OperationContext, kernel: Kernel  ): WorkflowNode = { new WorkflowNode( operation, kernel ) }
+  def apply( operation: OperationContext, kernel: KernelImpl  ): WorkflowNode = { new WorkflowNode( operation, kernel ) }
   def apply( node: DAGNode ) : WorkflowNode = promote( node )
   def promote( node: DAGNode ) : WorkflowNode = node match {
     case workflowNode: WorkflowNode => workflowNode
@@ -26,7 +26,7 @@ object WorkflowNode {
   def getProduct( uid: String ): Option[TimeSliceCollection] = _nodeProducts.get(uid)
 }
 
-class WorkflowNode( val operation: OperationContext, val kernel: Kernel  ) extends DAGNode with Loggable {
+class WorkflowNode( val operation: OperationContext, val kernel: KernelImpl  ) extends DAGNode with Loggable {
   import WorkflowNode._
   private val contexts = mutable.HashMap.empty[String,KernelContext]
   private var _isMergedSubworkflowRoot: Boolean = false;
@@ -170,17 +170,20 @@ case class KernelExecutionResult( results: TimeSliceCollection, files: List[Stri
 }
 
 class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager ) extends Loggable {
-  val nodes: Seq[WorkflowNode] = request.operations flatMap getWorkflowNode
+  val nodes: Seq[WorkflowNode] = request.operations flatMap getWorkflowNodes
   val roots = findRootNodes()
   private val _nodeInputs: mutable.HashMap[String, OperationInput] = mutable.HashMap.empty[String, OperationInput]
 
   def createKernel(id: String): Kernel = executionMgr.getKernel(id)
 
-  def getWorkflowNode( operation: OperationContext ): Option[WorkflowNode] = {
+  def getWorkflowNodes( operation: OperationContext ): List[WorkflowNode] = {
     val opName = operation.name.toLowerCase
     val moduleName = opName.split('.').head
-    if( moduleName.toLowerCase.equals("util") ) { None }
-    else { Some(  WorkflowNode( operation, createKernel( opName ) ) ) }
+    if( moduleName.toLowerCase.equals("util") ) { List.empty }
+    else {
+      val baseKernel = createKernel( opName )
+      baseKernel.getWorkflowNodes( this, operation )
+    }
   }
 
   def generateProduct( executor: WorkflowExecutor ): Option[WPSProcessExecuteResponse] = {

@@ -282,11 +282,9 @@ object PostOpOperations {
 }
 
 abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Loggable with Serializable with WPSProcess {
-  import Kernel._
+  val doesAxisReduction: Boolean
   val identifiers = this.getClass.getName.split('$').flatMap(_.split('.'))
   val status = options.get("visibility").fold(KernelStatus.developmental)( opVal => KernelStatus.parse(opVal) )
-  val doesAxisReduction: Boolean
-  val weighted: Boolean
   def operation: String = identifiers.last.toLowerCase
   def module: String = identifiers.dropRight(1).mkString(".")
   def id = identifiers.mkString(".")
@@ -297,53 +295,61 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   val identifier = name
   def matchesSpecs( _module: String, _operation: String ): Boolean = { _module.equals(module) && _operation.equals(operation) }
   val nOutputsPerInput: Int = options.getOrElse("nOutputsPerInput","1").toInt
+  def cleanUp() = {}
+  override def toString = s"Kernel[ id=${id} status=${status}]"
+  def getOpName(context: KernelContext): String = "%s(%s)".format(name, context.operation.inputs.mkString(","))
+  def toXmlHeader = <kernel module={module} name={name}>
+    {if (title.nonEmpty) <title> {title} </title>}
+    {if (description.nonEmpty) <description> {description} </description>}
+  </kernel>
+
+  def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode]
+}
+
+abstract class MultiKernel( options: Map[String,String] = Map.empty ) extends Kernel(options) {
+  def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode] = {
+    val expandedOps: List[(String, OperationContext)] = getExpandedOperations( workflow, operation )
+    expandedOps.flatMap { case (kernelName, op_context) =>
+      workflow.createKernel(kernelName) match {
+        case kernelImpl: KernelImpl => List(new WorkflowNode(op_context, kernelImpl))
+        case multiKernel: MultiKernel => multiKernel.getWorkflowNodes(workflow, op_context)
+      }
+    }
+  }
+  def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[ (String,OperationContext)]
+}
+
+abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Kernel(options) {
+  import Kernel._
+  val weighted: Boolean
   def getInputArrays( inputs: CDTimeSlice, context: KernelContext ): List[ArraySpec] = context.operation.inputs.map( id => inputs.element( id ).getOrElse {
-      throw new Exception(s"Can't find input ${id} for kernel ${identifier}, availiable inputs = ${inputs.elements.keys.mkString(",")}, values: \n\t${inputs.elements.values.map(_.toString).mkString("\n\t")}")
-    } )
+    throw new Exception(s"Can't find input ${id} for kernel ${identifier}, availiable inputs = ${inputs.elements.keys.mkString(",")}, values: \n\t${inputs.elements.values.map(_.toString).mkString("\n\t")}")
+  } )
   val mapCombineOp: Option[ReduceOpFlt] = options.get("mapOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
   val mapCombineNOp: Option[ReduceNOpFlt] = None
   val mapCombineWNOp: Option[ReduceWNOpFlt] = None
   val reduceCombineOp: Option[ReduceOpFlt] = options.get("reduceOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
   def hasReduceOp: Boolean = reduceCombineOp.isDefined
   val initValue: Float = 0f
-  def cleanUp() = {}
-  override def toString = s"Kernel[ id=${id} status=${status}]"
+
+  def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode] = List( new WorkflowNode( operation, this ) )
+  def execute( workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = { mapReduce(input, context, batchIndex ) }
+
+  def map(context: KernelContext )( rec: CDTimeSlice ): CDTimeSlice
 
   def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
     input.map( map(context) )
   }
 
-  def filterInputs ( input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = { input }
-
-  def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = {
-    if (reduceCombineOp.exists(_ == CDFloatArray.customOp)) {
-      customReduceRDD(context)
-    } else { reduceRDDOp(context) }
+  def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
+    val t0 = System.nanoTime()
+    val mapresult: TimeSliceRDD = context.profiler.profile("mapReduce.mapRDD") ( () => { mapRDD(input, context) } )
+    if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
+    val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge || orderedReduce(context) ) } )
+    logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
+    rv
   }
-
-  def execute( workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
-    mapReduce(input, context, batchIndex )
-  }
-
-//  def mapSliceElems( slice: TimeSliceRDD, rid: String, )
-
-//  def reduceParition(inputs: Iterator[TimeSliceRDD], context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
-//    EDASExecutionManager.checkIfAlive
-//    val rid = context.operation.rid.toLowerCase
-//    val reduceElements: TimeSliceRDD = inputs.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
-//    val axes = context.getAxes
-//    val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
-//      context.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
-//        reduceElements.reduce(getReduceOp(context), context.getGroup, ordered)
-//      })
-//    } else {
-//      val t0 = System.nanoTime()
-//      val result = reduceElements.collect
-//      logger.info(" #R# Collection time: %.2f, kernel = { %s }".format( (System.nanoTime-t0)/1.0E9, this.id ))
-//      result
-//    }
-//  }
 
   def reduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
     EDASExecutionManager.checkIfAlive
@@ -360,39 +366,11 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
-//  def reduceByGroup(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): TimeSliceCollection = {
-//    EDASExecutionManager.checkIfAlive
-//    //    evaluateProductSize( input, context )   // TOO SLOW!
-//    if( !parallelizable ) { input.collect }
-//    else {
-//      val rid = context.operation.rid.toLowerCase
-//      val reduceElements: TimeSliceRDD = input.selectElements( elemId => elemId.toLowerCase.startsWith( rid ) )
-//      val postOpId = options.get("postOp")
-//      val axes = context.getAxes
-//      val result: TimeSliceCollection = if( hasReduceOp && context.doesTimeOperations ) {
-//        context.profiler.profile[TimeSliceCollection]( "Kernel.reduce" ) ( () => {
-//          reduceElements.reduce(getReduceOp(context), context.getGroup, ordered)
-//        })
-//      } else {
-//        val t0 = System.nanoTime()
-//        val result = reduceElements.collect
-//        logger.info(" #R# Collection time: %.2f, kernel = { %s }".format( (System.nanoTime-t0)/1.0E9, this.id ))
-//        result
-//      }
-//      finalize( result.sort )
-//    }
-//  }
-
-  def mapReduce(input: TimeSliceRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): TimeSliceCollection = {
-    val t0 = System.nanoTime()
-    val mapresult: TimeSliceRDD = context.profiler.profile("mapReduce.mapRDD") ( () => { mapRDD(input, context) } )
-    if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
-    val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge || orderedReduce(context) ) } )
-    logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
-    rv
+  def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = {
+    if (reduceCombineOp.exists(_ == CDFloatArray.customOp)) {
+      customReduceRDD(context)
+    } else { reduceRDDOp(context) }
   }
-
-  def mapGroup(context: KernelContext, group: TSGroup)( value: ( Long, Iterable[CDTimeSlice]) ): Iterable[CDTimeSlice] = value._2
 
   def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: TimeSliceRDD): TimeSliceRDD = {
     assert( batchIndex == 0, "reduceBroadcast is not supported over multiple batches")
@@ -410,14 +388,12 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
-  def evaluateProductSize(input: TimeSliceRDD, context: KernelContext ): Unit =  if ( !context.doesTimeReduction ) {
-    val t0 = System.nanoTime()
-    val result_size: Long = input.dataSize
-    logger.info( s" %E% Evaluating: Product size: ${result_size/1.0e9f} G, max product size: ${EDASPartitioner.maxProductSize/1.0e9f} G, time = ${(System.nanoTime()-t0)/1.0e9}" )
-    if( result_size > EDASPartitioner.maxProductSize ) { throw new Exception(s"The product of this request is too large: ${result_size/1e9} G, max product size:  ${EDASPartitioner.maxProductSize/1e9} G") }
-  }
 
-  def addWeights( context: KernelContext ): Boolean = {
+  /// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ End of public interface ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  private def filterInputs ( input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = { input }
+
+  protected def addWeights( context: KernelContext ): Boolean = {
     context.getWeightMode match {
       case Some( weights ) =>
         val axes = context.operation.getConfiguration("axes")
@@ -427,19 +403,16 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
-  def orderedReduce(context: KernelContext) = { reduceCombineOp.isEmpty || ! context.getAxes.includes(0) }
-  def getOpName(context: KernelContext): String = "%s(%s)".format(name, context.operation.inputs.mkString(","))
-  def map(context: KernelContext )( rec: CDTimeSlice ): CDTimeSlice
-  def aggregate(context: KernelContext )( rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = { rec0 }
+  private def orderedReduce(context: KernelContext) = { reduceCombineOp.isEmpty || ! context.getAxes.includes(0) }
 
-  def combine(context: KernelContext)(a0: DataFragment, a1: DataFragment, axes: AxisIndices): DataFragment = reduceCombineOp match {
+  private def combine(context: KernelContext)(a0: DataFragment, a1: DataFragment, axes: AxisIndices): DataFragment = reduceCombineOp match {
     case Some(combineOp) =>
       if (axes.includes(0)) DataFragment(a0.spec, CDFloatArray.combine(combineOp, a0.data, a1.data))
       else { a0 ++ a1 }
     case None => { a0 ++ a1 }
   }
 
-  def getParamValue( binnedArrayData: List[Map[Int,HeapFltArray]], paramId: String ): String = {
+  private def getParamValue( binnedArrayData: List[Map[Int,HeapFltArray]], paramId: String ): String = {
     val pvals = scala.collection.mutable.SortedSet[String]()
     for( binnedArrayMap <- binnedArrayData; if binnedArrayMap.size > 1 ) {
       val pval = binnedArrayMap.head._2.attr(paramId)
@@ -449,12 +422,12 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     pvals.head
   }
 
-  def getCombinedGridfile( inputs: Map[String,ArrayBase[Float]] ): String = {
+  private def getCombinedGridfile( inputs: Map[String,ArrayBase[Float]] ): String = {
     for ( ( id, array ) <- inputs ) array.metadata.get("gridfile") match { case Some(gridfile) => return gridfile; case None => Unit }
     throw new Exception( " Missing gridfile in kernel inputs: " + name )
   }
 
-  def weightedValueSumRDDCombiner( context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = {
+  private def weightedValueSumRDDCombiner( context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = {
     val axes = context.getAxes
     val t0 = System.nanoTime
     val elems = a0.elements flatMap { case (key, data0) =>
@@ -476,7 +449,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     new CDTimeSlice(a0.mergeStart(a1), a0.mergeEnd(a1), elems, a0.metadata )
   }
 
-  def combineRDD(context: KernelContext)(rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = {
+  private def combineRDD(context: KernelContext)(rec0: CDTimeSlice, rec1: CDTimeSlice ): CDTimeSlice = {
     if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else context.profiler.profile[CDTimeSlice]( "Kernel.combineRDD" ) ( () => {
       val axes = context.getAxes
       val keys = rec0.elements.keys
@@ -493,7 +466,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     })
   }
 
-  def combineElements( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
+  private def combineElements( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
     if( elements0.isEmpty ) { elements1.toIndexedSeq } else if (elements1.isEmpty) { elements0.toIndexedSeq } else {
       options.get("reduceOp") match {
         case Some( reduceOp ) =>
@@ -510,15 +483,15 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       }
   }
 
-  def missing_element( key: String ) = throw new Exception( s"Missing element in weightedSumReduction for Kernel ${identifier}, key: " + key )
+  private def missing_element( key: String ) = throw new Exception( s"Missing element in weightedSumReduction for Kernel ${identifier}, key: " + key )
 
-  def getFloatBuffer( size: Int ): FloatBuffer = {
+  private def getFloatBuffer( size: Int ): FloatBuffer = {
     val vbb: ByteBuffer = ByteBuffer.allocateDirect( size * 4 )
     vbb.order( ByteOrder.nativeOrder() );    // use the device hardware's native byte order
     vbb.asFloatBuffer();
   }
 
-  def weightedSumReduction( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
+  private def weightedSumReduction( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
     if( elements0.isEmpty ) { elements1.toIndexedSeq } else if (elements1.isEmpty) { elements0.toIndexedSeq } else {
       val key_lists = elements0.keys.partition( _.endsWith("_WEIGHTS_") )
       val weights_key = key_lists._1.headOption.getOrElse( throw new Exception( s"Can't find weignts key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
@@ -562,7 +535,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       IndexedSeq( values_key -> valuesArray, weights_key -> weightsArray )
     }
 
-  def weightedAveReduction( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
+  private def weightedAveReduction( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
     if( elements0.isEmpty ) { elements1.toIndexedSeq } else if (elements1.isEmpty) { elements0.toIndexedSeq } else {
       val key_lists = elements0.keys.partition( _.endsWith("_WEIGHTS_") )
       val weights_key = key_lists._1.headOption.getOrElse( throw new Exception( s"Can't find weignts key in weightedSumReduction for Kernel ${identifier}, keys: " + elements0.keys.mkString(",") ) )
@@ -621,16 +594,16 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       IndexedSeq( values_key -> valuesArray, weights_key -> weightsArray )
     }
 
-  def appendElements( key: String,  elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
+  private def appendElements( key: String,  elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =
     if( elements0.isEmpty ) { elements1.toIndexedSeq } else if (elements1.isEmpty) { elements0.toIndexedSeq } else {
       elements0 flatMap { case (key,fltArray) => elements1.get(key) map ( fltArray1 => key -> fltArray.append(fltArray1) ) } toIndexedSeq
     }
 
-  def customReduceRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = if(Kernel.isEmpty(a0)) {a1} else if(Kernel.isEmpty(a1)) {a0} else {
+  private def customReduceRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = if(Kernel.isEmpty(a0)) {a1} else if(Kernel.isEmpty(a1)) {a0} else {
     collectRDDOp(context)( a0, a1 )
   }
 
-  def reduceOp(context: KernelContext)(a0op: Option[DataFragment], a1op: Option[DataFragment]): Option[DataFragment] = {
+  private def reduceOp(context: KernelContext)(a0op: Option[DataFragment], a1op: Option[DataFragment]): Option[DataFragment] = {
     val t0 = System.nanoTime
     val axes: AxisIndices = context.grid.getAxisIndices(context.config("axes", ""))
     val rv = a0op match {
@@ -649,10 +622,10 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     rv
   }
 
-  def collectRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = { a0 ++ a1 }
+  private def collectRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice = { a0 ++ a1 }
 
 
-  def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =
+  private def reduceRDDOp(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =
     if( a0.isEmpty ) {
       a1
     } else  if(
@@ -662,18 +635,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
       combineRDD(context)( a0, a1 )
     }
 
-  def getDataSample(result: CDFloatArray, sample_size: Int = 20): Array[Float] = {
-    val result_array = result.floatStorage.array
-    val start_value = result_array.size / 3
-    result_array.slice(start_value, Math.min(start_value + sample_size, result_array.size))
-  }
-
-  def toXmlHeader = <kernel module={module} name={name}>
-    {if (title.nonEmpty) <title> {title} </title>}
-    {if (description.nonEmpty) <description> {description} </description>}
-  </kernel>
-
-  def getStringArg(args: Map[String, String], argname: String, defaultVal: Option[String] = None): String = {
+  private def getStringArg(args: Map[String, String], argname: String, defaultVal: Option[String] = None): String = {
     args.get(argname) match {
       case Some(sval) => sval
       case None => defaultVal match {
@@ -683,7 +645,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
-  def getIntArg(args: Map[String, String], argname: String, defaultVal: Option[Int] = None): Int = {
+  private def getIntArg(args: Map[String, String], argname: String, defaultVal: Option[Int] = None): Int = {
     args.get(argname) match {
       case Some(sval) => try {
         sval.toInt
@@ -697,7 +659,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
     }
   }
 
-  def getFloatArg(args: Map[String, String], argname: String, defaultVal: Option[Float] = None): Float = {
+  private def getFloatArg(args: Map[String, String], argname: String, defaultVal: Option[Float] = None): Float = {
     args.get(argname) match {
       case Some(sval) => try {
         sval.toFloat
@@ -724,7 +686,7 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
 
 
-abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) extends Kernel(options)  {
+abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) extends KernelImpl(options)  {
   override def map ( context: KernelContext ) ( inputs: CDTimeSlice  ): CDTimeSlice =  context.profiler.profile(s"SingularRDDKernel.map(${KernelContext.getProcessAddress}):${inputs.toString}")( () => {
     val t0 = System.nanoTime
     val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
@@ -749,7 +711,7 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
   })
 }
 
-abstract class CombineRDDsKernel(options: Map[String,String] ) extends Kernel(options)  {
+abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImpl(options)  {
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
@@ -829,7 +791,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
   })
 }
 
-class zmqPythonKernel( _module: String, _operation: String, _title: String, _description: String, options: Map[String,String], axisElimination: Boolean  ) extends Kernel(options) {
+class zmqPythonKernel( _module: String, _operation: String, _title: String, _description: String, options: Map[String,String], axisElimination: Boolean  ) extends KernelImpl(options) {
   override def operation: String = _operation
 
   override def module = _module
