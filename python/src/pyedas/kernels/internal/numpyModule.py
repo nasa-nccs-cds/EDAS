@@ -84,7 +84,7 @@ class WeightedAverageKernel(Kernel):
         wids = [ inputId + "_WEIGHTS_" for inputId in data_inputIds ]
         weight_inputIds = [ ( wid if (wid in available_inputIds) else None ) for wid in wids ]
         inputs_with_weights = zip( data_inputIds, weight_inputIds )
-        self.logger.info("@@@@ data_inputIds = " + str(data_inputIds) + ", weight_inputIds = " + str(weight_inputIds) + ", inputs = " + str(inputs) )
+        self.logger.info("@@@@ data inputIds = " + str(data_inputIds) + ", weight_inputIds = " + str(weight_inputIds) + ", inputs = " + str(inputs) )
         results = []
         try:
             for input_pair in inputs_with_weights:
