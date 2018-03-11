@@ -377,6 +377,83 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     }
   }
 
+  def weightedReduce( op: FastMaskedArray.ReduceOp, op_axes: Array[Int], initVal: Float = 0f, wtsOpt: Option[FastMaskedArray] ): Seq[ FastMaskedArray ] = {
+    val wtsIterOpt = wtsOpt.map( _.array.getIndexIterator )
+    val ( shape_comparison, broadcast_axes ) = wtsOpt match {
+      case Some( wts ) =>   compareShapes( wts.array.getShape )
+      case None =>          ( 0, None )
+    }
+    val rank = array.getRank
+    val iter: IndexIterator = array.getIndexIterator()
+    if( shape_comparison == 0  ) {
+      if( op_axes.length == rank ) {
+        var result = initVal
+        var count = 0f
+        var result_shape = Array.fill[Int](rank)(1)
+        while ( iter.hasNext ) {
+          val fval = iter.getFloatNext
+          if( ( fval != missing ) && !fval.isNaN ) {
+            wtsIterOpt match {
+              case Some( wtsIter ) =>
+                val wtval = wtsIter.getFloatNext
+                result = op( result, fval * wtval )
+                count = count + wtval
+              case None =>
+                result = op( result, fval )
+                count = count + 1f
+            }
+          }
+        }
+        Seq( FastMaskedArray(result_shape,Array(result),missing), FastMaskedArray(result_shape,Array(count),missing) )
+      } else {
+        val target_shape: Array[Int] = getReducedShape( op_axes )
+        val target_array = FastMaskedArray( target_shape, initVal, missing )
+        val weights_array = FastMaskedArray( target_shape, 0.0f, missing )
+        val targ_index: Index =	target_array.array.getIndex()
+        while ( iter.hasNext ) {
+          val fval = iter.getFloatNext
+          if( ( fval != missing ) && !fval.isNaN ) {
+            val current_index = getReducedFlatIndex( targ_index, op_axes, iter )
+            wtsIterOpt match {
+              case Some(wtsIter) =>
+                val wtval = wtsIter.getFloatNext
+                target_array.array.setFloat(current_index, op( target_array.array.getFloat(current_index), fval*wtval ) )
+                weights_array.array.setFloat(current_index, weights_array.array.getFloat(current_index) + wtval )
+              case None =>
+                target_array.array.setFloat( current_index, op( target_array.array.getFloat(current_index), fval ) )
+                weights_array.array.setFloat( current_index, weights_array.array.getFloat(current_index) + 1.0f )
+            }
+          }
+        }
+        Seq( target_array, weights_array )
+      }
+    } else {
+      val target_shape: Array[Int] = getReducedShape( op_axes )
+      val target_array = FastMaskedArray( target_shape, initVal, missing )
+      val weights_array = FastMaskedArray( target_shape, 0.0f, missing )
+      val targ_index: Index =	target_array.array.getIndex()
+      val wtsIndexOpt: Option[Index] = wtsOpt.map( _.array.getIndex )
+      while ( iter.hasNext ) {
+        val fval = iter.getFloatNext
+        val wts: ma2.Array = wtsOpt.get.array
+        if( ( fval != missing ) && !fval.isNaN ) {
+          val current_index = getReducedFlatIndex( targ_index, op_axes, iter )
+          wtsIndexOpt match {
+            case Some(wtsIndex) =>
+              val reduced_flat_index: Int = getReducedFlatIndex( wtsIndex, broadcast_axes.get, iter )
+              val wtval: Float = wts.getFloat( reduced_flat_index )
+              target_array.array.setFloat(current_index, op( target_array.array.getFloat(current_index), fval*wtval ) )
+              weights_array.array.setFloat(current_index, weights_array.array.getFloat(current_index) + wtval )
+            case None =>
+              target_array.array.setFloat( current_index, target_array.array.getFloat(current_index) + fval )
+              weights_array.array.setFloat( current_index, op( weights_array.array.getFloat(current_index), 1.0f ) )
+          }
+        }
+      }
+      Seq( target_array, weights_array )
+    }
+  }
+
   def compareShapes( other_shape: Array[Int] ): ( Int, Option[Array[Int]] ) = {
     val p0 = array.getShape.product
     val p1 = other_shape.product

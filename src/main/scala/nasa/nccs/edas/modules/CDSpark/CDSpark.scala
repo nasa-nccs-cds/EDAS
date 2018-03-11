@@ -2,6 +2,7 @@ package nasa.nccs.edas.modules.CDSpark
 
 import java.io.{File, IOException}
 import java.nio.file.Paths
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
@@ -10,12 +11,12 @@ import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import ucar.{ma2, nc2}
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}
 import nasa.nccs.edas.engine.EDASExecutionManager.logger
-import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
+import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.Kernel.getResultDir
 import nasa.nccs.edas.kernels._
 import nasa.nccs.edas.rdd._
-import nasa.nccs.esgf.process.{DataFragmentSpec, WorkflowExecutor}
+import nasa.nccs.esgf.process.{DataFragmentSpec, OperationContext, UID, WorkflowExecutor}
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import ucar.ma2.DataType
@@ -166,7 +167,7 @@ class eDiv extends CombineRDDsKernel(Map("mapOp" -> "divide")) {
 }
 
 class write extends CombineRDDsKernel( Map.empty ) {
-  override val status = KernelStatus.public
+  override val status = KernelStatus.developmental
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Write Result data"
@@ -337,7 +338,7 @@ class write extends CombineRDDsKernel( Map.empty ) {
 }
 
 class norm extends KernelImpl(Map.empty) {
-  override val status = KernelStatus.public
+  override val status = KernelStatus.developmental
   val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Normalize"
@@ -364,7 +365,7 @@ class norm extends KernelImpl(Map.empty) {
 
 
 class cor extends KernelImpl(Map.empty) {
-  override val status = KernelStatus.public
+  override val status = KernelStatus.developmental
   val inputs = List( WPSDataInput("input variable", 2, Integer.MAX_VALUE ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
   val title = "Correlations"
@@ -498,128 +499,42 @@ class subset extends KernelImpl(Map.empty) {
     CDTimeSlice(inputs.startTime, inputs.endTime, elems.toMap, inputs.metadata )
   }
 }
-//
-//class anomaly extends SingularRDDKernel(Map.empty) {
-//  val inputs = List(WPSDataInput("input variable", 1, 1))
-//  val outputs = List(WPSProcessOutput("operation result"))
-//  val title = "Space/Time Mean"
-//  val doesAxisElimination: Boolean = true
-//  val description = "Computes an anomaly of the input variable data"
-//
-//  override def mapReduce(input: RDD[CDTimeSlice], context: KernelContext, batchIndex: Int): CDTimeSlice = {
-//    val binAveKernel = new binAve()
-//    val mapReduceResult = binAveKernel.mapReduce(input, context, 0)
-//    binAveKernel.finalize(mapReduceResult, context)
-//  }
-//}
-//
-//
-//class binAve extends KernelImpl(Map.empty) {
-//  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
-//  val outputs = List( WPSProcessOutput( "operation result" ) )
-//  val title = "Binning"
-//  override val description = "Aggregates data into bins using specified reduce function and binning specifications"
-//  val doesAxisElimination: Boolean = false
-//  object BinKeyUtils {
-//    implicit object BinKeyOrdering extends Ordering[String] {
-//      def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
-//    }
-//  }
-//
-//  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
-//    val t0 = System.nanoTime
-//    val axes = context.config("axes","")
-//    val binParm = context.config( "bin", "month" )
-//    val startIndex = inputs.metadata.getOrElse("startIndex","0").toInt
-//    val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId) match {
-//      case Some( input_data ) =>
-//        val input_array: FastMaskedArray = input_data.toFastMaskedArray
-//        val sorter = getSorter( input_data, context, startIndex )
-//        val result_arrays: (IndexedSeq[FastMaskedArray], IndexedSeq[FastMaskedArray]) = if( addWeights(context) ) {
-//          val weights: FastMaskedArray = FastMaskedArray(KernelUtilities.getWeights(inputId, context))
-//          input_array.weightedSumBin(sorter, Some(weights) )
-//        } else {
-//          input_array.weightedSumBin(sorter, None)
-//        }
-//        val NBins = result_arrays._1.length
-//        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "bin" -> binParm, "gridfile" -> getCombinedGridfile(inputs.elements), "NBins" -> NBins.toString, "varAxis" -> sorter.getVaryingAxis.toString, "cycle" ->  context.config("cycle", "" ), "axes" -> axes.toUpperCase )
-//        result_arrays._1.indices.map( index => context.operation.rid + "." + index ->
-//          HeapFltArray( result_arrays._1(index).toCDFloatArray, input_data.origin, result_metadata, Some(result_arrays._2(index).toFloatArray) )
-//        )
-//      case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
-//    })
-//    context.addTimestamp( "Executed Kernel %s map op, input = %s, time = %.4f s".format(name,  id, (System.nanoTime - t0) / 1.0E9), true )
-//    CDTimeSlice( TreeMap(elems:_*), inputs.metadata, inputs.partition )
-//  }
-//  override def combineRDD(context: KernelContext)( a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)( a0, a1 )
-//  override def postRDDOp(pre_result: CDTimeSlice, context: KernelContext ):  CDTimeSlice = weightedValueSumRDDPostOp( pre_result, context )
-//
-//  def getSorter( input_data: HeapFltArray, context: KernelContext, startIndex: Int  ): BinSorter =
-//    context.config("cycle", "" ) match {
-//      case x if !x.isEmpty  =>
-//        val cycle = context.config("cycle", "hour" )
-//        val bin = context.config("bin", "month" )
-//        new TimeCycleSorter( input_data, cycle, bin, startIndex )
-//      case x  =>
-//        val axes = context.config("axes", "" )
-//        new AnomalySorter( input_data, axes, context.grid, startIndex )
-//    }
-//
-//  def getOp(context: KernelContext): ReduceOpFlt = {
-//    if ( mapCombineOp.isDefined ) { mapCombineOp.get }
-//    else {
-//      context.config("mapOp").fold (context.config("mapreduceOp")) (Some(_)) map ( CDFloatArray.getOp(_) ) getOrElse( throw new Exception( "Undefined Op in bin kernel" ))
-//    }
-//  }
-//}
-//
-//class bin extends KernelImpl(Map.empty) {
-//  object BinKeyUtils {
-//    implicit object BinKeyOrdering extends Ordering[String] {
-//      def compare( k1: String, k2: String ) = k1.split('.').last.toInt - k2.split('.').last.toInt
-//    }
-//  }
-//  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
-//  val outputs = List( WPSProcessOutput( "operation result" ) )
-//  val title = "Binning"
-//  val doesAxisElimination: Boolean = false
-//  override val description = "Aggregates data into bins using specified reduce function and binning specifications"
-//
-//  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
-//    import BinKeyUtils.BinKeyOrdering
-//    val t0 = System.nanoTime
-//    val axes = context.config("axes","")
-//    val startIndex = inputs.metadata.getOrElse("startIndex","0").toInt
-//    val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId) match {
-//      case Some( input_data ) =>
-//        val input_array: FastMaskedArray = input_data.toFastMaskedArray
-//        val sorter = getSorter( input_data, context, startIndex )
-//        val result_arrays: IndexedSeq[FastMaskedArray] = input_array.bin( sorter, getOp(context), initValue )
-//        val result_metadata = inputs.metadata ++ arrayMdata(inputs, "value") ++ input_data.metadata ++ List("uid" -> context.operation.rid, "gridfile" -> getCombinedGridfile(inputs.elements), "axes" -> axes.toUpperCase )
-//        result_arrays.indices.map( index => context.operation.rid + "." + index ->
-//          HeapFltArray( result_arrays(index).toCDFloatArray, input_data.origin, result_metadata, None )
-//        )
-//      case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
-//    })
-//    context.addTimestamp( "Executed Kernel %s map op, input = %s, time = %.4f s".format(name,  id, (System.nanoTime - t0) / 1.0E9), true )
-//    CDTimeSlice( TreeMap( elems:_*), inputs.metadata ++ List( "rid" -> context.operation.rid ), inputs.partition )
-//  }
-//  override def combineRDD(context: KernelContext)( a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)( a0, a1 )
-//  override def postRDDOp(pre_result: CDTimeSlice, context: KernelContext ):  CDTimeSlice = weightedValueSumRDDPostOp( pre_result, context )
-//
-//  def getSorter( input_data: HeapFltArray, context: KernelContext, startIndex: Int  ): BinSorter = {
-//    val cycle = context.config( "cycle", "hour" )
-//    val bin = context.config( "bin", "month" )
-//    new TimeCycleSorter( input_data, cycle, bin, startIndex )
-//  }
-//
-//  def getOp(context: KernelContext): ReduceOpFlt = {
-//    if ( mapCombineOp.isDefined ) { mapCombineOp.get }
-//    else {
-//      context.config("mapOp").fold (context.config("mapreduceOp")) (Some(_)) map ( CDFloatArray.getOp ) getOrElse( throw new Exception( "Undefined Op in bin kernel" ))
-//    }
-//  }
-//}
+
+class anomaly extends MultiKernel(Map.empty) {
+  override val status = KernelStatus.public
+  val inputs = List(WPSDataInput("input variable", 1, 1))
+  val outputs = List(WPSProcessOutput("operation result"))
+  val title = "Space/Time Anomaly"
+  val doesAxisReduction: Boolean = false
+  val description = "MultiKernel: Computes an anomaly of the input variable data using the CDSpark ave and eDiff kernels"
+  val weighted: Boolean = true
+
+  def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext] = {
+    val opId = UID( operation.identifier.split('-').last )
+    val ( ave, eDiff, aveResult ) = ( "CDSpark.ave", "CDSpark.eDiff", workflow.request.id + "aveResult" )
+    val opAve  = new OperationContext( opId + ave, ave, aveResult, operation.inputs, operation.getConfiguration )
+    val opDiff = new OperationContext( opId + eDiff, eDiff, operation.rid, operation.inputs :+ aveResult, Map.empty[String, String] )
+    List( opAve, opDiff )
+  }
+}
+
+class stdDev extends MultiKernel(Map.empty) {
+  override val status = KernelStatus.public
+  val inputs = List(WPSDataInput("input variable", 1, 1))
+  val outputs = List(WPSProcessOutput("operation result"))
+  val title = "Space/Time Standard Deviation"
+  val doesAxisReduction: Boolean = false
+  val description = "MultiKernel: Computes an standard deviation of the input variable data using the CDSpark anomaly and rms kernels"
+  val weighted: Boolean = true
+
+  def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext] = {
+    val opId = UID( operation.identifier.split('-').last )
+    val ( anomaly, rms, anomalyResult ) = ( "CDSpark.anomaly", "CDSpark.rms", workflow.request.id + "anomalyResult" )
+    val opAve  = new OperationContext( opId + anomaly, anomaly, anomalyResult, operation.inputs, operation.getConfiguration )
+    val opDiff = new OperationContext( opId + rms, rms, operation.rid, operation.inputs :+ anomalyResult, operation.getConfiguration )
+    List( opAve, opDiff )
+  }
+}
 
 class noOp extends KernelImpl(Map.empty) {
   override val status = KernelStatus.public
@@ -639,37 +554,7 @@ class noOp extends KernelImpl(Map.empty) {
     result
   }
 }
-//class binAve extends SingularRDDKernel(Map.empty) {
-//  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
-//  val outputs = List( WPSProcessOutput( "operation result" ) )
-//  val title = "Space/Time Mean"
-//  val description = "Computes (weighted) means of element values in specified bins (e.g. day, month, year) from input variable data over specified axes and roi "
-//
-//  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
-//    val t0 = System.nanoTime
-//    val axes = context.config("axes","")
-//    val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
-//    val elems = context.operation.inputs.map( inputId => inputs.element(inputId) match {
-//      case Some( input_data ) =>
-//        val input_array: FastMaskedArray = input_data.toFastMaskedArray
-//        val (weighted_value_sum_masked, weights_sum_masked) =  if( addWeights(context) ) {
-//          val weights: FastMaskedArray = FastMaskedArray(KernelUtilities.getWeights(inputId, context))
-//          input_array.weightedSum(axisIndices,Some(weights))
-//        } else {
-//          input_array.weightedSum(axisIndices,None)
-//        }
-//        context.operation.rid -> HeapFltArray(weighted_value_sum_masked.toCDFloatArray, input_data.origin, arrayMdata(inputs, "value"), Some(weights_sum_masked.toCDFloatArray.getArrayData()))
-//      case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
-//    })
-//    logger.info("Executed Kernel %s map op, input = %s, time = %.4f s".format(name,  id, (System.nanoTime - t0) / 1.0E9))
-//    context.addTimestamp( "Map Op complete" )
-//    val rv = CDTimeSlice( Map( elems:_*), inputs.metadata ++ List( "rid" -> context.operation.rid, "axes" -> axes.toUpperCase ) )
-//    logger.info("Returning result value")
-//    rv
-//  }
-//  override def combineRDD(context: KernelContext)(a0: CDTimeSlice, a1: CDTimeSlice ): CDTimeSlice =  weightedValueSumRDDCombiner(context)(a0, a1)
-//  override def postRDDOp(pre_result: CDTimeSlice, context: KernelContext ):  CDTimeSlice = weightedValueSumRDDPostOp( pre_result, context )
-//}
+
 
 //class svd extends SingularRDDKernel(Map.empty) {
 //  val inputs = List(WPSDataInput("input variable", 1, 1))

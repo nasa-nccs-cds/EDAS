@@ -15,7 +15,6 @@ import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.kernels.AxisIndices
 import nasa.nccs.edas.sources.{Aggregation, Collection, CollectionLoadServices, Collections}
 import nasa.nccs.edas.utilities.appParameters
-import nasa.nccs.esgf.process.OperationContext.OpResultType
 import nasa.nccs.esgf.process.UID.ndigits
 
 import scala.collection.JavaConversions._
@@ -196,7 +195,7 @@ object TaskRequest extends Loggable {
     val data_list: List[DataContainer] = datainputs.getOrElse("variable", List()).flatMap(DataContainer.factory(uid, _, op_spec_list.isEmpty )).toList
     val domain_list: List[DomainContainer] = datainputs.getOrElse("domain", List()).map(DomainContainer(_)).toList
     val opSpecs: Seq[Map[String, Any]] = if(op_spec_list.isEmpty) { getEmptyOpSpecs(data_list) } else { op_spec_list }
-    val operation_map: Map[String,OperationContext] = Map( opSpecs.zipWithIndex.map {  case (op, index) => OperationContext(index, uid, process_name, data_list.map(_.uid), op) } map ( op => op.identifier -> op ) :_* )
+    val operation_map: Map[String,OperationContext] = Map( opSpecs.map (  op => OperationContext( uid, process_name, data_list.map(_.uid), op) ) map ( opc => opc.identifier -> opc ) :_* )
     val operation_list: Seq[OperationContext] = operation_map.values.toSeq
     val variableMap: Map[String, DataContainer] = buildVarMap(data_list, operation_list)
     val domainMap: Map[String, DomainContainer] = buildDomainMap(domain_list)
@@ -1171,12 +1170,10 @@ object DomainContainer extends ContainerBase {
   def empty(name: String): DomainContainer = new DomainContainer(name)
 }
 
-class OperationContext(val index: Int,
-                       val identifier: String,
+class OperationContext(val identifier: String,
                        val name: String,
                        val rid: String,
                        val inputs: List[String],
-                       val resultType: OpResultType,
                        private val configuration: Map[String, String]) extends ContainerBase with ScopeContext with Serializable {
 
   def getConfiguration: Map[String, String] = configuration
@@ -1200,20 +1197,15 @@ class OperationContext(val index: Int,
 }
 
 object OperationContext extends ContainerBase {
-  type OpResultType = OperationContext.ResultType.Value
-  object ResultType extends Enumeration {
-    val UNDEF, PRODUCT, INTERMEDIATE = Value
-  }
   private var resultIndex = 0;
 
-  def apply(index: Int, uid: UID, process_name: String, uid_list: List[String], metadata: Map[String, Any]): OperationContext = {
+  def apply( uid: UID, process_name: String, uid_list: List[String], metadata: Map[String, Any] ): OperationContext = {
     val op_inputs: Iterable[String] = metadata.get("input") match {
       case Some(input_values: List[_]) =>   input_values.map( input_value => { val sval = input_value.asInstanceOf[String]; if( sval.endsWith( uid.toString ) ) { sval } else { uid + sval.trim } } )
       case Some(input_value: String) =>     if( input_value.isEmpty ) { uid_list } else { input_value.split(',').map(uid + _.trim) }
       case None =>                          uid_list.map(uid + _.trim)
       case x => throw new Exception("Unrecognized input in operation spec: " + x.toString)
     }
-    var productType = ResultType.UNDEF;
     val op_name = metadata.getOrElse("name", process_name).toString.trim
     val optargs: Map[String, String] = metadata.filterNot((item) => List("input", "name").contains(item._1)).mapValues(_.toString.trim).map(identity) // map(identity) to work around scala serialization bug
     val input = metadata.getOrElse("input", "").toString
@@ -1221,20 +1213,17 @@ object OperationContext extends ContainerBase {
     val dt: DateTime = new DateTime(DateTimeZone.getDefault())
     val rid = metadata.get("id") match {
       case Some(result_id) =>
-        productType = ResultType.INTERMEDIATE;
         uid + result_id.toString
       case None =>
-        productType = ResultType.PRODUCT;
         metadata.get("result") match {
-          case Some(result_id) => uid + result_id.toString
-          case None => uid + op_name + "-" + index.toString
+          case Some(result_id) =>
+            uid + result_id.toString
+          case None =>
+            resultIndex += 1
+            uid + op_name + "-" + resultIndex.toString
         }
     }
-    new OperationContext(index, identifier = UID() + op_name, name = op_name, rid = rid, inputs = op_inputs.toList, productType, optargs)
-  }
-
-  def generateResultId: String = {
-    resultIndex += 1; "$v" + resultIndex.toString
+    new OperationContext( identifier = UID() + op_name, name = op_name, rid = rid, inputs = op_inputs.toList, optargs )
   }
 }
 

@@ -367,6 +367,13 @@ class DefaultTestSuite extends EDASTestSuite {
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
   }
 
+  test("anomaly-time-multiK") {
+    val datainputs = s"""[domain=[{"name":"d0", "lat":{"start":30,"end":50,"system":"values"}, "lon":{"start":0,"end":20,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.anomaly","input":"v1","axes":"t"}]]"""
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
+  }
+
   test("anomaly-seasonal") {
     val datainputs = s"""[domain=[{"name":"d0", "lat":{"start":40,"end":40,"system":"values"}, "lon":{"start":260,"end":260,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave","groupBy":"seasonOfYear"},{"name":"CDSpark.eDiff","input":"v1,v1ave"}]]"""
     val result_node = executeTest( datainputs )
@@ -641,9 +648,7 @@ class DefaultTestSuite extends EDASTestSuite {
       s"""[
             domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":0,"end":500,"system":"indices"}}],
             variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
-            operation=[       {"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t","id":"v1m"},
-                              {"name":"CDSpark.eDiff","input":"v1,v1m","domain":"d0","id":"v1ss"},
-                              {"name":"CDSpark.rms","input":"v1ss","domain":"d0","axes":"t"}]
+            operation=[ {"name":"CDSpark.stdDev","input":"v1","domain":"d0","axes":"t"} ]
           ]""".replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = getResultData( result_node )

@@ -307,16 +307,17 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 }
 
 abstract class MultiKernel( options: Map[String,String] = Map.empty ) extends Kernel(options) {
+  def insertNewName( oldIdentifier: String, newName: String ): String = ( Array(newName) ++ oldIdentifier.split('-').tail ).mkString("-")
   def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode] = {
-    val expandedOps: List[(String, OperationContext)] = getExpandedOperations( workflow, operation )
-    expandedOps.flatMap { case (kernelName, op_context) =>
-      workflow.createKernel(kernelName) match {
-        case kernelImpl: KernelImpl => List(new WorkflowNode(op_context, kernelImpl))
-        case multiKernel: MultiKernel => multiKernel.getWorkflowNodes(workflow, op_context)
+    val expandedOps: List[OperationContext] = getExpandedOperations( workflow, operation )
+    expandedOps.flatMap ( op_context =>
+      workflow.createKernel( op_context.name.toLowerCase ) match {
+        case kernelImpl: KernelImpl => List( new WorkflowNode( op_context, kernelImpl ) )
+        case multiKernel: MultiKernel => multiKernel.getWorkflowNodes( workflow, op_context )
       }
-    }
+    )
   }
-  def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[ (String,OperationContext)]
+  def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext]
 }
 
 abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Kernel(options) {
@@ -692,22 +693,29 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
     val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
     val inputId: String = context.operation.inputs.headOption.getOrElse("NULL")
     val shape = inputs.elements.head._2.shape
-    val elem = inputs.element(inputId) match {
+    val elems = inputs.element(inputId) match {
       case Some( input_array ) =>
         mapCombineOp match {
           case Some(combineOp) =>
-            val result = input_array.toFastMaskedArray.reduce(combineOp, axes.args, initValue)
-            val result_data = result.getData
-//            logger.info(" ##### KERNEL [%s]: Map Op: combine, axes = %s, result shape = %s, result value[0] = %.4f".format( name, axes, result.shape.mkString(","), result_data(0) ) )
-            ArraySpec( input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup )
+            if( this.weighted ) {
+              val suffixes = Seq( "", "_WEIGHTS_" )
+              input_array.toFastMaskedArray.weightedReduce( combineOp, axes.args, initValue, None ).zip(suffixes).map { case (result, suffix) => {
+                val result_data = result.getData
+                context.operation.rid + suffix -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup)
+              }}
+            } else {
+              val result = input_array.toFastMaskedArray.reduce(combineOp, axes.args, initValue)
+              val result_data = result.getData
+              Seq(context.operation.rid -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup) )
+            }
           case None =>
 //            logger.info(" ##### KERNEL [%s]: Map Op: NONE".format( name ) )
-            input_array
+            Seq(context.operation.rid -> input_array )
         }
       case None => throw new Exception( "Missing input to '" + this.getClass.getName + "' map op: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(",") )
     }
     val dt = (System.nanoTime - t0) / 1.0E9
-    CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> elem), inputs.metadata )
+    CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata )
   })
 }
 
