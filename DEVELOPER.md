@@ -132,7 +132,7 @@ commands in the **{EDAS}/bin/update.sh** script.
         >> anaconda logout
         
         
-#### Workflow Dyanamics
+#### Workflow Dynamics
 
     1) A workflow links a set of WorkflowNodes, ead representing a Kernel, into a processing pipeline.
     2) To compute partitioning domains, note that:
@@ -146,9 +146,16 @@ commands in the **{EDAS}/bin/update.sh** script.
         spans to partitions).  Apply this partitioning to all inputs.
     5) Compute batches as a function of the input data size and Spark partition size limits.  Batches are processed sequentially
         to prevent memory overflow. 
-    5) Each SWF is processed in order.  For each SWF an execution pipeline is constructed by starting from the root node and 
+    6) Each SWF is processed in order.  For each SWF an execution pipeline is constructed by starting from the root node and 
         propagating backward through the dependency tree.   The pipeline is executed using parallel streaming map operations followed by
         a final reduce and cache to generate a product for use in subsequent SWF processing. 
   
-        
+ #### Data Collections
+ 
+    1) A collection is defined as a set of files that all have the smae variables and axes.
+    2) An aggregation is defined as a set of cleectsion for which all variables are unique (no sets of distinct variables defined with the same name)
+    3) The script "mkcol" is used to create aggregations.  
+        * Usage:  "mkcol -d <bifurcation_depth> <aggregation_name> <aggregation_root_path>". 
+        * The "bifurcation_depth" is the depth in the direcory tree beneath the aggregation_root_dir at which the separate collections split off.
+    4) The script "mkcols" is used to create a separate aggregation for each subdirectory of a specified master directory.       
     
