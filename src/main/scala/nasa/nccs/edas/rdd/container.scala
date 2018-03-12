@@ -153,6 +153,8 @@ object TSGroup {
   def season( month: Int ): Int = ( (month+1) % 12 )/3
   def getGroup( groupBy: String ): TSGroup = {
     if( groupBy.equalsIgnoreCase("monthofyear") ) { new TSGroup ( cal => cal.get( Calendar.MONTH ), true ) }
+    else if( groupBy.equalsIgnoreCase("decade") ) { new TSGroup ( cal => cal.get( Calendar.YEAR )/10, false ) }
+    else if( groupBy.equalsIgnoreCase("year") ) { new TSGroup ( cal => cal.get( Calendar.YEAR ), false ) }
     else if( groupBy.equalsIgnoreCase("month") ) { new TSGroup ( cal =>  ( cal.get( Calendar.YEAR ) - 1970 )*12 + cal.get( Calendar.MONTH ), false ) }
     else if( groupBy.equalsIgnoreCase("hourofday") ) { new TSGroup ( cal =>  cal.get( Calendar.HOUR_OF_DAY ), true ) }
     else if( groupBy.equalsIgnoreCase("season") ) { new TSGroup ( cal =>  ( cal.get( Calendar.YEAR ) - 1970 )*4 + season( cal.get( Calendar.MONTH ) ), false ) }
