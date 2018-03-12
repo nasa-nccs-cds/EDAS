@@ -343,8 +343,8 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     EDASExecutionManager.checkIfAlive
     if( sampleInputs ) {
       val sample_slice = input.rdd.first()
-      logger.info( s" @S@: Kernel ${id} Data Sample: ${sample_slice.elements.map{ case (key,array) =>
-        s"{ $key: [ ${ array.data.slice( 0, Math.min( 20, array.data.length-1 ) ).mkString(", ") } ] }" }.mkString("; ")}")
+      logger.info( s" @S@: Kernel ${id} Data Sample: \n     ${sample_slice.elements.map{ case (key,array) =>
+        s"* $key: [ ${ array.data.slice( 0, Math.min( 20, array.data.length-1 ) ).mkString(", ") } ]" }.mkString("\n     ")}")
     }
     input.map( map(context) )
   }
