@@ -283,6 +283,7 @@ object PostOpOperations {
 
 abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Loggable with Serializable with WPSProcess {
   val doesAxisReduction: Boolean
+  val sampleInputs = true
   val identifiers = this.getClass.getName.split('$').flatMap(_.split('.'))
   val status = options.get("visibility").fold(KernelStatus.developmental)( opVal => KernelStatus.parse(opVal) )
   def operation: String = identifiers.last.toLowerCase
@@ -340,6 +341,11 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
 
   def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
+    if( sampleInputs ) {
+      val sample_slice = input.rdd.first()
+      logger.info( s" @S@: Kernel ${id} Data Sample: ${sample_slice.elements.map{ case (key,array) =>
+        s"{ $key: [ ${ array.data.slice( 0, Math.min( 20, array.data.length-1 ) ).mkString(", ") } ] }" }.mkString("; ")}")
+    }
     input.map( map(context) )
   }
 
