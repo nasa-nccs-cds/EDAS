@@ -170,7 +170,7 @@ case class KernelExecutionResult( results: TimeSliceCollection, files: List[Stri
 }
 
 class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager ) extends Loggable {
-  val nodes: Seq[WorkflowNode] = request.operations flatMap getWorkflowNodes
+  val nodes: List[WorkflowNode] = request.operations flatMap getWorkflowNodes toList
   val roots = findRootNodes()
   private val _nodeInputs: mutable.HashMap[String, OperationInput] = mutable.HashMap.empty[String, OperationInput]
 
