@@ -283,7 +283,7 @@ object PostOpOperations {
 
 abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Loggable with Serializable with WPSProcess {
   val doesAxisReduction: Boolean
-  val sampleInputs = true
+  val sampleInputs = false
   val identifiers = this.getClass.getName.split('$').flatMap(_.split('.'))
   val status = options.get("visibility").fold(KernelStatus.developmental)( opVal => KernelStatus.parse(opVal) )
   def operation: String = identifiers.last.toLowerCase
