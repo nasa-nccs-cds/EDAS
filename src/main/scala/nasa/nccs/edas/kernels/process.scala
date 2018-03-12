@@ -342,9 +342,9 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
   def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
     EDASExecutionManager.checkIfAlive
     if( sampleInputs ) {
-      val sample_slice = input.rdd.first()
-      logger.info( s" @S@: Kernel ${id} Data Sample: \n     ${sample_slice.elements.map{ case (key,array) =>
-        s"* $key: [ ${ array.data.slice( 0, Math.min( 20, array.data.length-1 ) ).mkString(", ") } ]" }.mkString("\n     ")}")
+      val slices = input.rdd.collect()
+      logger.info( s" @S@: Kernel ${id}.map Data Input Sample: \n  @S@:   ${slices.map ( _.elements.map{ case (key,array) =>
+        s" $key: [ ${ array.data.mkString(", ") } ]" }.mkString("; ")).mkString("\n  @S@:   ") }")
     }
     input.map( map(context) )
   }
@@ -363,6 +363,11 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     val rid = context.operation.rid.toLowerCase
     val elemFilter = (elemId: String) => elemId.toLowerCase.startsWith( rid )
     val postOpId: String = options.getOrElse( "postOp", "" )
+    if( sampleInputs ) {
+      val slices = input.rdd.collect()
+      logger.info( s" @S@: Kernel ${id}.reduce Input Data Sample: \n  @S@:   ${slices.map ( _.elements.map{ case (key,array) =>
+        s" $key: [ ${ array.data.mkString(", ") } ]" }.mkString("; ")).mkString("\n  @S@:   ") }")
+    }
     if( !parallelizable ) { input.collect( elemFilter, postOpId ) }
     else {
       val axes = context.getAxes

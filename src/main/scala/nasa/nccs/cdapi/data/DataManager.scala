@@ -514,6 +514,58 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     FastMaskedArray( vTot, missing )
   }
 
+  def -( other: FastMaskedArray ): FastMaskedArray = {
+    assert ( other.shape.sameElements(shape), s"Error, attempt to add arrays with different shapes: {${other.shape.mkString(",")}} -- {${shape.mkString(",")}}")
+    val vTot = new ma2.ArrayFloat( array.getShape )
+    (0 until array.getSize.toInt ) foreach ( index => {
+      val uv0: Float = array.getFloat(index)
+      val uv1: Float = other.array.getFloat(index)
+      if( (uv0==missing) || uv0.isNaN || (uv1==other.missing) || uv1.isNaN ) { missing }
+      else {  vTot.setFloat(index, uv0 - uv1)  }
+    } )
+    FastMaskedArray( vTot, missing )
+  }
+
+  def -( const: Int ): FastMaskedArray = {
+    val vTot = new ma2.ArrayFloat( array.getShape )
+    (0 until array.getSize.toInt ) foreach ( index => {
+      val uv0: Float = array.getFloat(index)
+      if( (uv0==missing) || uv0.isNaN ) { missing }
+      else {  vTot.setFloat(index, uv0 - const)  }
+    } )
+    FastMaskedArray( vTot, missing )
+  }
+
+  def +( const: Int ): FastMaskedArray = {
+    val vTot = new ma2.ArrayFloat( array.getShape )
+    (0 until array.getSize.toInt ) foreach ( index => {
+      val uv0: Float = array.getFloat(index)
+      if( (uv0==missing) || uv0.isNaN ) { missing }
+      else {  vTot.setFloat(index, uv0 + const)  }
+    } )
+    FastMaskedArray( vTot, missing )
+  }
+
+  def *( const: Int ): FastMaskedArray = {
+    val vTot = new ma2.ArrayFloat( array.getShape )
+    (0 until array.getSize.toInt ) foreach ( index => {
+      val uv0: Float = array.getFloat(index)
+      if( (uv0==missing) || uv0.isNaN ) { missing }
+      else {  vTot.setFloat(index, uv0 * const)  }
+    } )
+    FastMaskedArray( vTot, missing )
+  }
+
+  def /( const: Int ): FastMaskedArray = {
+    val vTot = new ma2.ArrayFloat( array.getShape )
+    (0 until array.getSize.toInt ) foreach ( index => {
+      val uv0: Float = array.getFloat(index)
+      if( (uv0==missing) || uv0.isNaN ) { missing }
+      else {  vTot.setFloat(index, uv0 / const)  }
+    } )
+    FastMaskedArray( vTot, missing )
+  }
+
   def *( other: FastMaskedArray ): FastMaskedArray = {
     assert ( other.shape.sameElements(shape), s"Error, attempt to add arrays with different shapes: {${other.shape.mkString(",")}} -- {${shape.mkString(",")}}")
     val vTot = new ma2.ArrayFloat( array.getShape )

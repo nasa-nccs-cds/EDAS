@@ -219,7 +219,7 @@ object TimeSliceRDD extends Serializable {
       val resultValues: FastMaskedArray = postOpKey match {
         case PostOpOperations.normw => weigtsArrayOpt.fold( valuesArray )( wts => valuesArray / wts.toFastMaskedArray )
         case PostOpOperations.sqrt =>  valuesArray.sqrt()
-        case PostOpOperations.rms =>   weigtsArrayOpt.fold( valuesArray.sqrt() )( wts => ( valuesArray / wts.toFastMaskedArray ).sqrt() )
+        case PostOpOperations.rms =>   weigtsArrayOpt.fold( valuesArray.sqrt() )( wts => ( valuesArray / (wts.toFastMaskedArray - 1) ).sqrt() )
         case x => FastMaskedArray.empty // Never reached.
       }
       values_key -> ArraySpec(valuesArray.missing, valuesArray.shape, valuesSpec.origin, resultValues.getData, valuesSpec.optGroup )

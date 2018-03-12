@@ -657,6 +657,20 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for StdDev")
   }
 
+  test("Anomaly-GISS-1") {
+
+    val datainputs =
+      s"""[
+            domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":5,"system":"indices"},"time":{"start":0,"end":50,"system":"indices"}}],
+            variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+            operation=[ {"name":"CDSpark.anomaly","input":"v1","domain":"d0","axes":"t"} ]
+          ]""".replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkDataString(", ")  )
+  }
+
+
   test("TimeAve-GISS-1") {
     // # NCO Verification script:
     //  datafile="collection:/giss_r1i1p1"

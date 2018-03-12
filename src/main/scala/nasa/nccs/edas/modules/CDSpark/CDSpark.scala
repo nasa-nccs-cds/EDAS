@@ -530,9 +530,9 @@ class stdDev extends MultiKernel(Map.empty) {
   def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext] = {
     val opId = UID( operation.identifier.split('-').last )
     val ( anomaly, rms, anomalyResult ) = ( "CDSpark.anomaly", "CDSpark.rms", workflow.request.id + "anomalyResult" )
-    val opAve  = new OperationContext( opId + anomaly, anomaly, anomalyResult, operation.inputs, operation.getConfiguration )
-    val opDiff = new OperationContext( opId + rms, rms, operation.rid, operation.inputs :+ anomalyResult, operation.getConfiguration )
-    List( opAve, opDiff )
+    val opAnomaly  = new OperationContext( opId + anomaly, anomaly, anomalyResult, operation.inputs, operation.getConfiguration )
+    val opRms = new OperationContext( opId + rms, rms, operation.rid, List( anomalyResult ), operation.getConfiguration )
+    List( opAnomaly, opRms )
   }
 }
 
