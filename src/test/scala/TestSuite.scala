@@ -1,5 +1,6 @@
 import java.net.URI
 import java.nio.file.{Path, Paths}
+import java.util.Formatter
 
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.engine.ExecutionCallback
@@ -12,6 +13,7 @@ import org.apache.commons.lang.RandomStringUtils
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import org.scalatest.{BeforeAndAfter, FunSuite, Ignore}
+import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1DTime}
 import ucar.nc2.{NetcdfFileWriter, Variable}
 
 import scala.collection.mutable.ListBuffer
@@ -631,6 +633,24 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
   }
 
+  test("SpaceAve-GISS-R1i1p1-dates") {
+    val result_vals = CDFloatArray( Array(  1.053432E7, 1.05768E7, 1.061928E7, 1.06632E7, 1.070712E7, 1.075104E7, 1.079496E7, 1.08396E7, 1.088352E7, 1.092744E7 ).map(_.toFloat), Float.MaxValue )
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"},"time":{"start":"1990-01-01T00:00:00Z","end":"1995-12-31T23:59:00Z","system":"timestamps"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val result_node = executeTest( datainputs, Map( "response" -> "file" ) )
+    val dataset = getResultDatasets( result_node ).headOption.getOrElse( throw new Exception( "Missing result data file, result node: " + result_node.toString() ) )
+    dataset.getCoordinateAxes.find( _.getAxisType.getCFAxisName == "T" ) match {
+      case Some(coordAxis) =>
+        val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(dataset, coordAxis, new Formatter())
+        println( "Op Result time axis units:       " + timeAxis.getUnitsString )
+        val nDates = Math.min( 10, timeAxis.getSize ).toInt
+        val time_values = (0 until nDates) map timeAxis.getCoordValue
+        println( "Op Result times: " + (0 until nDates).map( iTime => timeAxis.getCalendarDate(iTime).toString ).mkString(", ") )
+        println( "Op Result values: " + time_values.mkString(", ") )
+        assert( result_vals.maxScaledDiff( CDFloatArray( time_values.map(_.toFloat).toArray, Float.MaxValue )  )  < eps, s" Incorrect value computed for Ave")
+      case None => throw new Exception( "Missing Time Axis in data file: " + dataset.getLocation )
+    }
+  }
+
   test("StdDev-GISS") {
     // # NCO Verification script:
     //  datafile="collection:/giss_r1i1p1"
@@ -947,7 +967,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     values / counts
   }
 
-  def getDataNodes( result_node: xml.Elem, print_result: Boolean = false  ): xml.NodeSeq = {
+  def   getDataNodes( result_node: xml.Elem, print_result: Boolean = false  ): xml.NodeSeq = {
     if(print_result) { println( s"Result Node:\n${result_node.toString}\n" ) }
     result_node.label match {
       case "response" =>
@@ -981,19 +1001,24 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
   def getResultVariables( result_node: xml.Elem ): List[Variable] = {
     val variables = ListBuffer.empty[Variable]
     val data_nodes: xml.NodeSeq = getDataNodes( result_node, false )
-    for (data_node <- data_nodes; if data_node.label.startsWith("data")) yield data_node.attribute("file") match {
-      case Some(filePath) => {
-        val ncDataset: NetcdfDataset = NetcdfDataset.openDataset(filePath.toString)
-        variables += ncDataset.findVariable("Nd4jMaskedTensor")
-      }
-      case None => Unit;
+    for (data_node <- data_nodes; if data_node.label.startsWith("data")) yield data_node.attribute("file") foreach {
+      filePath => variables += NetcdfDataset.openDataset(filePath.toString).findVariable("Nd4jMaskedTensor")
     }
     variables.toList
   }
 
-  def executeTest( datainputs: String, runArgs: Map[String,String]=Map.empty, _processName: String = "" ): xml.Elem = {
+  def getResultDatasets( result_node: xml.Elem ): List[NetcdfDataset] = {
+    val datasets = ListBuffer.empty[NetcdfDataset]
+    val data_nodes: xml.NodeSeq = getDataNodes( result_node, false )
+    for (data_node <- data_nodes; if data_node.label.startsWith("data")) yield data_node.attribute("files") foreach {
+      filePath => datasets += NetcdfDataset.openDataset(filePath.toString)
+    }
+    datasets.toList
+  }
+
+  def executeTest( datainputs: String, runArgs: Map[String,String]=Map.empty, async: Boolean = false, _processName: String = "" ): xml.Elem = {
     val t0 = System.nanoTime()
-    val runargs = runArgs ++ Map( "responseform" -> "generic", "storeexecuteresponse" -> "true", "unitTest" -> "true", "status" -> "false" )
+    val runargs = runArgs ++ Map( "responseform" -> "generic", "storeexecuteresponse" -> "true", "unitTest" -> "true", "status" -> async.toString )
     val rId: String = RandomStringUtils.random( 6, true, true )
     val process_name = if( _processName.isEmpty ) { "Workflow-" + rId } else _processName
     val executionCallback: ExecutionCallback = new ExecutionCallback {

@@ -214,7 +214,7 @@ object EDASExecutionManager extends Loggable {
                 range
               case Some(dim) =>
                 logger.info( s" Reading coord var ${coordAxis.getFullName}, dim Length =${dim.getLength}, range = [${range.first}:${range.last}], axis shape = [${coordAxis.getShapeAll.mkString(",")}] " )
-                if( coordAxis.getAxisType == AxisType.Time ) { new ma2.Range( range.getName, 0, dim.getLength-1 ) }
+                if( coordAxis.getAxisType == AxisType.Time ) { range } // new ma2.Range( range.getName, 0, dim.getLength-1 ) }
                 else if( dim.getLength == 1 ) { val center = (range.first+range.last)/2; new ma2.Range( range.getName, center, center ) }
                 else { range }
  //               if ( ( dim.getLength < range.length ) || ( coordAxis.getAxisType == AxisType.Time ) ) new ma2.Range(dim.getLength) else range
