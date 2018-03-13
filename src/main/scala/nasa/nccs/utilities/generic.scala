@@ -131,7 +131,7 @@ object EDTime {
   val ucarDatatype = ma2.DataType.DOUBLE
 
   def toValue( date: CalendarDate ): Double = date.getMillis / millisPerMinute
-  def toValue( millis: Double ): Double = millis / millisPerMinute
+  def toValue( millis: Long ): Double = millis / millisPerMinute
   def toDate( value: Double ): CalendarDate = CalendarDate.of( ( value * millisPerMinute ).toLong )
   def toMillis( value: Double ): Long = ( value * millisPerMinute ).toLong
   def toString( value: Double ): String = "%f".format( value )

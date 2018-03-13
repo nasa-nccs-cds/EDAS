@@ -133,7 +133,7 @@ object FileHeader extends Loggable {
   def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): ( Array[Double], Array[Array[Double]] ) = {
     val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
     val timeCalValues: List[CalendarDate] = timeAxis.getCalendarDates.toList
-    val timeMillis: Array[Double] = timeCalValues.map( _.getMillis ).toArray
+    val timeMillis: Array[Long] = timeCalValues.map( _.getMillis ).toArray
     val bounds: Array[Array[Double]] = try {
       ((0 until timeAxis.getShape(0)) map (index => timeAxis.getCoordBoundsDate(index) map (EDTime.toValue))).toArray
     } catch { case err: Throwable =>
