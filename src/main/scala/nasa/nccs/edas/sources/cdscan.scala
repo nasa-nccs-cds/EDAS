@@ -132,18 +132,22 @@ object FileHeader extends Loggable {
 
   def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): ( Array[Double], Array[Array[Double]] ) = {
     val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
-    val timeCalValues: List[CalendarDate] = timeAxis.getCalendarDates.toList
-    val bounds: Array[Array[Double]] = try {
+    val timeValues = timeAxis.getCoordValues
+    val edasBounds: Array[Array[Double]] = try {
       ((0 until timeAxis.getShape(0)) map (index => timeAxis.getCoordBoundsDate(index) map (EDTime.toValue))).toArray
     } catch { case err: Throwable =>
       logger.error( s"Error reading time bounds from datset ${ncDataset.getLocation}: ${err.toString}")
-      Array.empty
+
+      if( timeValues.length < 2 ) { Array.empty } else {
+        val dt2 = ( timeValues(1) - timeValues(0) ) / 2
+        timeValues.map( value => Array( EDTime.toValue(value-dt2), EDTime.toValue(value+dt2) ) )
+      }
     }
-    val timeValues = timeCalValues.map( EDTime.toValue ).toArray
+    val edasTimeValues = timeValues.map( EDTime.toValue )
     //    val datesSample = timeCalValues.subList(0,5)
     //    val timeValuesSample = timeValues.slice(0,5)
     //    logger.info( s" Writing Time values, dates: [ ${datesSample.map(_.toString).mkString(", ")} ], ${EDTime.units}: [ ${timeValuesSample.map(_.toString).mkString(", ")} ] ")
-    ( timeValues, bounds )
+    ( edasTimeValues, edasBounds )
   }
 
 
