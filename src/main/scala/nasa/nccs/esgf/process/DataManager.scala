@@ -342,9 +342,18 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
     if (coord_values.length == range.length) coord_values else (0 until range.length).map(iE => coord_values(range.element(iE))).toArray
   }
 
-  def getGridIndexBounds( startval: Double, endval: Double ): Option[ma2.Range] = {
+  def getOffsetBounds( v0: Double, v1: Double ): ( Double, Double ) = {
+    val offset0: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getBound1().head >= 0 )
+    val offset1: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getBound1().last <= 180 )
+    val r0: Double = if( offset0 && ( v0 < 0 ) ) { v0 + 360 } else if( offset1 && ( v0 > 180 ) ) { v0 - 360 } else v0
+    val r1: Double = if( offset0 && ( v1 < 0 ) ) { v1 + 360 } else if( offset1 && ( v1 > 180 ) ) { v1 - 360 } else v1
+    ( r0, r1 )
+  }
+
+  def getGridIndexBounds( v0: Double, v1: Double ): Option[ma2.Range] = {
     val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
     val axis_size = coordAxis1D.getSize.toInt
+    val ( startval, endval ) = getOffsetBounds( v0, v1 )
     val coordStartIndex = Math.max( coordAxis1D.findCoordElementBounded(startval) - 1, 0 )
     var startIndex = -1
     for(  coordIndex <- coordStartIndex until axis_size; cval = coordAxis1D.getCoordValue( coordIndex ); if cval >= startval ) {

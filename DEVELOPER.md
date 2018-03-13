@@ -134,7 +134,7 @@ commands in the **{EDAS}/bin/update.sh** script.
         
 #### Workflow Dynamics
 
-    1) A workflow links a set of WorkflowNodes, ead representing a Kernel, into a processing pipeline.
+    1) A workflow links a set of WorkflowNodes, each representing a Kernel, into a processing pipeline.
     2) To compute partitioning domains, note that:
         A) Operations that eliminate the time axis do not propagate the partitioning.  Ignoring these links Allows us to split the 
             workflow into a set of subworkflows (SWFs), which can be independently partitioned.
