@@ -630,7 +630,7 @@ class DefaultTestSuite extends EDASTestSuite {
     println( "Verified Result: " + nco_verified_result.getStorageArray.mkString(",") )
     assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
   }
-  
+
   test("StdDev-GISS") {
     // # NCO Verification script:
     //  datafile="collection:/giss_r1i1p1"
