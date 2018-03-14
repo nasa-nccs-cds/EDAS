@@ -116,10 +116,10 @@ case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String, Arr
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
     if( new_elements.isEmpty ) { None } else { Some( new CDTimeSlice(startTime, endTime, new_elements, metadata) ) }
   }
-  def toVector( selectElems: Seq[String] ): DenseVector = {
-    val arrays: Iterable[Array[Float]] = ( elements.filter { case (key,array) => selectElems.contains(key) } values ).map( _.data )
-    val new_data: Array[Float] = ArrayUtils.addAll( arrays.toSeq: _* )
-  }
+//  def toVector( selectElems: Seq[String] ): DenseVector = {
+//    val arrays: Iterable[Array[Float]] = ( elements.filter { case (key,array) => selectElems.contains(key) } values ).map( _.data )
+//    val new_data: Array[Float] = ArrayUtils.addAll( arrays.toSeq: _* )
+//  }
   def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
   def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)
   def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice(startTime, endTime, elements.filterKeys(key => op(key) ), metadata)
