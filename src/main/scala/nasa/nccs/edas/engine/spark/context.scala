@@ -21,7 +21,7 @@ import org.apache.spark.sql.SparkSession
 import com.sun.management.OperatingSystemMXBean
 import nasa.nccs.cdapi.tensors.CDCoordMap
 import nasa.nccs.edas.engine.EDASExecutionManager.logger
-import nasa.nccs.edas.rdd.CDTimeSlice
+import nasa.nccs.edas.rdd.CDRecord
 import ucar.nc2.dataset.CoordinateAxis1DTime
 
 import scala.collection.JavaConversions._
@@ -99,7 +99,7 @@ object CDSparkContext extends Loggable {
       .set("spark.file.transferTo", "false" )
       .set("spark.kryoserializer.buffer.max", "1000m" )
       .set("spark.driver.maxResultSize", "8000m" )
-      .registerKryoClasses( Array(classOf[DirectCDTimeSliceSpec], classOf[RecordKey], classOf[CDTimeSlice], classOf[DirectRDDVariableSpec], classOf[CDSection], classOf[HeapFltArray], classOf[Partition], classOf[CDCoordMap] ) )
+      .registerKryoClasses( Array(classOf[DirectCDTimeSliceSpec], classOf[RecordKey], classOf[CDRecord], classOf[DirectRDDVariableSpec], classOf[CDSection], classOf[HeapFltArray], classOf[Partition], classOf[CDCoordMap] ) )
 
     val sparkConfigFile: Path = Paths.get( System.getenv("SPARK_HOME"), "conf", "spark-defaults.conf" )
     for ( raw_line <- Source.fromFile( sparkConfigFile.toFile ).getLines; line = raw_line.trim; if !(line.startsWith("#") || line.isEmpty); keyVal = line.split("\\s+") ) {
@@ -124,7 +124,7 @@ object CDSparkContext extends Loggable {
 
   def addConfig( sc: SparkConf, spark_config_id: String, edas_config_id: String ) =  appParameters( edas_config_id ) map ( cval => sc.set( spark_config_id, cval ) )
 
-  def getPartitioner( rdd: RDD[CDTimeSlice] ): Option[RangePartitioner] = {
+  def getPartitioner( rdd: RDD[CDRecord] ): Option[RangePartitioner] = {
     rdd.partitioner match {
       case Some( partitioner ) => partitioner match {
         case range_partitioner: RangePartitioner => Some(range_partitioner)

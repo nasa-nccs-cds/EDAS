@@ -9,7 +9,7 @@ import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
 import nasa.nccs.edas.engine.{EDASExecutionManager, ExecutionCallback, TestProcess}
 import nasa.nccs.edas.engine.spark.CDSparkContext
-import nasa.nccs.edas.rdd.{CDTimeSlice, TestClockProcess, TestDatasetProcess}
+import nasa.nccs.edas.rdd.{CDRecord, TestClockProcess, TestDatasetProcess}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.esgf.wps.{Job, ProcessManager, wpsObjectParser}
 import nasa.nccs.edas.utilities.appParameters
@@ -153,7 +153,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         logger.info( "\n\n     **** Found result Id: " + rid + " ****** \n\n")
         processManager.getResultVariable("edas",rid) match {
           case Some( resultVar ) =>
-            val slice: CDTimeSlice = resultVar.result.concatSlices.slices.head
+            val slice: CDRecord = resultVar.result.concatSlices.slices.head
             slice.elements.foreach { case ( id, array ) =>
               sendArrayData( clientId, rid, array.origin, array.shape, array.toByteArray, resultVar.result.metadata  + ( "elem" -> id ) )  // + ("gridfile" -> gridfilename)
             }

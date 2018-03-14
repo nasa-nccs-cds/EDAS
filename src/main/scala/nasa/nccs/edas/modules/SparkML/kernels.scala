@@ -1,7 +1,7 @@
 package nasa.nccs.edas.modules.SparkML
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelImpl, KernelStatus}
-import nasa.nccs.edas.rdd.{ArraySpec, CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
+import nasa.nccs.edas.rdd.{ArraySpec, CDRecord, QueryResultCollection, CDRecordRDD}
 import nasa.nccs.edas.sources.netcdf.{CDTimeSliceConverter, CDTimeSlicesConverter, EDASOptions, RDDSimpleRecordsConverter}
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.mllib.linalg.Matrix
@@ -21,22 +21,22 @@ class svd extends KernelImpl {
   val weighted: Boolean = false
   val description = "Implement Singular Value Decomposition"
 
-  override def execute(workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
+  override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val matrix = input.toMatrix( context.operation.inputs )
     val nModes: Int = context.operation.getConfParm("modes").fold( 10 )( _.toInt )
-    val topSlice: CDTimeSlice = input.rdd.first
+    val topSlice: CDRecord = input.rdd.first
     val topElem = topSlice.elements.head._2
     val svd = matrix.computeSVD( nModes, true )
-    val ( ushape, udata ) = CDTimeSlice.rowMatrix2Array( svd.U )
-    val ( vshape, vdata ) = CDTimeSlice.matrix2Array( svd.V )
+    val ( ushape, udata ) = CDRecord.rowMatrix2Array( svd.U )
+    val ( vshape, vdata ) = CDRecord.matrix2Array( svd.V )
     val uArray: ArraySpec  = new ArraySpec( topElem.missing, ushape, topElem.origin, udata, topElem.optGroup )
     val vArray: ArraySpec  = new ArraySpec( topElem.missing, vshape, topElem.origin, vdata, topElem.optGroup )
     val elements: Map[String, ArraySpec] = Map( "U" -> uArray, "V" ->vArray )
-    val slice: CDTimeSlice = new CDTimeSlice( topSlice.startTime, topSlice.endTime, elements, topSlice.metadata )
-    new TimeSliceCollection( Array( slice ), input.metadata )
+    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, elements, topSlice.metadata )
+    new QueryResultCollection( Array( slice ), input.metadata )
   }
 
-  def execute2(workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
+  def execute2(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val options: EDASOptions = new EDASOptions( Array.empty )
     val rowRdd: RDD[Row] = input.rdd.mapPartitions( iter => new CDTimeSlicesConverter( iter, options ) )
     val df: DataFrame = workflow.executionMgr.serverContext.spark.session.createDataFrame( rowRdd, CDTimeSliceConverter.defaultSchema )
@@ -45,10 +45,10 @@ class svd extends KernelImpl {
     logger.info( "Computing ave" )
     df.select( avgCol.alias("Average") ).show(3)
     logger.info( "Finished computing ave" )
-    TimeSliceCollection.empty
+    QueryResultCollection.empty
   }
 
-  def execute1( workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
+  def execute1(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val options: EDASOptions = new EDASOptions( Array.empty )
     val rowRdd: RDD[java.lang.Float] = input.rdd.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
     val df: Dataset[java.lang.Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )( Encoders.FLOAT )
@@ -57,9 +57,9 @@ class svd extends KernelImpl {
     logger.info( "Computing ave" )
     df.select( avgCol.alias("Average") ).show(3)
     logger.info( "Finished computing ave" )
-    TimeSliceCollection.empty
+    QueryResultCollection.empty
   }
 
-  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = { rdd }   // Not used-> bypassed
+  def map(context: KernelContext )( rdd: CDRecord ): CDRecord = { rdd }   // Not used-> bypassed
 
 }

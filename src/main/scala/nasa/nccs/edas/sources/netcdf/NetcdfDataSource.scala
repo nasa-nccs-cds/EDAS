@@ -2,7 +2,7 @@ package nasa.nccs.edas.sources.netcdf
 
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
 import nasa.nccs.edas.engine.spark.RecordKey
-import nasa.nccs.edas.rdd.{ArraySpec, CDTimeSlice}
+import nasa.nccs.edas.rdd.{ArraySpec, CDRecord}
 import nasa.nccs.utilities.Loggable
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
@@ -18,11 +18,11 @@ class TempRow( val values: Seq[Any] ) extends Row {
 case class EDASOptions( inputs: Array[String] ) {}
 
 object CDTimeSliceConverter {
-  def apply( slice: CDTimeSlice, options: EDASOptions ) = new CDTimeSliceConverter( slice, options )
+  def apply(slice: CDRecord, options: EDASOptions ) = new CDTimeSliceConverter( slice, options )
   def defaultSchema: StructType = new StructType( Array( new StructField("index",IntegerType,false), new StructField("value",DataTypes.FloatType,true) ) )
 }
 
-class CDTimeSliceConverter( record: CDTimeSlice, options: EDASOptions ) extends Iterator[Row] with Loggable {
+class CDTimeSliceConverter(record: CDRecord, options: EDASOptions ) extends Iterator[Row] with Loggable {
   val schema: StructType= inferSchema( record )
   private val input_arrays: Seq[(String,ArraySpec)] = record.elements.iterator.toSeq // options.inputs.map( id => id -> record.findElements(id).head )
   private val inputs:  Seq[(String,FastMaskedArray)] = input_arrays.map { case (id,heapArray) => (id,heapArray.toFastMaskedArray) }
@@ -50,15 +50,15 @@ class CDTimeSliceConverter( record: CDTimeSlice, options: EDASOptions ) extends 
 //    row.asInstanceOf[Row]
 //  }
 
-  def inferSchema( rec: CDTimeSlice ): StructType = new StructType( Array( new StructField("index",IntegerType,false), new StructField("value",DataTypes.FloatType,true) ) ) // { FloatType, IntegerType, ShortType, ArrayType, ByteType, DateType, StringType, TimestampType }
+  def inferSchema( rec: CDRecord ): StructType = new StructType( Array( new StructField("index",IntegerType,false), new StructField("value",DataTypes.FloatType,true) ) ) // { FloatType, IntegerType, ShortType, ArrayType, ByteType, DateType, StringType, TimestampType }
 }
 
 object RDDSimpleRecordConverter {
-  def apply( slice: CDTimeSlice, options: EDASOptions ) = new RDDSimpleRecordConverter( slice, options )
+  def apply(slice: CDRecord, options: EDASOptions ) = new RDDSimpleRecordConverter( slice, options )
   def genericSchema: StructType = new StructType( Array( new StructField("value",FloatType,true) ) )
 }
 
-class RDDSimpleRecordConverter( record: CDTimeSlice, options: EDASOptions ) extends Iterator[java.lang.Float] with Loggable {
+class RDDSimpleRecordConverter(record: CDRecord, options: EDASOptions ) extends Iterator[java.lang.Float] with Loggable {
   val schema: StructType= inferSchema( record )
   private val row = new GenericInternalRow(schema.length)
   private val input_arrays: Seq[(String,ArraySpec)] = record.elements.iterator.toSeq //  options.inputs.map( id => id -> record.findElements(id).head )
@@ -78,11 +78,11 @@ class RDDSimpleRecordConverter( record: CDTimeSlice, options: EDASOptions ) exte
     if(value == missing) null else value
   }
 
-  def inferSchema( rec: CDTimeSlice ): StructType = new StructType( Array( new StructField("value",DataTypes.FloatType,true) ) ) // { FloatType, IntegerType, ShortType, ArrayType, ByteType, DateType, StringType, TimestampType }
+  def inferSchema( rec: CDRecord ): StructType = new StructType( Array( new StructField("value",DataTypes.FloatType,true) ) ) // { FloatType, IntegerType, ShortType, ArrayType, ByteType, DateType, StringType, TimestampType }
 }
 
 
-class CDTimeSlicesConverter( inputs: Iterator[CDTimeSlice], options: EDASOptions ) extends Iterator[Row] with Loggable {
+class CDTimeSlicesConverter(inputs: Iterator[CDRecord], options: EDASOptions ) extends Iterator[Row] with Loggable {
   val iterator = inputs.foldLeft(Iterator[Row]()) { case ( baseIter, newKeyVal ) => baseIter ++ CDTimeSliceConverter(newKeyVal,options) }
   def hasNext : scala.Boolean = iterator.hasNext
   def next() : Row = iterator.next
@@ -90,7 +90,7 @@ class CDTimeSlicesConverter( inputs: Iterator[CDTimeSlice], options: EDASOptions
 }
 
 
-class RDDSimpleRecordsConverter( inputs: Iterator[CDTimeSlice], options: EDASOptions ) extends Iterator[java.lang.Float] with Loggable {
+class RDDSimpleRecordsConverter(inputs: Iterator[CDRecord], options: EDASOptions ) extends Iterator[java.lang.Float] with Loggable {
   val iterator = inputs.foldLeft(Iterator[java.lang.Float]()) { case ( baseIter, newKeyVal ) => baseIter ++ RDDSimpleRecordConverter(newKeyVal,options) }
   def hasNext : scala.Boolean = iterator.hasNext
   def next() : java.lang.Float = iterator.next

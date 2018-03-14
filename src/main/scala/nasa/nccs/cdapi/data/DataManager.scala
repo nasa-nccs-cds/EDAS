@@ -22,7 +22,7 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.portal.TestReadApplication.logger
-import nasa.nccs.edas.rdd.CDTimeSlice
+import nasa.nccs.edas.rdd.CDRecord
 import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import ucar.ma2.{ArrayFloat, Index, IndexIterator}
@@ -82,7 +82,7 @@ trait RDDataManager {
   def getDataProducts(): Set[String] = Set.empty
   def getDataProductMetadata( pid: String ): Map[String,String] = Map.empty
 
-  def getDataRDD( id: String, domain: Map[AxisType,(Int,Int)] ): RDD[CDTimeSlice]
+  def getDataRDD( id: String, domain: Map[AxisType,(Int,Int)] ): RDD[CDRecord]
 
 }
 

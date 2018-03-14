@@ -175,7 +175,7 @@ class write extends CombineRDDsKernel( Map.empty ) {
   val weighted: Boolean = false
   val description = "Writes the result data to disk on server as a data collection"
 
-  override def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
+  override def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
     val resultId = context.operation.rid
     val resultName = context.operation.config("name").getOrElse( resultId )
@@ -188,7 +188,7 @@ class write extends CombineRDDsKernel( Map.empty ) {
     input
   }
 
-  def writeSlicesToFile(context: KernelContext, resultName: String, resultDir: File )( slices: Iterator[CDTimeSlice]): Iterator[String] = {
+  def writeSlicesToFile(context: KernelContext, resultName: String, resultDir: File )( slices: Iterator[CDRecord]): Iterator[String] = {
     val gridFilePath = context.grid.gridFile
     val gridDSet = NetcdfDataset.openDataset(gridFilePath)
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
@@ -347,7 +347,7 @@ class norm extends KernelImpl(Map.empty) {
   val doesAxisReduction: Boolean = false
   val weighted: Boolean = true
 
-  override def mapRDD(input: TimeSliceRDD, context: KernelContext ): TimeSliceRDD = {
+  override def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
     val aveK = new ave()
     val aveRDD = aveK.mapRDD( input, context.addConfig( "axes" -> "t" ) )
@@ -356,10 +356,10 @@ class norm extends KernelImpl(Map.empty) {
     aveRDD
   }
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
+  override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
     val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
-    CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
+    CDRecord(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
   }
 }
 
@@ -374,10 +374,10 @@ class cor extends KernelImpl(Map.empty) {
   val doesAxisReduction: Boolean = false
   val weighted: Boolean = true
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
+  override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
     val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
-    CDTimeSlice(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
+    CDRecord(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
   }
 }
 
@@ -391,7 +391,7 @@ class eAve extends KernelImpl(Map.empty) {
   val doesAxisReduction: Boolean = false
   val weighted: Boolean = true
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
+  override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     val axes: String = context.config("axes","")
     val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
@@ -405,7 +405,7 @@ class eAve extends KernelImpl(Map.empty) {
       context.operation.rid -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, resultArray.getData, groupOpt ),
       context.operation.rid + "_WEIGHTS_" -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, weightArray.getData, groupOpt )
     ).toMap
-    CDTimeSlice(inputs.startTime, inputs.endTime, elems, inputs.metadata )
+    CDRecord(inputs.startTime, inputs.endTime, elems, inputs.metadata )
   }
 }
 
@@ -460,7 +460,7 @@ class ave extends SingularRDDKernel( Map( "mapOp" -> "avew", "reduceOp" -> "avew
   val weighted: Boolean = true
   val description = "REDUCTION OPERATION: Computes (weighted) means of element values from input variable data over specified axes and roi"
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = context.profiler.profile(s"ave.map(${KernelContext.getProcessAddress}):${inputs.toString}")( () => {
+  override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = context.profiler.profile(s"ave.map(${KernelContext.getProcessAddress}):${inputs.toString}")(() => {
     val axes = context.config("axes","")
     val axisIndices: Array[Int] = context.grid.getAxisIndices( axes ).getAxes.toArray
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId) match {
@@ -478,7 +478,7 @@ class ave extends SingularRDDKernel( Map( "mapOp" -> "avew", "reduceOp" -> "avew
     })
 //    logger.info("T[%.2f] @P@ Executed Kernel %s map op, input = %s, time = %.4f s".format(t0, name,  id, (t1 - t0) ))
 //    context.addTimestamp( "Map Op complete" )
-    val rv = CDTimeSlice(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata )
+    val rv = CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata )
 //    logger.info("Returning result value")
     rv
   } )
@@ -494,9 +494,9 @@ class subset extends KernelImpl(Map.empty) {
   val doesAxisReduction: Boolean = false
   val weighted: Boolean = false
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = {
+  override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
-    CDTimeSlice(inputs.startTime, inputs.endTime, elems.toMap, inputs.metadata )
+    CDRecord(inputs.startTime, inputs.endTime, elems.toMap, inputs.metadata )
   }
 }
 
@@ -545,9 +545,9 @@ class noOp extends KernelImpl(Map.empty) {
   val weighted = false
   override val description = "Returns the input data subset to the specified domain as the result"
 
-  override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = { inputs }
+  override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = { inputs }
 
-  override def execute( workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
+  override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val t0 = System.nanoTime
     val result = reduce( input, context, batchIndex )
     logger.info( s" noOp execution (reduce) time = ${(System.nanoTime-t0)/1e9} ")

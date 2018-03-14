@@ -4,7 +4,7 @@ import nasa.nccs.caching.{BatchSpec, RDDTransientVariable, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{OperationInput, _}
 import nasa.nccs.edas.engine.EDASExecutionManager.saveResultToFile
 import nasa.nccs.edas.kernels._
-import nasa.nccs.edas.rdd.{TimeSliceCollection, VariableRecord}
+import nasa.nccs.edas.rdd.{QueryResultCollection, VariableRecord}
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
 import nasa.nccs.utilities.{DAGNode, Loggable}
 import nasa.nccs.wps.{RDDExecutionResult, RefExecutionResult, WPSProcessExecuteResponse}
@@ -15,15 +15,15 @@ import scala.collection.mutable
 import scala.util.Try
 
 object WorkflowNode {
-  private val _nodeProducts = new mutable.HashMap[String,TimeSliceCollection]
+  private val _nodeProducts = new mutable.HashMap[String,QueryResultCollection]
   def apply( operation: OperationContext, kernel: KernelImpl  ): WorkflowNode = { new WorkflowNode( operation, kernel ) }
   def apply( node: DAGNode ) : WorkflowNode = promote( node )
   def promote( node: DAGNode ) : WorkflowNode = node match {
     case workflowNode: WorkflowNode => workflowNode
     case _ => throw new Exception( "Unknown element in workflow: " + node.getClass.getName )
   }
-  def addProduct( uid: String, product: TimeSliceCollection ): Unit = { _nodeProducts += ( uid -> product ) }
-  def getProduct( uid: String ): Option[TimeSliceCollection] = _nodeProducts.get(uid)
+  def addProduct( uid: String, product: QueryResultCollection ): Unit = { _nodeProducts += ( uid -> product ) }
+  def getProduct( uid: String ): Option[QueryResultCollection] = _nodeProducts.get(uid)
 }
 
 class WorkflowNode( val operation: OperationContext, val kernel: KernelImpl  ) extends DAGNode with Loggable {
@@ -43,7 +43,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: KernelImpl  ) e
     logger.info( s"WorkflowNode CACHE PRODUCT: ${operation.rid}" )
     WorkflowNode.addProduct( operation.rid, executionResult.results )
   }
-  def getProduct: Option[TimeSliceCollection] = {
+  def getProduct: Option[QueryResultCollection] = {
     val rv = WorkflowNode.getProduct( operation.rid )
     logger.info( s"WorkflowNode GET PRODUCT: ${operation.rid}, success: ${rv.isDefined.toString}" )
     rv
@@ -164,7 +164,7 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
   }
 }
 
-case class KernelExecutionResult( results: TimeSliceCollection, files: List[String] ) {
+case class KernelExecutionResult(results: QueryResultCollection, files: List[String] ) {
   val holdsData: Boolean = results.slices.nonEmpty
   val slice = results.getConcatSlice
 }
@@ -197,11 +197,11 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     val kernelCx: KernelContext  = root_node.getKernelContext( executor )
     val isIterative = false // executor.hasBatch(1)
     var batchIndex = 0
-    var aggResult = TimeSliceCollection.empty
+    var aggResult = QueryResultCollection.empty
     var resultFiles = mutable.ListBuffer.empty[String]
     do {
       val ts0 = System.nanoTime()
-      val batchResult:  TimeSliceCollection = executeBatch( executor, kernelCx, batchIndex )
+      val batchResult:  QueryResultCollection = executeBatch( executor, kernelCx, batchIndex )
       val ts1 = System.nanoTime()
       if( kernelCx.doesTimeReduction || !isIterative  ) {
         val reduceOp = executor.getReduceOp(kernelCx)
@@ -262,7 +262,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     workflowCx
   }
 
-  def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  TimeSliceCollection  = {
+  def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  QueryResultCollection  = {
     kernelCx.profiler.profile("processInputs") ( () => {
       processInputs( executor.rootNode, executor, kernelCx, batchIndex )
     } )

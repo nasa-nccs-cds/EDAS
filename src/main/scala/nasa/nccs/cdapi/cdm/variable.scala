@@ -6,7 +6,7 @@ import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray}
 import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.KernelContext
-import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection}
+import nasa.nccs.edas.rdd.{CDRecord, QueryResultCollection}
 import nasa.nccs.edas.sources.{Aggregation, Collection}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
 import ucar.{ma2, nc2, unidata}
@@ -127,7 +127,7 @@ class DependencyOperationInput( val inputNode: WorkflowNode, val opNode: Workflo
       logger.info("\n\n ----------------------- NODE %s => BEGIN Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ") ) )
       workflow.stream(inputNode, executor, batchIndex)
       logger.info("\n\n ----------------------- NODE %s => END   Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format( node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ") ) )
-    case Some(results: TimeSliceCollection) =>
+    case Some(results: QueryResultCollection) =>
       val opSection: Option[CDSection] = kernelContext.getDomainSections.headOption
       logger.info("\n\n ----------------------- NODE %s => Get Cached Result: %s, batch = %d, rID = %s, opSection= %s -------\n".format( node.getNodeId, inputNode.getNodeId, batchIndex, inputNode.getResultId, opSection.map(_.toString()).getOrElse("(EMPTY)") ) )
       executor.addOperationInput( workflow.executionMgr.serverContext, results, opSection, batchIndex )

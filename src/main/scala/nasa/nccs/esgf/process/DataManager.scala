@@ -72,13 +72,13 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
   def contents: Set[String] = _inputsRDD.contents.toSet
   def getInputs(node: WorkflowNode): List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
-  def getReduceOp(context: KernelContext): CDTimeSlice.ReduceOp = rootNode.kernel.getReduceOp(context)
+  def getReduceOp(context: KernelContext): CDRecord.ReduceOp = rootNode.kernel.getReduceOp(context)
   def getTargetGrid: Option[TargetGrid] = workflowCx.getTargetGrid
   def releaseBatch: Unit = _inputsRDD.releaseBatch
   def getRegridSpec: Option[RegridSpec] = getGridRefInput.map( opInput => RegridSpec( opInput.fragmentSpec ) )
   def variableRecs: Map[String,VariableRecord] = _inputsRDD.variableRecs
   def nSlices: Long = _inputsRDD.nSlices
-  def update: TimeSliceRDD = _inputsRDD.update
+  def update: CDRecordRDD = _inputsRDD.update
 
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Iterable[String] = {
     for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )
@@ -87,7 +87,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     disposable_inputs
   }
 
-  def execute( workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): TimeSliceCollection =  {
+  def execute( workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): QueryResultCollection =  {
       val result = _inputsRDD.execute( workflow, rootNode.kernel, kernelCx, batchIndex )
       val disposable_inputs = releaseInputs( rootNode, kernelCx )
       result
@@ -109,7 +109,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     _inputsRDD.regrid( kernelCx )
   }
 
-  def extendRDD( generator: RDDGenerator, rdd: TimeSliceRDD, vSpecs: List[DirectRDDVariableSpec]  ): TimeSliceRDD = {
+  def extendRDD(generator: RDDGenerator, rdd: CDRecordRDD, vSpecs: List[DirectRDDVariableSpec]  ): CDRecordRDD = {
     if( vSpecs.isEmpty ) { rdd }
     else {
       val vspec = vSpecs.head
@@ -117,11 +117,11 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
       extendRDD( generator, extendedRdd, vSpecs.tail )
     }
   }
-  private def addOperationInput( serverContext: ServerContext, inputs: TimeSliceCollection, batchIndex: Int ): Unit = {
+  private def addOperationInput(serverContext: ServerContext, inputs: QueryResultCollection, batchIndex: Int ): Unit = {
     _inputsRDD.addOperationInput(inputs)
   }
 
-  def addOperationInput(serverContext: ServerContext, inputs: TimeSliceCollection, section: Option[CDSection], batchIndex: Int ): Unit  = {
+  def addOperationInput(serverContext: ServerContext, inputs: QueryResultCollection, section: Option[CDSection], batchIndex: Int ): Unit  = {
     addOperationInput( serverContext, inputs, batchIndex )
 //    section.foreach( section => _inputsRDD.section( section ) )
   }

@@ -3,7 +3,7 @@ package nasa.nccs.edas.kernels.sql
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelImpl, KernelStatus}
-import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection, TimeSliceRDD}
+import nasa.nccs.edas.rdd.{CDRecord, QueryResultCollection, CDRecordRDD}
 import nasa.nccs.edas.sources.netcdf.{EDASOptions, RDDSimpleRecordsConverter}
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
@@ -22,16 +22,16 @@ class SQLKernel extends KernelImpl {
   val weighted: Boolean = false
   val description = "Implement SparkSQL operations"
 
-  override def execute(workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
+  override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val options: EDASOptions = new EDASOptions( Array.empty )
     val rowRdd: RDD[java.lang.Float] = input.rdd.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
     val dataset: Dataset[java.lang.Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )(Encoders.FLOAT)
     val aveCol: Column = avg( dataset.col("value") )
     logger.info( "Computed ave" )
-    TimeSliceCollection.empty
+    QueryResultCollection.empty
   }
 
-  def map(context: KernelContext )( rdd: CDTimeSlice ): CDTimeSlice = { rdd }   // Not used-> bypassed
+  def map(context: KernelContext )( rdd: CDRecord ): CDRecord = { rdd }   // Not used-> bypassed
 
 }
 

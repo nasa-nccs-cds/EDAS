@@ -16,7 +16,7 @@ import nasa.nccs.cdapi.tensors.{CDByteArray, CDFloatArray}
 import nasa.nccs.edas.engine.{EDASExecutionManager, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.TransientFragment
-import nasa.nccs.edas.rdd.{CDTimeSlice, TimeSliceCollection}
+import nasa.nccs.edas.rdd.{CDRecord, QueryResultCollection}
 import nasa.nccs.edas.sources.Masks
 import nasa.nccs.esgf.process.{DataFragmentKey, _}
 import nasa.nccs.esgf.wps.edasServiceProvider
@@ -867,7 +867,7 @@ class JobRecord(val id: String) {
   def elapsed: Int = ((System.nanoTime() - creationTime)/1.0e9).toInt
 }
 
-class RDDTransientVariable(val result: TimeSliceCollection,
+class RDDTransientVariable(val result: QueryResultCollection,
                            val operation: OperationContext,
                            val request: RequestContext) {
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
