@@ -354,6 +354,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
     val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
     val axis_size = coordAxis1D.getSize.toInt
     val ( startval, endval ) = getOffsetBounds( v0, v1 )
+    logger.info( s" @O@ ${coordAxis1D.getAxisType.getCFAxisName} GetOffsetBounds: ($v0, $v1) -> ($startval, $endval)" )
     val coordStartIndex = Math.max( coordAxis1D.findCoordElementBounded(startval) - 1, 0 )
     var startIndex = -1
     for(  coordIndex <- coordStartIndex until axis_size; cval = coordAxis1D.getCoordValue( coordIndex ); if cval >= startval ) {

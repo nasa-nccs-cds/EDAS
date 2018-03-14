@@ -708,6 +708,19 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for StdDev")
   }
 
+  test("TimeAve-GISS-roi-values") {
+    val datainputs =
+      s"""[
+            domain=[{"name":"d0","lat":{"start":-25,"end":25,"system":"values"},"lon":{"start":-120,"end":-60,"system":"values"},"time":{"start":0,"end":500,"system":"indices"}}],
+            variable=[ {"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"} ],
+            operation=[ {"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t","id":"v1m"} ]
+          ]""".replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = getResultData( result_node )
+    println( "Op  Shape:       " + result_data.getShape.mkString(", ")  )
+    println( "Op Result:       " + result_data.mkDataString(", ")  )
+  }
+
   test("TimeDiff-GISS") {
     // # NCO Verification script:
     //  datafile="collection:/giss_r1i1p1"
