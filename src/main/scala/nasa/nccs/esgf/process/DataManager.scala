@@ -343,8 +343,8 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   }
 
   def getOffsetBounds( v0: Double, v1: Double ): ( Double, Double ) = {
-    val offset0: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getBound1.head >= 0 )
-    val offset1: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getBound2.last <= 180 )
+    val offset0: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getCoordValue(0) >= 0 )
+    val offset1: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getCoordValue( coordAxis.getSize.toInt-1 ) <= 180 )
     val r0: Double = if( offset0 && ( v0 < 0 ) ) { v0 + 360 } else if( offset1 && ( v0 > 180 ) ) { v0 - 360 } else v0
     val r1: Double = if( offset0 && ( v1 < 0 ) ) { v1 + 360 } else if( offset1 && ( v1 > 180 ) ) { v1 - 360 } else v1
     ( r0, r1 )
