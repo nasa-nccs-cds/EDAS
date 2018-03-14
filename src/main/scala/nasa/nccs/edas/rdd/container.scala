@@ -19,6 +19,7 @@ import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.esgf.process.{CDSection, EDASCoordSystem, ServerContext}
 import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 import org.apache.spark.Partitioner
+import org.apache.spark.mllib.linalg.DenseVector
 import org.apache.spark.rdd.RDD
 import org.spark_project.guava.io.Files
 import ucar.ma2
@@ -114,6 +115,10 @@ case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String, Arr
   def section( section: CDSection ): Option[CDTimeSlice] = {
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
     if( new_elements.isEmpty ) { None } else { Some( new CDTimeSlice(startTime, endTime, new_elements, metadata) ) }
+  }
+  def toVector( selectElems: Seq[String] ): DenseVector = {
+    val arrays: Iterable[Array[Float]] = ( elements.filter { case (key,array) => selectElems.contains(key) } values ).map( _.data )
+    val new_data: Array[Float] = ArrayUtils.addAll( arrays.toSeq: _* )
   }
   def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
   def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)

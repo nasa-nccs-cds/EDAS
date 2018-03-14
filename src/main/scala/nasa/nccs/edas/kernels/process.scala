@@ -741,8 +741,6 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
   }
 }
 
-
-
 class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True", "visibility" -> "public" ), false ) {
 
   override def map ( context: KernelContext ) (inputs: CDTimeSlice  ): CDTimeSlice = context.profiler.profile(s"CDMSRegridKernel.map(${KernelContext.getProcessAddress})")(() => {

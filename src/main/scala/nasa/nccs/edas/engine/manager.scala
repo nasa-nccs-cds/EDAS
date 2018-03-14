@@ -242,7 +242,7 @@ object EDASExecutionManager extends Loggable {
       for (newCoordVar <- newCoordVars) {
         newCoordVar match {
           case (coordVar, coordData) =>
-            logger.info("Writing cvar %s: shape = [%s], dataType = %s".format(coordVar.getShortName, coordData.getShape.mkString(","), coordVar.getDataType.toString))
+            logger.info("Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString))
             writer.write(coordVar, coordData)
         }
       }
