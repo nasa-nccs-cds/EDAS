@@ -27,18 +27,14 @@ class svd extends KernelImpl {
     val topSlice: CDTimeSlice = input.rdd.first
     val topElem = topSlice.elements.head._2
     val svd = matrix.computeSVD( nModes, true )
-    val U: RowMatrix = svd.U
-    val V: Matrix = svd.V
-    val udata: Array[Float] = CDTimeSlice.rowMatrix2Array( U ) // U.rows.map( _.toArray.map(_.toFloat ) ).collect )
-    val vdata: Array[Float] = CDTimeSlice.matrix2Array( V )
-    val uArray: ArraySpec = new ArraySpec( topElem.missing, Array(U.numRows.toInt, U.numCols.toInt ), topElem.origin, udata, topElem.optGroup )
-    val vArray: ArraySpec  = new ArraySpec( topElem.missing, Array( V.numRows, U.numCols.toInt ), topElem.origin, vdata, topElem.optGroup )
+    val ( ushape, udata ) = CDTimeSlice.rowMatrix2Array( svd.U )
+    val ( vshape, vdata ) = CDTimeSlice.matrix2Array( svd.V )
+    val uArray: ArraySpec  = new ArraySpec( topElem.missing, ushape, topElem.origin, udata, topElem.optGroup )
+    val vArray: ArraySpec  = new ArraySpec( topElem.missing, vshape, topElem.origin, vdata, topElem.optGroup )
     val elements: Map[String, ArraySpec] = Map( "U" -> uArray, "V" ->vArray )
     val slice: CDTimeSlice = new CDTimeSlice( topSlice.startTime, topSlice.endTime, elements, topSlice.metadata )
-    new TimeSliceCollection( Array( slice ), input.metadata)
+    new TimeSliceCollection( Array( slice ), input.metadata )
   }
-
-
 
   def execute2(workflow: Workflow, input: TimeSliceRDD, context: KernelContext, batchIndex: Int ): TimeSliceCollection = {
     val options: EDASOptions = new EDASOptions( Array.empty )

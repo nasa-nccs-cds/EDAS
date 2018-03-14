@@ -115,16 +115,16 @@ object CDTimeSlice {
     joinedArray
   }
 
-  def matrix2Array( V: Matrix ): Array[Float] = {
+  def matrix2Array( V: Matrix ): ( Array[Int], Array[Float]) = {
     val (nRows,nCols) = ( V.numRows, V.numCols)
     val newArray = new Array[Float]( nRows * nCols )
     for( iR <- 0 until nRows; iC <- 0 until nCols ) {
       newArray( iR * nCols + iC ) = V( iR, iC ).toFloat
     }
-    newArray
+    ( Array(nRows,nCols), newArray )
   }
 
-  def rowMatrix2Array( V: RowMatrix ): Array[Float] = {
+  def rowMatrix2Array( V: RowMatrix ): ( Array[Int], Array[Float]) = {
     val (nRows,nCols) = ( V.numRows.toInt, V.numCols.toInt )
     val dataArrays: Array[Array[Double]] = V.rows.map(_.toArray).collect
     val newArray = new Array[Float]( nRows * nCols )
@@ -134,7 +134,7 @@ object CDTimeSlice {
         newArray( iR * nCols + iC ) = dataArray( iC ).toFloat
       })
     })
-    newArray
+    ( Array(nRows,nCols), newArray )
   }
 
 }
