@@ -795,9 +795,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
         val resultItems: Iterable[(String, ArraySpec)] = for (uid <- regrid_array_map.keys) yield {
           val tvar = worker.getResult
           val result = ArraySpec(tvar)
-          if (gFile.isEmpty) {
-            gFile = tvar.getMetaDataValue("gridfile", "")
-          }
+          if (gFile.isEmpty) { gFile = Option( tvar.getMetaDataValue("gridfile") ).getOrElse("") }
           context.operation.rid + ":" + uid -> result
         }
         (gFile, resultItems)

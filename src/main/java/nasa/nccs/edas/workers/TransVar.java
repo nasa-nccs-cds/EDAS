@@ -42,7 +42,8 @@ public class TransVar {
     public String id() { return _id; }
     public ByteBuffer getDataBuffer() { return ByteBuffer.wrap( _data, _offset,_data.length-_offset ); }
     public Map<String, String> getMetaData() { return _metadata; }
-    public String getMetaDataValue( String key, String defaultVal ) { return _metadata.getOrDefault(key,defaultVal); }
+//    public String getMetaDataValue( String key, String defaultVal ) { return _metadata.getOrDefault(key,defaultVal); }
+    public String getMetaDataValue( String key ) { return _metadata.get(key); }
 
 
     private int[] s2ia( String s ) {
