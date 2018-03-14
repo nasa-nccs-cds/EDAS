@@ -526,7 +526,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     FastMaskedArray( vTot, missing )
   }
 
-  def -( const: Int ): FastMaskedArray = {
+  def -( const: Float ): FastMaskedArray = {
     val vTot = new ma2.ArrayFloat( array.getShape )
     (0 until array.getSize.toInt ) foreach ( index => {
       val uv0: Float = array.getFloat(index)
@@ -536,7 +536,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     FastMaskedArray( vTot, missing )
   }
 
-  def +( const: Int ): FastMaskedArray = {
+  def +( const: Float ): FastMaskedArray = {
     val vTot = new ma2.ArrayFloat( array.getShape )
     (0 until array.getSize.toInt ) foreach ( index => {
       val uv0: Float = array.getFloat(index)
@@ -546,7 +546,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     FastMaskedArray( vTot, missing )
   }
 
-  def *( const: Int ): FastMaskedArray = {
+  def *( const: Float ): FastMaskedArray = {
     val vTot = new ma2.ArrayFloat( array.getShape )
     (0 until array.getSize.toInt ) foreach ( index => {
       val uv0: Float = array.getFloat(index)
@@ -556,7 +556,7 @@ class FastMaskedArray(val array: ma2.Array, val missing: Float ) extends Loggabl
     FastMaskedArray( vTot, missing )
   }
 
-  def /( const: Int ): FastMaskedArray = {
+  def /( const: Float ): FastMaskedArray = {
     val vTot = new ma2.ArrayFloat( array.getShape )
     (0 until array.getSize.toInt ) foreach ( index => {
       val uv0: Float = array.getFloat(index)
