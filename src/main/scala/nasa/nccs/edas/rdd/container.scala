@@ -19,13 +19,14 @@ import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.esgf.process.{CDSection, EDASCoordSystem, ServerContext}
 import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 import org.apache.spark.Partitioner
-import org.apache.spark.mllib.linalg.DenseVector
+import org.apache.spark.mllib.linalg.{Matrix, Vector, Vectors}
 import org.apache.spark.rdd.RDD
 import org.spark_project.guava.io.Files
 import ucar.ma2
 import ucar.nc2.Variable
 import ucar.nc2.dataset.CoordinateAxis1DTime
 import ucar.nc2.time.CalendarDate
+import org.apache.spark.mllib.linalg.distributed.RowMatrix
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -103,9 +104,43 @@ case class CDTimeInterval(startTime: Long, endTime: Long ) {
 object CDTimeSlice {
   type ReduceOp = (CDTimeSlice,CDTimeSlice)=>CDTimeSlice
   def empty = new CDTimeSlice(-1, 0, Map.empty[String,ArraySpec], Map.empty[String, String] )
+
+  def concat(arrays: Seq[Array[Float]]): Array[Float] = {
+    val joinedArray = new Array[Float]( arrays.map(_.length).sum )
+    var offset = 0
+    arrays.foreach { array =>
+      System.arraycopy( array, 0, joinedArray, offset, array.length )
+      offset = offset + array.length
+    }
+    joinedArray
+  }
+
+  def matrix2Array( V: Matrix ): Array[Float] = {
+    val (nRows,nCols) = ( V.numRows, V.numCols)
+    val newArray = new Array[Float]( nRows * nCols )
+    for( iR <- 0 until nRows; iC <- 0 until nCols ) {
+      newArray( iR * nCols + iC ) = V( iR, iC ).toFloat
+    }
+    newArray
+  }
+
+  def rowMatrix2Array( V: RowMatrix ): Array[Float] = {
+    val (nRows,nCols) = ( V.numRows.toInt, V.numCols.toInt )
+    val dataArrays: Array[Array[Double]] = V.rows.map(_.toArray).collect
+    val newArray = new Array[Float]( nRows * nCols )
+    ( 0 until nRows ).foreach( iR => {
+      val dataArray = dataArrays(iR)
+      ( 0 until nCols ).foreach( iC => {
+        newArray( iR * nCols + iC ) = dataArray( iC ).toFloat
+      })
+    })
+    newArray
+  }
+
 }
 
 case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String, ArraySpec], metadata: Map[String, String] ) {
+  import CDTimeSlice._
   def ++( other: CDTimeSlice ): CDTimeSlice = { new CDTimeSlice(startTime, endTime, elements ++ other.elements, metadata) }
   def <+( other: CDTimeSlice ): CDTimeSlice = append( other )
   def clear: CDTimeSlice = { new CDTimeSlice(startTime, endTime, Map.empty[String,ArraySpec], metadata) }
@@ -116,10 +151,12 @@ case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String, Arr
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
     if( new_elements.isEmpty ) { None } else { Some( new CDTimeSlice(startTime, endTime, new_elements, metadata) ) }
   }
-//  def toVector( selectElems: Seq[String] ): DenseVector = {
-//    val arrays: Iterable[Array[Float]] = ( elements.filter { case (key,array) => selectElems.contains(key) } values ).map( _.data )
-//    val new_data: Array[Float] = ArrayUtils.addAll( arrays.toSeq: _* )
-//  }
+  def toVector( selectElems: Seq[String] ): Vector = {
+    val selectedElems: Map[String, ArraySpec] = elements.filter { case (key,array) => selectElems.contains(key) }
+    val arrays: Iterable[Array[Float]] = selectedElems.values.map( _.data )
+    Vectors.dense( concat( arrays.toSeq ).map(_.toDouble) )
+  }
+
   def release( keys: Iterable[String] ): CDTimeSlice = { new CDTimeSlice(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
   def selectElement( elemId: String ): CDTimeSlice = CDTimeSlice(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)
   def selectElements( op: String => Boolean ): CDTimeSlice = CDTimeSlice(startTime, endTime, elements.filterKeys(key => op(key) ), metadata)
@@ -139,8 +176,9 @@ case class CDTimeSlice(startTime: Long, endTime: Long, elements: Map[String, Arr
   def precedes( other: CDTimeSlice ) = {assert(  startTime < other.startTime, s"Disordered Time slices: { $startTime $endTime -> ${startTime+endTime} } vs { ${other.startTime} ${other.endTime} }" ) }
   def append( other: CDTimeSlice ): CDTimeSlice = {
     this precedes other;
-    new CDTimeSlice(mergeStart( other ), mergeEnd( other ), elements.flatMap { case (key,array0) => other.elements.get(key).map(array1 => key -> ( array0 ++ array1 ) ) }, metadata )
+    new CDTimeSlice(mergeStart(other), mergeEnd(other), elements.flatMap { case (key, array0) => other.elements.get(key).map(array1 => key -> (array0 ++ array1)) }, metadata)
   }
+
   def addExtractedSlice( collection: TimeSliceCollection ): CDTimeSlice =
     collection.slices.find( _.contains( this ) ) match {
       case None =>
@@ -254,6 +292,7 @@ class TimeSliceRDD( val rdd: RDD[CDTimeSlice], metadata: Map[String,String], val
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
   def selectElement( elemId: String ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElement( elemId ) ), metadata, variableRecords )
   def selectElements(  elemFilter: String => Boolean  ): TimeSliceRDD = TimeSliceRDD ( rdd.map( _.selectElements( elemFilter ) ), metadata, variableRecords )
+  def toMatrix(selectElems: Seq[String]): RowMatrix = { new RowMatrix(rdd.map(_.toVector( selectElems ))) }
 
   def reduceByGroup( op: (CDTimeSlice,CDTimeSlice) => CDTimeSlice, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): TimeSliceRDD = {
     val keyedRDD: RDD[(Int,CDTimeSlice)] = rdd.keyBy( groupBy.group )
