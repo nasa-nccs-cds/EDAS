@@ -173,7 +173,7 @@ object EDASExecutionManager extends Loggable {
           val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
           val gblTimeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
           val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
-          val dims0 = space_dims :+ new Dimension(timeCoordAxis.getShortName, inputSpec.roi.getRange(0).length )
+          val dims0 = space_dims :+ new Dimension(timeCoordAxis.getShortName, timeValues.length )
           val newdims = dims0.map( dim => {
             val newdim = writer.addDimension(null, dim.getShortName, dim.getLength)
             logger.info(s"Writer addDimension ${dim.getShortName} ${dim.getLength.toString}")
@@ -227,9 +227,7 @@ object EDASExecutionManager extends Loggable {
         }
       }).flatten
 
-      val varDims: Array[Dimension] = axisTypes.map( aType =>
-        if( aType == "T" ) { new Dimension( "Time", timeValues.length ) } else { coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) }
-      )
+      val varDims: Array[Dimension] = axisTypes.map( aType => coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
       val dataMap: Map[String,CDFloatArray] = result.concatSlices.slices.head.elements.mapValues( _.toCDFloatArray )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
