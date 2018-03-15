@@ -293,6 +293,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def selectElement( elemId: String ): CDRecordRDD = CDRecordRDD ( rdd.map( _.selectElement( elemId ) ), metadata, variableRecords )
   def selectElements(  elemFilter: String => Boolean  ): CDRecordRDD = CDRecordRDD ( rdd.map( _.selectElements( elemFilter ) ), metadata, variableRecords )
   def toMatrix(selectElems: Seq[String]): RowMatrix = { new RowMatrix(rdd.map(_.toVector( selectElems ))) }
+  def toVectorRDD(selectElems: Seq[String]): RDD[Vector] = { rdd.map(_.toVector( selectElems )) }
 
   def reduceByGroup(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): CDRecordRDD = {
     val keyedRDD: RDD[(Int,CDRecord)] = rdd.keyBy( groupBy.group )

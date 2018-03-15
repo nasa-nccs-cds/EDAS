@@ -208,8 +208,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
         aggResult = aggResult.merge( batchResult, reduceOp )
       } else {
         if( executor.requestCx.task.getUserAuth > 0 ) {
-          val resultMap = batchResult.concatSlices.slices.head.elements.mapValues( slice => slice.toCDFloatArray )
-          resultFiles += EDASExecutionManager.saveResultToFile(executor, resultMap, batchResult.getMetadata, List.empty[nc2.Attribute])
+          resultFiles += EDASExecutionManager.saveResultToFile(executor, batchResult, List.empty[nc2.Attribute])
           executor.releaseBatch
         } else {
           throw new Exception( "Must be authorized to execute a request this big- please contact the service administrator for instructions.")
@@ -421,8 +420,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       val tvar = new RDDTransientVariable( executionResult.results, executor.rootNode.operation, executor.requestCx)
       collectionDataCache.putResult(executor.requestCx.jobId, tvar )
       if( ! executor.requestCx.getConf( "saveLocalFile", "" ).isEmpty ) {
-        val resultMap = tvar.result.concatSlices.slices.flatMap(_.elements.headOption).toMap.mapValues( slice =>  slice.toCDFloatArray )
-        saveResultToFile(executor, resultMap, tvar.result.getMetadata, List.empty[nc2.Attribute])
+        saveResultToFile(executor, tvar.result, List.empty[nc2.Attribute])
       }
     }
     executor.requestCx.jobId

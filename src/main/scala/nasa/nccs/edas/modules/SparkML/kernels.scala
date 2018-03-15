@@ -1,11 +1,12 @@
 package nasa.nccs.edas.modules.SparkML
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelImpl, KernelStatus}
-import nasa.nccs.edas.rdd.{ArraySpec, CDRecord, QueryResultCollection, CDRecordRDD}
+import nasa.nccs.edas.rdd.{ArraySpec, CDRecord, CDRecordRDD, QueryResultCollection}
 import nasa.nccs.edas.sources.netcdf.{CDTimeSliceConverter, CDTimeSlicesConverter, EDASOptions, RDDSimpleRecordsConverter}
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
-import org.apache.spark.mllib.linalg.Matrix
+import org.apache.spark.mllib.linalg.{Matrix, Vector}
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
+import org.apache.spark.mllib.feature.{StandardScaler, StandardScalerModel}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions.{avg, col}
 import org.apache.spark.sql.{DataFrame, Dataset, Encoders, Row}
@@ -22,17 +23,23 @@ class svd extends KernelImpl {
   val description = "Implement Singular Value Decomposition"
 
   override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
-    val matrix = input.toMatrix( context.operation.inputs )
-    val nModes: Int = context.operation.getConfParm("modes").fold( 10 )( _.toInt )
+    val inputVectors = input.toVectorRDD( context.operation.inputs ): RDD[Vector]
     val topSlice: CDRecord = input.rdd.first
     val topElem = topSlice.elements.head._2
+    val scaler = new StandardScaler( withMean = true, withStd = true ).fit( inputVectors )
+    val matrix = new RowMatrix( inputVectors.map( scaler.transform ) )
+    logger.info( s"@SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}" )
+    logger.info( s"@SVD Rescale inputs with ${scaler.mean.size} means: ${scaler.mean.toArray.mkString(", ")}" )
+    logger.info( s"@SVD Rescale inputs with ${scaler.std.size} stDevs: ${scaler.std.toArray.mkString(", ")}" )
+    val nModes: Int = context.operation.getConfParm("modes").fold( 10 )( _.toInt )
     val svd = matrix.computeSVD( nModes, true )
-    val ( ushape, udata ) = CDRecord.rowMatrix2Array( svd.U )
+//    val ( ushape, udata ) = CDRecord.rowMatrix2Array( svd.U )
     val ( vshape, vdata ) = CDRecord.matrix2Array( svd.V )
-    val uArray: ArraySpec  = new ArraySpec( topElem.missing, ushape, topElem.origin, udata, topElem.optGroup )
+//    val uArray: ArraySpec  = new ArraySpec( topElem.missing, ushape, topElem.origin, udata, topElem.optGroup )
     val vArray: ArraySpec  = new ArraySpec( topElem.missing, vshape, topElem.origin, vdata, topElem.optGroup )
-    val elements: Map[String, ArraySpec] = Map( "U" -> uArray, "V" ->vArray )
+    val elements: Map[String, ArraySpec] = Map( "V" ->vArray ) // Map( "U" -> uArray, "V" ->vArray )
     val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, elements, topSlice.metadata )
+    logger.info( s"@SVD Created V, shape = ${vshape.mkString(",")}" )
     new QueryResultCollection( Array( slice ), input.metadata )
   }
 
