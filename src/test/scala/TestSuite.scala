@@ -633,6 +633,16 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
   }
 
+  test("ML-svd-GISS") {
+    val datainputs =
+      s"""[domain=[{"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1991-12-31T23:59:00Z","system":"timestamps"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[{"name":"SparkML.svd","input":"v1","domain":"d0", "grid": "uniform", "shape": "18,36", "origin": "0,0", "res": "10,10" }]]""".stripMargin
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result Sample:       " + result_data.getSampleData(0,32).mkString(",") )
+  }
+
   test("SpaceAve-GISS-R1i1p1-dates") {
     val result_vals = CDFloatArray( Array(  1.05339E7, 1.05777E7, 1.06215E7, 1.06653E7, 1.07091E7, 1.07529E7, 1.07967E7, 1.08405E7, 1.08843E7, 1.09281E7, 1.09719E7, 1.10157E7, 1.10595E7, 1.11033E7, 1.11471E7, 1.11909E7, 1.12347E7, 1.12785E7, 1.13223E7, 1.13661E7, 1.14099E7, 1.14537E7, 1.14975E7, 1.15413E7, 1.15851E7, 1.16289E7, 1.16727E7, 1.17165E7, 1.17603E7, 1.18041E7, 1.18479E7, 1.18917E7, 1.19355E7, 1.19793E7, 1.20231E7, 1.20669E7 ).map(_.toFloat), Float.MaxValue )
     val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"},"time":{"start":"1990-01-01T00:00:00Z","end":"1992-12-31T23:59:00Z","system":"timestamps"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""

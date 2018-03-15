@@ -152,7 +152,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
     if( new_elements.isEmpty ) { None } else { Some( new CDRecord(startTime, endTime, new_elements, metadata) ) }
   }
   def toVector( selectElems: Seq[String] ): Vector = {
-    val selectedElems: Map[String, ArraySpec] = elements.filter { case (key,array) => selectElems.contains(key) }
+    val selectedElems: Map[String, ArraySpec] = elements.filter { case (key,array) => selectElems.contains(key.split(':').last) }
     val arrays: Iterable[Array[Float]] = selectedElems.values.map( _.data )
     Vectors.dense( concat( arrays.toSeq ).map(_.toDouble) )
   }
@@ -636,7 +636,8 @@ class RDDContainer extends Loggable {
   def regrid( context: KernelContext ): Unit = {
     val t0 = System.nanoTime()
     vault.update( regridKernel.mapRDD( vault.value, context ) )
-    if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
+//    if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
+    update
     logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
   }
   def execute( workflow: Workflow, node: KernelImpl, context: KernelContext, batchIndex: Int ): QueryResultCollection = node.execute( workflow, value, context, batchIndex )
