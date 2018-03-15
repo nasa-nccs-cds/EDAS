@@ -637,7 +637,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[domain=[{"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1991-12-31T23:59:00Z","system":"timestamps"}}],
          | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
-         | operation=[{"name":"SparkML.svd","input":"v1","domain":"d0", "grid": "uniform", "shape": "18,36", "origin": "0,0", "res": "10,10" }]]""".stripMargin
+         | operation=[{"name":"SparkML.svd","input":"v1","domain":"d0", "grid": "uniform", "shape": "18,36", "origin": "0,0", "res": "10,10", "modes":"5" }]]""".stripMargin
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result Sample:       " + result_data.getSampleData(0,32).mkString(",") )

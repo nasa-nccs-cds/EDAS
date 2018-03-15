@@ -23,6 +23,7 @@ class svd extends KernelImpl {
   val description = "Implement Singular Value Decomposition"
 
   override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
+    val t0 = System.nanoTime()
     val elem_id = context.operation.inputs.head
     val inputVectors = input.toVectorRDD( Seq( elem_id ) ): RDD[Vector]
     val topSlice: CDRecord = input.rdd.first
@@ -32,6 +33,8 @@ class svd extends KernelImpl {
     logger.info( s"  ##### @SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.mean.size} means: ${scaler.mean.toArray.slice(0,32).mkString(", ")}" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.std.size} stDevs: ${scaler.std.toArray.slice(0,32).mkString(", ")}" )
+    scaling_result.count()
+    print( "Running SVD" )
     val matrix = new RowMatrix( scaling_result )
     val nModes: Int = context.operation.getConfParm("modes").fold( 10 )( _.toInt )
     val svd = matrix.computeSVD( nModes, true )
@@ -41,7 +44,7 @@ class svd extends KernelImpl {
     val vArray: ArraySpec  = new ArraySpec( topElem.missing, vshape, topElem.origin, vdata, topElem.optGroup )
     val elements: Map[String, ArraySpec] = Map( "V" ->vArray ) // Map( "U" -> uArray, "V" ->vArray )
     val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, elements, topSlice.metadata )
-    logger.info( s"@SVD Created V, shape = ${vshape.mkString(",")}" )
+    logger.info( s"@SVD Created V, shape = ${vshape.mkString(",")}, time = ${(System.nanoTime - t0) / 1.0E9}" )
     new QueryResultCollection( Array( slice ), input.metadata )
   }
 
