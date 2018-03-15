@@ -152,12 +152,13 @@ object EDASExecutionManager extends Loggable {
     ( 0 until nTimeSteps ).map ( iT => start/60000.0 + ( iT + 0.5 )*dT )
   }
 
-  def saveResultToFile(executor: WorkflowExecutor, raw_result: QueryResultCollection, dsetMetadata: List[nc2.Attribute] = List.empty[nc2.Attribute] ): String = {
-    val result =raw_result.concatSlices
+  def saveResultToFile(executor: WorkflowExecutor, result: QueryResultCollection, dsetMetadata: List[nc2.Attribute] = List.empty[nc2.Attribute] ): String = {
     if( result.slices.isEmpty ) { return "" }
-    val varMetadata: Map[String,String] = result.getMetadata
-    val head_slice: CDRecord = result.slices.head
-    val head_elem: ArraySpec = head_slice.elements.values.head
+    saveResultToFile( executor, result.concatSlices.slices.head, result.getMetadata,  dsetMetadata )
+  }
+
+  def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute]  ): String = {
+    val head_elem: ArraySpec = slice.elements.values.head
     val resultId: String = executor.requestCx.jobId
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
     val resultFile = Kernel.getResultFile(resultId, true)
@@ -166,9 +167,8 @@ object EDASExecutionManager extends Loggable {
     var optGridDest: Option[NetcdfDataset] = None
     try {
       val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
-      val slice_sizes = result.slices.map( _.elements.values.head.shape(0) )
       val nTimeSteps = head_elem.shape(0)
-      val timeValues: IndexedSeq[Double] = generateRange( head_slice.startTime , head_slice.endTime, nTimeSteps )
+      val timeValues: IndexedSeq[Double] = generateRange( slice.startTime , slice.endTime, nTimeSteps )
       val timeUnits: String = "minutes since 1970-01-01T00:00:00Z" // EDTime.units
       val shape: Array[Int] = head_elem.shape
       val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
@@ -204,7 +204,7 @@ object EDASExecutionManager extends Loggable {
           dim => dimsMap.getOrElse( dim.getShortName, throw new Exception(s"Missing dimension: ${axis.getDimension(0).getShortName}") ))): _* ).flatMap( item => item._2.map( dim => item._1 -> dim ) )
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
-        resultId, path, head_slice.elements.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
+        resultId, path, slice.elements.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
         coordAxes.map { caxis => "%s: (%s)".format(caxis.getShortName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString ) )
 
 
@@ -235,7 +235,7 @@ object EDASExecutionManager extends Loggable {
       }).flatten
 
       val varDims: Array[Dimension] = axisTypes.map( aType => coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
-      val dataMap: Map[String,CDFloatArray] = result.slices.head.elements.mapValues( _.toCDFloatArray )
+      val dataMap: Map[String,CDFloatArray] = slice.elements.mapValues( _.toCDFloatArray )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
         val varname = baseName + "-" + tname
