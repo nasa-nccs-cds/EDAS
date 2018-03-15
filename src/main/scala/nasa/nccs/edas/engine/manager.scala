@@ -227,7 +227,9 @@ object EDASExecutionManager extends Loggable {
         }
       }).flatten
 
-      val varDims: Array[Dimension] = axisTypes.map( aType => coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
+      val varDims: Array[Dimension] = axisTypes.map( aType =>
+        if( aType == "T" ) { new Dimension( "Time", timeValues.length ) } else { coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) }
+      )
       val dataMap: Map[String,CDFloatArray] = result.concatSlices.slices.head.elements.mapValues( _.toCDFloatArray )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
