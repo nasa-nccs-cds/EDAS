@@ -634,15 +634,15 @@ class DefaultTestSuite extends EDASTestSuite {
   }
 
   test("SpaceAve-GISS-R1i1p1-dates") {
-    val result_vals = CDFloatArray( Array(  1.053432E7, 1.05768E7, 1.061928E7, 1.06632E7, 1.070712E7, 1.075104E7, 1.079496E7, 1.08396E7, 1.088352E7, 1.092744E7 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"},"time":{"start":"1990-01-01T00:00:00Z","end":"1995-12-31T23:59:00Z","system":"timestamps"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val result_vals = CDFloatArray( Array(  1.05339E7, 1.05777E7, 1.06215E7, 1.06653E7, 1.07091E7, 1.07529E7, 1.07967E7, 1.08405E7, 1.08843E7, 1.09281E7, 1.09719E7, 1.10157E7, 1.10595E7, 1.11033E7, 1.11471E7, 1.11909E7, 1.12347E7, 1.12785E7, 1.13223E7, 1.13661E7, 1.14099E7, 1.14537E7, 1.14975E7, 1.15413E7, 1.15851E7, 1.16289E7, 1.16727E7, 1.17165E7, 1.17603E7, 1.18041E7, 1.18479E7, 1.18917E7, 1.19355E7, 1.19793E7, 1.20231E7, 1.20669E7 ).map(_.toFloat), Float.MaxValue )
+    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"},"time":{"start":"1990-01-01T00:00:00Z","end":"1992-12-31T23:59:00Z","system":"timestamps"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
     val result_node = executeTest( datainputs, Map( "response" -> "file" ) )
     val dataset = getResultDatasets( result_node ).headOption.getOrElse( throw new Exception( "Missing result data file, result node: " + result_node.toString() ) )
     dataset.getCoordinateAxes.find( _.getAxisType.getCFAxisName == "T" ) match {
       case Some(coordAxis) =>
         val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(dataset, coordAxis, new Formatter())
         println( "Op Result time axis units:       " + timeAxis.getUnitsString )
-        val nDates = Math.min( 10, timeAxis.getSize ).toInt
+        val nDates = timeAxis.getSize.toInt
         val time_values = (0 until nDates) map timeAxis.getCoordValue
         println( "Op Result times: " + (0 until nDates).map( iTime => timeAxis.getCalendarDate(iTime).toString ).mkString(", ") )
         println( "Op Result values: " + time_values.mkString(", ") )
