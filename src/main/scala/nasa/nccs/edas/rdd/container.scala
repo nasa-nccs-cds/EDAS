@@ -223,7 +223,33 @@ object TSGroup {
     else if( groupBy.equalsIgnoreCase("seasonofyear") ) { new TSGroup ( cal =>  season( cal.get( Calendar.MONTH ) ), true ) }
     else if( groupBy.equalsIgnoreCase("day") ) { new TSGroup ( cal =>  ( cal.get( Calendar.YEAR ) - 1970 )*365 + cal.get( Calendar.DAY_OF_YEAR ), false ) }
     else if( groupBy.equalsIgnoreCase("dayofyear") ) { new TSGroup ( cal => cal.get( Calendar.DAY_OF_YEAR ), true ) }
-    else { throw new Exception(s"Unrecognized groupBy argument: ${groupBy}") }
+    else {
+      val groupToks: Array[String] = groupBy.split("of")
+      val baseGroup = groupToks(0)
+      assert( baseGroup.contains('-'), "Error, groupBy Operator must be predefined (e.g. 'monthofyear') or have the form <index>-<unit>, e.g. '7-year")
+      val cycle = groupToks.drop(0).headOption.getOrElse("")
+      val baseGroupToks = baseGroup.split('-')
+      val binToks = baseGroupToks(0).split('/')
+      val unit = baseGroupToks(1)
+      val binSize = binToks(0).toInt
+      val offset = binToks.drop(0).headOption.fold( 0 )( _.toInt )
+      if( unit.toLowerCase.startsWith("year") ) { new TSGroup ( cal => ( cal.get( Calendar.YEAR ) - 1970 + offset ) / binSize, false ) }
+      else if( unit.toLowerCase.startsWith("month") ) {
+        if( cycle.toLowerCase.startsWith("year") ) {
+          new TSGroup(cal => ( ( cal.get( Calendar.MONTH ) + offset) % 12 ) / binSize, false )
+        } else {
+          new TSGroup ( cal =>  ( ( cal.get( Calendar.YEAR ) - 1970 )*12 + cal.get( Calendar.MONTH ) + offset ) / binSize, false )
+        }
+      } else if( unit.toLowerCase.startsWith("day") ) {
+        if( cycle.toLowerCase.startsWith("year") ) {
+          new TSGroup(cal => ( ( cal.get( Calendar.DAY_OF_YEAR ) + offset ) % 365) / binSize, false )
+        } else {
+          new TSGroup ( cal =>  ( ( cal.get( Calendar.YEAR ) - 1970 )*365 + cal.get( Calendar.DAY_OF_YEAR ) + offset ) / binSize, false )
+        }
+      } else {
+        throw new Exception(s"Unrecognized groupBy argument: ${groupBy}")
+      }
+    }
   }
 }
 
@@ -655,9 +681,8 @@ class RDDContainer extends Loggable {
   def regrid( context: KernelContext ): Unit = {
     val t0 = System.nanoTime()
     vault.update( regridKernel.mapRDD( vault.value, context ) )
-//    if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
-    update
-    logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
+    if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
+//    logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
   }
   def execute( workflow: Workflow, node: KernelImpl, context: KernelContext, batchIndex: Int ): QueryResultCollection = node.execute( workflow, value, context, batchIndex )
   def reduceBroadcast( node: KernelImpl, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ) )
