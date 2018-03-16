@@ -38,13 +38,15 @@ class svd extends KernelImpl {
     val matrix = new RowMatrix( scaling_result )
     val nModes: Int = context.operation.getConfParm("modes").fold( 10 )( _.toInt )
     val svd = matrix.computeSVD( nModes, true )
+
 //    val ( ushape, udata ) = CDRecord.rowMatrix2Array( svd.U )
-    val ( vshape, vdata ) = CDRecord.matrix2Array( svd.V )
 //    val uArray: ArraySpec  = new ArraySpec( topElem.missing, ushape, topElem.origin, udata, topElem.optGroup )
-    val vArray: ArraySpec  = new ArraySpec( topElem.missing, vshape, topElem.origin, vdata, topElem.optGroup )
-    val elements: Map[String, ArraySpec] = Map( "V" ->vArray ) // Map( "U" -> uArray, "V" ->vArray )
-    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, elements, topSlice.metadata )
-    logger.info( s"@SVD Created V, shape = ${vshape.mkString(",")}, time = ${(System.nanoTime - t0) / 1.0E9}" )
+
+    val elements: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>
+      s"V$index" -> new ArraySpec(topElem.missing, topElem.shape, topElem.origin, array, topElem.optGroup)
+    }
+    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, elements.toMap, topSlice.metadata )
+    logger.info( s"@SVD Created modes, nModes = ${elements.length}, time = ${(System.nanoTime - t0) / 1.0E9}" )
     new QueryResultCollection( Array( slice ), input.metadata )
   }
 

@@ -124,6 +124,25 @@ object CDRecord {
     ( Array(nRows,nCols), newArray )
   }
 
+  def matrixCols2Arrays(V: Matrix ): Seq[Array[Float]] = {
+    val (nRows,nCols) = ( V.numRows, V.numCols )
+    ( 0 until nCols ) map ( iC => {
+      val newArray = new Array[Float](nRows)
+      ( 0 until nRows) foreach ( iR => newArray(iR) = V( iR, iC ).toFloat )
+      newArray
+    })
+  }
+
+  def matrixRows2Arrays(V: Matrix ): Seq[Array[Float]] = {
+    val (nRows,nCols) = ( V.numRows, V.numCols )
+    ( 0 until nRows ) map ( iR => {
+      val newArray = new Array[Float](nCols)
+      ( 0 until nCols) foreach ( iC => newArray(iC) = V( iR, iC ).toFloat )
+      newArray
+    })
+  }
+
+
   def rowMatrix2Array( V: RowMatrix ): ( Array[Int], Array[Float]) = {
     val (nRows,nCols) = ( V.numRows.toInt, V.numCols.toInt )
     val dataArrays: Array[Array[Double]] = V.rows.map(_.toArray).collect
