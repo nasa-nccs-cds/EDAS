@@ -32,11 +32,7 @@ object CDSparkContext extends Loggable {
   import org.apache.log4j.Logger
   import org.apache.log4j.Level
   val mb = 1024 * 1024
-  val totalRAM = ManagementFactory.getOperatingSystemMXBean.asInstanceOf[OperatingSystemMXBean].getTotalPhysicalMemorySize / mb
   val runtime = Runtime.getRuntime
-  val default_executor_memory = (totalRAM-10).toString + "m"
-  val default_executor_cores = (runtime.availableProcessors-1).toString
-  val default_num_executors = "1"
 
   def apply( appName: String="EDAS", logConf: Boolean = true, enableMetrics: Boolean = false ) : CDSparkContext = {
 //    val cl = ClassLoader.getSystemClassLoader
@@ -45,7 +41,7 @@ object CDSparkContext extends Loggable {
     val conf: SparkConf = CDSparkContext.getSparkConf( appName, logConf, enableMetrics)
     val spark = SparkSession.builder().appName(appName).config(conf).getOrCreate()
     val rv = new CDSparkContext( spark )
-    val spark_log_level = Level.toLevel( "ERROR" )
+    val spark_log_level = Level.toLevel( "WARN" )
     val rootLogger = Logger.getRootLogger()
     rootLogger.setLevel(spark_log_level)
     spark.sparkContext.setLogLevel( "ERROR" )
@@ -98,17 +94,16 @@ object CDSparkContext extends Loggable {
       .set("spark.local.dir", edas_cache_dir )
       .set("spark.file.transferTo", "false" )
       .set("spark.kryoserializer.buffer.max", "1000m" )
-      .set("spark.driver.maxResultSize", "8000m" )
       .registerKryoClasses( Array(classOf[DirectCDTimeSliceSpec], classOf[RecordKey], classOf[CDRecord], classOf[DirectRDDVariableSpec], classOf[CDSection], classOf[HeapFltArray], classOf[Partition], classOf[CDCoordMap] ) )
 
-    val sparkConfigFile: Path = Paths.get( System.getenv("SPARK_HOME"), "conf", "spark-defaults.conf" )
-    for ( raw_line <- Source.fromFile( sparkConfigFile.toFile ).getLines; line = raw_line.trim; if !(line.startsWith("#") || line.isEmpty); keyVal = line.split("\\s+") ) {
-      try{
-        val (key, value) = ( keyVal(0).trim, keyVal(1).trim )
-        sc.set( key, value )
-        logger.info( s"Add spark config value: ${key} -> ${value}")
-      } catch { case ex: Exception => logger.error( "Error parsing spark parameter '" + line + ": " + ex.toString ); }
-    }
+//    val sparkConfigFile: Path = Paths.get( System.getenv("SPARK_HOME"), "conf", "spark-defaults.conf" )
+//    for ( raw_line <- Source.fromFile( sparkConfigFile.toFile ).getLines; line = raw_line.trim; if !(line.startsWith("#") || line.isEmpty); keyVal = line.split("\\s+") ) {
+//      try{
+//        val (key, value) = ( keyVal(0).trim, keyVal(1).trim )
+//        sc.set( key, value )
+//        logger.info( s"Add spark config value: ${key} -> ${value}")
+//      } catch { case ex: Exception => logger.error( "Error parsing spark parameter '" + line + ": " + ex.toString ); }
+//    }
 
     if( enableMetrics ) sc.set("spark.metrics.conf", getClass.getResource("/spark.metrics.properties").getPath )
     appParameters( "spark.master" ) match {
