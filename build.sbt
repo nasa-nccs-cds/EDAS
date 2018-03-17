@@ -36,7 +36,7 @@ enablePlugins(JavaAppPackaging)
 mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
-libraryDependencies ++= ( Dependencies.cache  ++ Dependencies.geo ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test ++ Dependencies.breeze ) // ++ Dependencies.jackson
+libraryDependencies ++= ( Dependencies.cache  ++ Dependencies.geo ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test  ) // ++ Dependencies.jackson ++ Dependencies.breeze
 
 libraryDependencies ++= {
   sys.env.get("YARN_CONF_DIR") match {
