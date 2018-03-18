@@ -99,10 +99,6 @@ class Responder extends Thread {
         client_address = _client_address;
     }
 
-    public void registerExecutingJob(String cid, String rid ) {
-        executing_jobs.put( rid, new Response( "executing", cid, rid ) );
-    }
-
     public void sendResponse( Response msg ) {
         logger.info( "Post Message to response queue: " + msg.toString() );
         response_queue.add( msg );
@@ -147,9 +143,11 @@ class Responder extends Thread {
         logger.info( " Sent data packet " + dataPacket.id() + ", header: " + dataPacket.getHeaderString() );
     }
 
-    public void setExeStatus( String rid, String status ) {
+    public void setExeStatus( String cId, String rid, String status ) {
         status_reports.put(rid,status);
-        if( (status == "error") || (status == "completed") ) {
+        if( status.startsWith("executing") ) {
+            try {   executing_jobs.put( rid, new Response( "executing", cId, rid ) );  } catch ( Exception ex ) {;}
+        } else if( (status == "error") || (status == "completed") ) {
             try {   executing_jobs.remove( rid );  } catch ( Exception ex ) {;}
         }
     }
@@ -253,8 +251,8 @@ public abstract class EDASPortal {
         responder.sendResponse( new ErrorReport(clientId,responseId,msg) );
     }
 
-    public void setExeStatus( String rid, String status ) {
-        responder.setExeStatus(rid,status);
+    public void setExeStatus( String clientId, String rid, String status ) {
+        responder.setExeStatus(clientId,rid,status);
     }
 
     public void sendArrayData( String clientId, String rid, int[] origin, int[] shape, byte[] data, Map<String, String> metadata ) {
