@@ -166,7 +166,7 @@ class eDiv extends CombineRDDsKernel(Map("mapOp" -> "divide")) {
   val description = "ENSEMBLE OPERATION: Computes element-wise divisions for input variables data over specified roi"
 }
 
-class write extends CombineRDDsKernel( Map.empty ) {
+class write extends KernelImpl( Map.empty ) {
   override val status = KernelStatus.developmental
   val inputs = List( WPSDataInput("input variables", 2, 2 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
@@ -174,6 +174,7 @@ class write extends CombineRDDsKernel( Map.empty ) {
   val doesAxisReduction: Boolean = false
   val weighted: Boolean = false
   val description = "Writes the result data to disk on server as a data collection"
+  def map ( context: KernelContext ) ( inputs: CDRecord  ): CDRecord = { inputs; }
 
   override def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
