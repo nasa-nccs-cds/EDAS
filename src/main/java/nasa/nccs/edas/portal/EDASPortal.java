@@ -86,6 +86,7 @@ class Responder extends Thread {
     Logger logger = EDASLogManager.getCurrentLogger();
     String client_address = null;
     String clientId = null;
+    String responseId = null;
     ConcurrentLinkedQueue<Response> response_queue = null;
     HashMap<String,String> status_reports = null;
 
@@ -97,8 +98,8 @@ class Responder extends Thread {
         client_address = _client_address;
     }
 
-    public void setClientId( String id ) { clientId = id; }
-    public void clearClientId() { clientId = null; }
+    public void setClientId( String cid, String rid ) { clientId = cid; responseId = rid; }
+    public void clearClientId() { clientId = null; responseId = null;  }
 
     public void sendResponse( Response msg ) {
         logger.info( "Post Message to response queue: " + msg.toString() );
@@ -181,8 +182,7 @@ class Responder extends Thread {
             }
         } catch ( InterruptedException ex ) {;}
 
-        try { socket.close(); }
-        catch( Exception err ) { ; }
+        close_connection( socket );
     }
 
     public void term() {
@@ -190,6 +190,21 @@ class Responder extends Thread {
         active = false;
     }
 
+    public void close_connection(ZMQ.Socket socket ) {
+        try {
+            while (true) {
+                Response response = response_queue.poll();
+                if (response == null) {
+                    if( clientId != null ) { doSendErrorReport(socket, new ErrorReport(clientId, responseId, "Job terminated by server shutdown.")); }
+                    socket.close();
+                    return;
+                } else {
+                    doSendResponse( socket, response );
+                }
+            }
+        }
+        catch( Exception err ) { ; }
+    }
 }
 
 public abstract class EDASPortal {

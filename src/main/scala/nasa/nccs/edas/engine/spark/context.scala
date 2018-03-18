@@ -34,11 +34,11 @@ object CDSparkContext extends Loggable {
   val mb = 1024 * 1024
   val runtime = Runtime.getRuntime
 
-  def apply( appName: String="EDAS", logConf: Boolean = true, enableMetrics: Boolean = false ) : CDSparkContext = {
+  def apply( appName: String="EDAS" ) : CDSparkContext = {
 //    val cl = ClassLoader.getSystemClassLoader
 //    logger.info( "Loaded jars: \n\t" + cl.asInstanceOf[java.net.URLClassLoader].getURLs.mkString("\n\t") )
 //    logger.info( "EDAS env: \n\t" +  ( System.getenv.map { case (k,v) => k + ": " + v } ).mkString("\n\t") )
-    val conf: SparkConf = CDSparkContext.getSparkConf( appName, logConf, enableMetrics)
+    val conf: SparkConf = CDSparkContext.getSparkConf( appName )
     val spark = SparkSession.builder().appName(appName).config(conf).getOrCreate()
     val rv = new CDSparkContext( spark )
     val spark_log_level = Level.toLevel( "WARN" )
@@ -86,11 +86,10 @@ object CDSparkContext extends Loggable {
 
 //  def append(p0: CDTimeSlice, p1: CDTimeSlice ): CDTimeSlice = ( p0._1 + p1._1, p0._2.append(p1._2) )
 
-  def getSparkConf( appName: String, logConf: Boolean, enableMetrics: Boolean  ) = {
+  def getSparkConf( appName: String  ) = {
     val edas_cache_dir = appParameters.getCacheDirectory
     val sc = new SparkConf(false)
       .setAppName( appName )
-      .set("spark.logConf", logConf.toString )
       .set("spark.local.dir", edas_cache_dir )
       .set("spark.file.transferTo", "false" )
       .set("spark.kryoserializer.buffer.max", "1000m" )
@@ -105,7 +104,6 @@ object CDSparkContext extends Loggable {
 //      } catch { case ex: Exception => logger.error( "Error parsing spark parameter '" + line + ": " + ex.toString ); }
 //    }
 
-    if( enableMetrics ) sc.set("spark.metrics.conf", getClass.getResource("/spark.metrics.properties").getPath )
     appParameters( "spark.master" ) match {
       case Some(cval) =>
         logger.info( s" >>>>> Set Spark Master from appParameters: $cval" )
