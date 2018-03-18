@@ -101,7 +101,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val dataInputsSpec = elem(taskSpec,3)
     setExeStatus( jobId, "executing " + process_name + "-> " + dataInputsSpec )
     logger.info( "\n\nExecuting " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; ") + "\n\n")
-    responder.setClientId(clientId,jobId)
+    responder.registerExecutingJob(clientId,jobId)
     val response_syntax = getResponseSyntax(runargs)
     val responseType = runargs.getOrElse("response","file")
     val executionCallback: ExecutionCallback = new ExecutionCallback {
@@ -110,12 +110,10 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         if (responseType == "object") { sendDirectResponse(response_syntax, clientId, jobId, results) }
         else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
         setExeStatus(jobId, "completed")
-        responder.clearClientId()
       }
       override def failure( msg: String ): Unit = {
         logger.error( s"ERROR CALLBACK ($jobId:$clientId): " + msg )
         setExeStatus( jobId, "error" )
-        responder.clearClientId()
       }
     }
     try {

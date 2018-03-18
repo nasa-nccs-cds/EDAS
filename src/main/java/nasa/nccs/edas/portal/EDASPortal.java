@@ -11,6 +11,7 @@ import ucar.nc2.time.CalendarDate;
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Arrays;
@@ -85,21 +86,22 @@ class Responder extends Thread {
     int response_port = -1;
     Logger logger = EDASLogManager.getCurrentLogger();
     String client_address = null;
-    String clientId = null;
-    String responseId = null;
     ConcurrentLinkedQueue<Response> response_queue = null;
+    ConcurrentHashMap<String,Response> executing_jobs = null;
     HashMap<String,String> status_reports = null;
 
     public Responder(ZMQ.Context _context, String _client_address, int _response_port ) {
         context =  _context;
         response_port = _response_port;
         response_queue = new ConcurrentLinkedQueue<Response>();
+        executing_jobs = new ConcurrentHashMap<String,Response>();
         status_reports = new HashMap<String,String>();
         client_address = _client_address;
     }
 
-    public void setClientId( String cid, String rid ) { clientId = cid; responseId = rid; }
-    public void clearClientId() { clientId = null; responseId = null;  }
+    public void registerExecutingJob(String cid, String rid ) {
+        executing_jobs.put( rid, new Response( "executing", cid, rid ) );
+    }
 
     public void sendResponse( Response msg ) {
         logger.info( "Post Message to response queue: " + msg.toString() );
@@ -147,13 +149,16 @@ class Responder extends Thread {
 
     public void setExeStatus( String rid, String status ) {
         status_reports.put(rid,status);
+        if( (status == "error") || (status == "completed") ) {
+            try {   executing_jobs.remove( rid );  } catch ( Exception ex ) {;}
+        }
     }
 
     void heartbeat(ZMQ.Socket socket) {
-        if( clientId != null ) {
-            Message hb_msg = new Message( clientId, "status", status_reports.toString() );
+        for ( Response r : executing_jobs.values() ) try {
+            Message hb_msg = new Message( r.clientId, "status", r.responseId + ": " + status_reports.get( r.responseId ) );
             doSendMessage(socket, hb_msg);
-        }
+        } catch ( Exception ex ) {;}
     }
 
     public void run( )  {
@@ -192,16 +197,10 @@ class Responder extends Thread {
 
     public void close_connection(ZMQ.Socket socket ) {
         try {
-            while (true) {
-                Response response = response_queue.poll();
-                if (response == null) {
-                    if( clientId != null ) { doSendErrorReport(socket, new ErrorReport(clientId, responseId, "Job terminated by server shutdown.")); }
-                    socket.close();
-                    return;
-                } else {
-                    doSendResponse( socket, response );
-                }
+            for ( Response r : executing_jobs.values() ) {
+                doSendErrorReport( socket, new ErrorReport(r.clientId, r.responseId, "Job terminated by server shutdown.") );
             }
+            socket.close();
         }
         catch( Exception err ) { ; }
     }
