@@ -157,6 +157,10 @@ object EDASExecutionManager extends Loggable {
     saveResultToFile( executor, result.concatSlices.slices.head, result.getMetadata,  dsetMetadata )
   }
 
+//  def generateCoordValues( newRange: ma2.Range, size: Int  ): ma2.Array = {
+//    newRange.
+//  }
+
   def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute]  ): String = {
     val head_elem: ArraySpec = slice.elements.values.head
     val resultId: String = executor.requestCx.jobId
@@ -219,7 +223,7 @@ object EDASExecutionManager extends Loggable {
       val axisTypes = if( shape.length == 4 ) Array("T", "Z", "Y", "X" )  else Array("T", "Y", "X" )
       logger.info( s" InputSpec: {${optInputSpec.fold("")(_.getMetadata().mkString(", "))}} ")
       val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
-        inputSpec.getRange(coordAxis.getFullName) match {
+        inputSpec.getRangeCF( coordAxis.getAxisType.getCFAxisName ) match {
           case Some(range) =>
             val coordDataType = if( coordAxis.getAxisType == AxisType.Time ) { DataType.DOUBLE } else { coordAxis.getDataType }
             val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
@@ -228,7 +232,16 @@ object EDASExecutionManager extends Loggable {
             val newRange = dimsMap.get( coordAxis.getFullName ).fold( range )( dim =>
               if( dim.getLength == 1 ) { val center = (range.first+range.last)/2; new ma2.Range( range.getName, center, center ) } else { range }
             )
-            val data =  if( coordAxis.getAxisType == AxisType.Time ) { ma2.Array.factory( timeValues.toArray ) } else { coordAxis.read(List(newRange)) }
+            val data =  if( coordAxis.getAxisType == AxisType.Time ) {
+              ma2.Array.factory( timeValues.toArray )
+            } else {
+              if( coordAxis.getSize > newRange.length ) {
+                coordAxis.read(List(newRange))
+              } else {
+                coordAxis.read()
+              }
+
+            }
             Some(coordVar, data)
           case None => None
         }

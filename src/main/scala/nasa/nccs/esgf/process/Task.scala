@@ -28,6 +28,7 @@ import nasa.nccs.esgf.utilities.wpsNameMatchers
 import nasa.nccs.esgf.wps.edasServiceProvider
 import nasa.nccs.wps._
 import org.apache.commons.lang.RandomStringUtils
+import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.CoordinateAxis1DTime
 
 import scala.io.Source
