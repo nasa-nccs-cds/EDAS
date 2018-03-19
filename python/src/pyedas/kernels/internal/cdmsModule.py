@@ -51,7 +51,7 @@ class RegridKernel(CDMSKernel):
             #     (bounds0, bounds1) = self.getAxisBounds(gridSection)
             #     toGrid = toGrid.subGrid(bounds0, bounds1)
         elif ("uniform" in gridType):
-            origin = sa2f(self.getListParm(mdata, "origin", "0,-90"))
+            origin = sa2f(self.getListParm(mdata, "origin", "-90,0"))
             if (shape):
                 assert len(shape) > 1, "Shape must have two dimensions: " + str(shape)
                 assert len(origin) > 1, "Origin must have two dimensions: " + str(origin)
