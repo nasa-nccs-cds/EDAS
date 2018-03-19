@@ -585,9 +585,6 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
   }
 
-
-
-
   test("SpaceAve-GISS-R1i1p1-weighted") {
     //  ncap2 -O -S cosine_weights.nco ${datafile} /tmp/data_with_weights.nc
     //  ncwa -O -w gw -d lat,5,25 -d lon,5,25 -d time,50,75 -a lat,lon /tmp/data_with_weights.nc ~/test/out/spatial_average_wts.nc
