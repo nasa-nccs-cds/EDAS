@@ -25,7 +25,7 @@ public class CleanupManager {
     ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1);
     List<Executable> executables = new ArrayList<Executable>();
     volatile boolean isStopIssued;
-    private static final long PERIOD = 24*60*60;
+    private static final long PERIOD = 60*60;
     private Date midnight = getMidnight();
     long initialDelay = (midnight.getTime()-System.currentTimeMillis())/1000;
 
