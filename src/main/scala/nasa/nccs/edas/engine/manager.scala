@@ -312,6 +312,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
                           .addFileCleanupTask( Kernel.getResultDir.getPath, 2.0f, false, ".*" )
                           .addFileCleanupTask( EDAS_CACHE_DIR, 1.0f, true, "blockmgr-.*" )
                           .addFileCleanupTask( EDAS_CACHE_DIR, 1.0f, true, "spark-.*" )
+                          .addFileCleanupTask( EDAS_CACHE_DIR + "/collections/agg", 0.1f, true, "*CdmsRegrid*" )
                           .addFileCleanupTask( s"/tmp/$USER/logs", 4.0f, true, ".*" )
 
 
