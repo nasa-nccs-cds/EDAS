@@ -165,7 +165,7 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
 }
 
 case class KernelExecutionResult(results: QueryResultCollection, files: List[String] ) {
-  val holdsData: Boolean = results.slices.nonEmpty
+  val holdsData: Boolean = results.records.nonEmpty
   val slice = results.getConcatSlice
 }
 
@@ -208,7 +208,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
         aggResult = aggResult.merge( batchResult, reduceOp )
       } else {
         if( executor.requestCx.task.getUserAuth > 0 ) {
-          resultFiles += EDASExecutionManager.saveResultToFile(executor, batchResult, List.empty[nc2.Attribute])
+          resultFiles ++= EDASExecutionManager.saveResultToFile(executor, batchResult, List.empty[nc2.Attribute])
           executor.releaseBatch
         } else {
           throw new Exception( "Must be authorized to execute a request this big- please contact the service administrator for instructions.")

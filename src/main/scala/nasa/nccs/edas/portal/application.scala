@@ -150,7 +150,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         logger.info( "\n\n     **** Found result Id: " + rid + " ****** \n\n")
         processManager.getResultVariable("edas",rid) match {
           case Some( resultVar ) =>
-            val slice: CDRecord = resultVar.result.concatSlices.slices.head
+            val slice: CDRecord = resultVar.result.concatSlices.records.head
             slice.elements.foreach { case ( id, array ) =>
               sendArrayData( clientId, rid, array.origin, array.shape, array.toByteArray, resultVar.result.metadata  + ( "elem" -> id ) )  // + ("gridfile" -> gridfilename)
             }

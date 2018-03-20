@@ -38,8 +38,9 @@ class svd extends KernelImpl {
     val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
     val svd = matrix.computeSVD( nModes, true )
     val lambdas = svd.s.toArray.mkString(",")
-    val ( ushape, udata ) = CDRecord.rowMatrix2Array( svd.U )
-    val Uelems: Seq[(String, ArraySpec)] = Seq( s"U1" ->  new ArraySpec( topElem.missing, ushape, topElem.origin, udata, topElem.optGroup ) )
+    val Uelems: Seq[(String, ArraySpec)] = svd.U.rows.map(_.toArray).zipWithIndex().collect().map{ case ( udata, index ) =>
+      s"U$index" ->  new ArraySpec( topElem.missing, Array(udata.length), topElem.origin, udata.map(_.toFloat), topElem.optGroup )
+    }
     val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>
       s"V$index" -> new ArraySpec(topElem.missing, topElem.shape, topElem.origin, array, topElem.optGroup)
     }
@@ -101,8 +102,8 @@ class rescale extends KernelImpl {
       new CDRecord( rec.startTime, rec.endTime, Map( elem_id -> elem ), rec.metadata )
     }
     val rv = new QueryResultCollection( results.collect, input.metadata )
-    val top_array = rv.slices.head.elements.head._2
-    logger.info( s"  ##### @SVD Rescale result with ${rv.slices.length}, sliece elem shape: ${top_array.shape.mkString(", ")}, values: ${top_array.data.slice(0,32).mkString(", ")}" )
+    val top_array = rv.records.head.elements.head._2
+    logger.info( s"  ##### @SVD Rescale result with ${rv.records.length}, sliece elem shape: ${top_array.shape.mkString(", ")}, values: ${top_array.data.slice(0,32).mkString(", ")}" )
     rv
   }
 

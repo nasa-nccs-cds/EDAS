@@ -152,9 +152,12 @@ object EDASExecutionManager extends Loggable {
     ( 0 until nTimeSteps ).map ( iT => start/60000.0 + ( iT + 0.5 )*dT )
   }
 
-  def saveResultToFile(executor: WorkflowExecutor, result: QueryResultCollection, dsetMetadata: List[nc2.Attribute] = List.empty[nc2.Attribute] ): String = {
-    if( result.slices.isEmpty ) { return "" }
-    saveResultToFile( executor, result.concatSlices.slices.head, result.getMetadata,  dsetMetadata )
+  def saveResultToFile(executor: WorkflowExecutor, result: QueryResultCollection, dsetMetadata: List[nc2.Attribute] = List.empty[nc2.Attribute] ): Iterable[String] = {
+    if( result.records.isEmpty ) { return Iterable.empty }
+    val merged_record: CDRecord = result.concatSlices.records.head
+    merged_record.partitionByShape.map ( record =>
+      saveResultToFile( executor, record, result.getMetadata,  dsetMetadata )
+    )
   }
 
 //  def generateCoordValues( newRange: ma2.Range, size: Int  ): ma2.Array = {
@@ -532,7 +535,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
           if (resultFile.exists) List(resultFile.getAbsolutePath)
           else {
             logger.info( s" #RS# Result ${resId}, metadata: [${tvar.result.metadata.mkString(",")}] " )
-            List( saveResultToFile(executor, tvar.result ) ).filter( ! _.isEmpty )
+            saveResultToFile(executor, tvar.result ).toList.filter( ! _.isEmpty )
           }
         case None => List.empty[String]
       }

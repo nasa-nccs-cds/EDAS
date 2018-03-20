@@ -394,7 +394,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
       case None =>
         val groupOpt = context.getGroup
         val reducedCollection: QueryResultCollection = reduce( input, context, batchIndex )
-        val result_slice = reducedCollection.slices.head   // If there is no grouping then there will be a single result slice.
+        val result_slice = reducedCollection.records.head   // If there is no grouping then there will be a single result slice.
         val new_rdd =  input.rdd.map( _ ++ result_slice )
         new CDRecordRDD( new_rdd, input.metadata, input.variableRecords )
     }

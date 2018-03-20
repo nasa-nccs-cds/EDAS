@@ -144,7 +144,7 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
           <wps:ProcessSucceeded>EDAS Process successfully calculated</wps:ProcessSucceeded>
         </wps:Status>
         <wps:ProcessOutputs>
-          {tvar.result.concatSlices.slices.head.elements.map { case (id, result) =>
+          {tvar.result.concatSlices.records.head.elements.map { case (id, result) =>
           <wps:Output>
             <wps:Data id={id}>
               <wps:LiteralData  shape={result.shape.mkString(",")}>
@@ -158,7 +158,7 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
     case ResponseSyntax.Generic =>
       <response  serviceInstance={serviceInstance}  creation_time={currentTime} status="Success">
         <outputs>
-          {tvar.result.concatSlices.slices.head.elements.map { case (id, result) =>
+          {tvar.result.concatSlices.records.head.elements.map { case (id, result) =>
           <output id={id} shape={result.shape.mkString(",")} >
                 {result.toCDFloatArray.mkDataString(" ", " ", " ")}
           </output>

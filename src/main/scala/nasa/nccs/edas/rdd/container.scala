@@ -175,6 +175,10 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
     val arrays: Iterable[Array[Float]] = selectedElems.values.map( _.data )
     Vectors.dense( concat( arrays.toSeq ).map(_.toDouble) )
   }
+  def partitionByShape: Iterable[CDRecord] = {
+    val groupedElems = elements.groupBy { case (id,array) => array.shape }
+    groupedElems.values.map( elems => new CDRecord(startTime, endTime, elems, metadata ) )
+  }
 
   def release( keys: Iterable[String] ): CDRecord = { new CDRecord(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
   def selectElement( elemId: String ): CDRecord = CDRecord(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)
@@ -199,7 +203,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   }
 
   def addExtractedSlice( collection: QueryResultCollection ): CDRecord =
-    collection.slices.find( _.contains( this ) ) match {
+    collection.records.find( _.contains( this ) ) match {
       case None =>
         throw new Exception( s"Missing matching slice in broadcast: { ${startTime}, ${endTime} }")
       case Some( extracted_slice ) =>
@@ -382,30 +386,30 @@ object QueryResultCollection {
 
 }
 
-case class QueryResultCollection(slices: Array[CDRecord], metadata: Map[String,String] ) extends Serializable {
+case class QueryResultCollection(records: Array[CDRecord], metadata: Map[String,String] ) extends Serializable {
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
   def section( section: CDSection ): QueryResultCollection = {
-    QueryResultCollection( slices.flatMap( _.section(section) ), metadata )
+    QueryResultCollection( records.flatMap( _.section(section) ), metadata )
   }
-  def sort(): QueryResultCollection = { QueryResultCollection( slices.sortBy( _.startTime ), metadata ) }
-  val nslices: Int = slices.length
+  def sort(): QueryResultCollection = { QueryResultCollection( records.sortBy( _.startTime ), metadata ) }
+  val nslices: Int = records.length
 
   def merge(other: QueryResultCollection, op: CDRecord.ReduceOp ): QueryResultCollection = {
     val ( tsc0, tsc1 ) = ( sort(), other.sort() )
-    val merged_slices = if(tsc0.slices.isEmpty) { tsc1.slices } else if(tsc1.slices.isEmpty) { tsc0.slices } else {
-      tsc0.slices.zip( tsc1.slices ) map { case (s0,s1) => op(s0,s1) }
+    val merged_slices = if(tsc0.records.isEmpty) { tsc1.records } else if(tsc1.records.isEmpty) { tsc0.records } else {
+      tsc0.records.zip( tsc1.records ) map { case (s0,s1) => op(s0,s1) }
     }
     QueryResultCollection( merged_slices, metadata ++ other.metadata )
   }
 
-  def getMetadata: Map[String,String] = metadata ++ slices.headOption.fold(Map.empty[String,String])(_.metadata) // slices.foldLeft(metadata)( _ ++ _.metadata )
+  def getMetadata: Map[String,String] = metadata ++ records.headOption.fold(Map.empty[String,String])(_.metadata) // slices.foldLeft(metadata)( _ ++ _.metadata )
 
   def concatSlices: QueryResultCollection = {
-    val concatSlices = sort().slices.reduce( _ <+ _ )
+    val concatSlices = sort().records.reduce( _ <+ _ )
     QueryResultCollection( Array( concatSlices ), metadata )
   }
 
-  def getConcatSlice: CDRecord = concatSlices.slices.head
+  def getConcatSlice: CDRecord = concatSlices.records.head
 }
 
 object PartitionExtensionGenerator {
@@ -670,7 +674,7 @@ class RDDContainer extends Loggable {
     def += ( record: CDRecord ) = { update( _rdd.map(slice => slice ++ record ) ) }
     def += ( records: QueryResultCollection  ) = {
       assert( records.nslices <= 1, "UNIMPLEMENTED FEATURE: TimeSliceCollection -> RDDVault")
-      update( _rdd.map( slice => slice ++ records.slices.headOption.getOrElse( CDRecord.empty ) ) )
+      update( _rdd.map( slice => slice ++ records.records.headOption.getOrElse( CDRecord.empty ) ) )
     }
     def nSlices = { _rdd.cache; _rdd.nSlices }
     def nPartitions = {  _rdd.getNumPartitions }
