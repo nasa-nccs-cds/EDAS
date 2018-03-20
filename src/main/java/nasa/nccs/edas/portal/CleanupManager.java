@@ -139,8 +139,6 @@ public class CleanupManager {
                         logger.error( "Error Cleaning up directory " + file.getName() + ", error = " + ex.getMessage() );
                     }
                 }
-            } else {
-                logger.info( " %C% Retaining young file or dir: " + file.getName() + ", age = " +  age_days + " days");
             }
         }
     }

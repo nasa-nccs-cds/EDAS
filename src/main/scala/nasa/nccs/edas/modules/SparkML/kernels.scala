@@ -35,7 +35,7 @@ class svd extends KernelImpl {
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.std.size} stDevs: ${scaler.std.toArray.slice(0,32).mkString(", ")}" )
     scaling_result.cache()
     val matrix = new RowMatrix( scaling_result )
-    val nModes: Int = context.operation.getConfParm("modes").fold( 10 )( _.toInt )
+    val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
     val svd = matrix.computeSVD( nModes, true )
 
 //    val ( ushape, udata ) = CDRecord.rowMatrix2Array( svd.U )
