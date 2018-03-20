@@ -37,16 +37,15 @@ class svd extends KernelImpl {
     val matrix = new RowMatrix( scaling_result )
     val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
     val svd = matrix.computeSVD( nModes, true )
-
-//    val ( ushape, udata ) = CDRecord.rowMatrix2Array( svd.U )
-//    val uArray: ArraySpec  = new ArraySpec( topElem.missing, ushape, topElem.origin, udata, topElem.optGroup )
-
-    val elements: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>
+    val lambdas = svd.s.toArray.mkString(",")
+    val ( ushape, udata ) = CDRecord.rowMatrix2Array( svd.U )
+    val Uelems: Seq[(String, ArraySpec)] = Seq( s"U1" ->  new ArraySpec( topElem.missing, ushape, topElem.origin, udata, topElem.optGroup ) )
+    val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>
       s"V$index" -> new ArraySpec(topElem.missing, topElem.shape, topElem.origin, array, topElem.optGroup)
     }
-    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, elements.toMap, topSlice.metadata )
-    logger.info( s"@SVD Created modes, nModes = ${elements.length}, time = ${(System.nanoTime - t0) / 1.0E9}" )
-    new QueryResultCollection( Array( slice ), input.metadata )
+    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, (Uelems ++ Velems).toMap, topSlice.metadata )
+    logger.info( s"@SVD Created modes, nModes = ${Velems.length}, time = ${(System.nanoTime - t0) / 1.0E9}" )
+    new QueryResultCollection( Array( slice ), input.metadata + ("lambdas" -> lambdas) )
   }
 
   def execute2(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
