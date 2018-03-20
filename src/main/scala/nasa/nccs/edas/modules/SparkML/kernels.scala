@@ -38,8 +38,8 @@ class svd extends KernelImpl {
     val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
     val svd = matrix.computeSVD( nModes, true )
     val lambdas = svd.s.toArray.mkString(",")
-    val Uelems: Seq[(String, ArraySpec)] = svd.U.rows.map(_.toArray).zipWithIndex().collect().map{ case ( udata, index ) =>
-      s"U$index" ->  new ArraySpec( topElem.missing, Array(udata.length), topElem.origin, udata.map(_.toFloat), topElem.optGroup )
+    val Uelems: Seq[(String, ArraySpec)] = CDRecord.rowMatrixCols2Arrays( svd.U ).zipWithIndex.map { case (udata, index) =>
+      s"U$index" -> new ArraySpec(topElem.missing, Array(udata.length,1,1), topElem.origin, udata, topElem.optGroup )
     }
     val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>
       s"V$index" -> new ArraySpec(topElem.missing, topElem.shape, topElem.origin, array, topElem.optGroup)

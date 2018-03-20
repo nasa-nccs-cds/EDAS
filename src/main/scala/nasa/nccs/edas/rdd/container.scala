@@ -156,6 +156,16 @@ object CDRecord {
     ( Array(nRows,nCols), newArray )
   }
 
+  def rowMatrixCols2Arrays( V: RowMatrix ): IndexedSeq[Array[Float]] = {
+    val (nRows,nCols) = ( V.numRows.toInt, V.numCols.toInt )
+    val dataArrays: Array[Array[Double]] = V.rows.map(_.toArray).zipWithIndex.collect.sortBy( _._2 ).map(_._1)
+    for( iC <- 0 until nCols ) yield {
+      val newArray = new Array[Float]( nRows )
+      ( 0 until nRows ).foreach( iR => { newArray( iR ) = dataArrays(iR)(iC).toFloat } )
+      newArray
+    }
+  }
+
 }
 
 case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArraySpec], metadata: Map[String, String] ) {
