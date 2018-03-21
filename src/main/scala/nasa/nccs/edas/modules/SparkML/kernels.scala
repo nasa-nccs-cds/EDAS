@@ -36,15 +36,19 @@ class svd extends KernelImpl {
     scaling_result.cache()
     val matrix = new RowMatrix( scaling_result )
     val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
+    val computeU: Boolean = context.operation.getConfParm("compu").fold( false )( _.toBoolean )
     val svd = matrix.computeSVD( nModes, true )
     val lambdas = svd.s.toArray.mkString(",")
-    val Uelems: Seq[(String, ArraySpec)] = CDRecord.rowMatrixCols2Arrays( svd.U ).zipWithIndex.map { case (udata, index) =>
-      s"U$index" -> new ArraySpec(topElem.missing, Array(udata.length,1,1), topElem.origin, udata, topElem.optGroup )
-    }
     val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>
       s"V$index" -> new ArraySpec(topElem.missing, topElem.shape, topElem.origin, array, topElem.optGroup)
     }
-    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, (Uelems ++ Velems).toMap, topSlice.metadata )
+    val elems = if( computeU ) {
+      val Uelems: Seq[(String, ArraySpec)] = CDRecord.rowMatrixCols2Arrays( svd.U ).zipWithIndex.map { case (udata, index) =>
+        s"U$index" -> new ArraySpec(topElem.missing, Array(udata.length,1,1), topElem.origin, udata, topElem.optGroup )
+      }
+      (Uelems ++ Velems).toMap
+    } else { Velems.toMap }
+    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, elems, topSlice.metadata )
     logger.info( s"@SVD Created modes, nModes = ${Velems.length}, time = ${(System.nanoTime - t0) / 1.0E9}" )
     new QueryResultCollection( Array( slice ), input.metadata + ("lambdas" -> lambdas) )
   }
