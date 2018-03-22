@@ -30,6 +30,8 @@ import ucar.nc2.{Attribute, Dimension}
 import ucar.nc2.dataset.{CoordinateAxis, NetcdfDataset}
 import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingStrategyNone}
 import org.apache.spark.mllib.rdd.RDDFunctions._
+import ucar.nc2.time.CalendarDate
+
 import scala.collection.immutable.{Map, TreeMap}
 import scala.reflect.runtime.{universe => u}
 
@@ -182,29 +184,71 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
     val inputIds: List[String] = context.operation.inputs
     val elemFilter = (elemId: String) => inputIds.contains( elemId )
     val filteredRdd: RDD[CDRecord] = input.rdd.map( _.selectElements( elemFilter ) )
-    val times: Array[(Long,Long)] = filteredRdd.map( rec => ( rec.startTime, rec.endTime ) ).collect()
-    val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceRddByGroup( filteredRdd, CDRecord.weightedSum( context ), "normw", groupBy )
-    val regroupedRDD:  RDD[Array[(Int,CDRecord)]] = groupedRDD.sortBy( _._1 ).sliding(3,2)
-    val rdd = regroupedRDD.mapPartitions( interploate( times ) )
+    val times: Array[(Long,Long)] = filteredRdd.map( rec => ( rec.startTime, rec.endTime ) ).collect().sortBy( _._1 )
+    val groupedRDD:  RDD[CDRecord] = CDRecordRDD.reduceRddByGroup( filteredRdd, CDRecord.weightedSum( context ), "normw", groupBy ).map( _._2 )
+    val regroupedRDD:  RDD[Array[CDRecord]] = input.newData( groupedRDD.sortBy( _.startTime ) ).sliding(3,2)
+    val nParts = regroupedRDD.getNumPartitions
+    val rdd:  RDD[CDRecord] = regroupedRDD.mapPartitionsWithIndex( interploate( nParts, times ) )
     new CDRecordRDD( rdd, input.metadata, input.variableRecords )
   }
 
-  def interploate( times: Array[(Long,Long)] )( segments: Iterator[Array[(Int,CDRecord)]] ) : Iterator[CDRecord] = {
-    segments.flatMap( segment => {
-      val (startRec, midRec, endRec) = (segment(0)._2, segment(1)._2, segment(2)._2)
-      val (start_time, mid_time, end_time) = (startRec.midpoint, midRec.midpoint, endRec.midpoint)
-      val segmentTimes = times.filter { case (sliceT0, sliceT1) => (sliceT0 < end_time) && (sliceT1 > start_time) }
-      segmentTimes.map { case (sliceT0, sliceT1) => {
-        val sliceT = (sliceT0 + sliceT1) / 2
-        if( sliceT < mid_time ) {
-          CDRecord.interploate( sliceT0, sliceT1, startRec, midRec )
-        } else if( sliceT > mid_time ) {
-          CDRecord.interploate( sliceT0, sliceT1, midRec, endRec )
-        } else {
-          midRec
-        }
-      }}
-    })
+  override def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {
+    val t0 = System.nanoTime()
+    val mapresult: CDRecordRDD = context.profiler.profile("mapReduce.mapRDD") (() => { mapRDD(input, context) } )
+    if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
+    val rv = context.profiler.profile("mapReduce.reduce") ( () => { mapresult.collect } )
+    logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
+    rv
+  }
+
+  def date( time_index: Long ): String = CalendarDate.of(time_index).toString
+
+  def interploate( numPartitions: Int, times: Array[(Long,Long)] )( partitionIndex: Int, segments: Iterator[Array[CDRecord]] ) : Iterator[CDRecord] = {
+    val segSeq  = segments.toSeq
+    if( partitionIndex == 1 ) {
+      val x = 1
+    }
+    val nRecords = segSeq.length
+    val interpRecs = segSeq.sortBy( _(0).startTime ).zipWithIndex.flatMap { case ( segment, recordIndex ) => {
+      if( segment.length == 3 ) {
+        val (startRec, midRec, endRec) = ( segment(0), segment(1), segment(2) )
+        val (start_time, mid_time, end_time) =
+          if( ( recordIndex == 0 ) && ( partitionIndex == 0 )  )   {
+//            println( s"<< Segment[$partitionIndex:$recordIndex]  ${date(startRec.startTime)} -> ${date(midRec.midpoint)} -> ${date(endRec.midpoint)} ")
+            (startRec.startTime,  midRec.midpoint,  endRec.midpoint ) }
+          else if( ( recordIndex == nRecords-1 ) && ( partitionIndex == numPartitions-1 )   )  {
+//            println( s">> Segment[$partitionIndex:$recordIndex]  ${date(startRec.midpoint)} -> ${date(midRec.midpoint)} -> ${date(endRec.endTime)} ")
+            (startRec.midpoint,   midRec.midpoint,  endRec.endTime  ) }
+          else {
+//            println( s"-- Segment[$partitionIndex:$recordIndex]  ${date(startRec.midpoint)} -> ${date(midRec.midpoint)} -> ${date(endRec.midpoint)} ")
+            (startRec.midpoint,   midRec.midpoint,  endRec.midpoint ) }
+        val segmentTimes = times.filter { case (sliceT0, sliceT1) => { val midT = (sliceT0+sliceT1)/2;  (midT < end_time) && (midT > start_time) } }
+        println( s"   -->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
+        segmentTimes.map { case (sliceT0, sliceT1) => {
+          val sliceT = (sliceT0 + sliceT1) / 2
+          if( sliceT < mid_time ) {
+            CDRecord.interploate( sliceT0, sliceT1, startRec, midRec )
+          } else if( sliceT > mid_time ) {
+            CDRecord.interploate( sliceT0, sliceT1, midRec, endRec )
+          } else {
+            midRec
+          }
+        }}
+      } else if( partitionIndex == numPartitions-1 ) {
+        val (startRec, endRec) = ( segment(0), segment(1) )
+        val (start_time, end_time) =
+          if( recordIndex == nRecords-1 )  {
+//            println( s">> Segment[$partitionIndex:$recordIndex]  ${date(startRec.midpoint)}  -> ${date(endRec.endTime)} ")
+            (startRec.midpoint,  endRec.endTime  ) }
+          else {
+//            println( s"-- Segment[$partitionIndex:$recordIndex]  ${date(startRec.midpoint)}  -> ${date(endRec.midpoint)} ")
+            (startRec.midpoint,  endRec.midpoint ) }
+        val segmentTimes = times.filter { case (sliceT0, sliceT1) => (sliceT0 < end_time) && (sliceT1 > start_time) }
+        println( s"   xx-->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
+        segmentTimes.map { case (sliceT0, sliceT1) => CDRecord.interploate( sliceT0, sliceT1, startRec, endRec ) }
+      } else { Iterator.empty }
+    }}
+    interpRecs.sortBy(_.startTime).toIterator
   }
 }
 

@@ -136,7 +136,7 @@ object CDRecord extends Loggable {
       Seq(   key -> ArraySpec( array0.missing, array0.shape, array0.origin, results.getData, array0.optGroup ),
         key + "_WEIGHTS_" -> ArraySpec( array0.missing, array0.shape, array0.origin, weights.getData, array0.optGroup ) )
     }
-    CDRecord(input0.startTime, input0.endTime, elems, input0.metadata )
+    CDRecord(input0.startTime, input1.endTime, elems, input0.metadata )
   }
 
   def concat(arrays: Seq[Array[Float]]): Array[Float] = {
@@ -380,6 +380,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def release( keys: Iterable[String] ): CDRecordRDD = CDRecordRDD( rdd.map( _.release(keys) ), metadata, variableRecords )
   def map( op: CDRecord => CDRecord ): CDRecordRDD = CDRecordRDD( rdd map op , metadata, variableRecords )
   def getNumPartitions = rdd.getNumPartitions
+  def newData( new_rdd: RDD[CDRecord] ) = new CDRecordRDD( new_rdd, metadata, variableRecords )
   def nodeList: Array[String] = rdd.mapPartitionsWithIndex { case ( index, tsIter )  => if(tsIter.isEmpty) { Iterator.empty } else { Seq( s"{P${index}-(${KernelContext.getProcessAddress}), size: ${tsIter.length}}" ).toIterator }  } collect
 //  def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata, variableRecords )
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
@@ -387,6 +388,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def selectElements(  elemFilter: String => Boolean  ): CDRecordRDD = CDRecordRDD ( rdd.map( _.selectElements( elemFilter ) ), metadata, variableRecords )
   def toMatrix(selectElems: Seq[String]): RowMatrix = { new RowMatrix(rdd.map(_.toVector( selectElems ))) }
   def toVectorRDD(selectElems: Seq[String]): RDD[Vector] = { rdd.map(_.toVector( selectElems )) }
+  def collect: QueryResultCollection = { QueryResultCollection( rdd.collect.sortBy(_.startTime), metadata ) }
 
   def reduceByGroup(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): CDRecordRDD = {
     val keyedRDD: RDD[(Int,CDRecord)] = rdd.keyBy( groupBy.group )
@@ -400,6 +402,14 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
     QueryResultCollection( processedRDD.collect, metadata )
   }
 
+  def sliding( windowSize: Int, step: Int ): RDD[Array[CDRecord]] = {
+    require(windowSize > 0, s"Sliding window size must be positive, but got $windowSize.")
+    if (windowSize == 1 && step == 1) {
+      rdd.map(Array(_))
+    } else {
+      new SlidingRDD[CDRecord]( rdd, windowSize, step )
+    }
+  }
   def reduce(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, optGroupBy: Option[TSGroup], ordered: Boolean = false ): QueryResultCollection = {
     val filteredRdd = rdd.map( _.selectElements( elemFilter ) )
     if (ordered) optGroupBy match {
@@ -614,7 +624,6 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
       val data_shape: Array[Int] = data_section.getShape
       val arraySpec = ArraySpec( getMissing(variable), data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array, None )
       val time_index = sliceRanges.head.first
-      if( time_index < 11 ) { logger.info( s" @DSX time index: ${time_index}, value: ${data_array(0)}") }
       CDRecord(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
     }
     dataset.close()
