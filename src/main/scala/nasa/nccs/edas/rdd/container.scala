@@ -39,6 +39,11 @@ object ArraySpec {
     new ArraySpec( data_array.missing.getOrElse(Float.NaN), tvar.getShape, tvar.getOrigin, data_array.data, None )
   }
   def apply( fma: FastMaskedArray, origin: Array[Int] ): ArraySpec = new ArraySpec( fma.missing, fma.shape, origin,  fma.getData, None)
+
+  def interpolate( arraySpec0: ArraySpec, w0: Float, arraySpec1: ArraySpec, w1: Float ): ArraySpec = {
+    val new_data: FastMaskedArray = FastMaskedArray.interp( arraySpec0.toFastMaskedArray, w0, arraySpec1.toFastMaskedArray, w1 )
+    new ArraySpec( arraySpec0.missing, arraySpec0.shape, arraySpec0.origin, new_data.toFloatArray, arraySpec0.optGroup )
+  }
 }
 
 case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float], optGroup: Option[TSGroupIdentifier] ) {
@@ -49,6 +54,7 @@ case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], dat
   def toCDFloatArray: CDFloatArray = CDFloatArray(shape,data,missing)
   def getSection: ma2.Section = new ma2.Section( origin, shape )
   def getRelativeSection: ma2.Section = new ma2.Section( origin, shape ).shiftOrigin( new ma2.Section( origin, shape ) )
+  def getWeights: ArraySpec = new ArraySpec( missing, shape, origin, data.map( fval => if( fval == missing ) 0f else 1f ), optGroup )
 
   def setGroupId( group: TSGroup, group_index: Long ): ArraySpec = {
     new ArraySpec( missing, shape, origin, data, Some( new TSGroupIdentifier(group,group_index) ) )
@@ -101,9 +107,37 @@ case class CDTimeInterval(startTime: Long, endTime: Long ) {
   def append( other: CDTimeInterval ): CDTimeInterval = { this precedes other; new CDTimeInterval( mergeStart( other ), mergeEnd( other ) ) }
 }
 
-object CDRecord {
+object CDRecord extends Loggable {
   type ReduceOp = (CDRecord,CDRecord)=>CDRecord
   def empty = new CDRecord(-1, 0, Map.empty[String,ArraySpec], Map.empty[String, String] )
+
+  def interploate( startTime: Long, endTime: Long, startRec: CDRecord, endRec: CDRecord ): CDRecord = {
+    val time = (startTime + endTime)/2
+    if( time <= startRec.midpoint ) { startRec }
+    else if( time >= endRec.midpoint ) { endRec }
+    else {
+      val w0 = time - startRec.midpoint
+      val w1 = endRec.midpoint - time
+      val interp_elems = startRec.elements.map { case (key,arraySpec0) => {
+        val arraySpec1 = endRec.element(key).getOrElse( throw new Exception( "Missing element in interploate input: " + key ))
+        key -> ArraySpec.interpolate( arraySpec0, w0, arraySpec1, w1 )
+      } }
+      new CDRecord( startTime, endTime, interp_elems,  startRec.metadata )
+    }
+  }
+
+  def weightedSum ( context: KernelContext ) ( input0: CDRecord, input1: CDRecord  ): CDRecord = {
+    val elems = input0.elements filterKeys { !_.endsWith("_WEIGHTS_") } flatMap { case (key, array0) =>
+      val array1 =   input1.element(key).getOrElse( throw new Exception( "Missing element in combineRecords: " + key) )
+      val weights0 = input0.element(key + "_WEIGHTS_").getOrElse( array0.getWeights ).toFastMaskedArray
+      val weights1 = input1.element(key + "_WEIGHTS_").getOrElse( array1.getWeights ).toFastMaskedArray
+      val weights: FastMaskedArray = weights0 + weights1
+      val results: FastMaskedArray = array0.toFastMaskedArray + array1.toFastMaskedArray
+      Seq(   key -> ArraySpec( array0.missing, array0.shape, array0.origin, results.getData, array0.optGroup ),
+        key + "_WEIGHTS_" -> ArraySpec( array0.missing, array0.shape, array0.origin, weights.getData, array0.optGroup ) )
+    }
+    CDRecord(input0.startTime, input0.endTime, elems, input0.metadata )
+  }
 
   def concat(arrays: Seq[Array[Float]]): Array[Float] = {
     val joinedArray = new Array[Float]( arrays.map(_.length).sum )
@@ -173,7 +207,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   def ++( other: CDRecord ): CDRecord = { new CDRecord(startTime, endTime, elements ++ other.elements, metadata) }
   def <+( other: CDRecord ): CDRecord = append( other )
   def clear: CDRecord = { new CDRecord(startTime, endTime, Map.empty[String,ArraySpec], metadata) }
-  def midpoint: Long = (startTime + endTime)/2
+  lazy val midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDRecord ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDRecord ): Long = Math.max( endTime, other.endTime )
   def section( section: CDSection ): Option[CDRecord] = {

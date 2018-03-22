@@ -461,7 +461,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     new CDRecord(a0.mergeStart(a1), a0.mergeEnd(a1), elems, a0.metadata )
   }
 
-  private def combineRDD(context: KernelContext)(rec0: CDRecord, rec1: CDRecord ): CDRecord = {
+  protected def combineRDD(context: KernelContext)(rec0: CDRecord, rec1: CDRecord ): CDRecord = {
     if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else context.profiler.profile[CDRecord]( "Kernel.combineRDD" ) (() => {
       val axes = context.getAxes
       val keys = rec0.elements.keys
@@ -470,9 +470,11 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
           case Some(combineOp) =>
             if (axes.includes(0)) Some( key0 -> array0.combine( combineOp, array1, weighted ) )
             else Some( key0 -> (array0 ++ array1) )
-          case None => Some( key0 -> (array0 ++ array1) )
+          case None =>
+            Some( key0 -> (array0 ++ array1) )
         }
-        case None => None
+        case None =>
+          None
       }}
       CDRecord(rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*), rec0.metadata )
     })

@@ -29,7 +29,7 @@ import ucar.nc2.constants.AxisType
 import ucar.nc2.{Attribute, Dimension}
 import ucar.nc2.dataset.{CoordinateAxis, NetcdfDataset}
 import ucar.nc2.write.{Nc4Chunking, Nc4ChunkingStrategyNone}
-
+import org.apache.spark.mllib.rdd.RDDFunctions._
 import scala.collection.immutable.{Map, TreeMap}
 import scala.reflect.runtime.{universe => u}
 
@@ -164,6 +164,48 @@ class eDiv extends CombineRDDsKernel(Map("mapOp" -> "divide")) {
   val doesAxisReduction: Boolean = false
   val weighted: Boolean = false
   val description = "ENSEMBLE OPERATION: Computes element-wise divisions for input variables data over specified roi"
+}
+
+class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
+  override val status = KernelStatus.public
+  val inputs = List( WPSDataInput("input variables", 2, 2 ) )
+  val outputs = List( WPSProcessOutput( "operation result" ) )
+  val title = "Computes sliding average of time series"
+  val doesAxisReduction: Boolean = false
+  val weighted: Boolean = false
+  val description = "Independently removes the high frequency dynamics from the time series at each spatial point, requires 'groupBy' parm to determine resolution"
+  def map ( context: KernelContext ) ( inputs: CDRecord  ): CDRecord = { inputs; }
+
+  override def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
+    EDASExecutionManager.checkIfAlive
+    val groupBy = context.getGroup.getOrElse( throw new Exception( "lowpass operation requires a groupBy parameter") )
+    val inputIds: List[String] = context.operation.inputs
+    val elemFilter = (elemId: String) => inputIds.contains( elemId )
+    val filteredRdd: RDD[CDRecord] = input.rdd.map( _.selectElements( elemFilter ) )
+    val times: Array[(Long,Long)] = filteredRdd.map( rec => ( rec.startTime, rec.endTime ) ).collect()
+    val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceRddByGroup( filteredRdd, CDRecord.weightedSum( context ), "normw", groupBy )
+    val regroupedRDD:  RDD[Array[(Int,CDRecord)]] = groupedRDD.sortBy( _._1 ).sliding(3,2)
+    val rdd = regroupedRDD.mapPartitions( interploate( times ) )
+    new CDRecordRDD( rdd, input.metadata, input.variableRecords )
+  }
+
+  def interploate( times: Array[(Long,Long)] )( segments: Iterator[Array[(Int,CDRecord)]] ) : Iterator[CDRecord] = {
+    segments.flatMap( segment => {
+      val (startRec, midRec, endRec) = (segment(0)._2, segment(1)._2, segment(2)._2)
+      val (start_time, mid_time, end_time) = (startRec.midpoint, midRec.midpoint, endRec.midpoint)
+      val segmentTimes = times.filter { case (sliceT0, sliceT1) => (sliceT0 < end_time) && (sliceT1 > start_time) }
+      segmentTimes.map { case (sliceT0, sliceT1) => {
+        val sliceT = (sliceT0 + sliceT1) / 2
+        if( sliceT < mid_time ) {
+          CDRecord.interploate( sliceT0, sliceT1, startRec, midRec )
+        } else if( sliceT > mid_time ) {
+          CDRecord.interploate( sliceT0, sliceT1, midRec, endRec )
+        } else {
+          midRec
+        }
+      }}
+    })
+  }
 }
 
 class write extends KernelImpl( Map.empty ) {

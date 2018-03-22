@@ -228,7 +228,7 @@ object FastMaskedArray {
   def apply( fltArray: CDFloatArray ): FastMaskedArray = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, fltArray.getShape, fltArray.getArrayData() ), fltArray.getInvalid )
   def empty = new FastMaskedArray( ma2.Array.factory( ma2.DataType.FLOAT, Array(0) ), Float.NaN )
 
-  def weightedSum( arrays: Array[FastMaskedArray], wtsOpt: Option[FastMaskedArray] = None, axes: Array[Int] = Array.emptyIntArray ): ( FastMaskedArray, FastMaskedArray ) = {
+  def weightedSum( arrays: Array[FastMaskedArray], wtsOpt: Option[FastMaskedArray] = None ): ( FastMaskedArray, FastMaskedArray ) = {
     val input0: FastMaskedArray = arrays.head
     wtsOpt match {
       case Some( wts ) => if( !wts.shape.sameElements(input0.shape) ) { throw new Exception( s"Weights shape [${wts.shape.mkString(",")}] does not match data shape [${input0.shape.mkString(",")}]") }
@@ -244,7 +244,7 @@ object FastMaskedArray {
 
     while ( vsum_iter.hasNext ) {
       var vsum = 0f
-      var wsum = 0f
+      var wsum = wtsIterOpt.fold( 0f )( _.getFloatNext )
       for (i <- 0 until arrays.length) {
         val fval = iters(i).getFloatNext
         if ((fval != missing) && !fval.isNaN) {
@@ -252,17 +252,31 @@ object FastMaskedArray {
           wsum = wsum + 1.0f
         }
       }
-      vsum_iter.setFloatNext( if( axes.isEmpty ) { vsum } else { vsum/wsum }  )
-      wsum_iter.setFloatNext( wsum  )
+      vsum_iter.setFloatNext( vsum )
+      wsum_iter.setFloatNext( wsum )
     }
-    if( axes.isEmpty )    ( vsum_array, wsum_array )
-    else   {
-      val wts: FastMaskedArray = wtsOpt match {
-        case Some(aveWts) => wsum_array * aveWts
-        case None => wsum_array
-      }
-      vsum_array.weightedSum( axes, Some(wts) )
+    ( vsum_array, wsum_array )
+  }
+
+  def interp( array0: FastMaskedArray, w0: Float, array1: FastMaskedArray, w1: Float  ): FastMaskedArray = {
+    val wTot = w0 + w1
+    val (nw0,nw1) = ( w0/wTot, w1/wTot )
+    val missing = array0.missing
+    val vsum_array = FastMaskedArray( array0.shape, 0.0f, array0.missing )
+    val aiter0: IndexIterator = array0.array.getIndexIterator
+    val aiter1: IndexIterator = array1.array.getIndexIterator
+    val vsum_iter: IndexIterator = vsum_array.array.getIndexIterator
+
+    while ( vsum_iter.hasNext ) try {
+      val v0 = aiter0.getFloatNext
+      val v1 = aiter1.getFloatNext
+      val result = if( (v0 != missing) && !v0.isNaN && (v1 != missing) && !v1.isNaN ) { nw0*v0 + nw1*v1 } else { missing }
+      vsum_iter.setFloatNext( result )
+    } catch {
+      case ex: Exception =>
+        print( ex )
     }
+    vsum_array
   }
 
   def join( farrays: Array[FastMaskedArray], axis: Int ): FastMaskedArray = {
