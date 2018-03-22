@@ -113,8 +113,8 @@ object CDRecord extends Loggable {
 
   def interploate( startTime: Long, endTime: Long, startRec: CDRecord, endRec: CDRecord ): CDRecord = {
     val time = (startTime + endTime)/2
-    if( time <= startRec.midpoint ) { startRec }
-    else if( time >= endRec.midpoint ) { endRec }
+    if( time <= startRec.midpoint ) { startRec.shiftTime(startTime,endTime) }
+    else if( time >= endRec.midpoint ) { endRec.shiftTime(startTime,endTime) }
     else {
       val w0 = time - startRec.midpoint
       val w1 = endRec.midpoint - time
@@ -223,7 +223,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
     val groupedElems = elements.groupBy { case (id,array) => array.shape }
     groupedElems.values.map( elems => new CDRecord(startTime, endTime, elems, metadata ) )
   }
-
+  def shiftTime( startTime: Long, endTime: Long ) = new CDRecord( startTime, endTime, elements, metadata )
   def release( keys: Iterable[String] ): CDRecord = { new CDRecord(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
   def selectElement( elemId: String ): CDRecord = CDRecord(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)
   def selectElements( op: String => Boolean ): CDRecord = CDRecord(startTime, endTime, elements.filterKeys(key => op(key) ), metadata)
