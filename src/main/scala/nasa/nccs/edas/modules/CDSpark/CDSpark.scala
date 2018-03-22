@@ -205,25 +205,15 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
 
   def interploate( numPartitions: Int, times: Array[(Long,Long)] )( partitionIndex: Int, segments: Iterator[Array[CDRecord]] ) : Iterator[CDRecord] = {
     val segSeq  = segments.toSeq
-    if( partitionIndex == 1 ) {
-      val x = 1
-    }
     val nRecords = segSeq.length
     val interpRecs = segSeq.sortBy( _(0).startTime ).zipWithIndex.flatMap { case ( segment, recordIndex ) => {
       if( segment.length == 3 ) {
         val (startRec, midRec, endRec) = ( segment(0), segment(1), segment(2) )
         val (start_time, mid_time, end_time) =
-          if( ( recordIndex == 0 ) && ( partitionIndex == 0 )  )   {
-//            println( s"<< Segment[$partitionIndex:$recordIndex]  ${date(startRec.startTime)} -> ${date(midRec.midpoint)} -> ${date(endRec.midpoint)} ")
-            (startRec.startTime,  midRec.midpoint,  endRec.midpoint ) }
-          else if( ( recordIndex == nRecords-1 ) && ( partitionIndex == numPartitions-1 )   )  {
-//            println( s">> Segment[$partitionIndex:$recordIndex]  ${date(startRec.midpoint)} -> ${date(midRec.midpoint)} -> ${date(endRec.endTime)} ")
-            (startRec.midpoint,   midRec.midpoint,  endRec.endTime  ) }
-          else {
-//            println( s"-- Segment[$partitionIndex:$recordIndex]  ${date(startRec.midpoint)} -> ${date(midRec.midpoint)} -> ${date(endRec.midpoint)} ")
-            (startRec.midpoint,   midRec.midpoint,  endRec.midpoint ) }
+          if( ( recordIndex == 0 ) && ( partitionIndex == 0 )  )   { (startRec.startTime,  midRec.midpoint,  endRec.midpoint ) }
+          else if( ( recordIndex == nRecords-1 ) && ( partitionIndex == numPartitions-1 )   )  {  (startRec.midpoint,   midRec.midpoint,  endRec.endTime  ) }
+          else { (startRec.midpoint,   midRec.midpoint,  endRec.midpoint ) }
         val segmentTimes = times.filter { case (sliceT0, sliceT1) => { val midT = (sliceT0+sliceT1)/2;  (midT < end_time) && (midT > start_time) } }
-//        println( s"   -->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
         segmentTimes.map { case (sliceT0, sliceT1) => {
           val sliceT = (sliceT0 + sliceT1) / 2
           if( sliceT < mid_time ) {
@@ -237,14 +227,9 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
       } else if( partitionIndex == numPartitions-1 ) {
         val (startRec, endRec) = ( segment(0), segment(1) )
         val (start_time, end_time) =
-          if( recordIndex == nRecords-1 )  {
-//            println( s">> Segment[$partitionIndex:$recordIndex]  ${date(startRec.midpoint)}  -> ${date(endRec.endTime)} ")
-            (startRec.midpoint,  endRec.endTime  ) }
-          else {
-//            println( s"-- Segment[$partitionIndex:$recordIndex]  ${date(startRec.midpoint)}  -> ${date(endRec.midpoint)} ")
-            (startRec.midpoint,  endRec.midpoint ) }
+          if( recordIndex == nRecords-1 ) { (startRec.midpoint,  endRec.endTime  ) }
+          else { (startRec.midpoint,  endRec.midpoint ) }
         val segmentTimes = times.filter { case (sliceT0, sliceT1) => (sliceT0 < end_time) && (sliceT1 > start_time) }
-//        println( s"   xx-->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
         segmentTimes.map { case (sliceT0, sliceT1) => CDRecord.interploate( sliceT0, sliceT1, startRec, endRec ) }
       } else { Iterator.empty }
     }}

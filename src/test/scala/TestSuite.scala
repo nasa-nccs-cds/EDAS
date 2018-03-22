@@ -9,7 +9,7 @@ import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.esgf.wps.Job
 import nasa.nccs.utilities.{EDASLogManager, Loggable}
 import org.apache.commons.lang.RandomStringUtils
-
+// import co.theasi.plotly
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import org.scalatest.{BeforeAndAfter, FunSuite, Ignore}
@@ -576,6 +576,8 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_data = getResultData( result_node )
     println( "Op Size:         " + result_data.getStorageArray.length )
     println( "Op Result:       " + result_data.getStorageArray.mkString(",") )
+//    val p = Plot().withScatter(xs, ys)
+//    draw(p, "basic-scatter", writer.FileOptions(overwrite=true))
   }
 
   test("Ave-1-Space-GISS-R1i1p1") {

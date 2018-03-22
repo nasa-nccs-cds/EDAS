@@ -116,8 +116,8 @@ object CDRecord extends Loggable {
     if( time <= startRec.midpoint ) { startRec.shiftTime(startTime,endTime) }
     else if( time >= endRec.midpoint ) { endRec.shiftTime(startTime,endTime) }
     else {
-      val w0 = time - startRec.midpoint
-      val w1 = endRec.midpoint - time
+      val w0 = endRec.midpoint - time
+      val w1 = time - startRec.midpoint
       val interp_elems = startRec.elements.map { case (key,arraySpec0) => {
         val arraySpec1 = endRec.element(key).getOrElse( throw new Exception( "Missing element in interploate input: " + key ))
         key -> ArraySpec.interpolate( arraySpec0, w0, arraySpec1, w1 )
