@@ -331,7 +331,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
   val mapCombineNOp: Option[ReduceNOpFlt] = None
   val mapCombineWNOp: Option[ReduceWNOpFlt] = None
   val reduceCombineOp: Option[ReduceOpFlt] = options.get("reduceOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
-  def hasReduceOp: Boolean = reduceCombineOp.isDefined
+  def requiresReduceBroadcast( context: KernelContext ): Boolean = { context.operation.operatesOnAxis('t' ) && reduceCombineOp.isDefined }
   val initValue: Float = 0f
 
   def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode] = List( new WorkflowNode( operation, this ) )

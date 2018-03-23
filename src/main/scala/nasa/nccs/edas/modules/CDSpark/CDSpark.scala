@@ -16,7 +16,7 @@ import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.Kernel.getResultDir
 import nasa.nccs.edas.kernels._
 import nasa.nccs.edas.rdd._
-import nasa.nccs.esgf.process.{DataFragmentSpec, OperationContext, UID, WorkflowExecutor}
+import nasa.nccs.esgf.process._
 import nasa.nccs.wps.{WPSDataInput, WPSProcessOutput}
 import org.apache.spark.rdd.RDD
 import ucar.ma2.DataType
@@ -181,15 +181,13 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
   override def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
     val groupBy = context.getGroup.getOrElse( throw new Exception( "lowpass operation requires a groupBy parameter") )
-    val inputIds: List[String] = context.operation.inputs
-    val elemFilter = (elemId: String) => inputIds.contains( elemId )
-    val filteredRdd: RDD[CDRecord] = input.rdd.map( _.selectElements( elemFilter ) )
+    val elemFilter = (elemId: String) => context.operation.inputs.contains( elemId )
+    val filteredRdd: RDD[CDRecord] = input.rdd.map( _.selectAndRenameElements( elemFilter, (elemId: String) => context.operation.rid ) )
     val times: Array[(Long,Long)] = filteredRdd.map( rec => ( rec.startTime, rec.endTime ) ).collect().sortBy( _._1 )
     val groupedRDD:  RDD[CDRecord] = CDRecordRDD.reduceRddByGroup( filteredRdd, CDRecord.weightedSum( context ), "normw", groupBy ).map( _._2 )
     val regroupedRDD:  RDD[Array[CDRecord]] = input.newData( groupedRDD.sortBy( _.startTime ) ).sliding(3,2)
-    val nParts = regroupedRDD.getNumPartitions
-    val rdd:  RDD[CDRecord] = regroupedRDD.mapPartitionsWithIndex( interploate( nParts, times ) )
-    new CDRecordRDD( rdd, input.metadata, input.variableRecords )
+    val lowpass_rdd:  RDD[CDRecord] = regroupedRDD.mapPartitionsWithIndex( interploate( regroupedRDD.getNumPartitions, times ) )
+    new CDRecordRDD( lowpass_rdd, input.metadata, input.variableRecords ) join input.rdd
   }
 
   override def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {
@@ -200,6 +198,8 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
   }
+
+
 
   def date( time_index: Long ): String = CalendarDate.of(time_index).toString
 
@@ -554,7 +554,6 @@ class ave extends SingularRDDKernel( Map( "mapOp" -> "avew", "reduceOp" -> "avew
 //    logger.info("Returning result value")
     rv
   } )
-  override def hasReduceOp: Boolean = true
 }
 
 class subset extends KernelImpl(Map.empty) {

@@ -110,6 +110,7 @@ case class CDTimeInterval(startTime: Long, endTime: Long ) {
 object CDRecord extends Loggable {
   type ReduceOp = (CDRecord,CDRecord)=>CDRecord
   def empty = new CDRecord(-1, 0, Map.empty[String,ArraySpec], Map.empty[String, String] )
+  def join( recPairs: Iterator[(Long,(CDRecord,CDRecord))]): Iterator[CDRecord] = { recPairs map { case ( index, ( rec0, rec1 ) )  => rec0 ++ rec1 } }
 
   def interploate( startTime: Long, endTime: Long, startRec: CDRecord, endRec: CDRecord ): CDRecord = {
     val time = (startTime + endTime)/2
@@ -226,7 +227,9 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   def shiftTime( startTime: Long, endTime: Long ) = new CDRecord( startTime, endTime, elements, metadata )
   def release( keys: Iterable[String] ): CDRecord = { new CDRecord(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
   def selectElement( elemId: String ): CDRecord = CDRecord(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)
-  def selectElements( op: String => Boolean ): CDRecord = CDRecord(startTime, endTime, elements.filterKeys(key => op(key) ), metadata)
+  def selectElements( select: String => Boolean ): CDRecord = CDRecord(startTime, endTime, elements filterKeys ( key => select(key) ), metadata)
+  def selectAndRenameElements( select: String => Boolean, rename: String => String ): CDRecord =
+    CDRecord( startTime, endTime, elements filterKeys ( key => select(key) ) map { case ( key, value ) =>  rename(key) -> value } , metadata )
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def element( id: String ): Option[ArraySpec] =  elements find { case (key,value) => key.split(':').last.equals(id) } map ( _._2 )
   def isEmpty = elements.isEmpty
@@ -389,6 +392,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def toMatrix(selectElems: Seq[String]): RowMatrix = { new RowMatrix(rdd.map(_.toVector( selectElems ))) }
   def toVectorRDD(selectElems: Seq[String]): RDD[Vector] = { rdd.map(_.toVector( selectElems )) }
   def collect: QueryResultCollection = { QueryResultCollection( rdd.collect.sortBy(_.startTime), metadata ) }
+  def join( other: RDD[CDRecord] ) = CDRecordRDD( rdd.keyBy( _.startTime ).join( other.keyBy( _.startTime ) ).mapPartitions( CDRecord.join ), metadata, variableRecords )
 
   def reduceByGroup(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): CDRecordRDD = {
     val keyedRDD: RDD[(Int,CDRecord)] = rdd.keyBy( groupBy.group )
@@ -718,7 +722,10 @@ class RDDContainer extends Loggable {
 
   class RDDVault( init_value: CDRecordRDD ) {
     private var _rdd = init_value
-    def update( new_rdd: CDRecordRDD ): Unit = { _rdd = new_rdd }
+    def update( new_rdd: CDRecordRDD ): Unit = {
+      val elems = new_rdd.rdd.first.elements.keys
+      _rdd = new_rdd
+    }
     def map( f: (CDRecordRDD) => CDRecordRDD ): Unit = update( f(_rdd) )
     def value = _rdd
     def clear: Unit = _rdd.unpersist(false)
@@ -733,7 +740,11 @@ class RDDContainer extends Loggable {
     def nPartitions = {  _rdd.getNumPartitions }
     def nodeList = {  _rdd.nodeList }
   }
-  def map( kernel: KernelImpl, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ) ) }
+  def map( kernel: KernelImpl, context: KernelContext ): Unit = {
+    vault.update(
+      kernel.mapRDD( vault.value, context )
+    ) }
+
 
   def regrid( context: KernelContext ): Unit = {
     val t0 = System.nanoTime()
