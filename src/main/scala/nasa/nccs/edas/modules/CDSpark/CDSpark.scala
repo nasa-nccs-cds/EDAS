@@ -182,12 +182,15 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
     EDASExecutionManager.checkIfAlive
     val groupBy = context.getGroup.getOrElse( throw new Exception( "lowpass operation requires a groupBy parameter") )
     val elemFilter = (elemId: String) => context.operation.inputs.contains( elemId )
+    val nInputSlices = input.nSlices
     val filteredRdd: RDD[CDRecord] = input.rdd.map( _.selectAndRenameElements( elemFilter, (elemId: String) => context.operation.rid ) )
     val times: Array[(Long,Long)] = filteredRdd.map( rec => ( rec.startTime, rec.endTime ) ).collect().sortBy( _._1 )
     val groupedRDD:  RDD[CDRecord] = CDRecordRDD.reduceRddByGroup( filteredRdd, CDRecord.weightedSum( context ), "normw", groupBy ).map( _._2 )
     val regroupedRDD:  RDD[Array[CDRecord]] = input.newData( groupedRDD.sortBy( _.startTime ) ).sliding(3,2)
     val lowpass_rdd:  RDD[CDRecord] = regroupedRDD.mapPartitionsWithIndex( interploate( regroupedRDD.getNumPartitions, times ) )
-    new CDRecordRDD( lowpass_rdd, input.metadata, input.variableRecords ) join input.rdd
+    val rv = new CDRecordRDD( lowpass_rdd, input.metadata, input.variableRecords ) join input.rdd
+    val nOutputSlices = rv.nSlices
+    rv
   }
 
   override def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {
