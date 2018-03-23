@@ -112,7 +112,7 @@ object CDRecord extends Loggable {
   def empty = new CDRecord(-1, 0, Map.empty[String,ArraySpec], Map.empty[String, String] )
   def join( recPairs: Iterator[(Long,(CDRecord,CDRecord))]): Iterator[CDRecord] = { recPairs map { case ( index, ( rec0, rec1 ) )  => rec0 ++ rec1 } }
 
-  def interploate( startTime: Long, endTime: Long, startRec: CDRecord, endRec: CDRecord ): CDRecord = {
+  def interpolate(startTime: Long, endTime: Long, startRec: CDRecord, endRec: CDRecord ): CDRecord = {
     val time = (startTime + endTime)/2
     if( time <= startRec.midpoint ) { startRec.shiftTime(startTime,endTime) }
     else if( time >= endRec.midpoint ) { endRec.shiftTime(startTime,endTime) }

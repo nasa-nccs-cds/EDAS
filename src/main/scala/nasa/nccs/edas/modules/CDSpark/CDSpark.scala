@@ -186,7 +186,7 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
     val times: Array[(Long,Long)] = filteredRdd.map( rec => ( rec.startTime, rec.endTime ) ).collect().sortBy( _._1 )
     val groupedRDD:  RDD[CDRecord] = CDRecordRDD.reduceRddByGroup( filteredRdd, CDRecord.weightedSum( context ), "normw", groupBy ).map( _._2 )
     val regroupedRDD:  RDD[Array[CDRecord]] = input.newData( groupedRDD.sortBy( _.startTime ) ).sliding(3,2)
-    val lowpass_rdd:  RDD[CDRecord] = regroupedRDD.mapPartitionsWithIndex( interploate( regroupedRDD.getNumPartitions, times ) )
+    val lowpass_rdd:  RDD[CDRecord] = regroupedRDD.mapPartitionsWithIndex( interpolate( regroupedRDD.getNumPartitions, times ) )
     new CDRecordRDD( lowpass_rdd, input.metadata, input.variableRecords ) join input.rdd
   }
 
@@ -202,24 +202,26 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
 
   def date( time_index: Long ): String = CalendarDate.of(time_index).toString
 
-  def interploate( numPartitions: Int, times: Array[(Long,Long)] )( partitionIndex: Int, segments: Iterator[Array[CDRecord]] ) : Iterator[CDRecord] = {
+  def interpolate(numPartitions: Int, times: Array[(Long,Long)] )(partitionIndex: Int, segments: Iterator[Array[CDRecord]] ) : Iterator[CDRecord] = {
     val segSeq  = segments.toSeq
-    val nRecords = segSeq.length
-    assert( numPartitions > 1, "Must have more than one grouped segment in the lowpass operation-> choose a shorter 'groupBy' period" )
-    val interpRecs = segSeq.sortBy( _(0).startTime ).zipWithIndex.flatMap { case ( segment, recordIndex ) => {
+    val nSegments = segSeq.length
+    logger.info( s"   #I# --> Partition[$partitionIndex/$numPartitions], nSegments: ${nSegments}, Times: ${times.length} " )
+    val interpRecs = segSeq.sortBy( _(0).startTime ).zipWithIndex.flatMap { case ( segment, segmentIndex ) => {
+      logger.info( s"   #I# --> Segment[${segmentIndex}], num elements = ${segment.length}" )
       if( segment.length == 3 ) {
         val (startRec, midRec, endRec) = ( segment(0), segment(1), segment(2) )
         val (start_time, mid_time, end_time) =
-          if( ( recordIndex == 0 ) && ( partitionIndex == 0 )  )   { (startRec.startTime,  midRec.midpoint,  endRec.midpoint ) }
-          else if( ( recordIndex == nRecords-1 ) && ( partitionIndex == numPartitions-1 )   )  {  (startRec.midpoint,   midRec.midpoint,  endRec.endTime  ) }
+          if( ( segmentIndex == 0 ) && ( partitionIndex == 0 )  )   { (startRec.startTime,  midRec.midpoint,  endRec.midpoint ) }
+          else if( ( segmentIndex == nSegments-1 ) && ( partitionIndex == numPartitions-1 )   )  {  (startRec.midpoint,   midRec.midpoint,  endRec.endTime  ) }
           else { (startRec.midpoint,   midRec.midpoint,  endRec.midpoint ) }
         val segmentTimes = times.filter { case (sliceT0, sliceT1) => { val midT = (sliceT0+sliceT1)/2;  (midT < end_time) && (midT > start_time) } }
+        logger.info( s"   #I# -->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
         segmentTimes.map { case (sliceT0, sliceT1) => {
           val sliceT = (sliceT0 + sliceT1) / 2
           if( sliceT < mid_time ) {
-            CDRecord.interploate( sliceT0, sliceT1, startRec, midRec )
+            CDRecord.interpolate( sliceT0, sliceT1, startRec, midRec )
           } else if( sliceT > mid_time ) {
-            CDRecord.interploate( sliceT0, sliceT1, midRec, endRec )
+            CDRecord.interpolate( sliceT0, sliceT1, midRec, endRec )
           } else {
             midRec
           }
@@ -227,12 +229,14 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
       } else if( partitionIndex == numPartitions-1 ) {
         val (startRec, endRec) = ( segment(0), segment(1) )
         val (start_time, end_time) =
-          if( recordIndex == nRecords-1 ) { (startRec.midpoint,  endRec.endTime  ) }
+          if( segmentIndex == nSegments-1 ) { (startRec.midpoint,  endRec.endTime  ) }
           else { (startRec.midpoint,  endRec.midpoint ) }
         val segmentTimes = times.filter { case (sliceT0, sliceT1) => (sliceT0 < end_time) && (sliceT1 > start_time) }
-        segmentTimes.map { case (sliceT0, sliceT1) => CDRecord.interploate( sliceT0, sliceT1, startRec, endRec ) }
+        logger.info( s"   #I# -->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
+        segmentTimes.map { case (sliceT0, sliceT1) => CDRecord.interpolate( sliceT0, sliceT1, startRec, endRec ) }
       } else { Iterator.empty }
     }}
+    logger.info( s"   #I# --> Interp Times: ${interpRecs.length} " )
     interpRecs.sortBy(_.startTime).toIterator
   }
 
