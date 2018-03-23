@@ -584,7 +584,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""  [     domain=[{"name":"d0","time":{"start":"0","end":"80","system":"indices"}}],
          |        variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
-         |        operation=[{"name":"CDSpark.highpass","input":"v1","domain":"d0","grid":"uniform","shape":"18,36","res":"10,10","groupBy":"5-year"}]]""".stripMargin
+         |        operation=[{"name":"CDSpark.highpass","input":"v1","domain":"d0","grid":"uniform","shape":"18,36","res":"10,10","groupBy":"6-month"}]]""".stripMargin
     val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
     val result_data = getResultData( result_node )
     println( "Op Size:         " + result_data.getStorageArray.length )
