@@ -118,7 +118,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     }
   }
   private def addOperationInput(serverContext: ServerContext, inputs: QueryResultCollection, batchIndex: Int ): Unit = {
-    _inputsRDD.addOperationInput(inputs)
+    _inputsRDD.addOperationInput(inputs, s"Add Result, Request: ${requestCx.jobId}")
   }
 
   def addOperationInput(serverContext: ServerContext, inputs: QueryResultCollection, section: Option[CDSection], batchIndex: Int ): Unit  = {

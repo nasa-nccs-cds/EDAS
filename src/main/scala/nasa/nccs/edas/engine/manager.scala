@@ -277,6 +277,7 @@ object EDASExecutionManager extends Loggable {
         writer.write(variable, maskedTensor)
       } }
       logger.info("Done writing output to file %s".format(path))
+      println( "\n ------ ---> Saving output to:" + path + "\n")
     } catch {
       case ex: IOException =>
         logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));

@@ -192,14 +192,13 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
 
   override def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {
     val t0 = System.nanoTime()
+    val top = input.rdd.first()
     val mapresult: CDRecordRDD = context.profiler.profile("mapReduce.mapRDD") (() => { mapRDD(input, context) } )
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
     val rv = context.profiler.profile("mapReduce.reduce") ( () => { mapresult.collect } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
   }
-
-
 
   def date( time_index: Long ): String = CalendarDate.of(time_index).toString
 
@@ -600,31 +599,12 @@ class highpass extends MultiKernel(Map.empty) {
 
   def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext] = {
     val opId = UID( operation.identifier.split('-').last )
-    val ( ave, eDiff, aveResult ) = ( "CDSpark.lowpass", "CDSpark.eDiff", workflow.request.id + "aveResult" )
-    val opAve  = new OperationContext( opId + ave, ave, aveResult, operation.inputs, operation.getConfiguration )
-    val opDiff = new OperationContext( opId + eDiff, eDiff, operation.rid, operation.inputs :+ aveResult, Map.empty[String, String] )
+    val ( ave, eDiff, lowpassResult ) = ( "CDSpark.lowpass", "CDSpark.eDiff", workflow.request.id + "-lowpass" )
+    val opAve  = new OperationContext( opId + ave, ave, lowpassResult, operation.inputs, operation.getConfiguration )
+    val opDiff = new OperationContext( opId + eDiff, eDiff, operation.rid, operation.inputs :+ lowpassResult, Map.empty[String, String] )
     List( opAve, opDiff )
   }
 }
-
-class highpass1 extends MultiKernel(Map.empty) {
-  override val status = KernelStatus.public
-  val inputs = List(WPSDataInput("input variable", 1, 1))
-  val outputs = List(WPSProcessOutput("operation result"))
-  val title = "Space/Time Anomaly"
-  val doesAxisReduction: Boolean = false
-  val description = "MultiKernel: Computes an anomaly of the input variable data using the CDSpark ave and eDiff kernels"
-  val weighted: Boolean = true
-
-  def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext] = {
-    val opId = UID( operation.identifier.split('-').last )
-    val ( lowpass, eDiff, lowpassResult ) = ( "CDSpark.lowpass", "CDSpark.eDiff", workflow.request.id + "lowpassResult" )
-    val opLowpass  = new OperationContext( opId + lowpass, lowpass, lowpassResult, operation.inputs, operation.getConfiguration )
-    val opDiff = new OperationContext( opId + eDiff, eDiff, operation.rid, operation.inputs :+ lowpassResult, Map.empty[String, String] )
-    List( opLowpass, opDiff )
-  }
-}
-
 
 class stdDev extends MultiKernel(Map.empty) {
   override val status = KernelStatus.public

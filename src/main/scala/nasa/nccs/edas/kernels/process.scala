@@ -796,14 +796,14 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
           val tvar = worker.getResult
           val result = ArraySpec(tvar)
           if (gFile.isEmpty) { gFile = Option( tvar.getMetaDataValue("gridfile") ).getOrElse("") }
-          context.operation.rid + ":" + uid -> result
+          uid -> result
         }
         (gFile, resultItems)
       })
 
       val reprocessed_input_map = resultArrays.toMap
       logger.info("Gateway[T:%s]: Executed operation %s, time: %.2f".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9))
-      CDRecord(inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map, inputs.metadata + ("gridspec" -> gridFile) )
+      CDRecord( inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map, inputs.metadata + ("gridspec" -> gridFile) )
     }
   })
 }

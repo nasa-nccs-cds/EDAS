@@ -321,6 +321,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def stream(node: WorkflowNode, executor: WorkflowExecutor, batchIndex: Int ): Unit = {
     val kernelContext = node.getKernelContext( executor )
     processInputs(node, executor, kernelContext, batchIndex)
+    executor.regrid( kernelContext.addVariableRecords( executor.variableRecs ) )
     executor.streamMapReduce( node, kernelContext, executionMgr.serverContext, batchIndex )
     logger.info( s"Executed STREAM mapReduce Batch ${batchIndex.toString}" )
   }

@@ -712,7 +712,7 @@ class RDDContainer extends Loggable {
   def nSlices = _vault.fold( 0L ) ( _.value.nSlices )
   def update: CDRecordRDD = { _vault.foreach( _.value.exe ); value }
   def contents: Iterable[String] = _vault.fold( Iterable.empty[String] ) ( _.contents )
-  def section( section: CDSection ): Unit = vault.map( _.section(section) )
+  def section( section: CDSection  ): Unit = vault.map( _.section(section), "Section"  )
   def release( keys: Iterable[String] ): Unit = { vault.release( keys ) }
   def variableRecs: Map[String,VariableRecord] = value.variableRecords
 
@@ -721,39 +721,45 @@ class RDDContainer extends Loggable {
   }
 
   class RDDVault( init_value: CDRecordRDD ) {
+    val debug = false
     private var _rdd = init_value
-    def update( new_rdd: CDRecordRDD ): Unit = {
-      val elems = new_rdd.rdd.first.elements.keys
-      _rdd = new_rdd
+    if( debug ) {
+      val elems = init_value.rdd.first.elements.map { case ( key, array ) => s"${key}:[${array.shape.mkString(",")}]"}
+      logger.info( s" #V# Vault Initialization, elems: { ${elems.mkString(", ")} }")
     }
-    def map( f: (CDRecordRDD) => CDRecordRDD ): Unit = update( f(_rdd) )
+    def map( f: (CDRecordRDD) => CDRecordRDD, logStr: String ): Unit = update( f(_rdd), logStr )
     def value = _rdd
     def clear: Unit = _rdd.unpersist(false)
     def contents = _rdd.rdd.first().elements.keys
-    def release( keys: Iterable[String] ) = { update( _rdd.release(keys) ) }
-    def += ( record: CDRecord ) = { update( _rdd.map(slice => slice ++ record ) ) }
-    def += ( records: QueryResultCollection  ) = {
+    def release( keys: Iterable[String] ) = { update( _rdd.release(keys), s"Release keys: [${keys.mkString(",")}]" ) }
+//    def += ( record: CDRecord ) = { update( _rdd.map(slice => slice ++ record ) ) }
+    def addResult ( records: QueryResultCollection, logStr: String  ) = {
       assert( records.nslices <= 1, "UNIMPLEMENTED FEATURE: TimeSliceCollection -> RDDVault")
-      update( _rdd.map( slice => slice ++ records.records.headOption.getOrElse( CDRecord.empty ) ) )
+      update( _rdd.map( slice => slice ++ records.records.headOption.getOrElse( CDRecord.empty ) ), logStr )
     }
     def nSlices = { _rdd.cache; _rdd.nSlices }
     def nPartitions = {  _rdd.getNumPartitions }
     def nodeList = {  _rdd.nodeList }
+
+    def update( new_rdd: CDRecordRDD, log_msg: String ): Unit = {
+      if( debug ) {
+        val elems = new_rdd.rdd.first.elements.map { case ( key, array ) => s"${key}:[${array.shape.mkString(",")}]"}
+        logger.info( s" #V# Vault update[ ${log_msg} ], elems: { ${elems.mkString(", ")} }")
+      }
+      _rdd = new_rdd
+    }
   }
-  def map( kernel: KernelImpl, context: KernelContext ): Unit = {
-    vault.update(
-      kernel.mapRDD( vault.value, context )
-    ) }
+  def map( kernel: KernelImpl, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ), s"map Kernel ${context.operation.identifier}" ) }
 
 
   def regrid( context: KernelContext ): Unit = {
     val t0 = System.nanoTime()
-    vault.update( regridKernel.mapRDD( vault.value, context ) )
+    vault.update( regridKernel.mapRDD( vault.value, context ), s"regrid Kernel ${context.operation.identifier}" )
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
 //    logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
   }
   def execute( workflow: Workflow, node: KernelImpl, context: KernelContext, batchIndex: Int ): QueryResultCollection = node.execute( workflow, value, context, batchIndex )
-  def reduceBroadcast( node: KernelImpl, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ) )
+  def reduceBroadcast( node: KernelImpl, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ), s"ReduceBroadcast, Kernel: ${context.operation.identifier}" )
   def nPartitions: Int = _vault.fold(0)(_.nPartitions)
   def nodeList: Array[String] = _vault.fold( Array.empty[String] )( _.nodeList )
 
@@ -766,7 +772,7 @@ class RDDContainer extends Loggable {
     }
   }
 
-  def extendVault( generator: RDDGenerator, vSpecs: List[DirectRDDVariableSpec] ) = { vault.update( _extendRDD( generator, _vault.get.value, vSpecs ) ) }
+  def extendVault( generator: RDDGenerator, vSpecs: List[DirectRDDVariableSpec] ) = { vault.update( _extendRDD( generator, _vault.get.value, vSpecs ), s"Extend for Inputs: [ ${vSpecs.map(_.uid).mkString(", ")} ]" ) }
 
   def addFileInputs( sparkContext: CDSparkContext, kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
     val newVSpecs = vSpecs.filter( vspec => ! contents.contains(vspec.uid) )
@@ -789,5 +795,5 @@ class RDDContainer extends Loggable {
   }
 
 
-  def addOperationInput( inputs: QueryResultCollection ): Unit = { vault += inputs }
+  def addOperationInput( inputs: QueryResultCollection, logStr: String ): Unit = { vault.addResult( inputs, logStr ) }
 }
