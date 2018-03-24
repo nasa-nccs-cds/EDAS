@@ -117,11 +117,11 @@ object EDASExecutionManager extends Loggable {
     if( slaves_file.exists && slaves_file.canRead ) {
       for (slave <- Source.fromFile(slaves_file).getLines(); slave_node = slave.trim; if !slave_node.isEmpty && !slave_node.startsWith("#") ) {
         println( s"\nCleaning up spark worker ${slave_node} " )
-        try { Seq("ssh", slave_node, "bash", "-c", "'pkill -u $USER java; pkill -u $USER python'" ).! }
+        try { Seq("ssh", slave_node, "bash", "-c", "'pkill -u $USER java; pkill -u $USER python; rm -rf /tmp/$USER/logs/*'" ).! }
         catch { case err: Exception => println( "Error shutting down spark workers on slave_node '" + slave_node + ": " + err.toString ); }
-        println( s"\nCleaning up tmp files on ${slave_node} " )
-        try { Seq("ssh", slave_node, "bash", "-c", "'rm -rf /tmp/$USER/logs/*'" ).! }
-        catch { case err: Exception => println( "Error cleaning up tmp files on slave_node '" + slave_node + ": " + err.toString ); }
+//        println( s"\nCleaning up tmp files on ${slave_node} " )
+//        try { Seq("ssh", slave_node, "bash", "-c", "'rm -rf /tmp/$USER/logs/*'" ).! }
+//        catch { case err: Exception => println( "Error cleaning up tmp files on slave_node '" + slave_node + ": " + err.toString ); }
       }
     } else try {
       println( "No slaves file found, shutting down spark workers locally:")
