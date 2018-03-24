@@ -116,7 +116,7 @@ object EDASExecutionManager extends Loggable {
     if( slaves_file.exists && slaves_file.canRead ) {
       val shutdown_futures = for (slave <- Source.fromFile(slaves_file).getLines(); slave_node = slave.trim; if !slave_node.isEmpty && !slave_node.startsWith("#") ) yield Future {
         logger.info( s"\nCleaning up spark worker ${slave_node} " )
-        try { Seq("ssh", slave_node, "bash", "-c", "'pkill -u $USER java; pkill -u $USER python; cleanup_local_spark_files.sh'" ).! }
+        try { Seq("ssh", slave_node, "bash", "-c", "'pkill -u $USER java; pkill -u $USER python; rm -rf /tmp/${USER}/logs/*'" ).! }
         catch { case err: Exception => logger.error( "Error shutting down spark workers on slave_node '" + slave_node + ": " + err.toString ); }
       }
       Future.sequence( shutdown_futures )
