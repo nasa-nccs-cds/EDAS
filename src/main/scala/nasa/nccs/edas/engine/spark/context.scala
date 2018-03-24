@@ -44,7 +44,7 @@ object CDSparkContext extends Loggable {
     val spark_log_level = Level.toLevel( "WARN" )
     val rootLogger = Logger.getRootLogger()
     rootLogger.setLevel(spark_log_level)
-    spark.sparkContext.setLogLevel( "ERROR" )
+    spark.sparkContext.setLogLevel( "WARN" )
     Logger.getLogger("org").setLevel(spark_log_level)
     Logger.getLogger("akka").setLevel(spark_log_level)
     Logger.getLogger("dag-scheduler-event-loop").setLevel(spark_log_level)
