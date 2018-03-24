@@ -112,16 +112,19 @@ object EDASExecutionManager extends Loggable {
   def cleanup_spark_workers() = {
     import sys.process._
     val slaves_file = Paths.get( sys.env("SPARK_HOME"), "conf", "slaves" ).toFile
-    logger.info( s"Cleaning up spark workers using slaves file ${slaves_file}.")
+    println( s"Cleaning up spark workers using slaves file ${slaves_file}.")
     if( slaves_file.exists && slaves_file.canRead ) {
       val shutdown_futures = for (slave <- Source.fromFile(slaves_file).getLines(); slave_node = slave.trim; if !slave_node.isEmpty && !slave_node.startsWith("#") ) yield Future {
-        logger.info( s"\nCleaning up spark worker ${slave_node} " )
-        try { Seq("ssh", slave_node, "bash", "-c", "'pkill -u $USER java; pkill -u $USER python; rm -rf /tmp/${USER}/logs/*'" ).! }
-        catch { case err: Exception => logger.error( "Error shutting down spark workers on slave_node '" + slave_node + ": " + err.toString ); }
+        println( s"\nCleaning up spark worker ${slave_node} " )
+        try { Seq("ssh", slave_node, "bash", "-c", "'pkill -u $USER java; pkill -u $USER python'" ).! }
+        catch { case err: Exception => println( "Error shutting down spark workers on slave_node '" + slave_node + ": " + err.toString ); }
+        println( s"\nCleaning up tmp files on ${slave_node} " )
+        try { Seq("ssh", slave_node, "bash", "-c", "'rm -rf /tmp/$USER/logs/*'" ).! }
+        catch { case err: Exception => println( "Error cleaning up tmp files on slave_node '" + slave_node + ": " + err.toString ); }
       }
       Future.sequence( shutdown_futures )
     } else try {
-      logger.info( "No slaves file found, shutting down spark workers locally:")
+      println( "No slaves file found, shutting down spark workers locally:")
       try { "bash -c \"'pkill -u $USER java; pkill -u $USER java'\"" ! }
       catch { case err: Exception => logger.error( "Error cleaning up local spark workers: " + err.toString ); }
     } catch {
