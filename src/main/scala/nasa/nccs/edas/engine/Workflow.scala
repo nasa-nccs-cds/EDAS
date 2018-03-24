@@ -453,7 +453,9 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 //  }
 
   def processInputs(node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
-    val gridRefInput: OperationDataInput =  executor.getGridRefInput.getOrElse( throw new Exception("No grid ref input found for domainRDDPartition") )
+    val gridRefInput: OperationDataInput =  executor.getGridRefInput.getOrElse(
+      throw new Exception(s"No grid ref input found for domainRDDPartition, kernel = ${kernelContext.operation.identifier}, inputs = [${executor.workflowCx.inputs.keys.mkString(",")}}]")
+    )
     executor.getInputs(node).foreach { case (uid, opinput) =>
       opinput.processInput( uid, this, node, executor, kernelContext, gridRefInput, batchIndex)
     }
