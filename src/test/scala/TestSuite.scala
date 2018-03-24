@@ -363,7 +363,10 @@ class DefaultTestSuite extends EDASTestSuite {
 
 
   test("anomaly")  { if(test_binning) {
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":40,"end":60,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","groupBy":"monthofyear","axes":"xt","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]"""
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":40,"end":60,"system":"values"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","groupBy":"monthofyear","axes":"xt","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]""".stripMargin
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
@@ -647,7 +650,10 @@ class DefaultTestSuite extends EDASTestSuite {
   test("SpaceAve-GISS-R1i1p1") {
     //  ncwa -O -d lat,5,25 -d lon,5,25 -d time,50,75 -a lat,lon ${datafile} ~/test/out/spatial_average.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array(  270.0048, 267.3162, 264.9052, 263.4048, 262.913, 262.7695, 263.3018, 264.4724, 267.8822, 271.8264, 273.7054, 272.8606, 270.3697, 267.4805, 265.3143, 263.836, 262.907, 262.3552, 263.0375, 264.8206, 267.8294, 271.3149, 273.1132, 271.8285, 269.5949, 267.6493 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"},"time":{"start":50,"end":75,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"},"time":{"start":50,"end":75,"system":"indices"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]""".stripMargin
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.getStorageArray.mkString(",") )
@@ -657,12 +663,12 @@ class DefaultTestSuite extends EDASTestSuite {
 
   test("ML-svd-GISS") {
     val datainputs =
-      s"""[domain=[{"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1991-12-31T23:59:00Z","system":"timestamps"}}],
+      s"""[domain=[{"name":"d0","lat":{"start":-75,"end":75,"system":"values"},"time":{"start":"1990-01-01T00:00:00Z","end":"1994-12-31T23:59:00Z","system":"timestamps"}}],
          | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
-         | operation=[{"name":"SparkML.svd","input":"v1","domain":"d0", "grid": "uniform", "shape": "18,36", "origin": "0,0", "res": "10,10", "modes":"5" }]]""".stripMargin
-    val result_node = executeTest( datainputs )
-    val result_data = getResultData( result_node )
-    println( "Op Result Sample:       " + result_data.getSampleData(0,32).mkString(",") )
+         | operation=[
+         |      { "name": "CDSpark.highpass", "input":"v1", "grid":"uniform", "shape": "15,36", "res":"10,10", "id":"highpass", "groupBy":"6-month" },
+         |      { "name":"SparkML.svd", "input":"highpass", "modes":"4" }]]""".stripMargin
+    val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
   }
 
   test("SpaceAve-GISS-R1i1p1-dates") {
