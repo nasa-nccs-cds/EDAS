@@ -15,6 +15,7 @@ import nasa.nccs.edas.engine.spark.{CDSparkContext, RecordKey}
 import nasa.nccs.edas.kernels._
 import nasa.nccs.edas.sources.{Aggregation, Collection, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
+import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.edas.workers.TransVar
 import nasa.nccs.esgf.process.{CDSection, EDASCoordSystem, ServerContext}
 import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
@@ -531,7 +532,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     logger.info( " @DSX LAST Partition:  " + partitions.lastOption.fold("")(_.toString) )
     val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partitions )
     val t1 = System.nanoTime
-    val sliceRdd: RDD[CDRecord] =  slicePartitions.mapPartitions( _.flatMap( _.getSlices ) )
+    val sliceRdd: RDD[CDRecord] =  slicePartitions.mapPartitions( iter => {runtime.printMemoryUsage; iter.flatMap( _.getSlices )} )
     val optVar = agg.findVariable( vspec.varShortName )
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { val rddSize = sliceRdd.count() }
     logger.info( s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nPartGens = ${partGens.length}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, prep time = ${(t1-t0)/1e9} , total time = ${(System.nanoTime-t0)/1e9} ")

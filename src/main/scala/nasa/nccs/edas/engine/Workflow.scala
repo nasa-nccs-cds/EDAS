@@ -36,6 +36,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: KernelImpl  ) e
 
   def getResultId: String = operation.rid
   def getNodeId: String = operation.identifier
+  def isDisposable( input: OperationInput ): Boolean = kernel.isDisposable( input )
 
   def isSubworkflowBoundayNode: Boolean = isRoot || doesTimeReduction
 

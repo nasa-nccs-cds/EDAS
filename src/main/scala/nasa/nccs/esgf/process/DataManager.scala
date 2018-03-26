@@ -82,7 +82,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
 
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Iterable[String] = {
     for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )
-    val disposable_inputs: Iterable[String] = for( (uid,input) <- getInputs(node); if input.disposable ) yield { uid }
+    val disposable_inputs: Iterable[String] = for( (uid,input) <- getInputs(node); if node.isDisposable( input ) ) yield { uid }
     _inputsRDD.release(disposable_inputs)
     disposable_inputs
   }

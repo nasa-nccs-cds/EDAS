@@ -3,6 +3,8 @@ package nasa.nccs.edas.modules.CDSpark
 import java.io.{File, IOException}
 import java.nio.file.Paths
 
+import nasa.nccs.cdapi.cdm.OperationInput
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
@@ -192,7 +194,6 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
 
   override def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {
     val t0 = System.nanoTime()
-    val top = input.rdd.first()
     val mapresult: CDRecordRDD = context.profiler.profile("mapReduce.mapRDD") (() => { mapRDD(input, context) } )
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
     val rv = context.profiler.profile("mapReduce.reduce") ( () => { mapresult.collect } )
@@ -611,19 +612,30 @@ class ave extends SingularRDDKernel( Map( "mapOp" -> "avew", "reduceOp" -> "avew
   } )
 }
 
-class subset extends KernelImpl(Map.empty) {
+class noOp extends KernelImpl(Map.empty) {
   override val status = KernelStatus.public
   val inputs = List( WPSDataInput("input variable", 1, 1 ) )
   val outputs = List( WPSProcessOutput( "operation result" ) )
-  val title = "Space/Time Subset"
-  val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
+  val title = "NoOperation"
   val doesAxisReduction: Boolean = false
-  val weighted: Boolean = false
+  val weighted = false
+  override val description = "Returns the input data subset to the specified domain as the result"
+  override def isDisposable( input: OperationInput ): Boolean = false
+  override def elemFilter(rid: String) = (elemId: String) => true
 
-  override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
-    val elems = context.operation.inputs.flatMap( inputId => inputs.element(inputId).map( array => context.operation.rid + "-" + inputId -> array ) )
-    CDRecord(inputs.startTime, inputs.endTime, elems.toMap, inputs.metadata )
+  override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = { inputs }
+
+  override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
+    val t0 = System.nanoTime
+    val result = reduce( input, context, batchIndex )
+    logger.info( s" noOp execution (reduce) time = ${(System.nanoTime-t0)/1e9} ")
+    result
   }
+}
+
+class subset extends noOp {
+  override val title = "Space/Time Subset"
+  override val description = "Extracts a subset of element values from input variable data over the specified axes and roi"
 }
 
 class anomaly extends MultiKernel(Map.empty) {
@@ -680,24 +692,7 @@ class stdDev extends MultiKernel(Map.empty) {
   }
 }
 
-class noOp extends KernelImpl(Map.empty) {
-  override val status = KernelStatus.public
-  val inputs = List( WPSDataInput("input variable", 1, 1 ) )
-  val outputs = List( WPSProcessOutput( "operation result" ) )
-  val title = "NoOperation"
-  val doesAxisReduction: Boolean = false
-  val weighted = false
-  override val description = "Returns the input data subset to the specified domain as the result"
 
-  override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = { inputs }
-
-  override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
-    val t0 = System.nanoTime
-    val result = reduce( input, context, batchIndex )
-    logger.info( s" noOp execution (reduce) time = ${(System.nanoTime-t0)/1e9} ")
-    result
-  }
-}
 
 
 //class svd extends SingularRDDKernel(Map.empty) {

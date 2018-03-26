@@ -336,6 +336,8 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
 
   def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode] = List( new WorkflowNode( operation, this ) )
   def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = { mapReduce(input, context, batchIndex ) }
+  def isDisposable( input: OperationInput ): Boolean = input.disposable
+  def elemFilter(rid: String) = (elemId: String) => elemId.toLowerCase.startsWith( rid )
 
   def map(context: KernelContext )( rec: CDRecord ): CDRecord
 
@@ -361,18 +363,17 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
   def reduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): QueryResultCollection = {
     EDASExecutionManager.checkIfAlive
     val rid = context.operation.rid.toLowerCase
-    val elemFilter = (elemId: String) => elemId.toLowerCase.startsWith( rid )
     val postOpId: String = options.getOrElse( "postOp", "" )
     if( sampleInputs ) {
       val slices = input.rdd.collect()
       logger.info( s" @S@: Kernel ${id}.reduce Input Data Sample: \n  @S@:   ${slices.map ( _.elements.map{ case (key,array) =>
         s" $key: [ ${ array.data.mkString(", ") } ]" }.mkString("; ")).mkString("\n  @S@:   ") }")
     }
-    if( !parallelizable ) { input.collect( elemFilter, postOpId ) }
+    if( !parallelizable ) { input.collect( elemFilter(rid), postOpId ) }
     else {
       val axes = context.getAxes
       val result: QueryResultCollection =  context.profiler.profile[QueryResultCollection]( "Kernel.reduce" ) (() => {
-          input.reduce( getReduceOp(context), elemFilter, postOpId, context.getGroup, ordered )
+          input.reduce( getReduceOp(context), elemFilter(rid), postOpId, context.getGroup, ordered )
         })
       result.sort
     }
