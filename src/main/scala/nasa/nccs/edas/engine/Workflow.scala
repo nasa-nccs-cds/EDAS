@@ -454,6 +454,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 //  }
 
   def processInputs(node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+    assert( executor.workflowCx.inputs.nonEmpty, s"No inputs defined for operation ${kernelContext.operation.identifier}" )
     val gridRefInput: OperationDataInput =  executor.getGridRefInput.getOrElse(
       throw new Exception(s"No grid ref input found for domainRDDPartition, kernel = ${kernelContext.operation.identifier}, inputs = [${executor.workflowCx.inputs.keys.mkString(",")}}]")
     )

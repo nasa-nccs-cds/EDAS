@@ -21,6 +21,7 @@ class svd extends KernelImpl {
   val doesAxisReduction: Boolean = false
   val weighted: Boolean = false
   val description = "Implement Singular Value Decomposition"
+  def map(context: KernelContext )( rdd: CDRecord ): CDRecord = { rdd }   // Not used-> bypassed
 
   override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val t0 = System.nanoTime()
@@ -36,7 +37,7 @@ class svd extends KernelImpl {
     scaling_result.cache()
     val matrix = new RowMatrix( scaling_result )
     val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
-    val computeU: Boolean = context.operation.getConfParm("compu").fold( false )( _.toBoolean )
+    val computeU: Boolean = context.operation.getConfParm("compu").fold( true )( _.toBoolean )
     val svd = matrix.computeSVD( nModes, true )
     val lambdas = svd.s.toArray.mkString(",")
     val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>
@@ -52,33 +53,6 @@ class svd extends KernelImpl {
     logger.info( s"@SVD Created modes, nModes = ${Velems.length}, time = ${(System.nanoTime - t0) / 1.0E9}" )
     new QueryResultCollection( Array( slice ), input.metadata + ("lambdas" -> lambdas) )
   }
-
-  def execute2(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
-    val options: EDASOptions = new EDASOptions( Array.empty )
-    val rowRdd: RDD[Row] = input.rdd.mapPartitions( iter => new CDTimeSlicesConverter( iter, options ) )
-    val df: DataFrame = workflow.executionMgr.serverContext.spark.session.createDataFrame( rowRdd, CDTimeSliceConverter.defaultSchema )
-    df.show( 3 )
-    val avgCol = avg(col("value"))
-    logger.info( "Computing ave" )
-    df.select( avgCol.alias("Average") ).show(3)
-    logger.info( "Finished computing ave" )
-    QueryResultCollection.empty
-  }
-
-  def execute1(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
-    val options: EDASOptions = new EDASOptions( Array.empty )
-    val rowRdd: RDD[java.lang.Float] = input.rdd.mapPartitions( iter => new RDDSimpleRecordsConverter( iter, options ) )
-    val df: Dataset[java.lang.Float] = workflow.executionMgr.serverContext.spark.session.createDataset( rowRdd )( Encoders.FLOAT )
-    df.show( 3 )
-    val avgCol = avg(col("value"))
-    logger.info( "Computing ave" )
-    df.select( avgCol.alias("Average") ).show(3)
-    logger.info( "Finished computing ave" )
-    QueryResultCollection.empty
-  }
-
-  def map(context: KernelContext )( rdd: CDRecord ): CDRecord = { rdd }   // Not used-> bypassed
-
 }
 
 class rescale extends KernelImpl {
