@@ -86,7 +86,6 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
   def getCoordinateAxes: List[ CoordinateAxis1D ] = {
     dims.flatMap( dim => collection.getGrid(name).findCoordinateAxis( dim ).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) ) ).toList
   }
-  def getCoordinateAxis( axisType: AxisType ): Option[CoordinateAxis1D] = collection.getGrid(name).findCoordinateAxis(axisType).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) )
 
   def getCoordinateAxis( cname: String ): Option[CoordinateAxis1D] = {
     val caxis = collection.getGrid(name).findCoordinateAxis(cname)
@@ -208,13 +207,13 @@ class DirectOpDataInput(fragSpec: DataFragmentSpec, workflowNode: WorkflowNode  
   def getRDDVariableSpec: DirectRDDVariableSpec  =
     new DirectRDDVariableSpec( fragmentSpec.uid, fragmentSpec.getMetadata( Some(fragmentSpec.roi)), fragmentSpec.missing_value, CDSection(fragmentSpec.roi), fragmentSpec.varname, fragmentSpec.collection.collId )
 
-  def getKeyedRDDVariableSpec( uid: String, optSection: Option[ma2.Section] ): ( RecordKey, DirectRDDVariableSpec ) =
-    domainSection(optSection) match {
-      case Some( ( domFragSpec, section ) ) =>
-        domFragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, domFragSpec.getMetadata(Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.collId )
-      case _ =>
-        fragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.collId )
-    }
+//  def getKeyedRDDVariableSpec( uid: String, optSection: Option[ma2.Section] ): ( RecordKey, DirectRDDVariableSpec ) =
+//    domainSection(optSection) match {
+//      case Some( ( domFragSpec, section ) ) =>
+//        domFragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, domFragSpec.getMetadata(Some(section)), domFragSpec.missing_value, CDSection(section), fragSpec.varname, fragSpec.collection.collId )
+//      case _ =>
+//        fragSpec.getPartitionKey -> new DirectRDDVariableSpec( uid, fragSpec.getMetadata(), fragSpec.missing_value, CDSection.empty(fragSpec.getRank), fragSpec.varname, fragSpec.collection.collId )
+//    }
 }
 
 class EDASDirectDataInput(fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ) extends DirectOpDataInput(fragSpec,workflowNode) {

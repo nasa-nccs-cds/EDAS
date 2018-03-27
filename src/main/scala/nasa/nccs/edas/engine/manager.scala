@@ -4,7 +4,7 @@ import java.nio.file.{Files, Paths}
 import java.io.File
 
 import scala.collection.concurrent.TrieMap
-import nasa.nccs.cdapi.cdm.PartitionedFragment
+import nasa.nccs.cdapi.cdm.{CDGrid, PartitionedFragment}
 import nasa.nccs.esgf.process._
 
 import scala.collection.mutable.ListBuffer
@@ -176,7 +176,8 @@ object EDASExecutionManager extends Loggable {
     val resultFile = Kernel.getResultFile(resultId, true)
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
     val path = resultFile.getAbsolutePath
-    var optGridDest: Option[NetcdfDataset] = None
+    var optGridDset: Option[NetcdfDataset] = None
+    var originalDataset: Option[NetcdfDataset] = None
     try {
       val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
       val nTimeSteps = head_elem.shape(0)
@@ -185,12 +186,13 @@ object EDASExecutionManager extends Loggable {
       val shape: Array[Int] = head_elem.shape
       val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
       val targetGrid: TargetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
+      originalDataset = Some(targetGrid.grid.grid.getGridDataset)
       val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = gridFileOpt match {
         case Some( gridFilePath ) =>
           val gridDSet = NetcdfDataset.openDataset(gridFilePath)
           val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
           val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
-          val gblTimeCoordAxis = targetGrid.grid.getTimeCoordinateAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+          val gblTimeCoordAxis = originalDataset.flatMap( dset => CDGrid.getTimeAxis(dset)).getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
           val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
           val dims0 = space_dims :+ new Dimension(timeCoordAxis.getShortName, nTimeSteps )
           val newdims = dims0.map( dim => {
@@ -198,7 +200,7 @@ object EDASExecutionManager extends Loggable {
             logger.info(s"Writer addDimension ${dim.getShortName} ${dim.getLength.toString}")
             newdim
           })
-          optGridDest = Option(gridDSet)
+          optGridDset = Option(gridDSet)
           ( coordAxes :+ timeCoordAxis, newdims )
         case None =>
           val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => {
@@ -291,7 +293,8 @@ object EDASExecutionManager extends Loggable {
         throw ex
     }
     writer.close()
-    optGridDest.foreach( _.close )
+    originalDataset.foreach( _.close )
+    optGridDset.foreach( _.close )
     path
   }
 

@@ -18,7 +18,7 @@ import org.joda.time.DateTime
 import ucar.nc2.time.{CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
-import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D, CoordinateAxis1DTime}
+import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D, CoordinateAxis1DTime, NetcdfDataset}
 
 import scala.collection.immutable.Map
 import scala.collection.concurrent
@@ -397,9 +397,6 @@ object GridSection extends Loggable {
     rv
   }
 
-
-
-
   def apply( variable: CDSVariable, section: ma2.Section ): GridSection = {
     val grid_axes = section.getRanges.map( r => new DomainAxis( DomainAxis.fromCFAxisName(r.getName), r.first, r.last, "indices" ) )
     GridSection( variable, Some( grid_axes.toList ) )
@@ -415,23 +412,24 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
     axes.find( axis => axis.getCFAxisName.toLowerCase.equals(cfAxisName.toLowerCase) )
   }
   def getRank = axes.length
+  def getGridDataset: NetcdfDataset = grid.getGridDataset
   def toXml: xml.Elem = <grid> { axes.map(_.toXml) } </grid>
   def getGridSpec: String  = grid.getGridSpec
   def getGridFile: String  = grid.getGridFile
-  def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = grid.getTimeCoordinateAxis( "getTime")
+//  def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = grid.getTimeCoordinateAxis( "getTime")
   //  def getCalendarDate ( idx: Int ): CalendarDate = grid.getTimeCoordinateAxis match { case Some(axis) => axis.getCalendarDate(idx); case None => throw new Exception( "Can't get the time axis for grid " + grid.name ) }
 
-  def getCalendarDate ( idx: Int, context: String ): CalendarDate = grid.getTimeCoordinateAxis(context) match {
-    case Some(axis) =>
-      val testdate = axis.getCalendarDate(0);
-      try { axis.getCalendarDate(idx); }
-      catch {
-        case err: IndexOutOfBoundsException =>
-          throw err;
-      }
-    case None =>
-      throw new Exception("Can't get time axis for grid " + grid.name)
-  }
+//  def getCalendarDate ( idx: Int, context: String ): CalendarDate = grid.getTimeCoordinateAxis(context) match {
+//    case Some(axis) =>
+//      val testdate = axis.getCalendarDate(0);
+//      try { axis.getCalendarDate(idx); }
+//      catch {
+//        case err: IndexOutOfBoundsException =>
+//          throw err;
+//      }
+//    case None =>
+//      throw new Exception("Can't get time axis for grid " + grid.name)
+//  }
 
 //  def getTimeRange: RecordKey = grid.getTimeCoordinateAxis("getTimeRange") match {
 //    case Some(axis) =>
@@ -565,9 +563,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
   def getRank = grid.getRank
   def getGridSpec: String  = grid.getGridSpec
   def getGridFile: String  = grid.getGridFile
-  def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = grid.getTimeCoordinateAxis
-  def getTimeUnits: String  = grid.getTimeCoordinateAxis match { case Some(timeAxis) => timeAxis.getUnitsString; case None => "" }
-  def getCalendarDate ( idx: Int, context: String ): CalendarDate = grid.getCalendarDate(idx,context)
+//  def getCalendarDate ( idx: Int, context: String ): CalendarDate = grid.getCalendarDate(idx,context)
   def getDims: IndexedSeq[String] = grid.axes.map( _.coordAxis.getDimension(0).getFullName )
 
   def addSectionMetadata( section: ma2.Section ): ma2.Section = grid.addRangeNames( section )

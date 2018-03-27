@@ -652,6 +652,16 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
   }
 
+  test("filter-GISS") {
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":-75,"end":75,"system":"values"},"time":{"start":"1990-01-01T00:00:00Z","end":"1999-12-31T23:59:00Z","system":"timestamps","filter":"DJF"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[
+         |      { "name": "CDSpark.highpass", "input":"v1", "grid":"uniform", "shape": "15,36", "res":"10,10", "id":"highpass", "groupBy":"6-month" },
+         |      { "name":"SparkML.svd", "input":"highpass", "modes":"4" }]]""".stripMargin
+    val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
+  }
+
   test("svd-GISS") {
     val datainputs =
       s"""[domain=[{"name":"d0","lat":{"start":-75,"end":75,"system":"values"},"time":{"start":"1990-01-01T00:00:00Z","end":"1994-12-31T23:59:00Z","system":"timestamps"}}],

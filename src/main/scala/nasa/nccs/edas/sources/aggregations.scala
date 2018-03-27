@@ -19,11 +19,12 @@ import scala.collection.mutable
 import scala.io.Source
 import scala.util.matching.Regex
 
-case class FileInput(fileIndex: Int, startTime: Long, firstRowIndex: Int, nRows: Int, path: String ) extends Serializable {
+case class FileInput(fileIndex: Int, startTime: Long, timeStep: Long, firstRowIndex: Int, nRows: Int, path: String ) extends Serializable {
   def lastRowIndex = firstRowIndex + nRows - 1
   def getRowIndexRange: ma2.Range = new ma2.Range( firstRowIndex, firstRowIndex + nRows - 1 )
   def intersects( row_index_range: ma2.Range ) = getRowIndexRange.intersects( row_index_range )
   def intersect( row_index_range: ma2.Range ): ma2.Range = getRowIndexRange.intersect( row_index_range )
+  def rowToDate( iRow: Int ): CalendarDate = CalendarDate.of( startTime + (iRow-firstRowIndex) * timeStep )
   override def toString = s"FileInput(${fileIndex})[ ${path}, firstRow: ${firstRowIndex}, nRows: ${nRows}, time: ${CalendarDate.of(startTime).toString} (${startTime}) ]"
 }
 
@@ -33,7 +34,10 @@ case class Variable( name: String, shape: Array[Int], dims: String, units: Strin
   def toMap: Map[String,String] = Seq( "name"->name, "shape"->shape.mkString(","), "dims"->dims, "units"->units ).toMap
 }
 case class Coordinate( name: String, shape: Array[Int], dims: String="", units: String="" ) extends Serializable
-case class Axis( name: String, ctype: String, shape: Array[Int], units: String, minval: Float, maxval: Float ) extends Serializable
+case class Axis( name: String, ctype: String, shape: Array[Int], units: String, minval: Float, maxval: Float ) extends Serializable {
+  def step: Float = (maxval-minval)/(shape(0)-1)
+  def udstep: String = s"${step} ${units}"
+}
 
 object AggregationWriter extends Loggable {
   val ncExtensions = Seq( "nc", "nc4")
@@ -492,7 +496,9 @@ object Aggregation extends Loggable {
         case "F" =>
           assert( files != null, s"Missing or misordered 'num.files' parameter in Aggregation file: ${aggFile}")
           val nTS = toks(2).toInt
-          files += FileInput(files.length, EDTime.toMillis(toks(1).toDouble), timeIndex, nTS, toks(3) )
+          val time_axis = axes.find( _.ctype == "T" ).getOrElse( throw new Exception( s"Missing Time Axis in Aggregation ${aggFile}"))
+          val dT = CalendarDate.parseUdunits( null, time_axis.udstep )
+          files += FileInput(files.length, EDTime.toMillis(toks(1).toDouble), dT.getMillis, timeIndex, nTS, toks(3) )
           timeIndex += nTS
         case "P" =>
           parameters += toks(1) -> toks(2)

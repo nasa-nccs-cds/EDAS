@@ -189,19 +189,19 @@ abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int,
   def nRecords: Int
   def recordStartIndex(iRecord: Int): Int
 
-  def getPartitionRecordKey(grid: TargetGrid, context: String ): RecordKey = {
-    val start = origin(0)+startIndex
-    val startDate = grid.getCalendarDate(start, context + "-start")
-    val startDateStr = startDate.toString
-    val startTime = startDate.getMillis/1000
-    val end = Math.min( start+partSize, grid.shape(0)-1 )
-    val endDate = grid.getCalendarDate(end, context + "-end" )
-    val endDateStr = endDate.toString
-    val endTime =  endDate.getMillis/1000
-    RecordKey( startTime, endTime, startIndex, partSize )
-  }
+//  def getPartitionRecordKey(grid: TargetGrid, context: String ): RecordKey = {
+//    val start = origin(0)+startIndex
+//    val startDate = grid.getCalendarDate(start, context + "-start")
+//    val startDateStr = startDate.toString
+//    val startTime = startDate.getMillis/1000
+//    val end = Math.min( start+partSize, grid.shape(0)-1 )
+//    val endDate = grid.getCalendarDate(end, context + "-end" )
+//    val endDateStr = endDate.toString
+//    val endTime =  endDate.getMillis/1000
+//    RecordKey( startTime, endTime, startIndex, partSize )
+//  }
 
-  def getRecordKey( iRecord: Int, grid: TargetGrid ): RecordKey
+//  def getRecordKey( iRecord: Int, grid: TargetGrid ): RecordKey
 
   def getRelativeSection(global_section: ma2.Section): ma2.Section = {
     val relative_ranges = for (ir <- global_section.getRanges.indices; r = global_section.getRange(ir)) yield {
@@ -233,17 +233,17 @@ class RegularPartition( index: Int,  dimIndex: Int,  startIndex: Int,  partSize:
     new ma2.Range(start, origin(0)+Math.min(start + recordSize - 1, endIndex))
   }
 
-  override def getRecordKey( iRecord: Int, grid: TargetGrid ): RecordKey = {
-    val start = recordStartIndex(iRecord)
-    val startDate = grid.getCalendarDate(start,"RegularPartition-getRecordKey")
-    val startDateStr = startDate.toString
-    val startTime = startDate.getMillis/1000
-    val end = Math.min( start+recordSize, grid.shape(0)-1 )
-    val endDate = grid.getCalendarDate(end,"RegularPartition-getRecordKey")
-    val endDateStr = endDate.toString
-    val endTime =  grid.getCalendarDate(end,"RegularPartition-getRecordKey").getMillis/1000
-    RecordKey( startTime, endTime, startIndex, recordSize )
-  }
+//  override def getRecordKey( iRecord: Int, grid: TargetGrid ): RecordKey = {
+//    val start = recordStartIndex(iRecord)
+//    val startDate = grid.getCalendarDate(start,"RegularPartition-getRecordKey")
+//    val startDateStr = startDate.toString
+//    val startTime = startDate.getMillis/1000
+//    val end = Math.min( start+recordSize, grid.shape(0)-1 )
+//    val endDate = grid.getCalendarDate(end,"RegularPartition-getRecordKey")
+//    val endDateStr = endDate.toString
+//    val endTime =  grid.getCalendarDate(end,"RegularPartition-getRecordKey").getMillis/1000
+//    RecordKey( startTime, endTime, startIndex, recordSize )
+//  }
 
   def recordStartIndex(iRecord: Int) = { origin(0) + iRecord * recordSize + startIndex }
   def recordIndexArray: IndexedSeq[Int] = (0 until nRecords)
@@ -258,17 +258,17 @@ class FilteredPartition(index: Int, dimIndex: Int, startIndex: Int, partSize: In
   override def nRecords: Int = records.length
   override val toString: String = s"Part[$index]{dim:$dimIndex start:$startIndex partSize:$partSize sliceMemorySize:$sliceMemorySize origin:${origin.mkString(",")} shape:${shape.mkString(",")} )"
 
-  override def getRecordKey( iRecord: Int, grid: TargetGrid ): RecordKey = {
-    val record = records(iRecord)
-    val startDate = grid.getCalendarDate(record.first,"FilteredPartition-getRecordKey")
-    val startDateStr = startDate.toString
-    val startTime = startDate.getMillis/1000
-    val end = Math.min( record.last+1, grid.shape(0)-1 )
-    val endDate = grid.getCalendarDate(end,"FilteredPartition-getRecordKey")
-    val endDateStr = endDate.toString
-    val endTime =  grid.getCalendarDate(end,"FilteredPartition-getRecordKey").getMillis/1000
-    RecordKey( startTime, endTime, record.first, record.length )
-  }
+//  override def getRecordKey( iRecord: Int, grid: TargetGrid ): RecordKey = {
+//    val record = records(iRecord)
+//    val startDate = grid.getCalendarDate(record.first,"FilteredPartition-getRecordKey")
+//    val startDateStr = startDate.toString
+//    val startTime = startDate.getMillis/1000
+//    val end = Math.min( record.last+1, grid.shape(0)-1 )
+//    val endDate = grid.getCalendarDate(end,"FilteredPartition-getRecordKey")
+//    val endDateStr = endDate.toString
+//    val endTime =  grid.getCalendarDate(end,"FilteredPartition-getRecordKey").getMillis/1000
+//    RecordKey( startTime, endTime, record.first, record.length )
+//  }
 }
 
 import ucar.nc2.time.{CalendarDate, CalendarDateRange, CalendarPeriod}
@@ -661,75 +661,75 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
   }
 }
 
-class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], val maskOpt: Option[CDByteArray], val cacheType: String = "fragment") extends Loggable {
-  val attributes = fragmentSpec.getVariableMetadata
-  val _section = fragmentSpec.roi
-  val missing_value: Float = getAttributeValue("missing_value", "") match { case "" => Float.MaxValue; case x => x.toFloat }
-  protected val baseShape = _section.getShape
-  val cacheId = "a" + System.nanoTime.toHexString
-  val sType = getAttributeValue("dtype", "FLOAT")
-  val dType = ma2.DataType.getType( sType )
-  def roi: ma2.Section = new ma2.Section(_section.getRanges)
-  val partitioner = new EDASCachePartitioner(fragmentSpec.uid, cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, 1, RegridSpec(fragmentSpec), dType )
-  def getAttributeValue(key: String, default_value: String) =
-    attributes.get(key) match {
-      case Some(attr_val) => attr_val.toString.split('=').last.replace('"',' ').trim
-      case None => default_value
-    }
-
-  def getReadBuffer(cache_id: String): (FileChannel, MappedByteBuffer) = {
-    val channel = new FileInputStream(cache_id).getChannel
-    val size = math.min(channel.size, Int.MaxValue).toInt
-    ( channel, channel.map(FileChannel.MapMode.READ_ONLY, 0, size))
-  }
-
-  def cacheFloatData: CachePartitions = {
-    assert(dType == ma2.DataType.FLOAT,  "Attempting to cache %s data as float".format(dType.toString))
-    execute(missing_value)
-  }
-
-  def execute(missing_value: Float): CachePartitions = {
-    val t0 = System.nanoTime()
-    val future_partitions: IndexedSeq[Future[CachePartition]] = for ( pIndices <- ( 0 until partitioner.spec.getNPartitions ) ) yield Future { processChunkedPartitions(cacheId, pIndices, missing_value) }
-    val partitions: Array[CachePartition] = Await.result(Future.sequence(future_partitions.toList), Duration.Inf).toArray
-    logger.info("\n ********** Completed Cache Op, total time = %.3f min  ********** \n".format((System.nanoTime() - t0) / 6.0E10))
-    new CachePartitions( cacheId, roi, partitions)
-  }
-
-  def processChunkedPartitions(cache_id: String, partIndex: Int, missing_value: Float): CachePartition = {
-    logger.info( "Process Chunked Partitions(%s): %d".format( cache_id, partIndex ) )
-    val partition: CachePartition = partitioner.getPartition(partIndex);
-    val outStr = new BufferedOutputStream( new FileOutputStream(new File(partition.path)))
-    cachePartition(partition, outStr)
-    outStr.close
-    partition
-  }
-
-  def cacheRecord(partition: RegularPartition, iRecord: Int, outStr: BufferedOutputStream) = {
-    logger.info( "CacheRecord: part=%d, record=%d".format(partition.index, iRecord))
-    val subsection: ma2.Section = partition.recordSection(roi,iRecord)
-    val t0 = System.nanoTime()
-    logger.info( " ---> Reading data record %d, part %d, startTimIndex = %d, shape [%s], subsection [%s:%s], nElems = %d ".format(iRecord, partition.index, partition.startIndex, getAttributeValue("shape", ""), subsection.getOrigin.mkString(","), subsection.getShape.mkString(","), subsection.getShape.foldLeft(1L)(_ * _)))
-    val data = fragmentSpec.readData( subsection )
-    val chunkShape = data.getShape
-    val dataBuffer = data.getDataAsByteBuffer
-    val t1 = System.nanoTime()
-    logger.info( "Finished Reading data record %d, shape = [%s], buffer capacity = %.2f M in time %.2f ".format(iRecord, chunkShape.mkString(","), dataBuffer.capacity() / 1.0E6, (t1 - t0) / 1.0E9))
-    val t2 = System.nanoTime()
-    IOUtils.write(dataBuffer.array(), outStr)
-    val t3 = System.nanoTime()
-    logger.info( " -----> Writing record %d, write time = %.3f " .format(iRecord, (t3 - t2) / 1.0E9))
-    val t4 = System.nanoTime()
-    logger.info( s"Persisted record %d, write time = %.2f " .format(iRecord, (t4 - t3) / 1.0E9))
-    runtime.printMemoryUsage(logger)
-  }
-
-  def cachePartition(partition: RegularPartition, stream: BufferedOutputStream) = {
-    logger.info( "Caching Partition(%d): chunk start indices: (%s), roi: %s".format( partition.index, partition.recordIndexArray.map(partition.recordStartIndex).mkString(","), baseShape.mkString(",")))
-    for (iRecord <- partition.recordIndexArray; startLoc = partition.recordStartIndex(iRecord); if startLoc <= _section.getRange(0).last())
-      yield cacheRecord(partition, iRecord, stream)
-  }
-}
+//class FileToCacheStream(val fragmentSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNodeOpt: Option[WorkflowNode], val maskOpt: Option[CDByteArray], val cacheType: String = "fragment") extends Loggable {
+//  val attributes = fragmentSpec.getVariableMetadata
+//  val _section = fragmentSpec.roi
+//  val missing_value: Float = getAttributeValue("missing_value", "") match { case "" => Float.MaxValue; case x => x.toFloat }
+//  protected val baseShape = _section.getShape
+//  val cacheId = "a" + System.nanoTime.toHexString
+//  val sType = getAttributeValue("dtype", "FLOAT")
+//  val dType = ma2.DataType.getType( sType )
+//  def roi: ma2.Section = new ma2.Section(_section.getRanges)
+//  val partitioner = new EDASCachePartitioner(fragmentSpec.uid, cacheId, roi, partsConfig, workflowNodeOpt, fragmentSpec.getTimeCoordinateAxis, fragmentSpec.numDataFiles, 1, RegridSpec(fragmentSpec), dType )
+//  def getAttributeValue(key: String, default_value: String) =
+//    attributes.get(key) match {
+//      case Some(attr_val) => attr_val.toString.split('=').last.replace('"',' ').trim
+//      case None => default_value
+//    }
+//
+//  def getReadBuffer(cache_id: String): (FileChannel, MappedByteBuffer) = {
+//    val channel = new FileInputStream(cache_id).getChannel
+//    val size = math.min(channel.size, Int.MaxValue).toInt
+//    ( channel, channel.map(FileChannel.MapMode.READ_ONLY, 0, size))
+//  }
+//
+//  def cacheFloatData: CachePartitions = {
+//    assert(dType == ma2.DataType.FLOAT,  "Attempting to cache %s data as float".format(dType.toString))
+//    execute(missing_value)
+//  }
+//
+//  def execute(missing_value: Float): CachePartitions = {
+//    val t0 = System.nanoTime()
+//    val future_partitions: IndexedSeq[Future[CachePartition]] = for ( pIndices <- ( 0 until partitioner.spec.getNPartitions ) ) yield Future { processChunkedPartitions(cacheId, pIndices, missing_value) }
+//    val partitions: Array[CachePartition] = Await.result(Future.sequence(future_partitions.toList), Duration.Inf).toArray
+//    logger.info("\n ********** Completed Cache Op, total time = %.3f min  ********** \n".format((System.nanoTime() - t0) / 6.0E10))
+//    new CachePartitions( cacheId, roi, partitions)
+//  }
+//
+//  def processChunkedPartitions(cache_id: String, partIndex: Int, missing_value: Float): CachePartition = {
+//    logger.info( "Process Chunked Partitions(%s): %d".format( cache_id, partIndex ) )
+//    val partition: CachePartition = partitioner.getPartition(partIndex);
+//    val outStr = new BufferedOutputStream( new FileOutputStream(new File(partition.path)))
+//    cachePartition(partition, outStr)
+//    outStr.close
+//    partition
+//  }
+//
+//  def cacheRecord(partition: RegularPartition, iRecord: Int, outStr: BufferedOutputStream) = {
+//    logger.info( "CacheRecord: part=%d, record=%d".format(partition.index, iRecord))
+//    val subsection: ma2.Section = partition.recordSection(roi,iRecord)
+//    val t0 = System.nanoTime()
+//    logger.info( " ---> Reading data record %d, part %d, startTimIndex = %d, shape [%s], subsection [%s:%s], nElems = %d ".format(iRecord, partition.index, partition.startIndex, getAttributeValue("shape", ""), subsection.getOrigin.mkString(","), subsection.getShape.mkString(","), subsection.getShape.foldLeft(1L)(_ * _)))
+//    val data = fragmentSpec.readData( subsection )
+//    val chunkShape = data.getShape
+//    val dataBuffer = data.getDataAsByteBuffer
+//    val t1 = System.nanoTime()
+//    logger.info( "Finished Reading data record %d, shape = [%s], buffer capacity = %.2f M in time %.2f ".format(iRecord, chunkShape.mkString(","), dataBuffer.capacity() / 1.0E6, (t1 - t0) / 1.0E9))
+//    val t2 = System.nanoTime()
+//    IOUtils.write(dataBuffer.array(), outStr)
+//    val t3 = System.nanoTime()
+//    logger.info( " -----> Writing record %d, write time = %.3f " .format(iRecord, (t3 - t2) / 1.0E9))
+//    val t4 = System.nanoTime()
+//    logger.info( s"Persisted record %d, write time = %.2f " .format(iRecord, (t4 - t3) / 1.0E9))
+//    runtime.printMemoryUsage(logger)
+//  }
+//
+//  def cachePartition(partition: RegularPartition, stream: BufferedOutputStream) = {
+//    logger.info( "Caching Partition(%d): chunk start indices: (%s), roi: %s".format( partition.index, partition.recordIndexArray.map(partition.recordStartIndex).mkString(","), baseShape.mkString(",")))
+//    for (iRecord <- partition.recordIndexArray; startLoc = partition.recordStartIndex(iRecord); if startLoc <= _section.getRange(0).last())
+//      yield cacheRecord(partition, iRecord, stream)
+//  }
+//}
 
 object FragmentPersistence extends DiskCachable with FragSpecKeySet {
   private val fragmentIdCache: Cache[String, String] = new PersistentCache("CacheIdMap", "fragment" )

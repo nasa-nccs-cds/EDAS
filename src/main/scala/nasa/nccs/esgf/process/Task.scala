@@ -531,26 +531,23 @@ class DataFragmentSpec(val uid: String,
     }
   }
 
-  def getTimeCoordinateAxis: Option[CoordinateAxis1DTime] = targetGridOpt flatMap ( _.getTimeCoordinateAxis )
-
-  def getPartitionKey: RecordKey = targetGridOpt match {
-      case Some(grid) =>
-        val trange = roi.getRange(0)
-        val start = trange.first()
-        val startDate = grid.getCalendarDate(start,"getPartitionKey")
-        val startTime = startDate.getMillis / 1000
-        val end = trange.last()
-        val endDate = grid.getCalendarDate(end,"getPartitionKey")
-        val endTime = endDate.getMillis / 1000
-        RecordKey(startTime, endTime, start, end-start )
-    case None => throw new Exception( "Missing target grid ")
-  }
+//  def getPartitionKey: RecordKey = targetGridOpt match {
+//      case Some(grid) =>
+//        val trange = roi.getRange(0)
+//        val start = trange.first()
+//        val startDate = grid.getCalendarDate(start,"getPartitionKey")
+//        val startTime = startDate.getMillis / 1000
+//        val end = trange.last()
+//        val endDate = grid.getCalendarDate(end,"getPartitionKey")
+//        val endTime = endDate.getMillis / 1000
+//        RecordKey(startTime, endTime, start, end-start )
+//    case None => throw new Exception( "Missing target grid ")
+//  }
 
   def readData(section: ma2.Section) = collection.readVariableData(varname, section)
   def getVariableMetadata: Map[String, nc2.Attribute] = nc2.Attribute.makeMap(collection.getVariableMetadata(varname)).toMap
 
-  def getMetadata( section: Option[ma2.Section] = None): Map[String, String] =
-    Map(
+  def getMetadata( section: Option[ma2.Section] = None): Map[String, String] = Map (
       "name" -> varname,
       "collection" -> collection.id,
       "dataPath" -> collection.dataPath,
@@ -562,7 +559,8 @@ class DataFragmentSpec(val uid: String,
       "longname" -> longname,
       "uid" -> uid,
       "roi" -> CDSection.serialize(roi)
-    )
+    ) ++ _metadata
+
   def getVariable: CDSVariable = collection.getVariable(varname)
 
   def combine(other: DataFragmentSpec, sectionMerge: Boolean = true): (DataFragmentSpec, SectionMerge.Status) = {
@@ -1026,11 +1024,12 @@ object DataContainer extends ContainerBase {
 
 class DomainContainer(val name: String,
                       val axes: List[DomainAxis] = List.empty[DomainAxis],
-                      val metadata: Map[String, String] = Map.empty,
+                      _metadata: Map[String, String] = Map.empty,
                       val mask: Option[String] = None) extends ContainerBase with Serializable {
   override def toString = {
     s"DomainContainer { name = $name, axes = ${axes.mkString("\n\t\t\t","\n\t\t\t","\n\t\t\t")} }"
   }
+  val metadata = extractMetadata( _metadata, axes )
   def toDataInput: Map[String, Any] =
     Map(axes.map(_.toDataInput): _*) ++ Map(("name" -> name))
 
@@ -1039,6 +1038,10 @@ class DomainContainer(val name: String,
       <axes> { axes.map( _.toXml ) } </axes>
       { mask match { case None => Unit; case Some(maskId) => <mask> { maskId } </mask> } }
     </domain>
+  }
+  def extractMetadata(base_metadata: Map[String, String], axes: List[DomainAxis] ): Map[String, String] = {
+    val axis_metadata = axes.filter( ! _.filter.isEmpty ).map( axis => "filter:" + axis.getCFAxisName -> axis.filter )
+    base_metadata ++ axis_metadata
   }
 }
 
@@ -1067,16 +1070,10 @@ object DomainAxis extends ContainerBase {
         val axis_map = getStringKeyMap(generic_axis_map)
         val start = getGenericNumber(axis_map.get("start"))
         val end = getGenericNumber(axis_map.get("end"))
-        val system = axis_map
-          .getOrElse("system", axis_map.getOrElse("crs", "values"))
-          .toString
+        val filter: String = axis_map.getOrElse("filter","").toString
+        val system = axis_map.getOrElse("system", axis_map.getOrElse("crs", "values") ).toString
         val bounds = getStringValue(axis_map.get("bounds"))
-        Some(
-          new DomainAxis(axistype,
-                         start,
-                         end,
-                         normalize(system),
-                         normalize(bounds)))
+        Some( new DomainAxis(axistype, start,  end,  normalize(system),  normalize(bounds),  filter))
       case Some(sval: String) =>
         val gval = getGenericNumber(Some(sval))
         Some(new DomainAxis(axistype, gval, gval, "values"))
@@ -1093,7 +1090,8 @@ class DomainAxis(val axistype: DomainAxis.Type.Value,
                  val start: GenericNumber,
                  val end: GenericNumber,
                  val system: String,
-                 val bounds: String = "") extends ContainerBase  with Serializable {
+                 val bounds: String = "",
+                 val filter: String = "") extends ContainerBase  with Serializable {
   import DomainAxis.Type._
   val name = axistype.toString
   def getCFAxisName: String = axistype match {

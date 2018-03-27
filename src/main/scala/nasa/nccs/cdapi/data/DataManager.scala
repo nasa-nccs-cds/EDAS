@@ -1145,10 +1145,10 @@ object HeapLongArray {
 //}
 
 object DirectRDDPartSpec {
-  def apply(partition: Partition, tgrid: TargetGrid, varSpecs: Iterable[ DirectRDDVariableSpec ] = Iterable.empty ): DirectRDDPartSpec = new DirectRDDPartSpec( partition, partition.getPartitionRecordKey(tgrid,"DirectRDDPartSpec"), varSpecs )
+  def apply(partition: Partition, tgrid: TargetGrid, varSpecs: Iterable[ DirectRDDVariableSpec ] = Iterable.empty ): DirectRDDPartSpec = new DirectRDDPartSpec( partition, varSpecs )
 }
 
-class DirectRDDPartSpec(val partition: Partition, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
+class DirectRDDPartSpec(val partition: Partition,  val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
   val dbgIndex = 0
 
   def getCDTimeSliceSpecs(): IndexedSeq[DirectCDTimeSliceSpec] =
@@ -1164,10 +1164,10 @@ class DirectRDDPartSpec(val partition: Partition, val timeRange: RecordKey, val 
 }
 
 object DirectCDTimeSliceSpec {
-  def apply( partSpec: DirectRDDPartSpec, iRecord: Int ): DirectCDTimeSliceSpec = new DirectCDTimeSliceSpec( partSpec.partition, iRecord, partSpec.timeRange, partSpec.varSpecs )
+  def apply( partSpec: DirectRDDPartSpec, iRecord: Int ): DirectCDTimeSliceSpec = new DirectCDTimeSliceSpec( partSpec.partition, iRecord, partSpec.varSpecs )
 }
 
-class DirectCDTimeSliceSpec(val partition: Partition, iRecord: Int, val timeRange: RecordKey, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
+class DirectCDTimeSliceSpec(val partition: Partition, iRecord: Int, val varSpecs: Iterable[ DirectRDDVariableSpec ] ) extends Serializable with Loggable {
 
 //  def getRDDPartition( batchIndex: Int ): CDTimeSlice = {
 //    val t0 = System.nanoTime()
@@ -1179,7 +1179,7 @@ class DirectCDTimeSliceSpec(val partition: Partition, iRecord: Int, val timeRang
 //  }
 
   def index = partition.index
-  override def toString() = s"RDD-Record[${iRecord.toString}]{ ${partition.toString}, ${timeRange.toString} }"
+  override def toString() = s"RDD-Record[${iRecord.toString}]{ ${partition.toString} }"
 
   def empty( uid: String ): Boolean = varSpecs.find( _.uid == uid ) match {
     case Some( varSpec ) => varSpec.empty

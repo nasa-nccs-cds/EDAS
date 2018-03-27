@@ -1,6 +1,6 @@
 package nasa.nccs.edas.rdd
 
-import java.nio.FloatBuffer
+
 import java.nio.file.Paths
 import java.util.{Calendar, Date}
 
@@ -11,7 +11,7 @@ import org.apache.commons.lang.ArrayUtils
 import nasa.nccs.cdapi.tensors.{CDArray, CDFloatArray}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import nasa.nccs.edas.engine.Workflow
-import nasa.nccs.edas.engine.spark.{CDSparkContext, RecordKey}
+import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.kernels._
 import nasa.nccs.edas.sources.{Aggregation, Collection, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
@@ -26,13 +26,14 @@ import org.spark_project.guava.io.Files
 import ucar.ma2
 import ucar.nc2.Variable
 import ucar.nc2.dataset.CoordinateAxis1DTime
-import ucar.nc2.time.CalendarDate
+import ucar.nc2.time.{CalendarDate, CalendarPeriod}
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Map
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 object ArraySpec {
   def apply( tvar: TransVar ) = {
@@ -526,7 +527,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
 //    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.max( 1, Math.round( nTS/nPartitions.toFloat ) ) }
     val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.ceil(  nTS/nPartitions.toFloat ).toInt }
     val nUsableParts = if (  nTSperPart == -1 ) { nPartitions } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
-    val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), nTSperPart ) )
+    val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), vspec.metadata, nTSperPart ) )
     val partitions = partGens.flatMap( _.getTimeSlicePartitions )
     logger.info( " @DSX FIRST Partition: " + partitions.headOption.fold("")(_.toString) )
     logger.info( " @DSX LAST Partition:  " + partitions.lastOption.fold("")(_.toString) )
@@ -552,25 +553,52 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
 }
 
 object TimeSlicePartitionGenerator extends Loggable {
-  def apply( varId: String, varName: String, section: CDSection, fileInput: FileInput, basePath: String, rowsPerPartition: Int ): TimeSlicePartitionGenerator = {
-    new TimeSlicePartitionGenerator( varId, varName, section, fileInput, basePath, rowsPerPartition )
+  def apply( varId: String, varName: String, section: CDSection, fileInput: FileInput, basePath: String, metaData: Map[String,String], rowsPerPartition: Int ): TimeSlicePartitionGenerator = {
+    new TimeSlicePartitionGenerator( varId, varName, section, fileInput, basePath, metaData, rowsPerPartition )
   }
 }
 
-class TimeSlicePartitionGenerator(val varId: String, val varName: String, val section: CDSection, val fileInput: FileInput, val basePath: String,  val rowsPerPartition: Int = -1 ) extends Loggable {
+class TimeSlicePartitionGenerator(val varId: String, val varName: String, val section: CDSection, val fileInput: FileInput, val basePath: String, val metaData: Map[String,String], val rowsPerPartition: Int = -1 ) extends Loggable {
   val timeRange = section.getRange(0)
   val intersectingRange = fileInput.intersect( timeRange )
+  val filter = metaData.getOrElse("filter:T","")
   val nFileIntersectingRows = intersectingRange.length
-//  logger.info( s" @DSX PartIntersect, fileInput = ${fileInput.path}, nFileIntersectingRows = ${nFileIntersectingRows}, intersectingRange = ${intersectingRange.toString}, timeRange = ${timeRange.toString}" )
+  //  logger.info( s" @DSX PartIntersect, fileInput = ${fileInput.path}, nFileIntersectingRows = ${nFileIntersectingRows}, intersectingRange = ${intersectingRange.toString}, timeRange = ${timeRange.toString}" )
   val partsPerFile: Int = if(rowsPerPartition == -1) { 1 } else { Math.ceil( nFileIntersectingRows / rowsPerPartition.toFloat ).toInt }
 
-  def getTimeSlicePartitions: IndexedSeq[TimeSlicePartition] = ( 0 until partsPerFile ) map ( iPartIndex => {
+  def getTimeSlicePartitions: IndexedSeq[TimeSlicePartition] = if( filter.isEmpty ) {
+    ( 0 until partsPerFile ) flatMap  ( iPartIndex => {
       val partStartRow = if(rowsPerPartition == -1) { intersectingRange.first } else { intersectingRange.first +  iPartIndex * rowsPerPartition }
       val partEndRow = if(rowsPerPartition == -1) { intersectingRange.last } else { Math.min( partStartRow + rowsPerPartition -1, intersectingRange.last ) }
-      val partRange = new ma2.Range( partStartRow, partEndRow )
-//      logger.info( s" @DSX getTimeSlicePartitions[${iPartIndex}/${partsPerFile}], rowsPerPartition = ${rowsPerPartition}, partRange = [ ${partRange.toString} ]")
-      TimeSlicePartition (varId, varName, section, fileInput, basePath, partRange )
+      val partRange = new ma2.Range(partStartRow, partEndRow)
+      //      logger.info( s" @DSX getTimeSlicePartitions[${iPartIndex}/${partsPerFile}], rowsPerPartition = ${rowsPerPartition}, partRange = [ ${partRange.toString} ]")
+      Some(TimeSlicePartition(varId, varName, section, fileInput, basePath, partRange))
     } )
+  } else {
+    filterRange( intersectingRange.first, intersectingRange.last, filter, fileInput ) map { partRange => TimeSlicePartition(varId, varName, section, fileInput, basePath, partRange) }
+  }
+
+  def filterRange( partStartRow: Int, partEndRow: Int, filter: String, fileInput: FileInput ) : IndexedSeq[ ma2.Range ] = {
+    val month_offset = "JFMAMJJASONDJFMAMJJASOND".indexOf(filter.toUpperCase)
+    assert( month_offset >= 0, s"Unrecognized Filter value: ${filter}")
+    var currentList: Option[ListBuffer[Int]] = None
+    var ranges = new ListBuffer[ ma2.Range ]
+    val filter_months = ( 0 until filter.length ) map ( index => ( index + month_offset) % 12 )
+    for( partRow <- partStartRow to partEndRow ) {
+      val month: Int = fileInput.rowToDate( partRow ).getFieldValue( CalendarPeriod.Field.Month ) - 1
+      if( filter_months.contains(month) ) {
+        if( currentList.isEmpty ) { currentList = Some( new ListBuffer[Int] )}
+        currentList.get += partRow
+      } else {
+        if( currentList.isDefined ) {
+          ranges += new ma2.Range( currentList.get.head, currentList.get.last )
+          currentList = None
+        }
+      }
+    }
+    if( currentList.isDefined ) { ranges += new ma2.Range( currentList.get.head, currentList.get.last ) }
+    ranges.toIndexedSeq
+  }
 }
 
 object TimeSlicePartition {

@@ -58,6 +58,10 @@ object CDGrid extends Loggable {
     new CDGrid(name, gridFilePath, coordAxes, coordSystems, dimensions, resolution, dset_attributes)
   }
 
+  def getTimeAxis( gridDS: NetcdfDataset ): Option[CoordinateAxis1DTime] = {
+    Option(gridDS.findCoordinateAxis(AxisType.Time)) map ( axis => CoordinateAxis1DTime.factory(gridDS, axis, new Formatter()) )
+  }
+
   def getResolution( cAxis: CoordinateAxis): Option[(String,Float)] = try {
      val name = cAxis.getAxisType.toString
      val size = if ( name.equalsIgnoreCase("t") ) { cAxis.getShape(0) * 1.0e9 } else { cAxis.getShape(0) }
@@ -366,13 +370,6 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
     }
   }
 
-  def getTimeCoordinateAxis(context: String): Option[CoordinateAxis1DTime] = {
-    if (_timeAxis.isEmpty) {
-      updateTimeCoordinateAxis(context)
-    }
-    _timeAxis
-  }
-
   def updateTimeCoordinateAxis(context: String): Unit = {
     val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, context, true)
     try {
@@ -393,25 +390,27 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
     }
   }
 
+  def getGridDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(gridFilePath, 8.toString, true)
 
-  def findCoordinateAxis(atype: AxisType): Option[CoordinateAxis] = {
-    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 8.toString, true)
-    try {
-      Option(gridDS.findCoordinateAxis(atype)).map(axis => {
-        if (precache) {
-          axis.setCaching(true); axis.read()
-        }
-        axis
-      })
-    } catch {
-      case err: Exception =>
-        logger.error("Can't find Coordinate Axis with type: " + atype.toString + " in gridFile " + gridFilePath + ", error = " + err.toString);
-        logger.error(err.getStackTrace.mkString("\n"))
-        None
-    } finally {
-      gridDS.close
-    }
-  }
+
+//  def findCoordinateAxis(atype: AxisType): Option[CoordinateAxis] = {
+//    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 8.toString, true)
+//    try {
+//      Option(gridDS.findCoordinateAxis(atype)).map(axis => {
+//        if (precache) {
+//          axis.setCaching(true); axis.read()
+//        }
+//        axis
+//      })
+//    } catch {
+//      case err: Exception =>
+//        logger.error("Can't find Coordinate Axis with type: " + atype.toString + " in gridFile " + gridFilePath + ", error = " + err.toString);
+//        logger.error(err.getStackTrace.mkString("\n"))
+//        None
+//    } finally {
+//      gridDS.close
+//    }
+//  }
 
   def getVariable(varShortName: String): Option[(Int, nc2.Variable)] = {
     val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(gridFilePath, 9.toString, true)
