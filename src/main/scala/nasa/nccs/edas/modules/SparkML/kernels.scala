@@ -37,7 +37,7 @@ class svd extends KernelImpl {
     scaling_result.cache()
     val matrix = new RowMatrix( scaling_result )
     val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
-    val computeU: Boolean = context.operation.getConfParm("compu").fold( true )( _.toBoolean )
+    val computeU: Boolean = context.operation.getConfParm("compu").fold( false )( _.toBoolean )
     val svd = matrix.computeSVD( nModes, true )
     val lambdas = svd.s.toArray.mkString(",")
     val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>

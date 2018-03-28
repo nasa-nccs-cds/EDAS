@@ -24,6 +24,7 @@ object Library {
   val clcommon       = "edu.ucar"           % "clcommon"        % Versions.ucar
   val netcdf4        = "edu.ucar"           % "netcdf4"         % Versions.ucar
   val opendap        = "edu.ucar"           % "opendap"         % Versions.ucar
+  val netlib         = "com.github.fommil.netlib"  % "all"      % "1.1.2"
   val nd4s           = "org.nd4j"           % "nd4s_2.11"       % "0.4-rc3.8"
   val nd4j           =  "org.nd4j"          % "nd4j-x86"        % "0.4-rc3.8"
   val httpservices   = "edu.ucar"           %  "httpservices"   % Versions.ucar
@@ -58,7 +59,7 @@ object Dependencies {
 
   val jackson = Seq( jacksonCore, jacksonDatabind, jacksonModule )
 
-  val spark = Seq( sparkCore, sparkStreaming, sparkMLLib, sparkSQL )
+  val spark = Seq( sparkCore, sparkStreaming, sparkMLLib, sparkSQL, netlib )
 
   val cache = Seq( concurrentlinkedhashmap )
 
