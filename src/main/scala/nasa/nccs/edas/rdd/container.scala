@@ -563,7 +563,7 @@ class TimeSlicePartitionGenerator(val varId: String, val varName: String, val se
   val intersectingRange = fileInput.intersect( timeRange )
   val filter = metaData.getOrElse("filter:T","")
   val nFileIntersectingRows = intersectingRange.length
-  //  logger.info( s" @DSX PartIntersect, fileInput = ${fileInput.path}, nFileIntersectingRows = ${nFileIntersectingRows}, intersectingRange = ${intersectingRange.toString}, timeRange = ${timeRange.toString}" )
+  logger.info( s" @DSX PartIntersect, fileInput = ${fileInput.path}, nFileIntersectingRows = ${nFileIntersectingRows}, intersectingRange = ${intersectingRange.toString}, timeRange = ${timeRange.toString}, filter = ${filter}, metadata keys = [ ${metaData.keys.mkString(", ")} ]" )
   val partsPerFile: Int = if(rowsPerPartition == -1) { 1 } else { Math.ceil( nFileIntersectingRows / rowsPerPartition.toFloat ).toInt }
 
   def getTimeSlicePartitions: IndexedSeq[TimeSlicePartition] = if( filter.isEmpty ) {
@@ -571,11 +571,14 @@ class TimeSlicePartitionGenerator(val varId: String, val varName: String, val se
       val partStartRow = if(rowsPerPartition == -1) { intersectingRange.first } else { intersectingRange.first +  iPartIndex * rowsPerPartition }
       val partEndRow = if(rowsPerPartition == -1) { intersectingRange.last } else { Math.min( partStartRow + rowsPerPartition -1, intersectingRange.last ) }
       val partRange = new ma2.Range(partStartRow, partEndRow)
-      //      logger.info( s" @DSX getTimeSlicePartitions[${iPartIndex}/${partsPerFile}], rowsPerPartition = ${rowsPerPartition}, partRange = [ ${partRange.toString} ]")
+      logger.info( s" @DSX getTimeSlicePartitions[${iPartIndex}/${partsPerFile}], rowsPerPartition = ${rowsPerPartition}, partRange = [ ${partRange.toString} ]")
       Some(TimeSlicePartition(varId, varName, section, fileInput, basePath, partRange))
     } )
   } else {
-    filterRange( intersectingRange.first, intersectingRange.last, filter, fileInput ) map { partRange => TimeSlicePartition(varId, varName, section, fileInput, basePath, partRange) }
+    filterRange( intersectingRange.first, intersectingRange.last, filter, fileInput ) map { partRange =>
+      logger.info( s" @DSX getTimeSlicePartitions, filter = ${filter}, partRange = [ ${partRange.toString} ]")
+      TimeSlicePartition(varId, varName, section, fileInput, basePath, partRange)
+    }
   }
 
   def filterRange( partStartRow: Int, partEndRow: Int, filter: String, fileInput: FileInput ) : IndexedSeq[ ma2.Range ] = {
