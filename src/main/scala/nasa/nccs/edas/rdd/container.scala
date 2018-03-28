@@ -561,7 +561,7 @@ object TimeSlicePartitionGenerator extends Loggable {
 class TimeSlicePartitionGenerator(val varId: String, val varName: String, val section: CDSection, val fileInput: FileInput, val basePath: String, val metaData: Map[String,String], val rowsPerPartition: Int = -1 ) extends Loggable {
   val timeRange = section.getRange(0)
   val intersectingRange = fileInput.intersect( timeRange )
-  val filter = metaData.getOrElse("filter:T","")
+  val filter: String = metaData find { case (key,value) => key.startsWith("filter") } map { case (key,value) => value } getOrElse ""
   val nFileIntersectingRows = intersectingRange.length
   logger.info( s" @DSX PartIntersect, fileInput = ${fileInput.path}, nFileIntersectingRows = ${nFileIntersectingRows}, intersectingRange = ${intersectingRange.toString}, timeRange = ${timeRange.toString}, filter = ${filter}, metadata keys = [ ${metaData.keys.mkString(", ")} ]" )
   val partsPerFile: Int = if(rowsPerPartition == -1) { 1 } else { Math.ceil( nFileIntersectingRows / rowsPerPartition.toFloat ).toInt }

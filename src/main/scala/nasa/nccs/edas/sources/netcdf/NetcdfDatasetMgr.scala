@@ -14,6 +14,7 @@ import scala.collection.JavaConverters._
 /**
   * Created by tpmaxwel on 1/14/18.
   */
+
 object NetcdfDatasetMgr extends Loggable with ContainerOps  {
     import CDSVariable._
 //  NetcdfDataset.initNetcdfFileCache(10,1000,3600)   // Bugs in Netcdf file caching cause NullPointerExceptions on MERRA2 npana datasets (var T): ( 3/3/2017 )
