@@ -324,9 +324,7 @@ abstract class MultiKernel( options: Map[String,String] = Map.empty ) extends Ke
 abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Kernel(options) {
   import Kernel._
   val weighted: Boolean
-  def getInputArrays(inputs: CDRecord, context: KernelContext ): List[ArraySpec] = context.operation.inputs.map(id => inputs.element( id ).getOrElse {
-    throw new Exception(s"Can't find input ${id} for kernel ${identifier}, availiable inputs = ${inputs.elements.keys.mkString(",")}, values: \n\t${inputs.elements.values.map(_.toString).mkString("\n\t")}")
-  } )
+  def getInputArrays(inputs: CDRecord, context: KernelContext ): List[(String,ArraySpec)] = context.operation.inputs.flatMap(id => inputs.filterElements( id ))
   val mapCombineOp: Option[ReduceOpFlt] = options.get("mapOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
   val mapCombineNOp: Option[ReduceNOpFlt] = None
   val mapCombineWNOp: Option[ReduceWNOpFlt] = None
@@ -707,27 +705,25 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
     val axes: AxisIndices = context.grid.getAxisIndices( context.config("axes","") )
     val inputId: String = context.operation.inputs.headOption.getOrElse("NULL")
     val shape = inputs.elements.head._2.shape
-    val elems = inputs.element(inputId) match {
-      case Some( input_array ) =>
-        mapCombineOp match {
-          case Some(combineOp) =>
-            if( this.weighted ) {
-              val suffixes = Seq( "", "_WEIGHTS_" )
-              input_array.toFastMaskedArray.weightedReduce( combineOp, axes.args, initValue, None ).zip(suffixes).map { case (result, suffix) => {
-                val result_data = result.getData
-                context.operation.rid + suffix -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup)
-              }}
-            } else {
-              val result = input_array.toFastMaskedArray.reduce(combineOp, axes.args, initValue)
-              val result_data = result.getData
-              Seq(context.operation.rid -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup) )
-            }
-          case None =>
-//            logger.info(" ##### KERNEL [%s]: Map Op: NONE".format( name ) )
-            Seq(context.operation.rid -> input_array )
+    val inputsArrays = inputs.filterElements(inputId)
+    assert( ! inputsArrays.isEmpty, "Missing input to '" + this.getClass.getName + "' map op: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(",") )
+    val elems = inputsArrays flatMap { case ( key, input_array ) => mapCombineOp match {
+      case Some(combineOp) =>
+        if( this.weighted ) {
+          val suffixes = Seq( "", "_WEIGHTS_" )
+          input_array.toFastMaskedArray.weightedReduce( combineOp, axes.args, initValue, None ).zip(suffixes).map { case (result, suffix) => {
+            val result_data = result.getData
+            key.split("-").head + context.operation.rid + suffix -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup)
+          }}
+        } else {
+          val result = input_array.toFastMaskedArray.reduce(combineOp, axes.args, initValue)
+          val result_data = result.getData
+          Seq(key.split("-").head + context.operation.rid -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup) )
         }
-      case None => throw new Exception( "Missing input to '" + this.getClass.getName + "' map op: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(",") )
-    }
+      case None =>
+        //            logger.info(" ##### KERNEL [%s]: Map Op: NONE".format( name ) )
+        Seq(context.operation.rid -> input_array )
+    } }
     val dt = (System.nanoTime - t0) / 1.0E9
     CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata )
   })
@@ -737,8 +733,8 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      val input_arrays: List[ArraySpec] = getInputArrays( inputs, context )
-      val result_array: ArraySpec = input_arrays.reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
+      val input_arrays: List[(String,ArraySpec)] = getInputArrays( inputs, context )
+      val result_array: ArraySpec = input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
       CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> result_array), inputs.metadata )
     } else { inputs }
   }
@@ -833,7 +829,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
     val workerManager: PythonWorkerPortal = PythonWorkerPortal.getInstance()
     val worker: PythonWorker = workerManager.getPythonWorker
     try {
-      val input_arrays: List[ArraySpec] = getInputArrays(inputs, context)
+      val input_arrays: List[(String,ArraySpec)] = getInputArrays(inputs, context)
       val t1 = System.nanoTime
       for (input_id <- context.operation.inputs) inputs.element(input_id) match {
         case Some(input_array) =>
