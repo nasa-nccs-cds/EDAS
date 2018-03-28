@@ -412,7 +412,6 @@ class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) exte
     axes.find( axis => axis.getCFAxisName.toLowerCase.equals(cfAxisName.toLowerCase) )
   }
   def getRank = axes.length
-  def getGridDataset: NetcdfDataset = grid.getGridDataset
   def toXml: xml.Elem = <grid> { axes.map(_.toXml) } </grid>
   def getGridSpec: String  = grid.getGridSpec
   def getGridFile: String  = grid.getGridFile

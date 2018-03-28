@@ -30,8 +30,6 @@ import ucar.nc2.write.Nc4Chunking
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
-
-
 object CDGrid extends Loggable {
   def apply( aggregation: Aggregation, datfilePath: String): CDGrid = {
     if( !Files.exists( Paths.get( aggregation.gridFilePath ) ) ) { createGridFile( aggregation ) }
@@ -390,7 +388,7 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
     }
   }
 
-  def getGridDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(gridFilePath, 8.toString, true)
+  def getGridDataset( cache: Boolean ): NetcdfDataset = NetcdfDatasetMgr.aquireFile(gridFilePath, 8.toString, cache)
 
 
 //  def findCoordinateAxis(atype: AxisType): Option[CoordinateAxis] = {

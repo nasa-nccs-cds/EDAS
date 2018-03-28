@@ -84,7 +84,7 @@ class RegridKernel(CDMSKernel):
         else:
             raise Exception( "Unable to determine target grid type in Regrid operation")
 
-        outlatBounds, outlonBounds = toGrid.getBounds()
+ #       outlatBounds, outlonBounds = toGrid.getBounds()
  #       self.logger.info(" >> out LAT Bounds shape: " + str(outlatBounds.shape) + ", values: " + str(outlatBounds))
  #       self.logger.info(" >> out LON Bounds shape: " + str(outlonBounds.shape) + ", values: " + str(outlonBounds))
         return toGrid
