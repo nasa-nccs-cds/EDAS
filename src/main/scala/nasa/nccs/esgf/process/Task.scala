@@ -1183,7 +1183,7 @@ class OperationContext(val identifier: String,
   override def toString =  s"OperationContext { id = $identifier,  name = $name, rid = $rid, inputs = $inputs, configurations = $configuration }"
   override def toXml = <proc id={identifier} name={name} rid={rid} inputs={inputs.toString} configurations={configuration.toString}/>
   def operatesOnAxis( axis: Char ): Boolean = configuration.getOrElse("axes","").contains(axis)
-
+  def reconfigure( new_configuration: Map[String, String] ): OperationContext = new OperationContext( identifier, name, rid, inputs, new_configuration )
   def getDomains: List[String] = _domains.toList
 
   private def _addDomain( domain_id: String ): Boolean = if( _domains.contains(domain_id) ) { false; } else { _domains += domain_id; true }

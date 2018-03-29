@@ -213,6 +213,8 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   lazy val midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDRecord ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDRecord ): Long = Math.max( endTime, other.endTime )
+  def dateRange: (CalendarDate,CalendarDate) = ( CalendarDate.of(startTime), CalendarDate.of(endTime) )
+  def dateRangeStr: String = s"(${CalendarDate.of(startTime)}<->${CalendarDate.of(endTime)})"
   def section( section: CDSection ): Option[CDRecord] = {
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
     if( new_elements.isEmpty ) { None } else { Some( new CDRecord(startTime, endTime, new_elements, metadata) ) }
@@ -738,7 +740,7 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
 
 class RDDContainer extends Loggable {
   private var _vault: Option[RDDVault] = None
-  val regridKernel = new CDMSRegridKernel()
+//  val regridKernel = new CDMSRegridKernel()
   def releaseBatch = { _vault.foreach(_.clear);  _vault = None }
   private def vault: RDDVault = _vault.getOrElse { throw new Exception( "Unexpected attempt to access an uninitialized RDD Vault")}
   def value: CDRecordRDD = vault.value
@@ -785,12 +787,12 @@ class RDDContainer extends Loggable {
   def map( kernel: KernelImpl, context: KernelContext ): Unit = { vault.update( kernel.mapRDD( vault.value, context ), s"map Kernel ${context.operation.identifier}" ) }
 
 
-  def regrid( context: KernelContext ): Unit = {
-    val t0 = System.nanoTime()
-    vault.update( regridKernel.mapRDD( vault.value, context ), s"regrid Kernel ${context.operation.identifier}" )
-    if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
-//    logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
-  }
+//  def regrid( context: KernelContext ): Unit = {
+//    val t0 = System.nanoTime()
+//    vault.update( regridKernel.mapRDD( vault.value, context ), s"regrid Kernel ${context.operation.identifier}" )
+//    if( KernelContext.workflowMode == WorkflowMode.profiling ) { update }
+////    logger.info(" #R# Regrid time: %.2f".format( (System.nanoTime-t0)/1.0E9 ) )
+//  }
   def execute( workflow: Workflow, node: KernelImpl, context: KernelContext, batchIndex: Int ): QueryResultCollection = node.execute( workflow, value, context, batchIndex )
   def reduceBroadcast( node: KernelImpl, context: KernelContext, serverContext: ServerContext, batchIndex: Int ): Unit = vault.map( node.reduceBroadcast( context, serverContext, batchIndex ), s"ReduceBroadcast, Kernel: ${context.operation.identifier}" )
   def nPartitions: Int = _vault.fold(0)(_.nPartitions)

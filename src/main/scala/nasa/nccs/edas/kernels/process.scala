@@ -305,18 +305,38 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   </kernel>
 
   def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode]
+
+  def extractRegridOperation( workflow: Workflow, operation: OperationContext ): (OperationContext, Option[OperationContext]) = {
+    val opId = UID( operation.identifier.split('-').last )
+    val config = operation.getConfiguration
+    val gridKeys = List( "grid", "shape", "res", "origin" )
+    val regrid = "python.cdmsmodule.regrid"
+    if( config.keys.contains("grid") ) {
+      val groupedConfig = config.groupBy { case (key, value) => gridKeys.contains(key.toLowerCase) }
+      val regridOp = new OperationContext( opId + regrid, regrid, workflow.request.id.toString, operation.inputs, groupedConfig.getOrElse( true, Map.empty ) )
+      val filteredOp = operation.reconfigure( groupedConfig.getOrElse( false, Map.empty ) )
+      ( filteredOp,  Some(regridOp) )
+    } else {
+      ( operation, None )
+    }
+  }
 }
+
+// "grid": "uniform", "shape": "32,72", "res": "5,5"
 
 abstract class MultiKernel( options: Map[String,String] = Map.empty ) extends Kernel(options) {
   def insertNewName( oldIdentifier: String, newName: String ): String = ( Array(newName) ++ oldIdentifier.split('-').tail ).mkString("-")
+
   def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode] = {
-    val expandedOps: List[OperationContext] = getExpandedOperations( workflow, operation )
-    expandedOps.flatMap ( op_context =>
+    val ( filtered_op, optRegridOperation ) = extractRegridOperation( workflow, operation )
+    val expandedOps: List[OperationContext] = getExpandedOperations( workflow, filtered_op )
+    val workflowNodes = expandedOps.flatMap ( op_context =>
       workflow.createKernel( op_context.name.toLowerCase ) match {
         case kernelImpl: KernelImpl => List( new WorkflowNode( op_context, kernelImpl ) )
         case multiKernel: MultiKernel => multiKernel.getWorkflowNodes( workflow, op_context )
       }
     )
+    workflowNodes ++ optRegridOperation.map( regrid_op => WorkflowNode( regrid_op, workflow ) )
   }
   def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext]
 }
@@ -332,7 +352,10 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
   def requiresReduceBroadcast( context: KernelContext ): Boolean = { context.operation.operatesOnAxis('t' ) && reduceCombineOp.isDefined }
   val initValue: Float = 0f
 
-  def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode] = List( new WorkflowNode( operation, this ) )
+  def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode] = {
+    val ( filtered_op, optRegridOperation ) = extractRegridOperation( workflow, operation )
+    List( new WorkflowNode( filtered_op, this ) ) ++ optRegridOperation.map( regrid_op => WorkflowNode( regrid_op, workflow ))
+  }
   def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = { mapReduce(input, context, batchIndex ) }
   def isDisposable( input: OperationInput ): Boolean = input.disposable
   def elemFilter(rid: String) = (elemId: String) => elemId.toLowerCase.startsWith( rid )
@@ -713,12 +736,12 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
           val suffixes = Seq( "", "_WEIGHTS_" )
           input_array.toFastMaskedArray.weightedReduce( combineOp, axes.args, initValue, None ).zip(suffixes).map { case (result, suffix) => {
             val result_data = result.getData
-            key.split("-").head + context.operation.rid + suffix -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup)
+            key.split('-').head + context.operation.rid + suffix -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup)
           }}
         } else {
           val result = input_array.toFastMaskedArray.reduce(combineOp, axes.args, initValue)
           val result_data = result.getData
-          Seq(key.split("-").head + context.operation.rid -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup) )
+          Seq(key.split('-').head + context.operation.rid -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup) )
         }
       case None =>
         //            logger.info(" ##### KERNEL [%s]: Map Op: NONE".format( name ) )
@@ -786,7 +809,10 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val (gridFile, resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${KernelContext.getProcessAddress})")(() => {
         val rID = UID()
         val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
-        logger.info(s" RRR Sending regrid request to python worker, rid = ${rID}, keys = [ ${regrid_array_map.keys.mkString(", ")} ], operation metadata: { ${context_metadata.mkString(", ")} }")
+        if( regrid_array_map.keys.head.startsWith("v1lowpass") ) {
+          val idbg = 1
+        }
+        logger.info(s" RRR Sending regrid request to python worker, op=${context.operation.identifier}, rid = ${rID}, date range = ${inputs.dateRangeStr}, keys = [ ${regrid_array_map.keys.mkString(", ")} ], operation metadata: { ${context_metadata.mkString(", ")} }")
         worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
         var gFile = ""
         val resultItems: Iterable[(String, ArraySpec)] = for (uid <- regrid_array_map.keys) yield {

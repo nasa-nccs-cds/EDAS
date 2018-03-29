@@ -3,7 +3,7 @@ package nasa.nccs.edas.engine
 import nasa.nccs.caching.{BatchSpec, RDDTransientVariable, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{OperationInput, _}
 import nasa.nccs.edas.engine.EDASExecutionManager.saveResultToFile
-import nasa.nccs.edas.kernels._
+import nasa.nccs.edas.kernels.{KernelImpl, _}
 import nasa.nccs.edas.rdd.{QueryResultCollection, VariableRecord}
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
 import nasa.nccs.utilities.{DAGNode, Loggable}
@@ -24,19 +24,25 @@ object WorkflowNode {
   }
   def addProduct( uid: String, product: QueryResultCollection ): Unit = { _nodeProducts += ( uid -> product ) }
   def getProduct( uid: String ): Option[QueryResultCollection] = _nodeProducts.get(uid)
+  def apply( operation: OperationContext, workflow: Workflow ) = {
+    val kernel = workflow.createKernel( operation.name.toLowerCase() ) match { case kernelImpl: KernelImpl => kernelImpl }
+    new WorkflowNode( operation, kernel )
+  }
 }
 
 class WorkflowNode( val operation: OperationContext, val kernel: KernelImpl  ) extends DAGNode with Loggable {
   import WorkflowNode._
   private val contexts = mutable.HashMap.empty[String,KernelContext]
   private var _isMergedSubworkflowRoot: Boolean = false;
+  lazy val outputIds: List[String] = operation.inputs map ( _.split('-').head + "-" + operation.rid )
 
   def markAsMergedSubworkflowRoot: WorkflowNode = { _isMergedSubworkflowRoot = true; this }
   def isMergedSubworkflowRoot: Boolean = _isMergedSubworkflowRoot
 
   def getResultId: String = operation.rid
+  def hasOutput( uid: String ): Boolean = outputIds exists ( _.endsWith(uid) )
   def getNodeId: String = operation.identifier
-  def isDisposable( input: OperationInput ): Boolean = kernel.isDisposable( input )
+  def isDisposable( input: OperationInput ): Boolean = kernel isDisposable input
 
   def isSubworkflowBoundayNode: Boolean = isRoot || doesTimeReduction
 
@@ -266,9 +272,9 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     kernelCx.profiler.profile("processInputs") ( () => {
       processInputs( executor.rootNode, executor, kernelCx, batchIndex )
     } )
-    kernelCx.profiler.profile("regrid") ( () => {
-      executor.regrid( kernelCx.addVariableRecords( executor.variableRecs ) )
-    } )
+//    kernelCx.profiler.profile("regrid") ( () => {
+//      executor.regrid( kernelCx.addVariableRecords( executor.variableRecs ) )
+//    } )
     kernelCx.profiler.profile("execute") ( () => {
       executor.execute(this, kernelCx, batchIndex )
     } )
@@ -322,7 +328,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def stream(node: WorkflowNode, executor: WorkflowExecutor, batchIndex: Int ): Unit = {
     val kernelContext = node.getKernelContext( executor )
     processInputs(node, executor, kernelContext, batchIndex)
-    executor.regrid( kernelContext.addVariableRecords( executor.variableRecs ) )
+//    executor.regrid( kernelContext.addVariableRecords( executor.variableRecs ) )
     executor.streamMapReduce( node, kernelContext, executionMgr.serverContext, batchIndex )
     logger.info( s"Executed STREAM mapReduce Batch ${batchIndex.toString}" )
   }
@@ -333,10 +339,10 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       requestCx.getInputSpec(uid) match {
         case Some(inputSpec) => Unit
         case None =>
-          nodes.find(_.getResultId.equals(uid)) match {
+          nodes.find( _.hasOutput(uid) ) match {
             case Some(inode) => workflowNode.addInput(inode)
             case None =>
-              val errorMsg = s" * Unidentified input in workflow node %s: '%s', available inputs: { ${nodes.map(_.getResultId).mkString(",")} }: This is typically due to an empty domain intersection with the dataset! \n ----> inputs ids = %s, input source keys = %s, input source values = %s, result ids = %s".format(
+              val errorMsg = s" * Unidentified input in workflow node %s: '%s', available inputs: { ${nodes.map(_.outputIds.mkString(",")).mkString("; ")} }: This is typically due to an empty domain intersection with the dataset! \n ----> inputs ids = %s, input source keys = %s, input source values = %s, result ids = %s".format(
                 workflowNode.getNodeId, uid, requestCx.inputs.keySet.map(k=>s"'$k'").mkString(", "), requestCx.inputs.keys.mkString(", "), requestCx.inputs.values.mkString(", "),
                 nodes.map(_.getNodeId).map(k=>s"'$k'").mkString(", "))
               logger.error(errorMsg)
@@ -385,7 +391,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       if( workflowNode.kernel.extInputs ) { new ExternalDataInput( inputSpec, workflowNode ) }
       else                                { executionMgr.serverContext.getOperationInput(inputSpec, requestCx.getConfiguration, workflowNode ) }
     case None =>
-      nodes.find( _.getResultId.equals(uid) ) match {
+      nodes.find( _.hasOutput(uid) ) match {
         case Some(inode) => new DependencyOperationInput( inode, workflowNode )
         case None =>
           val errorMsg = " ** Unidentified input in workflow node %s: %s, input ids = %s".format(workflowNode.getNodeId, uid, requestCx.inputs.keySet.mkString(", "))

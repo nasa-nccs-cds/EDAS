@@ -105,9 +105,9 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
     _inputsRDD.addFileInputs( serverContext.spark, kernelCx, vSpecs )
   }
 
-  def regrid( kernelCx: KernelContext ): Unit = {
-    _inputsRDD.regrid( kernelCx )
-  }
+//  def regrid( kernelCx: KernelContext ): Unit = {
+//    _inputsRDD.regrid( kernelCx )
+//  }
 
   def extendRDD(generator: RDDGenerator, rdd: CDRecordRDD, vSpecs: List[DirectRDDVariableSpec]  ): CDRecordRDD = {
     if( vSpecs.isEmpty ) { rdd }
