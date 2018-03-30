@@ -184,11 +184,12 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
     EDASExecutionManager.checkIfAlive
     val groupBy = context.getGroup.getOrElse( throw new Exception( "lowpass operation requires a groupBy parameter") )
     val elemFilter = (elemId: String) => context.operation.inputs.contains( elemId )
-    val filteredRdd: RDD[CDRecord] = input.rdd.map( _.selectAndRenameElements( elemFilter, (elemId: String) => elemId.split('-').head + context.operation.rid ) )
+    val filteredRdd: RDD[CDRecord] = input.rdd.map( _.selectElements( elemFilter ) )
     val times: Array[(Long,Long)] = filteredRdd.map( rec => ( rec.startTime, rec.endTime ) ).collect().sortBy( _._1 )
     val groupedRDD:  RDD[CDRecord] = CDRecordRDD.reduceRddByGroup( filteredRdd, CDRecord.weightedSum( context ), "normw", groupBy ).map( _._2 )
     val regroupedRDD:  RDD[Array[CDRecord]] = input.newData( groupedRDD.sortBy( _.startTime ) ).sliding(3,2)
-    val lowpass_rdd:  RDD[CDRecord] = regroupedRDD.mapPartitionsWithIndex( interpolate( regroupedRDD.getNumPartitions, times ) )
+    val rename = context.operation.getRenameOp
+    val lowpass_rdd:  RDD[CDRecord] = regroupedRDD.mapPartitionsWithIndex( interpolate( regroupedRDD.getNumPartitions, times ) ).map( _.renameElements( rename ) )
     new CDRecordRDD( lowpass_rdd, input.metadata, input.variableRecords ) join input.rdd
   }
 
@@ -651,8 +652,7 @@ class anomaly extends MultiKernel(Map.empty) {
     val opId = UID( operation.identifier.split('-').last )
     val ( ave, eDiff, aveResult ) = ( "CDSpark.ave", "CDSpark.eDiff", workflow.request.id + "aveResult" )
     val opAve  = new OperationContext( opId + ave, ave, aveResult, operation.inputs, operation.getConfiguration )
-    val inputs = operation.inputs.map( input => input.split('-').head + "-" + aveResult )
-    val opDiff = new OperationContext( opId + eDiff, eDiff, operation.rid, inputs, Map.empty[String, String] )
+    val opDiff = new OperationContext( opId + eDiff, eDiff, operation.rid, operation.inputs ++ opAve.outputs, Map.empty[String, String] )
     List( opAve, opDiff )
   }
 }
@@ -669,10 +669,9 @@ class highpass extends MultiKernel(Map.empty) {
   def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext] = {
     val opId = UID( operation.identifier.split('-').last )
     val ( lowpass, eDiff, lowpassResult ) = ( "CDSpark.lowpass", "CDSpark.eDiff", workflow.request.id + "lowpass" )
-    val opAve  = new OperationContext( opId + lowpass, lowpass, lowpassResult, operation.inputs, operation.getConfiguration )
-    val inputs = operation.inputs.map( input => input.split("-").head + "-" +lowpassResult )
-    val opDiff = new OperationContext( opId + eDiff, eDiff, operation.rid, inputs, Map.empty[String, String] )
-    List( opAve, opDiff )
+    val opLowpass  = new OperationContext( opId + lowpass, lowpass, lowpassResult, operation.inputs, operation.getConfiguration )
+    val opDiff = new OperationContext( opId + eDiff, eDiff, operation.rid, operation.inputs ++ opLowpass.outputs, Map.empty[String, String] )
+    List( opLowpass, opDiff )
   }
 }
 
@@ -689,7 +688,7 @@ class stdDev extends MultiKernel(Map.empty) {
     val opId = UID( operation.identifier.split('-').last )
     val ( anomaly, rms, anomalyResult ) = ( "CDSpark.anomaly", "CDSpark.rms", workflow.request.id + "anomalyResult" )
     val opAnomaly  = new OperationContext( opId + anomaly, anomaly, anomalyResult, operation.inputs, operation.getConfiguration )
-    val opRms = new OperationContext( opId + rms, rms, operation.rid, List( anomalyResult ), operation.getConfiguration )
+    val opRms = new OperationContext( opId + rms, rms, operation.rid, opAnomaly.outputs, operation.getConfiguration )
     List( opAnomaly, opRms )
   }
 }

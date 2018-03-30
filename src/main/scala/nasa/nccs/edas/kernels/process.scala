@@ -106,6 +106,7 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   private var _variableRecs: Map[String,VariableRecord] = Map.empty[String,VariableRecord]
   def getGroup: Option[TSGroup]  = operation.config("groupBy") map TSGroup.getGroup
   def nonCyclicGroupOp: Boolean = getGroup.fold( false )( _.isNonCyclic )
+  def getResultId( inputId: String ): String = operation.output(inputId)
 
   lazy val grid: GridContext = getTargetGridContext
   def addVariableRecords( varRecs: Map[String,VariableRecord] ): KernelContext = { _variableRecs = _variableRecs ++ varRecs; this }
@@ -307,22 +308,19 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
   def getWorkflowNodes( workflow: Workflow, operation: OperationContext ): List[WorkflowNode]
 
   def extractRegridOperation( workflow: Workflow, operation: OperationContext ): (OperationContext, Option[OperationContext]) = {
-    val opId = UID( operation.identifier.split('-').last )
     val config = operation.getConfiguration
-    val gridKeys = List( "grid", "shape", "res", "origin" )
-    val regrid = "python.cdmsmodule.regrid"
     if( config.keys.contains("grid") ) {
-      val groupedConfig = config.groupBy { case (key, value) => gridKeys.contains(key.toLowerCase) }
-      val regridOp = new OperationContext( opId + regrid, regrid, workflow.request.id.toString, operation.inputs, groupedConfig.getOrElse( true, Map.empty ) )
-      val filteredOp = operation.reconfigure( groupedConfig.getOrElse( false, Map.empty ) )
+      val opId = UID( operation.identifier.split('-').last )
+      val rid = CDMSRegrid.resultId(workflow.request)
+      val groupedConfig = config.groupBy { case (key, value) => CDMSRegrid.configKeys.contains(key.toLowerCase) }
+      val regridOp = new OperationContext( opId + CDMSRegrid.kernelId, CDMSRegrid.kernelId, rid, operation.inputs, groupedConfig.getOrElse( true, Map.empty ) )
+      val filteredOp =  new OperationContext( operation.identifier, operation.name, operation.rid, regridOp.outputs, groupedConfig.getOrElse( false, Map.empty ) )
       ( filteredOp,  Some(regridOp) )
     } else {
       ( operation, None )
     }
   }
 }
-
-// "grid": "uniform", "shape": "32,72", "res": "5,5"
 
 abstract class MultiKernel( options: Map[String,String] = Map.empty ) extends Kernel(options) {
   def insertNewName( oldIdentifier: String, newName: String ): String = ( Array(newName) ++ oldIdentifier.split('-').tail ).mkString("-")
@@ -736,12 +734,12 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
           val suffixes = Seq( "", "_WEIGHTS_" )
           input_array.toFastMaskedArray.weightedReduce( combineOp, axes.args, initValue, None ).zip(suffixes).map { case (result, suffix) => {
             val result_data = result.getData
-            key.split('-').head + context.operation.rid + suffix -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup)
+            context.operation.output(key) + suffix -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup)
           }}
         } else {
           val result = input_array.toFastMaskedArray.reduce(combineOp, axes.args, initValue)
           val result_data = result.getData
-          Seq(key.split('-').head + context.operation.rid -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup) )
+          Seq( context.operation.output( key ) -> ArraySpec(input_array.missing, result.shape, input_array.origin, result_data, input_array.optGroup) )
         }
       case None =>
         //            logger.info(" ##### KERNEL [%s]: Map Op: NONE".format( name ) )
@@ -756,11 +754,17 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      val input_arrays: List[(String,ArraySpec)] = getInputArrays( inputs, context )
-      val result_array: ArraySpec = input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
-      CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ Seq(context.operation.rid -> result_array), inputs.metadata )
+      val grouped_input_arrays: Map[String, List[(String,ArraySpec)]] = getInputArrays( inputs, context ) groupBy { case (uid,array) => uid.split('-').head }
+      val results: Map[String,ArraySpec] = grouped_input_arrays.map { case ( vid, input_arrays ) => vid + "-" + context.operation.rid -> input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) ) }
+      CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ results, inputs.metadata )
     } else { inputs }
   }
+}
+
+object CDMSRegrid {
+  val configKeys = List( "grid", "shape", "res", "origin" )
+  val kernelId = "python.cdmsmodule.regrid"
+  def resultId( request: TaskRequest ) = request.id + "regrid"
 }
 
 class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True", "visibility" -> "public" ), false ) {
@@ -809,9 +813,6 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val (gridFile, resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${KernelContext.getProcessAddress})")(() => {
         val rID = UID()
         val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
-        if( regrid_array_map.keys.head.startsWith("v1lowpass") ) {
-          val idbg = 1
-        }
         logger.info(s" RRR Sending regrid request to python worker, op=${context.operation.identifier}, rid = ${rID}, date range = ${inputs.dateRangeStr}, keys = [ ${regrid_array_map.keys.mkString(", ")} ], operation metadata: { ${context_metadata.mkString(", ")} }")
         worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
         var gFile = ""
@@ -819,7 +820,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
           val tvar = worker.getResult
           val result = ArraySpec(tvar)
           if (gFile.isEmpty) { gFile = Option( tvar.getMetaDataValue("gridfile") ).getOrElse("") }
-          uid -> result
+          context.operation.output(uid) -> result
         }
         (gFile, resultItems)
       })

@@ -80,16 +80,17 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def nSlices: Long = _inputsRDD.nSlices
   def update: CDRecordRDD = _inputsRDD.update
 
-  private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Iterable[String] = {
-    for( (uid,input) <- getInputs(node) ) input.consume( kernelCx.operation )
-    val disposable_inputs: Iterable[String] = for( (uid,input) <- getInputs(node); if node.isDisposable( input ) ) yield { uid }
-    _inputsRDD.release(disposable_inputs)
-    disposable_inputs
+  private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Unit = {
+    val inputs =  getInputs(node)
+    for( (uid,input) <- inputs ) input.consume( kernelCx.operation )
+    val groupedInputs: Map[ Boolean, List[(String,OperationInput)] ] = inputs.groupBy { case (uid,input) => node.isDisposable( input ) }
+    _inputsRDD.release( groupedInputs.getOrElse(true,Map.empty).map( _._1 ) )
+//    _inputsRDD.cache( groupedInputs.getOrElse(false,Map.empty).map( _._1 ) )
   }
 
   def execute( workflow: Workflow, kernelCx: KernelContext, batchIndex: Int ): QueryResultCollection =  {
       val result = _inputsRDD.execute( workflow, rootNode.kernel, kernelCx, batchIndex )
-      val disposable_inputs = releaseInputs( rootNode, kernelCx )
+      releaseInputs( rootNode, kernelCx )
       result
   }
 

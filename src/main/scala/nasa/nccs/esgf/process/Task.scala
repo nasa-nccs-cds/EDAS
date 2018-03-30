@@ -57,8 +57,8 @@ class TaskRequest(val id: UID,
   val errorReports = new ListBuffer[ErrorReport]()
   val targetGridMap = scala.collection.mutable.HashMap.empty[String, TargetGrid]
   validate()
-  logger.info(s"TaskRequest: name= $name, workflows= " + operations.mkString(",") + ", variableMap= " + variableMap.toString + ", domainMap= " + domainMap.toString)
   val workflow = Workflow(this, edasServiceProvider.cds2ExecutionManager);
+  logger.info(s"TaskRequest: name= $name, workflows= " + operations.mkString(",") + ", variableMap= " + variableMap.toString + ", domainMap= " + domainMap.toString + "\n @N@ nodes = " + workflow.nodes.map(_.toString).mkString(", "))
   val getUserAuth: Int = user.authorization_level
 
   def addErrorReport(severity: String, message: String) = {
@@ -1169,34 +1169,9 @@ object DomainContainer extends ContainerBase {
   def empty(name: String): DomainContainer = new DomainContainer(name)
 }
 
-class OperationContext(val identifier: String,
-                       val name: String,
-                       val rid: String,
-                       val inputs: List[String],
-                       private val configuration: Map[String, String]) extends ContainerBase with ScopeContext with Serializable {
-
-  def getConfiguration: Map[String, String] = configuration
-  def getConfParm( key: String ): Option[String] = configuration.get(key)
-  private val _domains = new scala.collection.mutable.HashSet[String]()
-  configuration.get("domain").foreach( _addDomain )
-  val moduleName: String = name.toLowerCase.split('.').head
-  override def toString =  s"OperationContext { id = $identifier,  name = $name, rid = $rid, inputs = $inputs, configurations = $configuration }"
-  override def toXml = <proc id={identifier} name={name} rid={rid} inputs={inputs.toString} configurations={configuration.toString}/>
-  def operatesOnAxis( axis: Char ): Boolean = configuration.getOrElse("axes","").contains(axis)
-  def reconfigure( new_configuration: Map[String, String] ): OperationContext = new OperationContext( identifier, name, rid, inputs, new_configuration )
-  def getDomains: List[String] = _domains.toList
-
-  private def _addDomain( domain_id: String ): Boolean = if( _domains.contains(domain_id) ) { false; } else { _domains += domain_id; true }
-
-  def addInputDomains( variableMap: Map[String, DataContainer] ): Boolean = if( _domains.size > 0 ) { false } else {
-    inputs.exists( variableMap.get(_).exists( addDomainsForInput ) )
-  }
-
-  def addDomainsForInput( dc: DataContainer): Boolean = dc.getInputDomain.exists( _addDomain )
-}
-
 object OperationContext extends ContainerBase {
   private var resultIndex = 0;
+  def getRid (resultId: String) (inputId: String): String = inputId.split('-').head + "-" + resultId
 
   def apply( uid: UID, process_name: String, uid_list: List[String], metadata: Map[String, Any] ): OperationContext = {
     val op_inputs: Iterable[String] = metadata.get("input") match {
@@ -1206,6 +1181,7 @@ object OperationContext extends ContainerBase {
       case x => throw new Exception("Unrecognized input in operation spec: " + x.toString)
     }
     val op_name = metadata.getOrElse("name", process_name).toString.trim
+
     val optargs: Map[String, String] = metadata.filterNot((item) => List("input", "name").contains(item._1)).mapValues(_.toString.trim).map(identity) // map(identity) to work around scala serialization bug
     val input = metadata.getOrElse("input", "").toString
     val opLongName = op_name + "-" + (List(input) ++ optargs.toList.map(item => item._1 + "=" + item._2)).filterNot((item) => item.isEmpty).mkString("(", "_", ")")
@@ -1226,4 +1202,31 @@ object OperationContext extends ContainerBase {
   }
 }
 
-class TaskProcessor {}
+class OperationContext(val identifier: String,
+                       val name: String,
+                       val rid: String,
+                       val inputs: List[String],
+                       private val configuration: Map[String, String]) extends ContainerBase with ScopeContext with Serializable {
+  import OperationContext._
+  def getConfiguration: Map[String, String] = configuration
+  def getConfParm( key: String ): Option[String] = configuration.get(key)
+  private val _domains = new scala.collection.mutable.HashSet[String]()
+  configuration.get("domain").foreach( _addDomain )
+  val moduleName: String = name.toLowerCase.split('.').head
+  override def toString =  s"OperationContext { id = $identifier,  name = $name, rid = $rid, inputs = $inputs, configurations = $configuration }"
+  override def toXml = <proc id={identifier} name={name} rid={rid} inputs={inputs.toString} configurations={configuration.toString}/>
+  def operatesOnAxis( axis: Char ): Boolean = configuration.getOrElse("axes","").contains(axis)
+  def reconfigure( new_configuration: Map[String, String] ): OperationContext = new OperationContext( identifier, name, rid, inputs, new_configuration )
+  def getDomains: List[String] = _domains.toList
+  def outputs: List[String] = inputs map ( inputId =>  getRid(rid)( inputId ) )
+  def output( inputId: String ): String = getRid(rid)( inputId )
+  def getRenameOp: (String)=>String = getRid(rid)
+
+  private def _addDomain( domain_id: String ): Boolean = if( _domains.contains(domain_id) ) { false; } else { _domains += domain_id; true }
+
+  def addInputDomains( variableMap: Map[String, DataContainer] ): Boolean = if( _domains.size > 0 ) { false } else {
+    inputs.exists( variableMap.get(_).exists( addDomainsForInput ) )
+  }
+
+  def addDomainsForInput( dc: DataContainer): Boolean = dc.getInputDomain.exists( _addDomain )
+}

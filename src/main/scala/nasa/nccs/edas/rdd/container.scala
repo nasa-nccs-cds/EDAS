@@ -220,7 +220,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
     if( new_elements.isEmpty ) { None } else { Some( new CDRecord(startTime, endTime, new_elements, metadata) ) }
   }
   def toVector( selectElems: Seq[String] ): Vector = {
-    val selectedElems: Map[String, ArraySpec] = elements.filter { case (key,array) => selectElems.contains(key.split(':').last) }
+    val selectedElems: Map[String, ArraySpec] = elements.filter { case (key,array) => selectElems.exists( elem => key.split(':').last.endsWith( elem ) ) }
     val arrays: Iterable[Array[Float]] = selectedElems.values.map( _.data )
     Vectors.dense( concat( arrays.toSeq ).map(_.toDouble) )
   }
@@ -234,6 +234,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   def selectElements( select: String => Boolean ): CDRecord = CDRecord(startTime, endTime, elements filterKeys ( key => select(key) ), metadata)
   def selectAndRenameElements( select: String => Boolean, rename: String => String ): CDRecord =
     CDRecord( startTime, endTime, elements filterKeys ( key => select(key) ) map { case ( key, value ) =>  rename(key) -> value } , metadata )
+  def renameElements(rename: String => String ): CDRecord = CDRecord( startTime, endTime, elements map { case ( key, value ) =>  rename(key) -> value } , metadata )
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def filterElements( id: String ): Array[(String,ArraySpec)] =  elements filter { case (key,value) => key.split(':').last.endsWith(id) } toArray
   def element( id: String ): Option[ArraySpec] =  elements find { case (key,value) => key.split(':').last.equals(id) } map ( _._2 )

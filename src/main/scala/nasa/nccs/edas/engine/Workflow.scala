@@ -34,10 +34,11 @@ class WorkflowNode( val operation: OperationContext, val kernel: KernelImpl  ) e
   import WorkflowNode._
   private val contexts = mutable.HashMap.empty[String,KernelContext]
   private var _isMergedSubworkflowRoot: Boolean = false;
-  lazy val outputIds: List[String] = operation.inputs map ( _.split('-').head + "-" + operation.rid )
+  lazy val outputIds: List[String] = operation.outputs
 
   def markAsMergedSubworkflowRoot: WorkflowNode = { _isMergedSubworkflowRoot = true; this }
   def isMergedSubworkflowRoot: Boolean = _isMergedSubworkflowRoot
+  override def toString() = s"Node[${operation.identifier}](${operation.inputs.mkString(",")})(${operation.outputs.mkString(",")})"
 
   def getResultId: String = operation.rid
   def hasOutput( uid: String ): Boolean = outputIds exists ( _.endsWith(uid) )
@@ -193,10 +194,15 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     }
   }
 
+//  def generateProduct( executor: WorkflowExecutor ): Option[WPSProcessExecuteResponse] = {
+//    val kernelExecutionResult = executeKernel( executor )
+//    if( executor.workflowCx.rootNode.isRoot ) { createResponse( kernelExecutionResult, executor ) }
+//    else { executor.workflowCx.rootNode.cacheProduct( kernelExecutionResult ); None }
+//  }
+
   def generateProduct( executor: WorkflowExecutor ): Option[WPSProcessExecuteResponse] = {
     val kernelExecutionResult = executeKernel( executor )
-    if( executor.workflowCx.rootNode.isRoot ) { createResponse( kernelExecutionResult, executor ) }
-    else { executor.workflowCx.rootNode.cacheProduct( kernelExecutionResult ); None }
+    createResponse( kernelExecutionResult, executor )
   }
 
   def executeKernel(executor: WorkflowExecutor ):  KernelExecutionResult = {
@@ -268,16 +274,10 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     workflowCx
   }
 
-  def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  QueryResultCollection  = {
-    kernelCx.profiler.profile("processInputs") ( () => {
-      processInputs( executor.rootNode, executor, kernelCx, batchIndex )
-    } )
-//    kernelCx.profiler.profile("regrid") ( () => {
-//      executor.regrid( kernelCx.addVariableRecords( executor.variableRecs ) )
-//    } )
-    kernelCx.profiler.profile("execute") ( () => {
-      executor.execute(this, kernelCx, batchIndex )
-    } )
+  def executeBatch(executor: WorkflowExecutor, initKernelCx: KernelContext, batchIndex: Int ):  QueryResultCollection  = {
+    initKernelCx.profiler.profile("processInputs") ( () => { processInputs( executor.rootNode, executor, initKernelCx, batchIndex ) } )
+    val kernelCx = initKernelCx.addVariableRecords( executor.variableRecs )
+    kernelCx.profiler.profile("execute") ( () => { executor.execute(this, kernelCx, batchIndex ) } )
   }
 
 //  def executeBatch(executor: WorkflowExecutor, kernelCx: KernelContext, batchIndex: Int ):  TimeSliceCollection  = {
@@ -326,9 +326,9 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 
 
   def stream(node: WorkflowNode, executor: WorkflowExecutor, batchIndex: Int ): Unit = {
-    val kernelContext = node.getKernelContext( executor )
-    processInputs(node, executor, kernelContext, batchIndex)
-//    executor.regrid( kernelContext.addVariableRecords( executor.variableRecs ) )
+    val initKernelContext = node.getKernelContext( executor )
+    processInputs(node, executor, initKernelContext, batchIndex)
+    val kernelContext = initKernelContext.addVariableRecords( executor.variableRecs )
     executor.streamMapReduce( node, kernelContext, executionMgr.serverContext, batchIndex )
     logger.info( s"Executed STREAM mapReduce Batch ${batchIndex.toString}" )
   }
