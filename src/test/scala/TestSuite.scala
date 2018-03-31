@@ -573,8 +573,6 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_data = getResultData( result_node )
     println( "Op Size:         " + result_data.getStorageArray.length )
     println( "Op Result:       " + result_data.getStorageArray.mkString(",") )
-//    val p = Plot().withScatter(xs, ys)
-//    draw(p, "basic-scatter", writer.FileOptions(overwrite=true))
   }
 
   test("Highpass-GISS-R1i1p1") {

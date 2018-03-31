@@ -182,15 +182,30 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
 
   override def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
-    val groupBy = context.getGroup.getOrElse( throw new Exception( "lowpass operation requires a groupBy parameter") )
-    val elemFilter = (elemId: String) => context.operation.inputs.contains( elemId )
-    val filteredRdd: RDD[CDRecord] = input.rdd.map( _.selectElements( elemFilter ) )
-    val times: Array[(Long,Long)] = filteredRdd.map( rec => ( rec.startTime, rec.endTime ) ).collect().sortBy( _._1 )
-    val groupedRDD:  RDD[CDRecord] = CDRecordRDD.reduceRddByGroup( filteredRdd, CDRecord.weightedSum( context ), "normw", groupBy ).map( _._2 )
-    val regroupedRDD:  RDD[Array[CDRecord]] = input.newData( groupedRDD.sortBy( _.startTime ) ).sliding(3,2)
-    val rename = context.operation.getRenameOp
-    val lowpass_rdd:  RDD[CDRecord] = regroupedRDD.mapPartitionsWithIndex( interpolate( regroupedRDD.getNumPartitions, times ) ).map( _.renameElements( rename ) )
-    new CDRecordRDD( lowpass_rdd, input.metadata, input.variableRecords ) join input.rdd
+    if( context.profiler.activated ) { input.exe }
+    val ( times, regroupedRDD ) =  context.profiler.profile(s"lowpass.group(${KernelContext.getProcessAddress}):${inputs.toString}")(() => {
+      val groupBy = context.getGroup.getOrElse(throw new Exception("lowpass operation requires a groupBy parameter"))
+      val elemFilter = (elemId: String) => context.operation.inputs.contains(elemId)
+      val filteredRdd: RDD[CDRecord] = input.rdd.map(_.selectElements(elemFilter))
+      val times: Array[(Long, Long)] = filteredRdd.map(rec => (rec.startTime, rec.endTime)).collect().sortBy(_._1)
+      val groupedRDD: RDD[CDRecord] = CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy).map(_._2)
+      val regrouped_rdd = input.newData(groupedRDD.sortBy(_.startTime)).sliding(3, 2)
+      if( context.profiler.activated ) { regrouped_rdd.cache; regrouped_rdd.count }
+      (times, regrouped_rdd )
+    })
+
+    val lowpassRdd:  RDD[CDRecord] = context.profiler.profile(s"lowpass.interpolate(${KernelContext.getProcessAddress}):${inputs.toString}")(() => {
+      val rename = context.operation.getRenameOp
+      val lowpass_rdd = regroupedRDD.mapPartitionsWithIndex(interpolate(regroupedRDD.getNumPartitions, times)).map(_.renameElements(rename))
+      if( context.profiler.activated ) { lowpass_rdd.cache; lowpass_rdd.count }
+      lowpass_rdd
+    })
+
+    context.profiler.profile(s"lowpass.join(${KernelContext.getProcessAddress}):${inputs.toString}")(() => {
+      val rv = new CDRecordRDD(lowpassRdd, input.metadata, input.variableRecords) join input.rdd
+      if( context.profiler.activated ) { rv.exe }
+      rv
+    })
   }
 
   override def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {
