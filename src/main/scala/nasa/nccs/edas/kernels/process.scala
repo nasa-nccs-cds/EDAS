@@ -309,7 +309,9 @@ abstract class Kernel( val options: Map[String,String] = Map.empty ) extends Log
 
   def extractRegridOperation( workflow: Workflow, operation: OperationContext ): (OperationContext, Option[OperationContext]) = {
     val config = operation.getConfiguration
-    if( config.keys.contains("grid") ) {
+    val crs = config.getOrElse("crs","")
+
+    if( config.keys.contains("grid") || crs.startsWith("~") ) {
       val opId = UID( operation.identifier.split('-').last )
       val rid = CDMSRegrid.resultId(workflow.request)
       val groupedConfig = config.groupBy { case (key, value) => CDMSRegrid.configKeys.contains(key.toLowerCase) }
@@ -768,6 +770,7 @@ object CDMSRegrid {
 }
 
 class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "Regridder", "Regrids the inputs using UVCDAT", Map( "parallelize" -> "True", "visibility" -> "public" ), false ) {
+  override def extractRegridOperation( workflow: Workflow, operation: OperationContext ): (OperationContext, Option[OperationContext]) = ( operation, None )
 
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = context.profiler.profile(s"CDMSRegridKernel.map(${KernelContext.getProcessAddress})")(() => {
     val t0 = System.nanoTime
@@ -827,7 +830,8 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
       val reprocessed_input_map = resultArrays.toMap
       logger.info("Gateway[T:%s]: Executed operation %s, time: %.2f".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9))
-      CDRecord( inputs.startTime, inputs.endTime, reprocessed_input_map ++ acceptable_array_map, inputs.metadata + ("gridspec" -> gridFile) )
+      val result_arrays = reprocessed_input_map ++ acceptable_array_map.map { case (key, value) => ( context.operation.output(key), value) }
+      CDRecord( inputs.startTime, inputs.endTime, result_arrays, inputs.metadata + ("gridspec" -> gridFile) )
     }
   })
 }

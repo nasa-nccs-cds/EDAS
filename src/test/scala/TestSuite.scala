@@ -49,14 +49,27 @@ class DefaultTestSuite extends EDASTestSuite {
     print( response.toString )
   }
 
-  test("ReanalysisEnsemble") { if(test_regrid && reanalysis_ensemble) {
+  test("ReanalysisEnsemble") { if(test_regrid && reanalysis_ensemble ) {
     print( s"Running test ReanalysisEnsemble" )
-    val JRA_input   =  s"""{"uri":"collection:/cip_jra_sample","name":"ta:v0","domain":"d0"}"""
-    val MERRA2_input = s"""{"uri":"collection:/cip_merra2_sample","name":"ta:v1","domain":"d0"}"""
+    val JRA_input   =  s"""{"uri":"collection:/cip_ecmwf_mon_1980-2015","name":"ta:v0","domain":"d0"}"""
+    val MERRA2_input = s"""{"uri":"collection:/cip_merra2_mon_1980-2015","name":"ta:v1","domain":"d0"}"""
     val datainputs =
       s"""[   variable=[$JRA_input,$MERRA2_input],
               domain=[ {"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1990-03-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":30,"system":"values"},"lon":{"start":30,"end":40,"system":"values"}} ],
               operation=[{"name":"CDSpark.filter","input":"v0","plev":"97500,87500,77500","result":"cv0"},{"name":"CDSpark.filter","input":"v1","plev":"97500,87500,77500","result":"cv1"},{"name":"CDSpark.eAve","input":"cv0,cv1","crs":"~v0"}]]""".stripMargin.replaceAll("\\s", "")
+    val result_node = executeTest(datainputs)
+    val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
+    println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
+  }}
+
+  test("RegridToTargetInput") { if( test_regrid ) {
+    print( s"Running test ReanalysisEnsemble" )
+    val JRA_input   =  s"""{"uri":"collection:/cip_ecmwf_mon_1980-2015","name":"tas:v0","domain":"d0"}"""
+    val MERRA2_input = s"""{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v1","domain":"d0"}"""
+    val datainputs =
+      s"""[   variable=[$JRA_input,$MERRA2_input],
+              domain=[ {"name":"d0","time":{"start":"1990-01-01T00:00:00Z","end":"1990-03-01T00:00:00Z","system":"values"},"lat":{"start":20,"end":30,"system":"values"},"lon":{"start":30,"end":40,"system":"values"}} ],
+              operation=[{"name":"CDSpark.eAve","input":"v0,v1","crs":"~v0"}]]""".stripMargin.replaceAll("\\s", "")
     val result_node = executeTest(datainputs)
     val result_data = CDFloatArray( getResultData( result_node ).slice(0,0,10) )
     println( " ** Op Result:       " + result_data.mkBoundedDataString( ", ", 200 ) )
