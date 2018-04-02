@@ -364,13 +364,16 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
 
   def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
+    val size0 = input.rdd.count
 //    logger.info( s" @WW@ mapRDD: op: ${context.operation.identifier}, input elems: ${input.rdd.first.elements.keys.mkString(",")}, op inputs: ${context.operation.inputs.mkString(",")}")
     if( sampleInputs ) {
       val slices = input.rdd.collect()
       logger.info( s" @S@: Kernel ${id}.map Data Input Sample: \n  @S@:   ${slices.map ( _.elements.map{ case (key,array) =>
         s" $key: [ ${ array.data.mkString(", ") } ]" }.mkString("; ")).mkString("\n  @S@:   ") }")
     }
-    input.map( map(context) )
+    val rv = input.map( map(context) )
+    logger.info( s" @SS@ mapRDD: size0: ${size0}, size1: ${rv.rdd.count}" )
+    rv
   }
 
   def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {

@@ -206,7 +206,7 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
     context.profiler.profile(s"lowpass.join(${KernelContext.getProcessAddress}):${inputs.toString}")(() => {
       val rv = new CDRecordRDD(lowpassRdd, input.metadata, input.variableRecords) join input.rdd
       if( context.profiler.activated ) { rv.exe }
-      logger.info( s"#LP# sizes: ${size0} ${size1} ${rv.rdd.count}")
+      logger.info( s" @SS@ sizes: ${size0} ${size1} ${rv.rdd.count}")
       rv
     })
   }
