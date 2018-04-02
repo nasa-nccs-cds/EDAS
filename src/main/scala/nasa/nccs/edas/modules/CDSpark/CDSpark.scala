@@ -182,6 +182,7 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
 
   override def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
+    val size0 = input.rdd.count
     if( context.profiler.activated ) { input.exe }
     val ( times, regroupedRDD ) =  context.profiler.profile(s"lowpass.group(${KernelContext.getProcessAddress}):${inputs.toString}")(() => {
       val groupBy = context.getGroup.getOrElse(throw new Exception("lowpass operation requires a groupBy parameter"))
@@ -200,10 +201,12 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
       if( context.profiler.activated ) { lowpass_rdd.cache; lowpass_rdd.count }
       lowpass_rdd
     })
+    val size1 = lowpassRdd.count
 
     context.profiler.profile(s"lowpass.join(${KernelContext.getProcessAddress}):${inputs.toString}")(() => {
       val rv = new CDRecordRDD(lowpassRdd, input.metadata, input.variableRecords) join input.rdd
       if( context.profiler.activated ) { rv.exe }
+      logger.info( s"#LP# sizes: ${size0} ${size1} ${rv.rdd.count}")
       rv
     })
   }
