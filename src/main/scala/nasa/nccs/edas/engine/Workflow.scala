@@ -194,16 +194,16 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     }
   }
 
-//  def generateProduct( executor: WorkflowExecutor ): Option[WPSProcessExecuteResponse] = {
-//    val kernelExecutionResult = executeKernel( executor )
-//    if( executor.workflowCx.rootNode.isRoot ) { createResponse( kernelExecutionResult, executor ) }
-//    else { executor.workflowCx.rootNode.cacheProduct( kernelExecutionResult ); None }
-//  }
-
   def generateProduct( executor: WorkflowExecutor ): Option[WPSProcessExecuteResponse] = {
     val kernelExecutionResult = executeKernel( executor )
-    createResponse( kernelExecutionResult, executor )
+    if( executor.workflowCx.rootNode.isRoot ) { createResponse( kernelExecutionResult, executor ) }
+    else { executor.workflowCx.rootNode.cacheProduct( kernelExecutionResult ); None }
   }
+
+//  def generateProduct( executor: WorkflowExecutor ): Option[WPSProcessExecuteResponse] = {
+//    val kernelExecutionResult = executeKernel( executor )
+//    createResponse( kernelExecutionResult, executor )
+//  }
 
   def executeKernel(executor: WorkflowExecutor ):  KernelExecutionResult = {
     val root_node = executor.rootNode
@@ -275,6 +275,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   }
 
   def executeBatch(executor: WorkflowExecutor, initKernelCx: KernelContext, batchIndex: Int ):  QueryResultCollection  = {
+    logger.info( s" @WW@: executeBatch ${initKernelCx.operation.identifier}")
     initKernelCx.profiler.profile("processInputs") ( () => { processInputs( executor.rootNode, executor, initKernelCx, batchIndex ) } )
     val kernelCx = initKernelCx.addVariableRecords( executor.variableRecs )
     kernelCx.profiler.profile("execute") ( () => { executor.execute(this, kernelCx, batchIndex ) } )
@@ -460,6 +461,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
 //  }
 
   def processInputs(node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, batchIndex: Int ) = {
+    logger.info( s" @WW@: processInputs ${kernelContext.operation.identifier}")
     assert( executor.workflowCx.inputs.nonEmpty, s"No inputs defined for operation ${kernelContext.operation.identifier}" )
     val gridRefInput: OperationDataInput =  executor.getGridRefInput.getOrElse(
       throw new Exception(s"No grid ref input found for domainRDDPartition, kernel = ${kernelContext.operation.identifier}, inputs = [${executor.workflowCx.inputs.keys.mkString(",")}}]")

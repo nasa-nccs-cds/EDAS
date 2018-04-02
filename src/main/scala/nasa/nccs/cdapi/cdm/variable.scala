@@ -123,12 +123,13 @@ class DependencyOperationInput( val inputNode: WorkflowNode, val opNode: Workflo
   def getKeyString: String =  inputNode.getNodeId + "->" + opNode.getNodeId
 
   def processInput(uid: String, workflow: Workflow, node: WorkflowNode, executor: WorkflowExecutor, kernelContext: KernelContext, gridRefInput: OperationDataInput, batchIndex: Int ) = {
-    if( !executor.contents.contains(uid) ) inputNode.getProduct match {
+    val contents = executor.contents
+    logger.info( s" @WW@ ProcessInput ${uid} for kernel ${node.getNodeId}, Vault contents: ${contents.mkString(",")}")
+    if( !contents.contains(uid) ) inputNode.getProduct match {
       case None =>
-        val vaultContents =
-        logger.info("\n\n ----------------------- NODE %s => BEGIN Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format(node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ")))
+        logger.info("\n\n @WW@ ----------------------- NODE %s => BEGIN Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format(node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ")))
         workflow.stream(inputNode, executor, batchIndex)
-        logger.info("\n\n ----------------------- NODE %s => END   Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format(node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ")))
+        logger.info("\n\n @WW@ ----------------------- NODE %s => END   Stream DEPENDENCY Node: %s, input: %s, batch = %d, rID = %s, contents = [ %s ] -------\n".format(node.getNodeId, uid, inputNode.getNodeId, batchIndex, inputNode.getResultId, executor.contents.mkString(", ")))
       case Some(results: QueryResultCollection) =>
         val opSection: Option[CDSection] = kernelContext.getDomainSections.headOption
         logger.info("\n\n ----------------------- NODE %s => Get Cached Result: %s, batch = %d, rID = %s, opSection= %s -------\n".format(node.getNodeId, inputNode.getNodeId, batchIndex, inputNode.getResultId, opSection.map(_.toString()).getOrElse("(EMPTY)")))

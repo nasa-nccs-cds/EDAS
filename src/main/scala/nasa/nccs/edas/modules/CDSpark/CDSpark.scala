@@ -618,7 +618,8 @@ class ave extends SingularRDDKernel( Map( "mapOp" -> "avew", "reduceOp" -> "avew
         }
         List( context.operation.rid -> ArraySpec(weighted_value_sum_masked.missing, weighted_value_sum_masked.shape, input_data.origin, weighted_value_sum_masked.getData, input_data.optGroup ),
               context.operation.rid + "_WEIGHTS_" -> ArraySpec(weights_sum_masked.missing, weights_sum_masked.shape, input_data.origin, weights_sum_masked.getData, input_data.optGroup ))
-      case None => throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
+      case None =>
+        throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
     })
 //    logger.info("T[%.2f] @P@ Executed Kernel %s map op, input = %s, time = %.4f s".format(t0, name,  id, (t1 - t0) ))
 //    context.addTimestamp( "Map Op complete" )

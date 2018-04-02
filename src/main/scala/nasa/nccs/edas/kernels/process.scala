@@ -364,6 +364,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
 
   def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
+    logger.info( s" @WW@ mapRDD: op: ${context.operation.identifier}, input elems: ${input.rdd.first.elements.keys.mkString(",")}, op inputs: ${context.operation.inputs.mkString(",")}")
     if( sampleInputs ) {
       val slices = input.rdd.collect()
       logger.info( s" @S@: Kernel ${id}.map Data Input Sample: \n  @S@:   ${slices.map ( _.elements.map{ case (key,array) =>
@@ -374,6 +375,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
 
   def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {
     val t0 = System.nanoTime()
+    logger.info(s" @WW@ mapReduce: ${context.operation.identifier}, inputs: ${input.rdd.first.elements.keys.mkString(",")} " )
     val mapresult: CDRecordRDD = context.profiler.profile("mapReduce.mapRDD") (() => { mapRDD(input, context) } )
     val test = mapresult.rdd.first
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
