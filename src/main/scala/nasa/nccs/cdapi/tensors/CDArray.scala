@@ -427,7 +427,7 @@ class CDFloatArray( cdIndexMap: CDIndexMap, val floatStorage: FloatBuffer, prote
         Float.NaN
     }
   }
-
+  def sortWith( op: (Float,Float) => Boolean ): CDFloatArray = CDFloatArray( cdIndexMap, getStorageArray.sortWith(op), invalid )
   def sample(size: Int): CDFloatArray = CDFloatArray(getSectionArray(size),getInvalid)
 
   def reinterp( weights: Map[Int,RemapElem] ): CDFloatArray = {

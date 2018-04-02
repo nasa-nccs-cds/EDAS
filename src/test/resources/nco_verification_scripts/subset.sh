@@ -14,6 +14,5 @@ datafile="/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1/tas_Amon_GISS-E
 
 #ncwa -O -v tas -a time -d lat,5,5 -d lon,5,10 ${datafile} ~/test/out/tsubset.nc
 
-
-ncks -O -v tas -d lat,30,30 -d lon,30,30 -d time,0,100  ${datafile} ~/test/out/subset.nc
-ncdump ~/test/out/subset.nc
+ncks -O -v tas -d lat,25,25 -d lon,20,25 -d time,45,50  ${datafile} ~/test/out/subset33.nc
+ncdump ~/test/out/subset33.nc
