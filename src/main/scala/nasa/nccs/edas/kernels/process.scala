@@ -358,7 +358,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
   }
   def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = { mapReduce(input, context, batchIndex ) }
   def isDisposable( input: OperationInput ): Boolean = input.disposable
-  def elemFilter(rid: String) = (elemId: String) => elemId.toLowerCase.startsWith( rid )
+  def elemFilter(rid: String) = (elemId: String) => elemId.toLowerCase.contains( rid )
 
   def map(context: KernelContext )( rec: CDRecord ): CDRecord
 
@@ -375,6 +375,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
   def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {
     val t0 = System.nanoTime()
     val mapresult: CDRecordRDD = context.profiler.profile("mapReduce.mapRDD") (() => { mapRDD(input, context) } )
+    val test = mapresult.rdd.first
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
     val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge || orderedReduce(context) ) } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))

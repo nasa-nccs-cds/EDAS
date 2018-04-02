@@ -963,7 +963,10 @@ class DefaultTestSuite extends EDASTestSuite {
   test("Max3") {
     // ncwa -O -v tas -d time,10,10 -d lat,30.0,40.0  -a lon -y max ${datafile} ~/test/out/maxval1.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array( 296.312, 294.3597, 293.7058, 292.8994, 291.9226 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":30,"end":40,"system":"values"},"time":{"start":10,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"x"}]]"""
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":30,"end":40,"system":"values"},"time":{"start":10,"end":10,"system":"indices"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[{"name":"CDSpark.max","input":"v1","domain":"d0","axes":"x"}]]""".stripMargin
     val result_node = executeTest(datainputs)
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkDataString(", ") )
