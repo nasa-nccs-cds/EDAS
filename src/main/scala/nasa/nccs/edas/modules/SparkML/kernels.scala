@@ -30,7 +30,6 @@ class svd extends KernelImpl {
     val topElem = topSlice.elements.head._2
     val scaler = new StandardScaler( withMean = true, withStd = true ).fit( inputVectors )
     val scaling_result: RDD[Vector] = inputVectors.map( scaler.transform )
-    logger.info( s"  ##### @SVD Input Length: ${input.rdd.count}" )
     logger.info( s"  ##### @SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}, Num input elems: ${topSlice.elements.size}" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.mean.size} means: ${scaler.mean.toArray.slice(0,32).mkString(", ")}" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.std.size} stDevs: ${scaler.std.toArray.slice(0,32).mkString(", ")}" )
