@@ -25,13 +25,12 @@ class svd extends KernelImpl {
 
   override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val t0 = System.nanoTime()
-    val elem_id = context.operation.inputs.head
-    val inputVectors = input.toVectorRDD( Seq( elem_id ) ): RDD[Vector]
+    val inputVectors = input.toVectorRDD( context.operation.inputs ): RDD[Vector]
     val topSlice: CDRecord = input.rdd.first
     val topElem = topSlice.elements.head._2
     val scaler = new StandardScaler( withMean = true, withStd = true ).fit( inputVectors )
     val scaling_result: RDD[Vector] = inputVectors.map( scaler.transform )
-    logger.info( s"  ##### @SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}" )
+    logger.info( s"  ##### @SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}, Num input elems: ${topSlice.elements.size}" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.mean.size} means: ${scaler.mean.toArray.slice(0,32).mkString(", ")}" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.std.size} stDevs: ${scaler.std.toArray.slice(0,32).mkString(", ")}" )
     scaling_result.cache()
@@ -65,19 +64,19 @@ class rescale extends KernelImpl {
   val description = "Implement Singular Value Decomposition"
 
   override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
-    val elem_id = context.operation.inputs.head
-    val inputVectors = input.toVectorRDD( Seq( elem_id ) ): RDD[Vector]
+    val inputVectors = input.toVectorRDD( context.operation.inputs ): RDD[Vector]
     val topSlice: CDRecord = input.rdd.first
     val topElem = topSlice.elements.head._2
+    val rid = context.operation.inputs.mkString("-")
     val scaler = new StandardScaler( withMean = true, withStd = true ).fit( inputVectors )
     val scaling_result: RDD[Vector] = inputVectors.map( scaler.transform )
-    logger.info( s"  ##### @SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}" )
+    logger.info( s"  ##### @SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}, Num input elems: ${topSlice.elements.size}" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.mean.size} means: ${scaler.mean.toArray.slice(0,32).mkString(", ")}" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.std.size} stDevs: ${scaler.std.toArray.slice(0,32).mkString(", ")}" )
     val results: RDD[CDRecord] = scaling_result.zip( input.rdd ).map { case ( vec, rec ) =>
       val headElem = rec.elements.values.head
       val elem = new ArraySpec( headElem.missing, headElem.shape, headElem.origin, vec.toArray.map(_.toFloat), headElem.optGroup )
-      new CDRecord( rec.startTime, rec.endTime, Map( elem_id -> elem ), rec.metadata )
+      new CDRecord( rec.startTime, rec.endTime, Map( rid -> elem ), rec.metadata )
     }
     val rv = new QueryResultCollection( results.collect, input.metadata )
     val top_array = rv.records.head.elements.head._2
