@@ -40,6 +40,7 @@ class svd extends KernelImpl {
     val svd = matrix.computeSVD( nModes, true )
     val lambdas = svd.s.toArray.mkString(",")
     val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>
+      logger.info( s"@SVD Creating V$index Array, data size = ${array.length}, input shape= [ ${topElem.shape.mkString(", ")} ]")
       s"V$index" -> new ArraySpec(topElem.missing, topElem.shape, topElem.origin, array, topElem.optGroup)
     }
     val elems = if( computeU ) {
