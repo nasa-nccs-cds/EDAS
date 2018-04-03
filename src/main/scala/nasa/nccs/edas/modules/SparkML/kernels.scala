@@ -1,4 +1,6 @@
 package nasa.nccs.edas.modules.SparkML
+import java.util
+
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.kernels.{Kernel, KernelContext, KernelImpl, KernelStatus}
 import nasa.nccs.edas.rdd.{ArraySpec, CDRecord, CDRecordRDD, QueryResultCollection}
@@ -22,15 +24,18 @@ class svd extends KernelImpl {
   val weighted: Boolean = false
   val description = "Implement Singular Value Decomposition"
   def map(context: KernelContext )( rdd: CDRecord ): CDRecord = { rdd }   // Not used-> bypassed
+  def getSelectedElemIds( rec: CDRecord, context: KernelContext ): Array[String] = rec.elements.keys.filter ( key => context.operation.inputs.exists( elem => key.split(':').last.endsWith( elem ) ) ).toArray
 
   override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val t0 = System.nanoTime()
     val inputVectors = input.toVectorRDD( context.operation.inputs ): RDD[Vector]
     val topSlice: CDRecord = input.rdd.first
     val topElem = topSlice.elements.head._2
+    val elemIds: Array[String] = getSelectedElemIds( topSlice, context )
+    val nElems = elemIds.size
     val scaler = new StandardScaler( withMean = true, withStd = true ).fit( inputVectors )
     val scaling_result: RDD[Vector] = inputVectors.map( scaler.transform )
-    logger.info( s"  ##### @SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}, Num input elems: ${topSlice.elements.size}" )
+    logger.info( s"  ##### @SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}, Num input elems: $nElems" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.mean.size} means: ${scaler.mean.toArray.slice(0,32).mkString(", ")}" )
     logger.info( s"  ##### @SVD Rescale inputs with ${scaler.std.size} stDevs: ${scaler.std.toArray.slice(0,32).mkString(", ")}" )
     scaling_result.cache()
@@ -39,9 +44,13 @@ class svd extends KernelImpl {
     val computeU: Boolean = context.operation.getConfParm("compu").fold( false )( _.toBoolean )
     val svd = matrix.computeSVD( nModes, true )
     val lambdas = svd.s.toArray.mkString(",")
-    val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex map { case (array, index) =>
-      logger.info( s"@SVD Creating V$index Array, data size = ${array.length}, input shape= [ ${topElem.shape.mkString(", ")} ]")
-      s"V$index" -> new ArraySpec(topElem.missing, topElem.shape, topElem.origin, array, topElem.optGroup)
+    val array_size = topElem.shape.product
+    val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex flatMap { case (array, index) =>
+      logger.info( s"@SVD Creating V$index Array, data size = ${array.length}, array size = ${array_size}, input shape= [ ${topElem.shape.mkString(", ")} ]")
+      for( iArray <- 0 until nElems; start = array_size*iArray ) yield {
+        val subArray = util.Arrays.copyOfRange(array, start, start + array_size )
+        s"V-${elemIds(iArray)}-$index" -> new ArraySpec(topElem.missing, topElem.shape, topElem.origin, subArray, topElem.optGroup)
+      }
     }
     val elems = if( computeU ) {
       val Uelems: Seq[(String, ArraySpec)] = CDRecord.rowMatrixCols2Arrays( svd.U ).zipWithIndex.map { case (udata, index) =>
