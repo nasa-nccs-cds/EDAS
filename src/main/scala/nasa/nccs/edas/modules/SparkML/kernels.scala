@@ -24,11 +24,11 @@ class svd extends KernelImpl {
   val weighted: Boolean = false
   val description = "Implement Singular Value Decomposition"
   def map(context: KernelContext )( rdd: CDRecord ): CDRecord = { rdd }   // Not used-> bypassed
-  def getSelectedElemIds( rec: CDRecord, context: KernelContext ): Array[String] = rec.elements.keys.filter ( key => context.operation.inputs.exists( elem => key.split(':').last.endsWith( elem ) ) ).toArray
+  def getSelectedElemIds( rec: CDRecord, context: KernelContext ): Array[String] = rec.elements.keys.filter ( key => context.operation.inputs.exists( elem => key.split(':').last.endsWith( elem ) ) ).map(_.split('-').head).toArray
 
   override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val t0 = System.nanoTime()
-    val inputVectors = input.toVectorRDD( context.operation.inputs ): RDD[Vector]
+    val inputVectors: RDD[Vector] = input.toVectorRDD( context.operation.inputs )
     val topSlice: CDRecord = input.rdd.first
     val topElem = topSlice.elements.head._2
     val elemIds: Array[String] = getSelectedElemIds( topSlice, context )

@@ -59,7 +59,7 @@ class CDArray:
     def getGrid(self): pass
 
     @abstractmethod
-    def subsetAxes(self, dimensions, gridfile, origin, shape ): pass
+    def subsetAxes(self, dimensions, gridfile, origin, shape, latBounds, lonBounds ): pass
 
     @abstractmethod
     def toBytes( self, dtype ): pass
@@ -207,29 +207,34 @@ class npArray(CDArray):
             baseGrid = gridfile.grids.values()[0]
             (latInterval, lonInterval) = (self.getAxisSection('y'), self.getAxisSection('x'))
             grid = baseGrid if ((latInterval is None) or (lonInterval is None)) else baseGrid.subGrid(latInterval, lonInterval)
-            partition_axes = self.subsetAxes(self.dimensions, gridfile, self.origin, self.shape)
-
+            partition_axes = self.subsetAxes( self.dimensions, gridfile, self.origin, self.shape, latInterval, lonInterval )
 
             self.logger.info( "Creating Variable {0}, gridfile = {1}, data shape = [ {2} ], self.shape = [ {3} ], grid shape = [ {4} ], roi = {5}, baseGrid shape = [ {6} ], latInterval = {7}, lonInterval = {8}".format(
-                self.name, gridFilePath, shape(self.array), shape(self), shape(grid), str(self.roi), shape(baseGrid), str(latInterval), str(lonInterval) ) )
+                self.name, gridFilePath, a2s(self.array.shape), a2s(self.shape), a2s(grid.shape), str(self.roi), a2s(baseGrid.shape), str(latInterval), str(lonInterval) ) )
             self.variable = cdms2.createVariable( self.array, typecode=None, copy=0, savespace=0, mask=None, fill_value=var.getMissing(), missing_value=var.getMissing(),
                                             grid=grid, axes=partition_axes, attributes=self.metadata, id=self.collection + "-" + self.name)
             self.variable.createattribute("gridfile", self.gridFile)
             self.variable.createattribute("origin", mParse.ia2s(self.origin))
+            for paxis in partition_axes:
+                self.logger.info( " Partition axis: {0}, startVal: {1}".format( paxis.axis, paxis[0] ) )
+            self.logger.info( " --Grid-> Lat startVal: " + str(grid.getLatitude()[0]) )
+            for raxis in self.variable.getAxisList():
+                self.logger.info( " Regrid axis: {0}, startVal: {1}".format( raxis.axis, raxis[0] ) )
             t1 = time.time()
             self.logger.info(" >> Created CDMS Variable: {0} ({1}) in time {2}, gridFile = {3}".format(self.variable.id, self.name, (t1 - t0), self.gridFile))
         return self.variable
 
-    def subsetAxes( self, dimensions, gridfile, origin, shape ):
+    def subsetAxes( self, dimensions, gridfile, origin, shape, latBounds, lonBounds ):
         subAxes = []
         try:
             for index in range( len(dimensions) ):
-                start = origin[index]
                 length = shape[index]
                 dim = dimensions[index]
                 axis = gridfile.axes.get(dim)
-                subAxes.append( axis.subAxis( start, start + length ) )
-                self.logger.info( " >> Axis: {0}, length: {1} ".format( dim, length ) )
+                start = lonBounds[0] if( axis.axis == 'X' ) else latBounds[0] if( axis.axis == 'Y' ) else origin[index]
+                subAxis = axis.subAxis( start, start + length )
+                subAxes.append( subAxis )
+                self.logger.info( " >> Axis {0}: {1}, length: {2}, start: {3}, startVal: {4} ".format( axis.axis, dim, length, start, subAxis[0] ) )
         except Exception as err:
             self.logger.info( "\n-------------------------------\nError subsetting Axes: {0}\n{1}-------------------------------\n".format(err, traceback.format_exc() ) )
             raise err
@@ -291,14 +296,14 @@ class cdmsArray(CDArray):
             self.logger.info( " latInterval {0} --- lonInterval {1} ".format( str(latInterval), str(lonInterval) ) )
             return self.variable.getGrid().subGrid( latInterval, lonInterval )
 
-    def subsetAxes( self, dimensions, gridfile, origin, shape ):
+    def subsetAxes( self, dimensions, gridfile, origin, shape, latBounds, lonBounds ):
         subAxes = []
         try:
             for index in range( len(dimensions) ):
-                start = origin[index]
                 length = shape[index]
                 dim = dimensions[index]
                 axis = gridfile.axes.get(dim)
+                start = lonBounds[0] if (axis.axis == 'X') else latBounds[0] if (axis.axis == 'Y') else origin[index]
                 subAxes.append( axis.subAxis( start, start + length ) )
                 self.logger.info( " >> Axis: {0}, length: {1} ".format( dim, length ) )
         except Exception as err:

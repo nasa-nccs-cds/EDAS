@@ -69,28 +69,34 @@ class Kernel:
         else: return tuple( [ int(item) for item in axes ] )
 
     def saveGridFile( self, resultId, variable  ):
-        grid = variable.getGrid()
-        outpath = None
-        if not (grid is None):
-            axes = variable.getAxisList()
-            outdir = os.path.dirname( variable.gridfile )
-            outpath = os.path.join(outdir, resultId + ".nc" )
-            newDataset = cdms2.createDataset( outpath )
-            for axis in axes:
-                if axis.isTime:
-                    pass
-                else:
-                    newDataset.copyAxis(axis)
-            newDataset.copyGrid(grid)
-            newDataset.close()
-            self.logger.info( "Saved grid file: {0}".format( outpath ) )
+        outdir = os.path.dirname(variable.gridfile)
+        outpath = os.path.join(outdir, resultId + ".nc")
+        if not os.path.isfile(outpath):
+            try:
+                newDataset = cdms2.createDataset(outpath)
+                grid = variable.getGrid()
+                if not (grid is None):
+                    axes = variable.getAxisList()
+                    axis_keys = [ axis.axis for axis in axes ]
+                    self.logger.info(" #SGF Copying axes: {0}".format( str(axis_keys) ))
+                    for axis in axes:
+                        if axis.isTime():
+                            pass
+                        else:
+                            self.logger.info( "  #SGF axis: {0}, startVal: {1}".format( axis.axis, axis[0] ) )
+                            newDataset.copyAxis(axis)
+                    newDataset.copyGrid(grid)
+                    newDataset.close()
+                    self.logger.info( " #SGF saved file: {0}".format( outpath ) )
+            except Exception as err:
+                self.logger.info( "  #SGF Can't create grid file " + outpath + ": " + str(err) )
         return outpath
 
 class CDMSKernel(Kernel):
 
-    def createResult(self, result_var, input, task ):
+    def createResult(self, rid, result_var, input, task ):
         rv = None
-        result_var.id = result_var.id  + "-" + task.rId
+        result_var.id = result_var.id  + "-" + rid
         gridFilePath = self.saveGridFile( result_var.id, result_var )
         varmd = { "origin": input.origin, "worker": socket.gethostname() }
         if( gridFilePath ): varmd["gridfile"] = gridFilePath

@@ -39,10 +39,12 @@ class RegridKernel(CDMSKernel):
         res = sa2f( self.getListParm( mdata, "res" ) )
         shape = sa2i( self.getListParm( mdata, "shape" ) )
         gridSection = str( mdata.get('gridSection',"") )
+        latStart = ingrid.getLatitude()[0]
+        lonStart = ingrid.getLongitude()[0]
         inlatBounds, inlonBounds = ingrid.getBounds()
         self.logger.info("\n Execute REGRID -> " + gridType + ", grid section: '" + str(gridSection) + "' with metadata: " + str(mdata) + "\n")
-      #  self.logger.info(" >> in LAT Bounds shape: " + str(inlatBounds.shape) + ", values: " + str(inlatBounds))
-      #  self.logger.info(" >> in LON Bounds shape: " + str(inlonBounds.shape) + ", values: " + str(inlonBounds))
+#        self.logger.info(" #RGA  >> in LAT Bounds shape: " + str(inlatBounds.shape) + ", values: " + str(inlatBounds))
+#        self.logger.info(" #RGA  >> in LON Bounds shape: " + str(inlonBounds.shape) + ", values: " + str(inlonBounds))
         toGrid = None
         if ("gaussian" in gridType):
             toGrid = cdms2.createGaussianGrid(shape[0])
@@ -51,7 +53,7 @@ class RegridKernel(CDMSKernel):
             #     (bounds0, bounds1) = self.getAxisBounds(gridSection)
             #     toGrid = toGrid.subGrid(bounds0, bounds1)
         elif ("uniform" in gridType):
-            origin = sa2f(self.getListParm(mdata, "origin", "-90,0"))
+            origin = sa2f(self.getListParm(mdata, "origin", "{0},{1}".format(latStart,lonStart)))
             if (shape):
                 assert len(shape) > 1, "Shape must have two dimensions: " + str(shape)
                 assert len(origin) > 1, "Origin must have two dimensions: " + str(origin)
@@ -69,7 +71,7 @@ class RegridKernel(CDMSKernel):
             if( ( outlatBounds0[0] < inlatBounds0[0] ) and ( outlatBounds0[1] > inlatBounds0[0] ) ): new_origin[0] = origin[0] + (inlatBounds0[0]-outlatBounds0[0])
             if( ( outlonBounds0[0] < inlonBounds0[0] ) and ( outlonBounds0[1] > inlonBounds0[0] ) ): new_origin[1] = origin[1] + (inlonBounds0[0]-outlonBounds0[0])
             if( cmp(new_origin,origin) ):
-                self.logger.info("Re-create uniform Grid, new origin = " + str(new_origin) + " old bounds, lat = " + str( outlatBounds0 ) + ", lon = " + str( outlonBounds0 ))
+                self.logger.info("#RGA Re-create uniform Grid, new origin = " + str(new_origin) + " old bounds, lat = " + str( outlatBounds0 ) + ", lon = " + str( outlonBounds0 ))
                 toGrid = cdms2.createUniformGrid(new_origin[0], shape[0], res[0], new_origin[1], shape[1], res[1])
             self.logger.info("createUniformGrid")
         elif( target ):
@@ -104,6 +106,8 @@ class RegridKernel(CDMSKernel):
             mdata = task.metadata;     """:type : dict[str,str] """
             regridTool = str(mdata.get("regridTool", "esmf"))
             method = str( mdata.get("method","linear") ).lower()
+            mdata_keys = mdata.keys()
+            jobId = str( mdata.get( 'jobId', task.rId ) )
 
             for input_id in task.inputs:
                 vid = input_id.split('-')[0]
@@ -111,7 +115,7 @@ class RegridKernel(CDMSKernel):
                 if( _input is None ):
                     raise Exception(" Can't find variable id {0} ({1}) in inputs {2} ".format( vid, input_id, str( _inputs.keys() ) ))
                 else:
-                    self.logger.info( "Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}".format( vid, _input.name, _input.collection, _input.gridFile ) )
+                    self.logger.info( "Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}, mdata: {4}".format( vid, _input.name, _input.collection, _input.gridFile, mdata_keys ) )
                     variable = _input.getVariable()
                     ingrid = _input.getGrid()
 #                    self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
@@ -123,9 +127,18 @@ class RegridKernel(CDMSKernel):
                             self.logger.info( " >> Input Variable Shape: {0}, Grid Shape: {1}, Regrid Method: {2}, Grid Type: {3} ".format( str(variable.shape), str([len(ingrid.getLatitude()),len(ingrid.getLongitude())] ), method, toGrid.getType() ))
                         tr0 = time.time()
                         result_var = variable.regrid(toGrid, regridTool=regridTool, regridMethod=method)
+
+                        for iaxis in variable.getAxisList():
+                            self.logger.info(" #RGA Input axis: {0}, startVal: {1}".format(iaxis.axis, iaxis[0]))
+
+                        for raxis in result_var.getAxisList():
+                            self.logger.info(" #RGA Regrid axis: {0}, startVal: {1}".format(raxis.axis, raxis[0]))
+
+        #                self.logger.info(" #RGA toGrid Latitude startVal: " + toGrid.getLatitude()[0] )
+
                         tr1 = time.time()
                         self.logger.info( " >> Gridded Data Sample ( variable.regrid op time = {0} ): [ {1} ]".format(  (tr1 - tr0), ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
-                        results.append( self.createResult( result_var, _input, task ) )
+                        results.append( self.createResult( jobId, result_var, _input, task ) )
             t1 = time.time()
             self.logger.info(" @RRR@ Completed regrid operation for input variables: {0} in time {1}".format( str( _inputs.keys() ), (t1 - t0)))
     #        log_file.close()
@@ -140,6 +153,7 @@ class AverageKernel(CDMSKernel):
     def executeOperation(self, task, _input):
         variable = _input.getVariable()
         axis = task.metadata.get("axis","xy")
+        jobId = str( task.metadata.get('jobId', task.rId) )
         #        weights = task.metadata.get( "weights", "" ).split(",")
         #        if weights == [""]: weights = [ ("generate" if( axis == 'y' ) else "equal") for axis in axes ]
         weights = task.metadata.get("weights","generate").split(",")
@@ -147,5 +161,5 @@ class AverageKernel(CDMSKernel):
         action = task.metadata.get("action","average")
         returned = 0
         result_var = cdutil.averager( variable, axis=axis, weights=weights, action=action, returned=returned )
-        rv = self.createResult( result_var, _input, task )
+        rv = self.createResult( jobId, result_var, _input, task )
         return rv

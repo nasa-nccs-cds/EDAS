@@ -88,6 +88,7 @@ class AverageKernel(CDMSKernel):
         self.logger.info( "Executing AverageKernel, input metadata = " + str(_input.metadata) )
         dset_address = _input.metadata.get("uri", _input.metadata.get("dataPath") )
         vname = _input.metadata.get("name")
+        jobId = str(task.metadata.get('jobId', task.rId))
         dset = cdms2.open( dset_address )
         selector = _input.getSelector( dset[vname] )
         self.logger.info( "exec *EXT* AverageKernel, selector: " + str( selector ) )
@@ -101,7 +102,7 @@ class AverageKernel(CDMSKernel):
         returned = 0
         result_var = cdutil.averager( variable, axis=axes, weights=weights, action=action, returned=returned )
         self.logger.info( "Computed result, input shape = " + str(variable.shape) + ", output shape = " + str(result_var.shape))
-        rv = self.createResult( result_var, _input, task )
+        rv = self.createResult( jobId, result_var, _input, task )
         self.logger.info( "Result data, shape = " + str(result_var.shape) + ", data = " + np.array_str( rv.array() )  )
         return rv
 
@@ -114,6 +115,7 @@ class ZonalAverageDemo(CDMSKernel):
     def executeOperation(self, task, _input):
         self.logger.info( "Executing AverageKernel, input metadata = " + str(_input.metadata) )
         dset_address = _input.metadata.get("uri", _input.metadata.get("dataPath") )
+        jobId = str(task.metadata.get('jobId', task.rId))
         vname = _input.metadata.get("name")
         dset = cdms2.open( dset_address )
         selector = _input.getSelector( dset[vname] )
@@ -125,4 +127,4 @@ class ZonalAverageDemo(CDMSKernel):
         djfclimatology = cdutil.times.DJF.climatology(variable)
         zonalAve = cdutil.averager( djfclimatology, axis=axisIndex, weights='equal' )
 
-        return self.createResult( zonalAve, _input, task )
+        return self.createResult( jobId, zonalAve, _input, task )
