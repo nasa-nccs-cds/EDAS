@@ -15,6 +15,36 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+interface OnHeartbeatFailureListener {
+    void onHeartbeatFailure();
+}
+
+class HeartbeatManager extends Thread {
+    Long heartbeatTime = 0L;
+    Long maxHeartbeatPeriod = null;
+    Boolean active = true;
+    OnHeartbeatFailureListener listener = null;
+
+    public void processHeartbeat() { heartbeatTime =  Calendar.getInstance().getTimeInMillis(); }
+    public void term() { active = false; }
+
+    public HeartbeatManager( int maxHeartbeatPeriodSecs, OnHeartbeatFailureListener hbfListener ) {
+        maxHeartbeatPeriod = maxHeartbeatPeriodSecs * 1000L;
+        listener = hbfListener;
+    }
+    public void run() {
+        try {
+            while (active) {
+                Long currentTime = Calendar.getInstance().getTimeInMillis();
+                if ((currentTime - heartbeatTime) > maxHeartbeatPeriod) {
+                    listener.onHeartbeatFailure();
+                }
+                Thread.sleep(2000);
+            }
+        } catch  ( Exception ex ) { return; }
+    }
+}
+
 public class ResponseManager extends Thread {
     String socket_address = "";
     String client_id = "";
@@ -27,9 +57,19 @@ public class ResponseManager extends Thread {
     String cacheDir = null;
     String publishDir = null;
     String latest_result = "";
+    HeartbeatManager heartbeatManager = null;
+    int maxHeartbeatPeriodSecs = 0;
     SimpleDateFormat timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy");
     protected Logger logger = EDASLogManager.getCurrentLogger();
     protected CleanupManager cleanupManager = new CleanupManager();
+
+    class HeartbeatFailureListener implements OnHeartbeatFailureListener {
+        @Override public void onHeartbeatFailure()  { processHeartbeatFailure(); }
+    }
+
+    public void processHeartbeatFailure( ) {
+        logger.error("Server Heartbeat Failure" );
+    }
 
     public ResponseManager( ZMQ.Context _zmqContext, String _socket_address, String _client_id, Map<String,String> configuration ) {
         socket_address = _socket_address;
@@ -50,6 +90,7 @@ public class ResponseManager extends Thread {
         for(int i = 0; i< subdirs.length; i++){ cleanupManager.addFileCleanupTask( subdirs[i].getAbsolutePath(), 2.0f, true, ".*" ); }
         Path log_path = fileSystems.getPath( "/tmp", System.getProperty("user.name"), "logs" );
         cleanupManager.addFileCleanupTask( log_path.toString(), 2.0f, true, ".*" );
+
     }
 
     public File[] getDirs( String baseDir ) {
@@ -57,6 +98,14 @@ public class ResponseManager extends Thread {
             @Override
             public boolean accept(File file) { return file.isDirectory(); }
         });
+    }
+
+    public void processHeartbeat() {
+        if( heartbeatManager == null ) {
+            heartbeatManager = new HeartbeatManager( maxHeartbeatPeriodSecs, new HeartbeatFailureListener() );
+            heartbeatManager.start();
+        }
+        heartbeatManager.processHeartbeat();
     }
 
     public void setFilePermissions( Path directory, String perms ) {
@@ -112,7 +161,10 @@ public class ResponseManager extends Thread {
         }
     }
 
-    public void term() { active = false; }
+    public void term() {
+        if( heartbeatManager != null ) { heartbeatManager.term(); }
+        active = false;
+    }
 
     public String getMessageField( String header, int index) {
         String[] toks = header.split("[|]");
@@ -147,6 +199,8 @@ public class ResponseManager extends Thread {
                 cacheResult(rId, toks[2]);
                 String currentTime = timeFormat.format( Calendar.getInstance().getTime() );
                 logger.info(String.format("Received error[%s] (%s): %s", rId, currentTime, response ) );
+            } else if ( type.equals("heartbeat") ) {
+                if( maxHeartbeatPeriodSecs > 0 ) { processHeartbeat(); }
             } else {
                 logger.error(String.format("EDASPortal.ResponseThread-> Received unrecognized message type: %s",type));
             }
