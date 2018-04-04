@@ -15,30 +15,27 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-interface OnHeartbeatFailureListener {
-    void onHeartbeatFailure();
-}
-
 class HeartbeatManager extends Thread {
-    Long heartbeatTime = 0L;
+    enum SStatus { ALIVE, DEAD }
+    Long heartbeatTime = null;
     Long maxHeartbeatPeriod = null;
     Boolean active = true;
-    OnHeartbeatFailureListener listener = null;
+    SStatus serverStatus = SStatus.ALIVE;
 
     public void processHeartbeat() { heartbeatTime =  Calendar.getInstance().getTimeInMillis(); }
     public void term() { active = false; }
+    public boolean serverIsDown( ) { return ( serverStatus == SStatus.DEAD ); }
 
-    public HeartbeatManager( int maxHeartbeatPeriodSecs, OnHeartbeatFailureListener hbfListener ) {
+    public HeartbeatManager( int maxHeartbeatPeriodSecs ) {
         maxHeartbeatPeriod = maxHeartbeatPeriodSecs * 1000L;
-        listener = hbfListener;
+        processHeartbeat();
     }
     public void run() {
         try {
             while (active) {
                 Long currentTime = Calendar.getInstance().getTimeInMillis();
-                if ((currentTime - heartbeatTime) > maxHeartbeatPeriod) {
-                    listener.onHeartbeatFailure();
-                }
+                if ((currentTime - heartbeatTime) > maxHeartbeatPeriod) { serverStatus = SStatus.DEAD; }
+                else                                                    { serverStatus = SStatus.ALIVE; }
                 Thread.sleep(2000);
             }
         } catch  ( Exception ex ) { return; }
@@ -58,18 +55,12 @@ public class ResponseManager extends Thread {
     String publishDir = null;
     String latest_result = "";
     HeartbeatManager heartbeatManager = null;
-    int maxHeartbeatPeriodSecs = 0;
+    int maxHeartbeatPeriodSecs = 30;
     SimpleDateFormat timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy");
     protected Logger logger = EDASLogManager.getCurrentLogger();
     protected CleanupManager cleanupManager = new CleanupManager();
 
-    class HeartbeatFailureListener implements OnHeartbeatFailureListener {
-        @Override public void onHeartbeatFailure()  { processHeartbeatFailure(); }
-    }
-
-    public void processHeartbeatFailure( ) {
-        logger.error("Server Heartbeat Failure" );
-    }
+    public boolean serverIsDown( ) { return heartbeatManager.serverIsDown(); }
 
     public ResponseManager( ZMQ.Context _zmqContext, String _socket_address, String _client_id, Map<String,String> configuration ) {
         socket_address = _socket_address;
@@ -101,11 +92,13 @@ public class ResponseManager extends Thread {
     }
 
     public void processHeartbeat() {
-        if( heartbeatManager == null ) {
-            heartbeatManager = new HeartbeatManager( maxHeartbeatPeriodSecs, new HeartbeatFailureListener() );
-            heartbeatManager.start();
+        if( maxHeartbeatPeriodSecs > 0 ) {
+            if (heartbeatManager == null) {
+                heartbeatManager = new HeartbeatManager(maxHeartbeatPeriodSecs);
+                heartbeatManager.start();
+            }
+            heartbeatManager.processHeartbeat();
         }
-        heartbeatManager.processHeartbeat();
     }
 
     public void setFilePermissions( Path directory, String perms ) {
@@ -177,6 +170,7 @@ public class ResponseManager extends Thread {
             String[] toks = response.split("[!]");
             String rId = toks[0];
             String type = toks[1];
+            processHeartbeat();
             if ( type.equals("array") ) {
                 String header = toks[2];
                 byte[] data = socket.recv(0);
@@ -199,12 +193,9 @@ public class ResponseManager extends Thread {
                 cacheResult(rId, toks[2]);
                 String currentTime = timeFormat.format( Calendar.getInstance().getTime() );
                 logger.info(String.format("Received error[%s] (%s): %s", rId, currentTime, response ) );
-            } else if ( type.equals("heartbeat") ) {
-                if( maxHeartbeatPeriodSecs > 0 ) { processHeartbeat(); }
-            } else {
+            }  else {
                 logger.error(String.format("EDASPortal.ResponseThread-> Received unrecognized message type: %s",type));
             }
-
         } catch( Exception err ) {
             logger.error(String.format("EDAS error: %s\n%s\n", err, ExceptionUtils.getStackTrace(err) ) );
         }

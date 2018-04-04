@@ -32,6 +32,7 @@ trait GenericProcessManager {
 //  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String]
   def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
+  def serverIsDown: Boolean
   def term();
 }
 
@@ -41,6 +42,7 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
 
   def alloc = if( _apiManagerOpt.isEmpty ) { _apiManagerOpt = Some( new APIManager( serverConfiguration ) ) }
   def apiManager: APIManager = { alloc; _apiManagerOpt.get }
+  def serverIsDown: Boolean = { false; }
 
   def unacceptable(msg: String): Unit = {
     logger.error(msg)
@@ -110,6 +112,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     response_manager.term()
     portal.shutdown()
   }
+  def serverIsDown: Boolean = { response_manager.serverIsDown }
 
   def unacceptable(msg: String) = {
     logger.error(msg)
