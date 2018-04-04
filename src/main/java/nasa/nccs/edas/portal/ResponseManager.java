@@ -15,30 +15,17 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-class HeartbeatManager extends Thread {
-    enum SStatus { ALIVE, DEAD }
+class HeartbeatManager {
     Long heartbeatTime = null;
-    Long maxHeartbeatPeriod = null;
-    Boolean active = true;
-    SStatus serverStatus = SStatus.ALIVE;
+    Long maxHeartbeatPeriod = 30 * 1000L;
+
+    public HeartbeatManager() { processHeartbeat(); }
 
     public void processHeartbeat() { heartbeatTime =  Calendar.getInstance().getTimeInMillis(); }
-    public void term() { active = false; }
-    public boolean serverIsDown( ) { return ( serverStatus == SStatus.DEAD ); }
 
-    public HeartbeatManager( int maxHeartbeatPeriodSecs ) {
-        maxHeartbeatPeriod = maxHeartbeatPeriodSecs * 1000L;
-        processHeartbeat();
-    }
-    public void run() {
-        try {
-            while (active) {
-                Long currentTime = Calendar.getInstance().getTimeInMillis();
-                if ((currentTime - heartbeatTime) > maxHeartbeatPeriod) { serverStatus = SStatus.DEAD; }
-                else                                                    { serverStatus = SStatus.ALIVE; }
-                Thread.sleep(2000);
-            }
-        } catch  ( Exception ex ) { return; }
+    public boolean serverIsDown() {
+        Long currentTime = Calendar.getInstance().getTimeInMillis();
+        return ( (currentTime - heartbeatTime) > maxHeartbeatPeriod );
     }
 }
 
@@ -55,12 +42,13 @@ public class ResponseManager extends Thread {
     String publishDir = null;
     String latest_result = "";
     HeartbeatManager heartbeatManager = null;
-    int maxHeartbeatPeriodSecs = 30;
     SimpleDateFormat timeFormat = new SimpleDateFormat("HH-mm-ss MM-dd-yyyy");
     protected Logger logger = EDASLogManager.getCurrentLogger();
     protected CleanupManager cleanupManager = new CleanupManager();
 
-    public boolean serverIsDown( ) { return heartbeatManager.serverIsDown(); }
+    public boolean serverIsDown( ) {
+        if ( heartbeatManager == null ) { return false; } else { return heartbeatManager.serverIsDown(); }
+    }
 
     public ResponseManager( ZMQ.Context _zmqContext, String _socket_address, String _client_id, Map<String,String> configuration ) {
         socket_address = _socket_address;
@@ -92,13 +80,8 @@ public class ResponseManager extends Thread {
     }
 
     public void processHeartbeat() {
-        if( maxHeartbeatPeriodSecs > 0 ) {
-            if (heartbeatManager == null) {
-                heartbeatManager = new HeartbeatManager(maxHeartbeatPeriodSecs);
-                heartbeatManager.start();
-            }
-            heartbeatManager.processHeartbeat();
-        }
+        if (heartbeatManager == null) { heartbeatManager = new HeartbeatManager(); }
+        heartbeatManager.processHeartbeat();
     }
 
     public void setFilePermissions( Path directory, String perms ) {
@@ -155,7 +138,6 @@ public class ResponseManager extends Thread {
     }
 
     public void term() {
-        if( heartbeatManager != null ) { heartbeatManager.term(); }
         active = false;
     }
 
