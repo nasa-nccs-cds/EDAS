@@ -224,9 +224,9 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
     val arrays: Iterable[Array[Float]] = selectedElems.values.map( _.data )
     Vectors.dense( concat( arrays.toSeq ).map(_.toDouble) )
   }
-  def partitionByShape: Iterable[CDRecord] = {
-    val groupedElems = elements.groupBy { case (id,array) => array.shape }
-    groupedElems.values.map( elems => new CDRecord(startTime, endTime, elems, metadata ) )
+  def partitionByShape: Map[String,CDRecord] = {
+    val groupedElems = elements.groupBy { case (id,array) => array.shape.mkString(",") }
+    groupedElems.mapValues( elems => new CDRecord(startTime, endTime, elems, metadata ) )
   }
   def shiftTime( startTime: Long, endTime: Long ) = new CDRecord( startTime, endTime, elements, metadata )
   def release( keys: Iterable[String] ): CDRecord = { new CDRecord(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
@@ -238,6 +238,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def filterElements( id: String ): Array[(String,ArraySpec)] =  elements filter { case (key,value) => key.split(':').last.endsWith(id) } toArray
   def element( id: String ): Option[ArraySpec] =  elements find { case (key,value) => key.split(':').last.equals(id) } map ( _._2 )
+  def signature = elements.keys.mkString("-")
   def isEmpty = elements.isEmpty
   def findElements( id: String ): Iterable[ArraySpec] = ( elements filter { case (key,array) => key.split(':').last.equals(id) } ) values
   def contains( other_startTime: Long ): Boolean = {

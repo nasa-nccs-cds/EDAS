@@ -160,9 +160,22 @@ object EDASExecutionManager extends Loggable {
   def saveResultToFile(executor: WorkflowExecutor, result: QueryResultCollection, dsetMetadata: List[nc2.Attribute] = List.empty[nc2.Attribute] ): Iterable[String] = {
     if( result.records.isEmpty ) { return Iterable.empty }
     val merged_record: CDRecord = result.concatSlices.records.head
-    merged_record.partitionByShape.map ( record =>
-      saveResultToFile( executor, record, result.getMetadata,  dsetMetadata )
-    )
+    val partitioned_records = merged_record.partitionByShape
+    partitioned_records.map { case (shape, record) =>
+      saveResultToFile(executor, record, result.getMetadata, dsetMetadata)
+    }
+  }
+  def ex( msg: String ) = throw new Exception( msg )
+
+  def getAxisSize( shape: Array[Int], axis: String ): Int = {
+    val axisIndex = axis match {
+      case "X" => if( shape.length == 3 ) { 2 } else { 3 }
+      case "T" => 0
+      case "Z" => if( shape.length == 3 ) { ex("Illegal Z axis" ) } else { 1 }
+      case "Y" => if( shape.length == 3 ) { 1 } else { 2 }
+      case x =>  ex("Unrecognized axis: " + x )
+    }
+    shape(axisIndex)
   }
 
 //  def generateCoordValues( newRange: ma2.Range, size: Int  ): ma2.Array = {
@@ -171,54 +184,37 @@ object EDASExecutionManager extends Loggable {
 
   def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute]  ): String = {
     val head_elem: ArraySpec = slice.elements.values.head
-    val resultId: String = executor.requestCx.jobId
+    val resultId: String = executor.requestCx.jobId + "-" + slice.elements.keys.head
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
-    val resultFile = Kernel.getResultFile(resultId, true)
+    val resultFile = Kernel.getResultFile( resultId, true )
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
     val path = resultFile.getAbsolutePath
     var optGridDset: Option[NetcdfDataset] = None
     var originalDataset: Option[NetcdfDataset] = None
     try {
       val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
-      val nTimeSteps = head_elem.shape(0)
-      val timeValues: IndexedSeq[Double] = generateRange( slice.startTime , slice.endTime, nTimeSteps )
-      val timeUnits: String = "minutes since 1970-01-01T00:00:00Z" // EDTime.units
       val shape: Array[Int] = head_elem.shape
+      val timeValues: IndexedSeq[Double] = generateRange( slice.startTime , slice.endTime, shape(0) )
+      val timeUnits: String = "minutes since 1970-01-01T00:00:00Z" // EDTime.units
       val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
       val targetGrid: TargetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
       originalDataset = Some( targetGrid.grid.grid.getGridDataset(false) )
-      val ( coordAxes: List[CoordinateAxis], dims: IndexedSeq[nc2.Dimension]) = gridFileOpt match {
+      val dimsMap: Map[String,nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => {
+        val axisSpec = targetGrid.grid.getAxisSpec(idim)
+        axisSpec.coordAxis.getAxisType.getCFAxisName -> writer.addDimension(null, axisSpec.getAxisName, shape(idim))
+      }).toMap
+      val gblTimeCoordAxis = originalDataset.flatMap( dset => CDGrid.getTimeAxis(dset)).getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+      val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
+      val coordAxes: List[CoordinateAxis] = gridFileOpt match {
         case Some( gridFilePath ) =>
           val gridDSet = NetcdfDataset.openDataset(gridFilePath)
-          val coordAxes: List[CoordinateAxis] = gridDSet.getCoordinateAxes.toList
-          val space_dims: IndexedSeq[nc2.Dimension] = gridDSet.getDimensions.toIndexedSeq
-          val gblTimeCoordAxis = originalDataset.flatMap( dset => CDGrid.getTimeAxis(dset)).getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
-          val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
-          val dims0 = space_dims :+ new Dimension(timeCoordAxis.getShortName, nTimeSteps )
-          val newdims = dims0.map( dim => {
-            val newdim = writer.addDimension(null, dim.getShortName, dim.getLength)
-            logger.info(s"Writer addDimension ${dim.getShortName} ${dim.getLength.toString}")
-            newdim
-          })
-          optGridDset = Option(gridDSet)
-          ( coordAxes :+ timeCoordAxis, newdims )
+          gridDSet.getCoordinateAxes.toList :+ timeCoordAxis
         case None =>
-          val dims: IndexedSeq[nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => {
-            val aname = targetGrid.grid.getAxisSpec(idim).getAxisName
-            val dim = writer.addDimension(null, aname, shape(idim))
-            logger.info(s"Writer addDimension ${aname} ${shape(idim).toString}")
-            dim
-          })
-          val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
-          ( coordAxes, dims )
+          targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
       }
-      val dimsMap: Map[String, nc2.Dimension] = Map(dims.map(dim => (dim.getShortName -> dim)): _*)
-      val coordsMap: Map[String, Dimension] = Map( coordAxes.map(axis =>
-        axis.getAxisType.getCFAxisName -> axis.getDimensions.headOption.map(
-          dim => dimsMap.getOrElse( dim.getShortName, throw new Exception(s"Missing dimension: ${axis.getDimension(0).getShortName}") ))): _* ).flatMap( item => item._2.map( dim => item._1 -> dim ) )
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
-        resultId, path, slice.elements.keys.mkString(","), dims.map( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
+        resultId, path, slice.elements.keys.mkString(","), dimsMap.mapValues( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
         coordAxes.map { caxis => "%s: (%s)".format(caxis.getShortName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString ) )
 
 
@@ -236,16 +232,19 @@ object EDASExecutionManager extends Loggable {
         inputSpec.getRangeCF( coordAxis.getAxisType.getCFAxisName ) match {
           case Some(range) =>
             val coordDataType = if( coordAxis.getAxisType == AxisType.Time ) { DataType.DOUBLE } else { coordAxis.getDataType }
-            val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, coordAxis.getFullName)
+            val dims = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).toList
+            val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, dims )
             for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
             if( coordAxis.getAxisType == AxisType.Time ) { coordVar.addAttribute( new Attribute( "units", timeUnits ) ) }
-            val newRange = dimsMap.get( coordAxis.getFullName ).fold( range )( dim =>
+            val newRange = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).fold( range )( dim =>
               if( dim.getLength == 1 ) { val center = (range.first+range.last)/2; new ma2.Range( range.getName, center, center ) } else { range }
             )
             val data =  if( coordAxis.getAxisType == AxisType.Time ) {
               ma2.Array.factory( timeValues.toArray )
             } else {
-              if( coordAxis.getSize > newRange.length ) {
+              if( dims.head.getLength == 1  ) {
+                ma2.Array.makeArray( coordDataType, Array( "0") )
+              } else if( coordAxis.getSize > newRange.length ) {
                 coordAxis.read(List(newRange))
               } else {
                 coordAxis.read()
@@ -257,7 +256,7 @@ object EDASExecutionManager extends Loggable {
         }
       }).flatten
 
-      val varDims: Array[Dimension] = axisTypes.map( aType => coordsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
+      val varDims: Array[Dimension] = axisTypes.map( aType => dimsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
       val dataMap: Map[String,CDFloatArray] = slice.elements.mapValues( _.toCDFloatArray )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
