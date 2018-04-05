@@ -187,8 +187,8 @@ object EDASExecutionManager extends Loggable {
     val resultId: String = executor.requestCx.jobId + "-" + slice.elements.keys.head
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
     val resultFile = Kernel.getResultFile( resultId, true )
-    val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, resultFile.getAbsolutePath, chunker)
     val path = resultFile.getAbsolutePath
+    val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, path, chunker)
     var optGridDset: Option[NetcdfDataset] = None
     var originalDataset: Option[NetcdfDataset] = None
     try {
