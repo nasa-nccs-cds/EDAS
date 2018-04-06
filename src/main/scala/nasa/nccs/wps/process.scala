@@ -35,6 +35,7 @@ class WPSDataInput(_id: String, val minoccurs: Int, val maxoccurs: Int, _title: 
   val title = _title
   val description = _abstract
   override val keywords = _keywords
+  override def toString = s"WPSInput(${_id})"
 
   def toXml( response_syntax: ResponseSyntax.Value): xml.Elem = {
     val syntax = if (response_syntax == ResponseSyntax.Default) default_syntax else response_syntax

@@ -183,15 +183,26 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
   override def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
     if( context.profiler.activated ) { input.exe }
-    val ( times, regroupedRDD ) =  context.profiler.profile(s"lowpass.group(${KernelContext.getProcessAddress}):${inputs.toString}")(() => {
-      val groupBy = context.getGroup.getOrElse(throw new Exception("lowpass operation requires a groupBy parameter"))
+
+    val filteredRdd: RDD[CDRecord] =   context.profiler.profile(s"lowpass.filter(${KernelContext.getProcessAddress})")(() => {
       val elemFilter = (elemId: String) => context.operation.inputs.contains(elemId)
-      val filteredRdd: RDD[CDRecord] = input.rdd.map(_.selectElements(elemFilter))
+      val filtered_Rdd = input.rdd.map(_.selectElements(elemFilter))
+      if( context.profiler.activated ) { filtered_Rdd.cache; filtered_Rdd.count }
+      filtered_Rdd
+    })
+
+    val ( times, groupedRDD ) =  context.profiler.profile(s"lowpass.group(${KernelContext.getProcessAddress})")(() => {
+      val groupBy = context.getGroup.getOrElse(throw new Exception("lowpass operation requires a groupBy parameter"))
       val times: Array[(Long, Long)] = filteredRdd.map(rec => (rec.startTime, rec.endTime)).collect().sortBy(_._1)
-      val groupedRDD: RDD[CDRecord] = CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy).map(_._2)
-      val regrouped_rdd = input.newData(groupedRDD.sortBy(_.startTime)).sliding(3, 2)
-      if( context.profiler.activated ) { regrouped_rdd.cache; regrouped_rdd.count }
-      (times, regrouped_rdd )
+      val grouped_RDD = CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy).map(_._2)
+      if( context.profiler.activated ) { grouped_RDD.cache; grouped_RDD.count }
+      (times, grouped_RDD)
+    })
+
+    val regroupedRDD  =  context.profiler.profile(s"lowpass.regroup(${KernelContext.getProcessAddress})")(() => {
+      val regrouped_RDD = input.newData(groupedRDD.sortBy(_.startTime)).sliding(3, 2)
+      if( context.profiler.activated ) { regrouped_RDD.cache; regrouped_RDD.count }
+      regrouped_RDD
     })
 
     val lowpassRdd:  RDD[CDRecord] = context.profiler.profile(s"lowpass.interpolate(${KernelContext.getProcessAddress}):${inputs.toString}")(() => {
