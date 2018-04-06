@@ -234,24 +234,33 @@ object EDASExecutionManager extends Loggable {
             val coordDataType = if( coordAxis.getAxisType == AxisType.Time ) { DataType.DOUBLE } else { coordAxis.getDataType }
             val dims = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).toList
             val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, dims )
-            for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
-            if( coordAxis.getAxisType == AxisType.Time ) { coordVar.addAttribute( new Attribute( "units", timeUnits ) ) }
-            val newRange = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).fold( range )( dim =>
-              if( dim.getLength == 1 ) { val center = (range.first+range.last)/2; new ma2.Range( range.getName, center, center ) } else { range }
-            )
-            val data =  if( coordAxis.getAxisType == AxisType.Time ) {
-              ma2.Array.factory( timeValues.toArray )
-            } else {
-              if( dims.head.getLength == 1  ) {
-                ma2.Array.makeArray( coordDataType, Array( "0") )
-              } else if( coordAxis.getSize > newRange.length ) {
-                coordAxis.read(List(newRange))
-              } else {
-                coordAxis.read()
+            if( coordVar == null ) { None }
+            else {
+              for (attr <- coordAxis.getAttributes; if attr != null) { writer.addVariableAttribute(coordVar, attr) }
+              if (coordAxis.getAxisType == AxisType.Time) {
+                coordVar.addAttribute(new Attribute("units", timeUnits))
               }
+              val newRange = dimsMap.get(coordAxis.getAxisType.getCFAxisName).fold(range)(dim =>
+                if (dim.getLength == 1) {
+                  val center = (range.first + range.last) / 2; new ma2.Range(range.getName, center, center)
+                } else {
+                  range
+                }
+              )
+              val data = if (coordAxis.getAxisType == AxisType.Time) {
+                ma2.Array.factory(timeValues.toArray)
+              } else {
+                if (dims.head.getLength == 1) {
+                  ma2.Array.makeArray(coordDataType, Array("0"))
+                } else if (coordAxis.getSize > newRange.length) {
+                  coordAxis.read(List(newRange))
+                } else {
+                  coordAxis.read()
+                }
 
+              }
+              Some(coordVar, data)
             }
-            Some(coordVar, data)
           case None => None
         }
       }).flatten
