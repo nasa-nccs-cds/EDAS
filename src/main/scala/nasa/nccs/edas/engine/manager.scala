@@ -403,13 +403,15 @@ class EDASExecutionManager extends WPSServer with Loggable {
 
   def createRequestContext( jobId: String, request: TaskRequest, run_args: Map[String,String], executionCallback: Option[ExecutionCallback] = None ): RequestContext = {
     val sourceContainers = request.variableMap.values.filter(_.isSource)
+    val profileParm: String = request.operations.flatMap( _.getConfParm("profile") ).headOption.getOrElse( run_args.getOrElse("profile","") )
     val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource ) yield {
       val domainOpt: Option[DomainContainer] = data_container.getSource.getDomain.flatMap(request.getDomain)
       serverContext.createInputSpec( data_container, domainOpt, request )
     }
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
     val rc = new RequestContext ( jobId, sourceMap, request, run_args, executionCallback )
-    rc.initializeProfiler( run_args.getOrElse("profile",""), serverContext.spark.sparkContext )
+    logger.info( s"#P# Initialize Profiler: '${profileParm}'" )
+    rc.initializeProfiler( run_args.getOrElse( "profile", profileParm ), serverContext.spark.sparkContext )
     rc
   }
 

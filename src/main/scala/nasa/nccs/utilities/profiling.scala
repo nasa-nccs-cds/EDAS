@@ -81,7 +81,7 @@ class EventAccumulator( initActivationStatus: String = "active" ) extends Accumu
     val events: List[EventMetrics] = value.toList.sortBy( _.ctime )
     val baseClockTime = events.head.ctime
     "EVENTS:\n ** " + events.map(_.toString(baseClockTime)).mkString( "\n ** ")
-  } catch { case err: Throwable => "" }
+  } catch { case err: Throwable => err.getMessage + ":\n" + err.getStackTrace.mkString("\n\t") }
 
   def startEvent( eventId: String ): StartEvent = updateStartEvent( eventId )
   def activated: Boolean  = ! _activationStatus.isEmpty
