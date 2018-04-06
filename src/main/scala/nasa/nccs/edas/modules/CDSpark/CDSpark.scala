@@ -196,11 +196,16 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
       filteredRdd.map(rec => (rec.startTime, rec.endTime)).collect().sortBy(_._1)
     })
 
+//    val groupedRDD  =  context.profiler.profile(s"lowpass.group(${KernelContext.getProcessAddress})")(() => {
+//      val groupBy = context.getGroup.getOrElse(throw new Exception("lowpass operation requires a groupBy parameter"))
+//      val grouped_RDD = CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy).map(_._2)
+//      if( context.profiler.activated ) { grouped_RDD.cache; grouped_RDD.count }
+//      grouped_RDD
+//    })
+//
     val groupedRDD  =  context.profiler.profile(s"lowpass.group(${KernelContext.getProcessAddress})")(() => {
       val groupBy = context.getGroup.getOrElse(throw new Exception("lowpass operation requires a groupBy parameter"))
-      val grouped_RDD = CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy).map(_._2)
-      if( context.profiler.activated ) { grouped_RDD.cache; grouped_RDD.count }
-      grouped_RDD
+      CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy).map(_._2)
     })
 
     val regroupedRDD  =  context.profiler.profile(s"lowpass.regroup(${KernelContext.getProcessAddress})")(() => {
