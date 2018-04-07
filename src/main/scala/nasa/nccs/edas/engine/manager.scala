@@ -183,6 +183,7 @@ object EDASExecutionManager extends Loggable {
 //  }
 
   def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute]  ): String = {
+    val t0 = System.nanoTime()
     val head_elem: ArraySpec = slice.elements.values.head
     val resultId: String = executor.requestCx.jobId + "-" + slice.elements.keys.head
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
@@ -291,8 +292,6 @@ object EDASExecutionManager extends Loggable {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
         writer.write(variable, maskedTensor)
       } }
-      logger.info("Done writing output to file %s".format(path))
-      println( "\n ------ ---> Saving output to:" + path + "\n")
     } catch {
       case ex: IOException =>
         logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
@@ -303,6 +302,8 @@ object EDASExecutionManager extends Loggable {
     writer.close()
     originalDataset.foreach( _.close )
     optGridDset.foreach( _.close )
+    logger.info("Done writing output to file %s, time = %.3f".format(path,(System.nanoTime() - t0) / 1.0E9))
+    println( "\n ------ ---> Saving output to:" + path + "\n")
     path
   }
 

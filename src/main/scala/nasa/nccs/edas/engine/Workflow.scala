@@ -414,10 +414,11 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   }
 
   def createResponse( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): Option[WPSProcessExecuteResponse] = {
+    val t0 = System.nanoTime()
     val resultId = cacheResult( executionResult, executor )
     logger.info( s"Create result ${resultId}: req-context metadata: ${executor.requestCx.task.metadata.mkString("; ")}" )
     val node = executor.rootNode
-    executor.requestCx.getConf("response", "xml") match {
+    val rv = executor.requestCx.getConf("response", "xml") match {
         case "object" =>
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, List.empty[String] ) )
         case "xml" =>
@@ -426,6 +427,8 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
           val resultFiles: List[String] = executionMgr.getResultFilePath( executionResult, executor )
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFiles) )
       }
+    logger.info("Completed createResponse in %.4f sec".format( ( System.nanoTime() - t0 ) / 1.0E9 ) )
+    rv
   }
 
   def cacheResult( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): String = {
