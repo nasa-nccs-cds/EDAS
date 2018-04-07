@@ -192,6 +192,7 @@ object EDASExecutionManager extends Loggable {
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, path, chunker)
     var optGridDset: Option[NetcdfDataset] = None
     var originalDataset: Option[NetcdfDataset] = None
+    val t1 = System.nanoTime()
     try {
       val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
       val shape: Array[Int] = head_elem.shape
@@ -200,12 +201,14 @@ object EDASExecutionManager extends Loggable {
       val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
       val targetGrid: TargetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
       originalDataset = Some( targetGrid.grid.grid.getGridDataset(false) )
+      val t2 = System.nanoTime()
       val dimsMap: Map[String,nc2.Dimension] = targetGrid.grid.axes.indices.map(idim => {
         val axisSpec = targetGrid.grid.getAxisSpec(idim)
         axisSpec.coordAxis.getAxisType.getCFAxisName -> writer.addDimension(null, axisSpec.getAxisName, shape(idim))
       }).toMap
       val gblTimeCoordAxis = originalDataset.flatMap( dset => CDGrid.getTimeAxis(dset)).getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
       val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
+      val t3 = System.nanoTime()
       val coordAxes: List[CoordinateAxis] = gridFileOpt match {
         case Some( gridFilePath ) =>
           val gridDSet = NetcdfDataset.openDataset(gridFilePath)
@@ -213,7 +216,7 @@ object EDASExecutionManager extends Loggable {
         case None =>
           targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
       }
-      val t1 = System.nanoTime()
+      val t4 = System.nanoTime()
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
         resultId, path, slice.elements.keys.mkString(","), dimsMap.mapValues( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
@@ -267,8 +270,6 @@ object EDASExecutionManager extends Loggable {
         }
       }).flatten
 
-      val t2 = System.nanoTime()
-
       val varDims: Array[Dimension] = axisTypes.map( aType => dimsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
       val dataMap: Map[String,CDFloatArray] = slice.elements.mapValues( _.toCDFloatArray )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
@@ -283,8 +284,6 @@ object EDASExecutionManager extends Loggable {
       }
 
       writer.create()
-
-      val t3 = System.nanoTime()
 
       for (newCoordVar <- newCoordVars) {
         newCoordVar match {
@@ -301,8 +300,6 @@ object EDASExecutionManager extends Loggable {
       writer.close()
       originalDataset.foreach( _.close )
       optGridDset.foreach( _.close )
-
-      val t4 = System.nanoTime()
       logger.info("Done writing output to file %s, time = %.3f ( %.3f, %.3f, %.3f, %.3f )".format(path,(System.nanoTime() - t0) / 1.0E9, (t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9, (t3 - t2) / 1.0E9, (t4 - t3) / 1.0E9 ) )
       println( "\n ------ ---> Saving output to:" + path + "\n")
 
