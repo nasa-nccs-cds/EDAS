@@ -66,10 +66,13 @@ object WorkflowMode {
   val profiling = 1
 }
 
-object KernelContext {
+object KernelContext extends Loggable {
   private var _workflowMode = WorkflowMode.streaming
 
-  def enableProfiling = { _workflowMode = WorkflowMode.profiling }
+  def enableProfiling = {
+    logger.info( "%PP% ENABLE PROFILING " )
+    _workflowMode = WorkflowMode.profiling
+  }
   def workflowMode = _workflowMode
 
   def apply( operation: OperationContext, executor: WorkflowExecutor ): KernelContext = {
