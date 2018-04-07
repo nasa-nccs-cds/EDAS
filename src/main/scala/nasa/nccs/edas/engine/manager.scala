@@ -213,6 +213,7 @@ object EDASExecutionManager extends Loggable {
         case None =>
           targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
       }
+      val t1 = System.nanoTime()
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
         resultId, path, slice.elements.keys.mkString(","), dimsMap.mapValues( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
@@ -266,6 +267,8 @@ object EDASExecutionManager extends Loggable {
         }
       }).flatten
 
+      val t2 = System.nanoTime()
+
       val varDims: Array[Dimension] = axisTypes.map( aType => dimsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
       val dataMap: Map[String,CDFloatArray] = slice.elements.mapValues( _.toCDFloatArray )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
@@ -281,6 +284,8 @@ object EDASExecutionManager extends Loggable {
 
       writer.create()
 
+      val t3 = System.nanoTime()
+
       for (newCoordVar <- newCoordVars) {
         newCoordVar match {
           case (coordVar, coordData) =>
@@ -292,6 +297,15 @@ object EDASExecutionManager extends Loggable {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
         writer.write(variable, maskedTensor)
       } }
+
+      writer.close()
+      originalDataset.foreach( _.close )
+      optGridDset.foreach( _.close )
+
+      val t4 = System.nanoTime()
+      logger.info("Done writing output to file %s, time = %.3f ( %.3f, %.3f, %.3f, %.3f )".format(path,(System.nanoTime() - t0) / 1.0E9, (t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9, (t3 - t2) / 1.0E9, (t4 - t3) / 1.0E9 ) )
+      println( "\n ------ ---> Saving output to:" + path + "\n")
+
     } catch {
       case ex: IOException =>
         logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
@@ -299,11 +313,6 @@ object EDASExecutionManager extends Loggable {
         ex.printStackTrace()
         throw ex
     }
-    writer.close()
-    originalDataset.foreach( _.close )
-    optGridDset.foreach( _.close )
-    logger.info("Done writing output to file %s, time = %.3f".format(path,(System.nanoTime() - t0) / 1.0E9))
-    println( "\n ------ ---> Saving output to:" + path + "\n")
     path
   }
 
