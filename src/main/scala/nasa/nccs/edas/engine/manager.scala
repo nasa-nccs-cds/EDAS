@@ -374,7 +374,8 @@ class EDASExecutionManager extends WPSServer with Loggable {
     }
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
     val rc = new RequestContext ( jobId, sourceMap, request, run_args, executionCallback )
-    rc.initializeProfiler( run_args.getOrElse("profile",""), serverContext.spark.sparkContext )
+    val profileParm: String = request.operations.flatMap( _.getConfParm("profile") ).headOption.getOrElse( run_args.getOrElse("profile","") )
+    rc.initializeProfiler( run_args.getOrElse( "profile", profileParm ), serverContext.spark.sparkContext )
     rc
   }
 
