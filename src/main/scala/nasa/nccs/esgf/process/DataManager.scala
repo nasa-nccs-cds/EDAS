@@ -636,6 +636,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
       case None => None
     }
   }
+  def getTimeCoordAxis: Option[ CoordinateAxis1D ] = grid.getAxisSpec("t").map( _.coordAxis )
 
   def getBounds( section: ma2.Section ): Option[Array[Double]] = {
     val xrangeOpt: Option[Array[Double]] = Option( section.find("X") ) flatMap ( (r: ma2.Range) => grid.getAxisSpec("X").map( (gs: GridCoordSpec) => gs.getBounds(r) ) )

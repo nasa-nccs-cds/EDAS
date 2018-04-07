@@ -206,7 +206,8 @@ object EDASExecutionManager extends Loggable {
         axisSpec.coordAxis.getAxisType.getCFAxisName -> writer.addDimension(null, axisSpec.getAxisName, shape(idim))
       }).toMap
       val t2 = System.nanoTime()
-      val gblTimeCoordAxis = originalDataset.flatMap( dset => CDGrid.getTimeAxis(dset)).getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+      val gblTimeCoordAxis = targetGrid.getTimeCoordAxis.getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
+//      val gblTimeCoordAxis = originalDataset.flatMap( dset => CDGrid.getTimeAxis(dset)).getOrElse( throw new Exception( s"Missing Time Axis in Target Grid in saveResultToFile for result $resultId"))
       val t3 = System.nanoTime()
       val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
       val t4 = System.nanoTime()
