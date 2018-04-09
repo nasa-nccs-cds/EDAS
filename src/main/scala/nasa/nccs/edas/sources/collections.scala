@@ -508,7 +508,7 @@ object Collections extends XmlResource with Loggable {
     val dir = metadata.getOrElse("dir","/")
     val format = metadata.getOrElse("format","ag1")
     val agFiles: Iterator[(String,String)] = for (line <- partitionedLines._2; elems = line.split(",").map(_.trim)) yield elems.head -> Paths.get( dir, elems.last + "." + format ).toString
-    val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( file ) ) }
+    val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( Paths.get( dir, file ).toString ) ) }
     agMapIter.toMap[String,Aggregation]
   }
 
