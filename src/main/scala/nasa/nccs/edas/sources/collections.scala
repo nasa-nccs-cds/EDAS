@@ -484,7 +484,7 @@ object Collections extends XmlResource with Loggable {
       val collection = _datasets.getOrElseUpdate(id, {
         val groupedLines = Source.fromFile(collectionFilePath).getLines.partition( _.startsWith("#") )
         val vars = for (line <- groupedLines._2; elems = line.split(",").map(_.trim)) yield elems.head
-        val metadata: Map[String,String] = groupedLines._1.map( _.split(',') ).map( toks => toks(0).substring(1).trim -> toks(1)).toMap
+        val metadata: Map[String,String] = groupedLines._1.map( _.split(',') ).map( toks => toks(0).substring(1).trim -> toks(1).trim ).toMap
         val aggregations: Map[String,Aggregation] = getAggregations(collectionFilePath)
         new Collection("file", id, collectionFilePath, aggregations, metadata, vars.toList)
       })
@@ -502,12 +502,12 @@ object Collections extends XmlResource with Loggable {
   def getAggregations(collectionFilePath: String ): Map[String,Aggregation] = {
     val aggs = mutable.HashMap.empty[String,Aggregation]
     val partitionedLines = Source.fromFile(collectionFilePath).getLines.partition( _.startsWith("#") )
-    val metadata: Map[String,String] = partitionedLines._1.map( _.split(',') ).map( toks => toks(0).substring(1).trim -> toks(1)).toMap
+    val metadata: Map[String,String] = partitionedLines._1.map( _.split(',') ).map( toks => toks(0).substring(1).trim -> toks(1).trim ).toMap
     val dir = metadata.getOrElse("dir","/")
     val format = metadata.getOrElse("format","ag1")
     logger.info( s" ---> Loading aggregation from file ${collectionFilePath}, dir = ${dir}, metadata = { ${metadata.mkString(";")} }")
     val agFiles: Iterator[(String,String)] = for (line <- partitionedLines._2; elems = line.split(",").map(_.trim)) yield elems.head -> Paths.get( dir, elems.last + "." + format ).toString
-    val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( Paths.get( dir, file + "." + format ).toString ) ) }
+    val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( file ) ) }
     agMapIter.toMap[String,Aggregation]
   }
 
