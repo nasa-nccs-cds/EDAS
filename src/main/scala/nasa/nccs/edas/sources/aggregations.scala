@@ -28,13 +28,13 @@ case class FileInput(fileIndex: Int, startTime: Long, timeStep: Long, firstRowIn
   override def toString = s"FileInput(${fileIndex})[ ${path}, firstRow: ${firstRowIndex}, nRows: ${nRows}, time: ${CalendarDate.of(startTime).toString} (${startTime}) ]"
 }
 
-case class Variable( name: String, shape: Array[Int], dims: String, units: String ) extends Serializable {
-  def toXml: xml.Elem = { <variable name={name} shape={shape.mkString(",")} dims={dims} units={units} /> }
+case class Variable( name: String, fullName: String, dodsName: String, description: String, shape: Array[Int], dims: String, units: String ) extends Serializable {
+  def toXml: xml.Elem = { <variable name={name} fullName={fullName} dodsName={dodsName} description={description} shape={shape.mkString(",")} dims={dims} units={units} /> }
   override def toString: String = s"name:${name};shape:${shape.mkString(",")};dims:${dims};units:${units}"
   def toMap: Map[String,String] = Seq( "name"->name, "shape"->shape.mkString(","), "dims"->dims, "units"->units ).toMap
 }
 case class Coordinate( name: String, shape: Array[Int], dims: String="", units: String="" ) extends Serializable
-case class Axis( name: String, ctype: String, shape: Array[Int], units: String, minval: Float, maxval: Float ) extends Serializable {
+case class Axis( name: String, longName: String, ctype: String, shape: Array[Int], units: String, minval: Float, maxval: Float ) extends Serializable {
   def step: Float = (maxval-minval)/(shape(0)-1)
   def udstep: String = s"${step} ${units}"
 }
@@ -506,9 +506,9 @@ object Aggregation extends Loggable {
         case "P" =>
           parameters += toks(1) -> toks(2)
           if( toks(1).equals("num.files") ) { files = new mutable.ArrayBuffer[FileInput]( toks(2).toInt ) }
-        case "V" => variables += Variable( toks(1), toks(2).split(",").map( toInt ), toks(3), toks(4) )
+        case "V" => variables += Variable( toks(1), toks(2), toks(3), toks(4), toks(5).split(",").map( toInt ), toks(6), toks(7) )
         case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( toInt ) )
-        case "A" => axes += Axis( toks(1), toks(2), toks(3).split(",").map( toInt ), toks(4), toFloat(toks(5)), toFloat(toks(6)) )
+        case "A" => axes += Axis( toks(1), toks(2), toks(3), toks(4).split(",").map( toInt ), toks(5), toFloat(toks(6)), toFloat(toks(7)) )
         case _ => Unit
       } } catch {
         case err: Exception =>
