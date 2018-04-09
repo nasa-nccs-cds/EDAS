@@ -184,8 +184,9 @@ object EDASExecutionManager extends Loggable {
 
   def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute]  ): String = {
     val t0 = System.nanoTime()
+    val multiFiles = false
     val head_elem: ArraySpec = slice.elements.values.head
-    val resultId: String = executor.requestCx.jobId + "-" + slice.elements.keys.head
+    val resultId: String = if(multiFiles) { executor.requestCx.jobId + "-" + slice.elements.keys.head } else { executor.requestCx.jobId }
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
     val resultFile = Kernel.getResultFile( resultId, true )
     val path = resultFile.getAbsolutePath
