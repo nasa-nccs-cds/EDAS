@@ -57,7 +57,7 @@ object AggregationWriter extends Loggable {
     logger.info(s"Generate NCML file from specs in " + collectionsFile.getAbsolutePath )
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
       val mdata = tline.split(",").map(_.trim)
-      assert( ((mdata.length == 5) && isInt(mdata(0)) && (new File(mdata(3))).exists ), s"Format error in Collections csv file, columns = { depth: Int, template: RegEx, title: String, CollectionId: String, rootCollectionPath: String }, incorrect line: { $tline }" )
+      assert( ((mdata.length == 5) && isInt(mdata(0)) && (new File(mdata(4))).exists ), s"Format error in Collections csv file, columns = { depth: Int, template: RegEx, title: String, CollectionId: String, rootCollectionPath: String }, incorrect line: { $tline }" )
       extractAggregations( mdata(3), Paths.get( mdata(4) ), Map( "depth" -> mdata(0), "filter" -> mdata(1), "title" -> mdata(2) ) )
     }
   }
