@@ -325,14 +325,12 @@ class CollectionLoadService( val fastPoolSize: Int = 4, val slowPoolSize: Int = 
 
 class CollectionLoader( val collId: String, val collectionFile: File ) extends Runnable  with Loggable  {
   def run() {
-    logger.info( s" ---> Loading collection $collId" )
     Collections.addCollection( collId, Some( collectionFile.toString ) )
   }
 }
 
 class CollectionGridFileLoader( val collId: String,val collectionFile: File ) extends Runnable  with Loggable {
   def run() {
-    logger.info(s" ---> Loading collection $collId")
     val optCollection = Collections.addCollection(collId, Some(collectionFile.toString))
     optCollection foreach { collection => collection.aggregations.values foreach { aggregation =>
         if (!new File(aggregation.gridFilePath).exists) { CDGrid.createGridFile(aggregation) }
@@ -507,6 +505,7 @@ object Collections extends XmlResource with Loggable {
     val metadata: Map[String,String] = partitionedLines._1.map( _.split(',') ).map( toks => toks(0) -> toks(1)).toMap
     val dir = metadata.getOrElse("dir","/")
     val format = metadata.getOrElse("format","ag1")
+    logger.info( s" ---> Loading aggregation from file ${collectionFilePath}, dir = ${dir}, metadata = { ${metadata.mkString(";")} }")
     val agFiles: Iterator[(String,String)] = for (line <- partitionedLines._2; elems = line.split(",").map(_.trim)) yield elems.head -> Paths.get( dir, elems.last + "." + format ).toString
     val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( Paths.get( dir, file ).toString ) ) }
     agMapIter.toMap[String,Aggregation]
