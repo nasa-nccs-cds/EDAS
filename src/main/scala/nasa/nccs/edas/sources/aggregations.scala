@@ -57,8 +57,8 @@ object AggregationWriter extends Loggable {
     logger.info(s"Generate NCML file from specs in " + collectionsFile.getAbsolutePath )
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
       val mdata = tline.split(",").map(_.trim)
-      assert( ((mdata.length == 4) && isInt(mdata(0)) && (new File(mdata(3))).exists ), s"Format error in Collections csv file, columns = { depth: Int, template: RegEx, CollectionId: String, rootCollectionPath: String }, incorrect line: { $tline }" )
-      extractAggregations( mdata(2), Paths.get( mdata(3) ), Map( "depth" -> mdata(0), "template" -> mdata(1) ) )
+      assert( ((mdata.length == 5) && isInt(mdata(0)) && (new File(mdata(3))).exists ), s"Format error in Collections csv file, columns = { depth: Int, template: RegEx, title: String, CollectionId: String, rootCollectionPath: String }, incorrect line: { $tline }" )
+      extractAggregations( mdata(3), Paths.get( mdata(4) ), Map( "depth" -> mdata(0), "filter" -> mdata(1), "title" -> mdata(2) ) )
     }
   }
 
@@ -115,7 +115,8 @@ object AggregationWriter extends Loggable {
     val ncSubPaths = recursiveListNcFiles(dataLocation)
     FileHeader.factory( ncSubPaths.map( relFilePath => dataLocation.resolve(relFilePath).toFile.getCanonicalPath ) )
     val bifurDepth: Int = options.getOrElse("depth","0").toInt
-    val nameTemplate: Regex = options.getOrElse("template",".*").r
+    val nameTemplate: Regex = options.getOrElse("filter",".*").r
+    val collectionTitle = options.getOrElse("title","Collection")
     var subColIndex: Int = 0
     val agFormat = "ag1"
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
@@ -128,7 +129,7 @@ object AggregationWriter extends Loggable {
     }
     //    logger.info(s" %C% extract Aggregations varMap: " + varMap.map(_.toString()).mkString("; ") )
     val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 } .values.map( scopeRepeatedVarNames ).toSeq.flatten
-    addAggregations( collectionId, Map( contextualizedVarMap:_* ), agFormat )
+    addAggregations( collectionId, collectionTitle, Map( contextualizedVarMap:_* ), agFormat )
     FileHeader.clearCache
   }
 
@@ -270,13 +271,15 @@ object AggregationWriter extends Loggable {
   }
 
 
-  def addAggregations(collectionId: String, variableMap: Map[String,String], agFormat: String ): Unit = {
+  def addAggregations(collectionId: String, collectionTitle: String, variableMap: Map[String,String], agFormat: String ): Unit = {
     val dirFile = Collections.getAggregationPath.resolve(collectionId + ".csv").toFile
     logger.info( s"Generating Collection ${dirFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
     val pw = new PrintWriter( dirFile )
+    pw.write(s"# title, ${collectionTitle}\n")
+    pw.write(s"# dir, ${Collections.getAggregationPath.toString}\n")
+    pw.write(s"# format, ${agFormat}\n")
     variableMap foreach { case ( varName, aggregation ) =>
-      val agFile = Collections.getAggregationPath.resolve( aggregation + "." + agFormat ).toString
-      pw.write(s"$varName, ${agFile}\n")
+      pw.write(s"$varName, ${aggregation}\n")
     }
     pw.close
   }
@@ -531,12 +534,18 @@ object Aggregation extends Loggable {
     }
   }
 
+  def getShapeStr( dimStr: String, nTS: Int, fileShape: Array[Int] ): String = {
+    val hasTime = dimStr.toLowerCase.contains("time")
+    fileShape.zipWithIndex map { case (value, index) => if ( hasTime && (index == 0) ) nTS else value } mkString ","
+  }
+
   def writeAggregation( aggFile: File,  fileHeaders: IndexedSeq[FileHeader], format: String, maxCores: Int = 8 ): Unit = {
     logger.info(s"Writing Aggregation[$format] File: " + aggFile.toString)
     val nReadProcessors = Math.min( Runtime.getRuntime.availableProcessors, maxCores )
     logger.info("Processing %d files with %d workers".format(fileHeaders.length, nReadProcessors))
     val bw = new BufferedWriter(new FileWriter(aggFile))
     val fileMetadata = FileMetadata( fileHeaders.head.filePath )
+    val nTimeSteps = fileMetadata.getNTimesteps
     val ( basePath, reducedFileheaders ) = FileHeader.extractSubpath( fileHeaders )
     try {
       bw.write( s"P; time.nrows; ${fileHeaders.length}\n")
@@ -546,11 +555,11 @@ object Aggregation extends Loggable {
       bw.write( s"P; num.files; ${reducedFileheaders.length}\n")
       for (attr <- fileMetadata.attributes ) { bw.write( s"P; ${attr.getFullName}; ${attr.getStringValue} \n") }
       for (coordAxis <- fileMetadata.coordinateAxes; ctype = coordAxis.getAxisType.getCFAxisName ) {
-        if(ctype.equals("Z") ) {  bw.write( s"A; ${coordAxis.getShortName}; ${ctype}; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n") }
-        else {                    bw.write( s"A; ${coordAxis.getShortName}; ${ctype}; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n" ) }
+        if(ctype.equals("Z") ) {  bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n") }
+        else {                    bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n" ) }
       }
       for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} \n" ) }
-      for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName};  ${variable.getShape.mkString(",")};  ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
+      for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName}; ${variable.getFullName}; ${variable.getDODSName};  ${variable.getDescription};  ${getShapeStr(variable.getDimensionsString,nTimeSteps,variable.getShape)};  ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
       for (fileHeader <- reducedFileheaders) {
         bw.write( s"F; ${EDTime.toString(fileHeader.startValue)}; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
       }

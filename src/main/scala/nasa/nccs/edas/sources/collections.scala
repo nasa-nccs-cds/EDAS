@@ -20,6 +20,7 @@ import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.utilities.Loggable
 import ucar.nc2.dataset.NetcdfDataset
 import ucar.{ma2, nc2}
+
 import scala.collection.concurrent.TrieMap
 import scala.io.Source
 import scala.xml.factory.XMLLoader
@@ -136,8 +137,11 @@ object CollectionLoadServices {
   def loadCollection( collId: String ): Boolean = { startService.loadCollection(collId) }
 }
 
-class Collection( val ctype: String, val id: String, val dataPath: String, val aggregations: Map[String,Aggregation], val fileFilter: String = "", val scope: String="local", val title: String= "", val vars: List[String] = List() ) extends Serializable with Loggable {
+class Collection( val ctype: String, val id: String, val dataPath: String, val aggregations: Map[String,Aggregation], val metadata: Map[String,String], val vars: List[String] = List() ) extends Serializable with Loggable {
   val collId = id // Collections.idToFile(id)
+  val title = metadata.getOrElse("title","Aggregated Collection")
+  val scope = metadata.getOrElse("scope","local")
+  val fileFilter = metadata.getOrElse("fileFilter","")
   private val _grids = new ConcurrentLinkedHashMap.Builder[String, CDGrid].initialCapacity(10).maximumWeightedCapacity(500).build()
   private val _variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()
   override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
@@ -326,7 +330,7 @@ class CollectionLoader( val collId: String, val collectionFile: File ) extends R
   }
 }
 
-class CollectionGridFileLoader( val collId: String, val collectionFile: File ) extends Runnable  with Loggable {
+class CollectionGridFileLoader( val collId: String,val collectionFile: File ) extends Runnable  with Loggable {
   def run() {
     logger.info(s" ---> Loading collection $collId")
     val optCollection = Collections.addCollection(collId, Some(collectionFile.toString))
@@ -480,9 +484,11 @@ object Collections extends XmlResource with Loggable {
     val collectionFilePath = optFilePath getOrElse { getNCMLDirectory.resolve(id + ".csv").toString }
     try {
       val collection = _datasets.getOrElseUpdate(id, {
-        val vars = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head
+        val groupedLines = Source.fromFile(collectionFilePath).getLines.partition( _.startsWith("#") )
+        val vars = for (line <- groupedLines._2; elems = line.split(",").map(_.trim)) yield elems.head
+        val metadata: Map[String,String] = groupedLines._1.map( _.split(',') ).map( toks => toks(0) -> toks(1)).toMap
         val aggregations: Map[String,Aggregation] = getAggregations(collectionFilePath)
-        new Collection("file", id, collectionFilePath, aggregations, "", "", "Aggregated Collection", vars.toList)
+        new Collection("file", id, collectionFilePath, aggregations, metadata, vars.toList)
       })
       Some(collection)
     } catch {
@@ -497,7 +503,11 @@ object Collections extends XmlResource with Loggable {
 
   def getAggregations(collectionFilePath: String ): Map[String,Aggregation] = {
     val aggs = mutable.HashMap.empty[String,Aggregation]
-    val agFiles: Iterator[(String,String)] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head -> new File( elems.last ).getAbsolutePath
+    val partitionedLines = Source.fromFile(collectionFilePath).getLines.partition( _.startsWith("#") )
+    val metadata: Map[String,String] = partitionedLines._1.map( _.split(',') ).map( toks => toks(0) -> toks(1)).toMap
+    val dir = metadata.getOrElse("dir","/")
+    val format = metadata.getOrElse("format","ag1")
+    val agFiles: Iterator[(String,String)] = for (line <- partitionedLines._2; elems = line.split(",").map(_.trim)) yield elems.head -> Paths.get( dir, elems.last + "." + format ).toString
     val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( file ) ) }
     agMapIter.toMap[String,Aggregation]
   }

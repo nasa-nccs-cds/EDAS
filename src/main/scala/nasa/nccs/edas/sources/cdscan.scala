@@ -205,6 +205,7 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
   val dimNames: List[String] = dimensions.map(AggregationWriter.getName(_))
   def close = ncDataset.close()
   def getCoordinateAxis(name: String): Option[nc2.dataset.CoordinateAxis] = coordinateAxes.find(p => AggregationWriter.getName(p).equalsIgnoreCase(name))
+  def getNTimesteps: Int = coordinateAxes.find( _.getAxisType.getCFAxisName == "T" ).fold(-1)( _.getShape(0) )
 
   def getAxisType(variable: nc2.Variable): AxisType = variable match {
     case coordVar: CoordinateAxis1D => coordVar.getAxisType;
@@ -231,7 +232,8 @@ object CDScan extends Loggable {
       val arg = argIter.next
       if(arg(0) == '-') arg match {
         case "-d" => optionMap += (( "depth", argIter.next ))
-        case "-t" => optionMap += (( "template", argIter.next ))
+        case "-f" => optionMap += (( "filter", argIter.next ))
+        case "-t" => optionMap += (( "title", argIter.next ))
         case x => throw new Exception( "Unrecognized option: " + x )
       } else { inputs += arg }
     }
@@ -262,7 +264,8 @@ object CDMultiScan extends Loggable {
           val arg = argIter.next
           if(arg(0) == '-') arg match {
             case "-d" => optionMap += (( "depth", argIter.next ))
-            case "-t" => optionMap += (( "template", argIter.next ))
+            case "-f" => optionMap += (( "filter", argIter.next ))
+            case "-t" => optionMap += (( "title", argIter.next ))
             case x => throw new Exception( "Unrecognized option: " + x )
           }
         }
