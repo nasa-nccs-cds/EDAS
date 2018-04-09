@@ -58,7 +58,7 @@ object AggregationWriter extends Loggable {
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
       val mdata = tline.split(",").map(_.trim)
       assert( ((mdata.length == 5) && isInt(mdata(0)) && (new File(mdata(4))).exists ), s"Format error in Collections csv file, columns = { depth: Int, template: RegEx, title: String, CollectionId: String, rootCollectionPath: String }, incorrect line: { $tline }" )
-      extractAggregations( mdata(3), Paths.get( mdata(4) ), Map( "depth" -> mdata(0), "filter" -> mdata(1), "title" -> mdata(2) ) )
+      extractAggregations( mdata(2), Paths.get( mdata(4) ), Map( "depth" -> mdata(0), "filter" -> mdata(1), "title" -> mdata(3) ) )
     }
   }
 
