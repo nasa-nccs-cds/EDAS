@@ -123,7 +123,7 @@ object AggregationWriter extends Loggable {
       val aggregationId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
       val agFile = Aggregation.getAgFile( aggregationId, agFormat )
       if( agFile.exists ) {
-        logger.info(s" %X% skipping Aggregation($aggregationId)-> aggregation file ${agFile.toString} already exists." )
+//        logger.info(s" %X% skipping Aggregation($aggregationId)-> aggregation file ${agFile.toString} already exists." )
         List.empty[(String,String)]
       } else {
         logger.info(s" %X% extract Aggregation($collectionId)-> group_key=$group_key, aggregationId=$aggregationId")
