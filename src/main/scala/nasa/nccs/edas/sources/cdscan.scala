@@ -58,7 +58,6 @@ object FileHeader extends Loggable {
   val maxOpenAttempts = 1
   val retryIntervalSecs = 10
   private val _instanceCache = new ConcurrentLinkedHashMap.Builder[String, FileHeader].initialCapacity(64).maximumWeightedCapacity(10000).build()
-  private val _groupCache = new ConcurrentLinkedHashMap.Builder[String, List[FileHeader]].initialCapacity(32).maximumWeightedCapacity(10000).build()
   private val _pool = Executors.newFixedThreadPool( Runtime.getRuntime.availableProcessors )
 
   def apply( collectionId: String, uri: URI, timeRegular: Boolean ): FileHeader = apply( collectionId, uri.toString, timeRegular )
@@ -70,18 +69,15 @@ object FileHeader extends Loggable {
       val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
       val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
       val variableNames = variables map { _.getShortName }
-      val key = collectionId + ":" + variableNames.sorted.mkString("-")
       val fileHeader = new FileHeader(filePath, axisValues, boundsValues, timeRegular, variableNames, coordVars map { _.getShortName } )
-      val header_list = _groupCache.getOrDefault( key, List.empty[FileHeader]) :+ fileHeader
       _instanceCache.put( filePath, fileHeader  )
-      _groupCache.put( key, header_list  )
       fileHeader
     } finally {
       ncDataset.close()
     }
   })
 
-  def getGroupedFileHeaders( collectionId: String ): Map[String, List[FileHeader]] = _groupCache.filterKeys( _.split(':').head.equalsIgnoreCase(collectionId) ).toMap
+  def getGroupedFileHeaders( collectionId: String ): Map[String, Iterable[FileHeader]] = _instanceCache.values.groupBy ( _.varNames.sorted.mkString("-") )
 
   def term() = {
     _pool.shutdown()
@@ -349,8 +345,8 @@ class FileHeaderGenerator( collectionId: String, file: String, timeRegular: Bool
 
 object CDScanTest {
   def main(args: Array[String]) {
-    val collectionId = "cip_merra_mth-tro3"
-    val dataPath = "/dass/pubrepo/CREATE-IP/data/reanalysis/NASA-GMAO/GEOS-5/MERRA/mon/atmos/tro3"
+    val collectionId = "giss-test"
+    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1"
     CDScan.main( Array( collectionId, dataPath))
   }
 }

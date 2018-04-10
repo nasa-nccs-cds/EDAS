@@ -4,7 +4,7 @@ import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.net.URI
 import java.nio.file.{Path, Paths}
 import java.util.Date
-
+import scala.util.control.Breaks._
 import nasa.nccs.edas.sources.netcdf.NCMLWriter
 import nasa.nccs.esgf.process.CDSection
 import nasa.nccs.utilities.{EDTime, Loggable}
@@ -121,9 +121,9 @@ object AggregationWriter extends Loggable {
     val collectionTitle = options.getOrElse("title","Collection")
     var subColIndex: Int = 0
     val agFormat = "ag1"
-    val groupedFileHeaders: Map[String, List[FileHeader]] = FileHeader.getGroupedFileHeaders( collectionId)
+    val groupedFileHeaders: Map[String, Iterable[FileHeader]] = FileHeader.getGroupedFileHeaders( collectionId)
     val varMap: Map[String,String] = groupedFileHeaders flatMap { case ( group_key, groupedFileHeaders ) =>
-      val aggregationId: String = extractCommonElements( groupedFileHeaders ).mkString(".")
+      val aggregationId: String = commonElements( dataLocation, groupedFileHeaders )
       val agFile = Aggregation.getAgFile( aggregationId, agFormat )
       if( agFile.exists ) {
 //        logger.info(s" %X% skipping Aggregation($aggregationId)-> aggregation file ${agFile.toString} already exists." )
@@ -228,17 +228,29 @@ object AggregationWriter extends Loggable {
 
   def extractCommonElements( paths: Iterable[ Seq[String] ] ): Seq[String] = paths.head.filter( elem => paths.forall( _.contains(elem) ) )
 
-  def extractCommonElements( headers: List[ FileHeader ] ): Seq[String] = {
-    val disectedPaths: List[ Array[String] ] = headers.map( _.filePath.split('/') )
+  def commonElements( base: Path, headers: Iterable[ FileHeader ] ): String = {
+    val relPaths: Iterable[Path] = headers.map(fh => base.relativize(fh.toPath))
+    val disectedPaths: Iterable[Array[String]] = relPaths.map(_.iterator.map(_.toString).toArray)
     val commonElems = ArrayBuffer.empty[String]
-    for( index <- 0 until disectedPaths.head.length; elem = disectedPaths.head(0) ) {
-      if( disectedPaths.exists( elems => elems(index) !=  elem ) ) {
-        return commonElems
-      } else {
-        commonElems += elem
+    if (disectedPaths.head.length > 1) {
+      breakable { for (index <- 0 until disectedPaths.head.length - 1; elem = disectedPaths.head(index)) {
+        if (disectedPaths.exists(elems => elems(index) != elem)) { break } else {
+          commonElems += elem
+        }
       }
+    }}
+    if( commonElems.isEmpty ) {
+      val paths = relPaths.map( _.toString )
+      val buffer = new StringBuilder( paths.head.length )
+      breakable { for (index <- 0 until paths.head.length - 1; elem = paths.head(index)) {
+        if( paths.exists(path => path(index) != elem) ) { break } else {
+          buffer += elem
+        }
+      }}
+      buffer.toString
+    } else {
+      commonElems.mkString("-")
     }
-    commonElems
   }
 
   def filterCommonElements( paths: Iterable[ Seq[String] ] ): Iterable[ Seq[String] ] = {
@@ -556,7 +568,7 @@ object Aggregation extends Loggable {
   def toFloat( tok: String ): Float = if( tok.isEmpty ) { 0 } else { tok.toFloat }
   def getAgFile( aggregationId: String, format: String = "ag1" ): File = Collections.getAggregationPath.resolve(aggregationId + "." + format).toFile
 
-  def write( aggregationId: String, files: List[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {
+  def write( aggregationId: String, files: Iterable[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {
     try {
       val fileHeaders = FileHeader.getFileHeaders( aggregationId, files.toIndexedSeq, false )
       if( !format.isEmpty ) { writeAggregation(  Collections.getAggregationPath.resolve(aggregationId + "." + format).toFile, fileHeaders, format ) }
