@@ -181,7 +181,7 @@ class FileHeader(val filePath: String,
 
 
 object FileMetadata extends Loggable {
-  def apply(file: String): FileMetadata = {
+  def apply( file: String): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.aquireFile(file.toString, 4.toString)
     logger.info( s" #FM# FileMetadata, File: ${file.toString}")
     new FileMetadata(dataset)
