@@ -546,8 +546,7 @@ object Aggregation extends Loggable {
     val bw = new BufferedWriter(new FileWriter(aggFile))
     val startTime = fileHeaders.head.startValue
     val endTime = fileHeaders.last.endValue
-    val dt = fileHeaders.head.dt
-    val nTimeSteps = math.round( ( endTime - startTime ) / dt.toFloat ).toInt
+    val nTimeSteps: Int = fileHeaders.foldLeft(0)(_ + _.nElem)
     val fileMetadata = FileMetadata( fileHeaders.head.filePath, nTimeSteps )
     logger.info( " ")
     val ( basePath, reducedFileheaders ) = FileHeader.extractSubpath( fileHeaders )
