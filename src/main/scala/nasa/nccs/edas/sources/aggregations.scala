@@ -140,8 +140,8 @@ object AggregationWriter extends Loggable {
       logger.info(s" %X% Adding ${varMap.length} new aggregations for collection ${collectionId} " )
       val contextualizedVarMap: Seq[(String, String)] = varMap.groupBy { _._1 }.values.map(scopeRepeatedVarNames).toSeq.flatten
       addAggregations(collectionId, collectionTitle, Map(contextualizedVarMap: _*), agFormat)
+      FileHeader.clearCache
     }
-    FileHeader.clearCache
   }
 
   def rid( len: Int = 6 ) = RandomStringUtils.random( 6, true, true )
