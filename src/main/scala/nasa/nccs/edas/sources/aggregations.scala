@@ -121,13 +121,17 @@ object AggregationWriter extends Loggable {
     val agFormat = "ag1"
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
       val aggregationId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
-      if( ! Aggregation.getAgFile( aggregationId, agFormat ).exists ) {
-        logger.info(s" %X% extract Aggregation($collectionId)-> group_key=$group_key, aggregationId=$aggregationId" )
+      val agFile = Aggregation.getAgFile( aggregationId, agFormat )
+      if( agFile.exists ) {
+        logger.info(s" %X% skipping Aggregation($aggregationId)-> aggregation file ${agFile.toString} already exists." )
+        List.empty[(String,String)]
+      } else {
+        logger.info(s" %X% extract Aggregation($collectionId)-> group_key=$group_key, aggregationId=$aggregationId")
         val fileHeaders = Aggregation.write(aggregationId, files.map(fp => dataLocation.resolve(fp).toString), agFormat)
         val writer = new NCMLWriter(aggregationId, fileHeaders)
         val varNames = writer.writeNCML(Collections.getAggregationPath.resolve(aggregationId + ".ncml").toFile)
         varNames.map(vname => vname -> aggregationId)
-      } else { List.empty[(String,String)] }
+      }
     }
     //    logger.info(s" %C% extract Aggregations varMap: " + varMap.map(_.toString()).mkString("; ") )
     if( varMap.nonEmpty ) {
