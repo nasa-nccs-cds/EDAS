@@ -134,7 +134,10 @@ object AggregationWriter extends Loggable {
       }
     }
     //    logger.info(s" %C% extract Aggregations varMap: " + varMap.map(_.toString()).mkString("; ") )
-    if( varMap.nonEmpty ) {
+    if( varMap.isEmpty ) {
+      logger.info(s" %X% No new aggregations for collection ${collectionId} " )
+    } else {
+      logger.info(s" %X% Adding ${varMap.length} new aggregations for collection ${collectionId} " )
       val contextualizedVarMap: Seq[(String, String)] = varMap.groupBy { _._1 }.values.map(scopeRepeatedVarNames).toSeq.flatten
       addAggregations(collectionId, collectionTitle, Map(contextualizedVarMap: _*), agFormat)
     }
