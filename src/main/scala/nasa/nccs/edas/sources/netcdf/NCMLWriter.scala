@@ -65,26 +65,31 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
 
   def getDims( fileMetadata: FileMetadata, variable: nc2.Variable ): String =
     variable.getDimensions.map( dim =>
-      if (dim.isShared) getDimCoordRef( fileMetadata, dim )
+      if (dim.isShared) { dim.getShortName }
       else if (dim.isVariableLength) "*"
       else dim.getLength.toString
     ).toArray.mkString(" ")
 
-  def getDimension(axis: CoordinateAxis): Option[xml.Node] = {
-    axis match {
-      case coordAxis: CoordinateAxis1D =>
-        val nElems =
-          if (coordAxis.getAxisType == AxisType.Time) outerDimensionSize
-          else coordAxis.getSize
-        val dimension = coordAxis.getDimension(0)
-        val node =
-            <dimension name={getName(dimension)} length={nElems.toString} isUnlimited={dimension.isUnlimited.toString} isVariableLength={dimension.isVariableLength.toString} isShared={dimension.isShared.toString}/>
-        Some(node)
-      case x =>
-        logger.warn( "This Coord axis type not currently supported: " + axis.getClass.getName + " for axis " + axis.getNameAndDimensions(true) )
-        None
-    }
+//  def getDimensionFromAxis(axis: CoordinateAxis): Option[xml.Node] = {
+//    axis match {
+//      case coordAxis: CoordinateAxis1D =>
+//        val nElems =
+//          if (coordAxis.getAxisType == AxisType.Time) outerDimensionSize
+//          else coordAxis.getSize
+//        val dimension = coordAxis.getDimension(0)
+//        val node =  <dimension name={getName(dimension)} length={nElems.toString} isUnlimited={dimension.isUnlimited.toString} isVariableLength={dimension.isVariableLength.toString} isShared={dimension.isShared.toString}/>
+//        Some(node)
+//      case x =>
+//        logger.warn( "This Coord axis type not currently supported: " + axis.getClass.getName + " for axis " + axis.getNameAndDimensions(true) )
+//        None
+//    }
+//  }
+
+  def getDimension(dim: nc2.Dimension): xml.Node = {
+      <dimension name={dim.getShortName} length={dim.getLength.toString} isUnlimited={dim.isUnlimited.toString} isVariableLength={dim.isVariableLength.toString} isShared={dim.isShared.toString}/>
   }
+
+
 
   def getAggDatasetTUC(fileHeader: FileHeader,
                        timeRegular: Boolean = false): xml.Node =
@@ -177,7 +182,7 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
           <explicit/>
           <attribute name="title" type="string" value="NetCDF aggregated dataset"/>
           {for (attribute <- fileMetadata.attributes) yield getAttribute(attribute)}
-          {(for (coordAxis <- fileMetadata.coordinateAxes) yield getDimension(coordAxis)).flatten}
+          {for (dimension <- fileMetadata.dimensions) yield getDimension(dimension)}
           {for (variable <- fileMetadata.coordVars) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
           {for (variable <- fileMetadata.variables) yield getVariable(fileMetadata, variable, timeRegularSpecs)}
           {getAggregation(fileMetadata, timeRegularSpecs.isDefined)}

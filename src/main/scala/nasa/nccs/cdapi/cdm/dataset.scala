@@ -124,8 +124,8 @@ object CDGrid extends Loggable {
     val writeSpatialBounds = false
     val gridFilePath: String = aggregation.gridFilePath
     val gridWriter = NetcdfFileWriter.createNew(NetcdfFileWriter.Version.netcdf4, gridFilePath, null)
-    logger.info( s" %G% Creating #grid# file $gridFilePath from aggregation: [${aggregation.id}]" )
     val collectionFile = aggregation.ncmlFilePath
+    logger.info( s" %G% Creating #grid# file $gridFilePath from aggregation: [${aggregation.id}], collectionFile: ${collectionFile}" )
     val ncDataset: NetcdfDataset = NetcdfDataset.openDataset(collectionFile)
 
     val dimMap = Map(ncDataset.getDimensions.map(d => AggregationWriter.getName(d) -> gridWriter.addDimension(null, AggregationWriter.getName(d), d.getLength)): _*)

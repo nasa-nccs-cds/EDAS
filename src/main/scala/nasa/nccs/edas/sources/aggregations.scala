@@ -121,15 +121,19 @@ object AggregationWriter extends Loggable {
     val agFormat = "ag1"
     val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
       val aggregationId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
-      //      logger.info(s" %X% extract Aggregations($collectionId)-> group_key=$group_key, aggregatoinId=$aggregatoinId, files=${files.mkString(";")}" )
-      val fileHeaders = Aggregation.write(aggregationId, files.map(fp => dataLocation.resolve(fp).toString), agFormat )
-      val writer = new NCMLWriter( aggregationId, fileHeaders )
-      val varNames = writer.writeNCML( Collections.getAggregationPath.resolve(aggregationId + ".ncml").toFile )
-      varNames.map(vname => vname -> aggregationId)
+      if( ! Aggregation.getAgFile( aggregationId, agFormat ).exists ) {
+        logger.info(s" %X% extract Aggregation($collectionId)-> group_key=$group_key, aggregationId=$aggregationId" )
+        val fileHeaders = Aggregation.write(aggregationId, files.map(fp => dataLocation.resolve(fp).toString), agFormat)
+        val writer = new NCMLWriter(aggregationId, fileHeaders)
+        val varNames = writer.writeNCML(Collections.getAggregationPath.resolve(aggregationId + ".ncml").toFile)
+        varNames.map(vname => vname -> aggregationId)
+      } else { List.empty[(String,String)] }
     }
     //    logger.info(s" %C% extract Aggregations varMap: " + varMap.map(_.toString()).mkString("; ") )
-    val contextualizedVarMap: Seq[(String,String)] = varMap.groupBy { _._1 } .values.map( scopeRepeatedVarNames ).toSeq.flatten
-    addAggregations( collectionId, collectionTitle, Map( contextualizedVarMap:_* ), agFormat )
+    if( varMap.nonEmpty ) {
+      val contextualizedVarMap: Seq[(String, String)] = varMap.groupBy { _._1 }.values.map(scopeRepeatedVarNames).toSeq.flatten
+      addAggregations(collectionId, collectionTitle, Map(contextualizedVarMap: _*), agFormat)
+    }
     FileHeader.clearCache
   }
 
@@ -521,6 +525,7 @@ object Aggregation extends Loggable {
 
   def toInt( tok: String ): Int = if( tok.isEmpty ) { 0 } else { tok.toInt }
   def toFloat( tok: String ): Float = if( tok.isEmpty ) { 0 } else { tok.toFloat }
+  def getAgFile( aggregationId: String, format: String = "ag1" ): File = Collections.getAggregationPath.resolve(aggregationId + "." + format).toFile
 
   def write( aggregationId: String, files: IndexedSeq[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {
     try {

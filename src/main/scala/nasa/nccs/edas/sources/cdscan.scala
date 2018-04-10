@@ -183,7 +183,6 @@ class FileHeader(val filePath: String,
 object FileMetadata extends Loggable {
   def apply( file: String, nTS: Int ): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.aquireFile(file.toString, 4.toString)
-    logger.info( s" #FM# FileMetadata, File: ${file.toString}")
     new FileMetadata(dataset,nTS)
   }
   def getVariableLists(ncDataset: NetcdfDataset): ( List[nc2.Variable], List[nc2.Variable] ) = {
@@ -200,7 +199,9 @@ object FileMetadata extends Loggable {
 class FileMetadata(val ncDataset: NetcdfDataset, val nTS: Int ) {
   import FileMetadata._
   val coordinateAxes: List[CoordinateAxis] = ncDataset.getCoordinateAxes.toList
-  val dimensions: List[nc2.Dimension] = ncDataset.getDimensions.toList
+  val dimensions: List[nc2.Dimension] = ncDataset.getDimensions.toList.map( dim =>
+    if( dim.getDODSName.toLowerCase.startsWith("t") ) { new nc2.Dimension(dim.getShortName,nTS,dim.isShared,dim.isUnlimited,dim.isVariableLength) } else { dim }
+  )
   val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable] ) = getVariableLists(ncDataset)
   val attributes: List[nc2.Attribute] = ncDataset.getGlobalAttributes.toList
   val dimNames: List[String] = dimensions.map(AggregationWriter.getName(_))
