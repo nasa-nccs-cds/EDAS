@@ -544,11 +544,12 @@ object Aggregation extends Loggable {
     val nReadProcessors = Math.min( Runtime.getRuntime.availableProcessors, maxCores )
     logger.info("Processing %d files with %d workers".format(fileHeaders.length, nReadProcessors))
     val bw = new BufferedWriter(new FileWriter(aggFile))
-    val fileMetadata = FileMetadata( fileHeaders.head.filePath )
     val startTime = fileHeaders.head.startValue
     val endTime = fileHeaders.last.endValue
     val dt = fileHeaders.head.dt
     val nTimeSteps = math.round( ( endTime - startTime ) / dt.toFloat ).toInt
+    val fileMetadata = FileMetadata( fileHeaders.head.filePath, nTimeSteps )
+    logger.info( " ")
     val ( basePath, reducedFileheaders ) = FileHeader.extractSubpath( fileHeaders )
     try {
       bw.write( s"P; time.nrows; ${fileHeaders.length}\n")

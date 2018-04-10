@@ -181,10 +181,10 @@ class FileHeader(val filePath: String,
 
 
 object FileMetadata extends Loggable {
-  def apply( file: String): FileMetadata = {
+  def apply( file: String, nTS: Int ): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.aquireFile(file.toString, 4.toString)
     logger.info( s" #FM# FileMetadata, File: ${file.toString}")
-    new FileMetadata(dataset)
+    new FileMetadata(dataset,nTS)
   }
   def getVariableLists(ncDataset: NetcdfDataset): ( List[nc2.Variable], List[nc2.Variable] ) = {
     val all_vars = ncDataset.getVariables
@@ -197,7 +197,7 @@ object FileMetadata extends Loggable {
   }
 }
 
-class FileMetadata(val ncDataset: NetcdfDataset) {
+class FileMetadata(val ncDataset: NetcdfDataset, val nTS: Int ) {
   import FileMetadata._
   val coordinateAxes: List[CoordinateAxis] = ncDataset.getCoordinateAxes.toList
   val dimensions: List[nc2.Dimension] = ncDataset.getDimensions.toList
@@ -207,7 +207,7 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
   logger.info( s" #FM# FileMetadata, NTS: ${getNTimesteps}")
   def close = ncDataset.close()
   def getCoordinateAxis(name: String): Option[nc2.dataset.CoordinateAxis] = coordinateAxes.find(p => AggregationWriter.getName(p).equalsIgnoreCase(name))
-  def getNTimesteps: Int = coordinateAxes.find( _.getAxisType.getCFAxisName == "T" ).fold(-1)( _.getShape(0) )
+  def getNTimesteps: Int = nTS
 
   def getAxisType(variable: nc2.Variable): AxisType = variable match {
     case coordVar: CoordinateAxis1D => coordVar.getAxisType;
