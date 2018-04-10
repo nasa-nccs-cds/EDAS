@@ -183,6 +183,7 @@ class FileHeader(val filePath: String,
 object FileMetadata extends Loggable {
   def apply(file: String): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.aquireFile(file.toString, 4.toString)
+    logger.info( s" #FM# FileMetadata, File: ${file.toString}")
     new FileMetadata(dataset)
   }
   def getVariableLists(ncDataset: NetcdfDataset): ( List[nc2.Variable], List[nc2.Variable] ) = {
@@ -203,6 +204,7 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
   val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable] ) = getVariableLists(ncDataset)
   val attributes: List[nc2.Attribute] = ncDataset.getGlobalAttributes.toList
   val dimNames: List[String] = dimensions.map(AggregationWriter.getName(_))
+  logger.info( s" #FM# FileMetadata, NTS: ${getNTimesteps}")
   def close = ncDataset.close()
   def getCoordinateAxis(name: String): Option[nc2.dataset.CoordinateAxis] = coordinateAxes.find(p => AggregationWriter.getName(p).equalsIgnoreCase(name))
   def getNTimesteps: Int = coordinateAxes.find( _.getAxisType.getCFAxisName == "T" ).fold(-1)( _.getShape(0) )
@@ -331,9 +333,9 @@ class FileHeaderGenerator(file: String, timeRegular: Boolean ) extends Runnable 
 
 object CDScanTest {
   def main(args: Array[String]) {
-    val collectionId = "giss-test"
-    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H"
-    CDMultiScan.main( Array( collectionId, dataPath))
+    val collectionId = "cip_merra_mth-tro3"
+    val dataPath = "/dass/pubrepo/CREATE-IP/data/reanalysis/NASA-GMAO/GEOS-5/MERRA/mon/atmos/tro3"
+    CDScan.main( Array( collectionId, dataPath))
   }
 }
 
