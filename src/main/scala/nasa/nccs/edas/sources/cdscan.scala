@@ -57,24 +57,31 @@ class DatasetFileHeaders(val aggDim: String, val aggFileMap: Seq[FileHeader]) {
 object FileHeader extends Loggable {
   val maxOpenAttempts = 1
   val retryIntervalSecs = 10
-  private val _instanceCache = new ConcurrentLinkedHashMap.Builder[String, FileHeader].initialCapacity(64).maximumWeightedCapacity(100000).build()
+  private val _instanceCache = new ConcurrentLinkedHashMap.Builder[String, FileHeader].initialCapacity(64).maximumWeightedCapacity(10000).build()
+  private val _groupCache = new ConcurrentLinkedHashMap.Builder[String, List[FileHeader]].initialCapacity(32).maximumWeightedCapacity(10000).build()
   private val _pool = Executors.newFixedThreadPool( Runtime.getRuntime.availableProcessors )
 
-  def apply( uri: URI, timeRegular: Boolean ): FileHeader = apply( uri.toString, timeRegular )
-  def apply( file: File, timeRegular: Boolean ): FileHeader = apply( file.getCanonicalPath, timeRegular )
+  def apply( collectionId: String, uri: URI, timeRegular: Boolean ): FileHeader = apply( collectionId, uri.toString, timeRegular )
+  def apply( collectionId: String, file: File, timeRegular: Boolean ): FileHeader = apply( collectionId, file.getCanonicalPath, timeRegular )
 
-  def apply( filePath: String, timeRegular: Boolean ): FileHeader = _instanceCache.getOrElse( filePath, {
+  def apply( collectionId: String, filePath: String, timeRegular: Boolean ): FileHeader = _instanceCache.getOrElse( filePath, {
     val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.aquireFile(filePath, 2.toString)
     try {
       val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
       val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
-      val fileHeader = new FileHeader(filePath, axisValues, boundsValues, timeRegular, variables map { _.getShortName }, coordVars map { _.getShortName } )
-      _instanceCache.put( filePath, fileHeader )
+      val variableNames = variables map { _.getShortName }
+      val key = collectionId + ":" + variableNames.sorted.mkString("-")
+      val fileHeader = new FileHeader(filePath, axisValues, boundsValues, timeRegular, variableNames, coordVars map { _.getShortName } )
+      val header_list = _groupCache.getOrDefault( key, List.empty[FileHeader]) :+ fileHeader
+      _instanceCache.put( filePath, fileHeader  )
+      _groupCache.put( key, header_list  )
       fileHeader
     } finally {
       ncDataset.close()
     }
   })
+
+  def getGroupedFileHeaders( collectionId: String ): Map[String, List[FileHeader]] = _groupCache.filterKeys( _.split(':').head.equalsIgnoreCase(collectionId) ).toMap
 
   def term() = {
     _pool.shutdown()
@@ -92,14 +99,14 @@ object FileHeader extends Loggable {
     waitUntilDone( filterCompleted(seq) )
   }
 
-  def factory(files: IndexedSeq[String], timeRegular: Boolean = false ):Unit = {
-    val futures: IndexedSeq[Future[_]] = files.filter { file => !isCached(file) } map { file => _pool.submit( new FileHeaderGenerator(file,timeRegular) ) }
+  def factory(collectionId: String, files: IndexedSeq[String], timeRegular: Boolean = false ):Unit = {
+    val futures: IndexedSeq[Future[_]] = files.filter { file => !isCached(file) } map { file => _pool.submit( new FileHeaderGenerator(collectionId,file,timeRegular) ) }
     waitUntilDone( futures )
   }
 
-  def getFileHeaders(files: IndexedSeq[String], timeRegular: Boolean = false ): IndexedSeq[FileHeader] = {
-    factory( files, timeRegular )
-    files.map( file => FileHeader( file, timeRegular ) ).sortBy(_.startDate)
+  def getFileHeaders(collectionId: String, files: IndexedSeq[String], timeRegular: Boolean = false ): IndexedSeq[FileHeader] = {
+    factory( collectionId, files, timeRegular )
+    files.map( file => FileHeader( collectionId, file, timeRegular ) ).sortBy(_.startDate)
   }
 
   def getNumCommonElements( elemList: IndexedSeq[Array[String]] ): Int = {
@@ -171,6 +178,7 @@ class FileHeader(val filePath: String,
   def startValue: Double = boundsValues.head(0)
   def endValue: Double = boundsValues.last(1)
   def dt = ( endValue + 1 - startValue ) / boundsValues.length
+  def toPath: Path = Paths.get( filePath )
   def startDate: String = EDTime.toDate(startValue).toString
   override def toString: String = " *** FileHeader { path='%s', nElem=%d, startValue=%d startDate=%s} ".format(filePath, nElem, startValue, startDate)
   def dropPrefix( nElems: Int ): FileHeader = new FileHeader( filePath.split("/").drop(nElems).mkString("/"), axisValues, boundsValues, timeRegular, varNames, coordVarNames )
@@ -222,7 +230,9 @@ class FileMetadata(val ncDataset: NetcdfDataset, val nTS: Int ) {
 
 object CDScan extends Loggable {
   val usage = """
-    Usage: mkcol [-d {collectionBifurcationDepth: Int)}] [-t {collectionNameTemplate: RegExp}] <collectionID> <datPath>
+    Usage: mkcol [-r] [-o] [-f {collectionNameFilter: RegExp}] [-t {collectionTitle: String}] <collectionID> <datPath>
+      Options:  -r  refresh:    Clear all existing collections and begin with a blank slate.
+                -o  overwrite:  Delete any existing configurations for this collection before processing.
   """
 
   def main(args: Array[String]) {
@@ -234,7 +244,7 @@ object CDScan extends Loggable {
     while( argIter.hasNext ) {
       val arg = argIter.next
       if(arg(0) == '-') arg match {
-        case "-d" => optionMap += (( "depth", argIter.next ))
+        case "-o" => optionMap += (( "overwrite", "true" ))
         case "-f" => optionMap += (( "filter", argIter.next ))
         case "-t" => optionMap += (( "title", argIter.next ))
         case x => throw new Exception( "Unrecognized option: " + x )
@@ -249,6 +259,11 @@ object CDScan extends Loggable {
 }
 
 object CDMultiScan extends Loggable {
+  val usage = """
+    Usage: mkcols [-r] [-o] <collectionsMetaFile>
+      Options:  -r  refresh:    Clear all existing collections and begin with a blank slate.
+                -o  overwrite:  Delete any existing configurations for this collection before processing.
+  """
   def main(args: Array[String]) {
     if( args.length < 1 ) { println( "Usage: 'mkcols <collectionsMetaFile>' or  'mkcols <aggId> <aggregationsDirectory> <args>'"); return }
     EDASLogManager.isMaster
@@ -282,8 +297,8 @@ object CDMultiScan extends Loggable {
   }
 }
 
-class FileHeaderGenerator(file: String, timeRegular: Boolean ) extends Runnable {
-  override def run(): Unit = { FileHeader( file, timeRegular ) }
+class FileHeaderGenerator( collectionId: String, file: String, timeRegular: Boolean ) extends Runnable {
+  override def run(): Unit = { FileHeader( collectionId: String, file, timeRegular ) }
 }
 
 

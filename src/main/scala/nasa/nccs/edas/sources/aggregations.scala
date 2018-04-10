@@ -16,6 +16,7 @@ import ucar.ma2
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 import scala.util.matching.Regex
 
@@ -57,8 +58,8 @@ object AggregationWriter extends Loggable {
     logger.info(s"Generate NCML file from specs in " + collectionsFile.getAbsolutePath )
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
       val mdata = tline.split(",").map(_.trim)
-      assert( ((mdata.length == 5) && isInt(mdata(0)) && (new File(mdata(4))).exists ), s"Format error in Collections csv file, columns = { depth: Int, template: RegEx, title: String, CollectionId: String, rootCollectionPath: String }, incorrect line: { $tline }" )
-      extractAggregations( mdata(2), Paths.get( mdata(4) ), Map( "depth" -> mdata(0), "filter" -> mdata(1), "title" -> mdata(3) ) )
+      assert( (mdata.length == 4) && isInt(mdata(0)) && new File(mdata(3)).exists, s"Format error in Collections csv file, columns = { filter: RegEx, title: String, CollectionId: String, rootCollectionPath: String }, incorrect line: { $tline }" )
+      extractAggregations( mdata(1), Paths.get( mdata(3) ), Map( "filter" -> mdata(0), "title" -> mdata(2) ) )
     }
   }
 
@@ -113,21 +114,23 @@ object AggregationWriter extends Loggable {
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
     //    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
-    FileHeader.factory( ncSubPaths.map( relFilePath => dataLocation.resolve(relFilePath).toFile.getCanonicalPath ) )
-    val bifurDepth: Int = options.getOrElse("depth","0").toInt
+    FileHeader.factory( collectionId, ncSubPaths.map( relFilePath => dataLocation.resolve(relFilePath).toFile.getCanonicalPath ) )
+    val refresh: Boolean = options.getOrElse("refresh","false").toBoolean
+    val overwrite: Boolean = options.getOrElse("overwrite","false").toBoolean
     val nameTemplate: Regex = options.getOrElse("filter",".*").r
     val collectionTitle = options.getOrElse("title","Collection")
     var subColIndex: Int = 0
     val agFormat = "ag1"
-    val varMap: Seq[(String,String)] = getPathGroups(dataLocation, ncSubPaths, bifurDepth, nameTemplate ) flatMap { case (group_key, (subCol_name, files)) =>
-      val aggregationId = collectionId + "-" + { if( subCol_name.trim.isEmpty ) { group_key } else subCol_name }
+    val groupedFileHeaders: Map[String, List[FileHeader]] = FileHeader.getGroupedFileHeaders( collectionId)
+    val varMap: Map[String,String] = groupedFileHeaders flatMap { case ( group_key, groupedFileHeaders ) =>
+      val aggregationId: String = extractCommonElements( groupedFileHeaders ).mkString(".")
       val agFile = Aggregation.getAgFile( aggregationId, agFormat )
       if( agFile.exists ) {
 //        logger.info(s" %X% skipping Aggregation($aggregationId)-> aggregation file ${agFile.toString} already exists." )
         List.empty[(String,String)]
       } else {
         logger.info(s" %X% extract Aggregation($collectionId)-> group_key=$group_key, aggregationId=$aggregationId")
-        val fileHeaders = Aggregation.write(aggregationId, files.map(fp => dataLocation.resolve(fp).toString), agFormat)
+        val fileHeaders = Aggregation.write(aggregationId, groupedFileHeaders.map(fh => dataLocation.resolve(fh.filePath).toString), agFormat)
         val writer = new NCMLWriter(aggregationId, fileHeaders)
         val varNames = writer.writeNCML(Collections.getAggregationPath.resolve(aggregationId + ".ncml").toFile)
         varNames.map(vname => vname -> aggregationId)
@@ -137,9 +140,10 @@ object AggregationWriter extends Loggable {
     if( varMap.isEmpty ) {
       logger.info(s" %X% No new aggregations for collection ${collectionId} " )
     } else {
-      logger.info(s" %X% Adding ${varMap.length} new aggregations for collection ${collectionId} " )
-      val contextualizedVarMap: Seq[(String, String)] = varMap.groupBy { _._1 }.values.map(scopeRepeatedVarNames).toSeq.flatten
-      addAggregations(collectionId, collectionTitle, Map(contextualizedVarMap: _*), agFormat)
+      logger.info(s" %X% Adding ${varMap.size} new aggregations for collection ${collectionId} " )
+//      val contextualizedVarMap: Seq[(String, String)] = varMap.groupBy { _._1 }.values.map(scopeRepeatedVarNames).toSeq.flatten
+//      addAggregations(collectionId, collectionTitle, Map(contextualizedVarMap: _*), agFormat)
+      addAggregations(collectionId, collectionTitle, varMap, agFormat)
       FileHeader.clearCache
     }
   }
@@ -204,25 +208,38 @@ object AggregationWriter extends Loggable {
   //    groupMap.mapValues(_.toArray).toMap
   //  }
 
-  def getPathGroups(rootPath: Path, relFilePaths: Seq[Path], bifurDepth: Int, nameTemplate: Regex ): Seq[(String,(String,Array[Path]))] = {
-    val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[Path]]
-    relFilePaths.foreach(df => groupMap.getOrElseUpdate(getPathKey(rootPath, df, bifurDepth), mutable.ListBuffer.empty[Path]) += df)
-    //    logger.info(s" %X% relFilePaths: \n\t ----> ${groupMap.mapValues(_.map(_.toString).mkString("[",",","]")).mkString("\n\t ----> ")} " )
-    if( bifurDepth == 0 ) {
-      groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
-    } else {
-      val unsimplifiedResult = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
-        val paths: Iterable[ Seq[String] ] = grRelFilePaths.map( df => df.subpath( 0, bifurDepth).map(_.toString).toSeq )
-        val collIdNames: Seq[String] = extractCommonElements( paths )
-        val result = ( groupKey, ( collIdNames, grRelFilePaths.toArray)  )
-        result
-      }
-      val filteredColIds: IndexedSeq[String] = filterCommonElements( unsimplifiedResult.map( _._2._1) ).map( _.mkString(colIdSep) ).toIndexedSeq
-      unsimplifiedResult.zipWithIndex  map { case (elem, index) => ( elem._1, ( filteredColIds(index), elem._2._2 ) ) }
-    }
-  }
+//  def getPathGroups(rootPath: Path, relFilePaths: Seq[Path], bifurDepth: Int, nameTemplate: Regex ): Seq[(String,(String,Array[Path]))] = {
+//    val groupMap = mutable.HashMap.empty[String,mutable.ListBuffer[Path]]
+//    relFilePaths.foreach(df => groupMap.getOrElseUpdate(getPathKey(rootPath, df, bifurDepth), mutable.ListBuffer.empty[Path]) += df)
+//    //    logger.info(s" %X% relFilePaths: \n\t ----> ${groupMap.mapValues(_.map(_.toString).mkString("[",",","]")).mkString("\n\t ----> ")} " )
+//    if( bifurDepth == 0 ) {
+//      groupMap.mapValues(df => (getSubCollectionName(df), df.toArray)).toSeq
+//    } else {
+//      val unsimplifiedResult = groupMap.toSeq map { case (groupKey, grRelFilePaths) =>
+//        val paths: Iterable[ Seq[String] ] = grRelFilePaths.map( df => df.subpath( 0, bifurDepth).map(_.toString).toSeq )
+//        val collIdNames: Seq[String] = extractCommonElements( paths )
+//        val result = ( groupKey, ( collIdNames, grRelFilePaths.toArray)  )
+//        result
+//      }
+//      val filteredColIds: IndexedSeq[String] = filterCommonElements( unsimplifiedResult.map( _._2._1) ).map( _.mkString(colIdSep) ).toIndexedSeq
+//      unsimplifiedResult.zipWithIndex  map { case (elem, index) => ( elem._1, ( filteredColIds(index), elem._2._2 ) ) }
+//    }
+//  }
 
   def extractCommonElements( paths: Iterable[ Seq[String] ] ): Seq[String] = paths.head.filter( elem => paths.forall( _.contains(elem) ) )
+
+  def extractCommonElements( headers: List[ FileHeader ] ): Seq[String] = {
+    val disectedPaths: List[ Array[String] ] = headers.map( _.filePath.split('/') )
+    val commonElems = ArrayBuffer.empty[String]
+    for( index <- 0 until disectedPaths.head.length; elem = disectedPaths.head(0) ) {
+      if( disectedPaths.exists( elems => elems(index) !=  elem ) ) {
+        return commonElems
+      } else {
+        commonElems += elem
+      }
+    }
+    commonElems
+  }
 
   def filterCommonElements( paths: Iterable[ Seq[String] ] ): Iterable[ Seq[String] ] = {
     val commonElements: Seq[String]  = extractCommonElements( paths )
@@ -269,10 +286,10 @@ object AggregationWriter extends Loggable {
   //    vkey
   //  }
 
-  def getPathKey( rootPath: Path, relFilePath: Path, bifurDepth: Int ): String = {
-    val fileHeader = FileHeader( rootPath.resolve(relFilePath).toFile, false )
-    Seq( getRelPathKey(relFilePath, bifurDepth), Option( fileHeader.varNames.mkString( "." ) ) ).flatten.mkString("-")
-  }
+//  def getPathKey( rootPath: Path, relFilePath: Path, bifurDepth: Int ): String = {
+//    val fileHeader = FileHeader( rootPath.resolve(relFilePath).toFile, false )
+//    Seq( getRelPathKey(relFilePath, bifurDepth), Option( fileHeader.varNames.mkString( "." ) ) ).flatten.mkString("-")
+//  }
 
   def getRelPathKey( relFilePath: Path, bifurDepth: Int ): Option[String] = try {
     if( bifurDepth < 1 ) { None } else { Option( relFilePath.subpath(0, bifurDepth).mkString(".") ) }
@@ -281,15 +298,20 @@ object AggregationWriter extends Loggable {
     Option( relFilePath.mkString(".") )
   }
 
+  def getAggregationMap( csvFile: File ): Map[String,String] = {
+    val entries = for (line <- Source.fromFile( csvFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) yield { tline.split(",").map(_.trim) }
+    entries.map( e => e(0) -> e(1) ).toMap
+  }
 
   def addAggregations(collectionId: String, collectionTitle: String, variableMap: Map[String,String], agFormat: String ): Unit = {
-    val dirFile = Collections.getAggregationPath.resolve(collectionId + ".csv").toFile
-    logger.info( s"Generating Collection ${dirFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
-    val pw = new PrintWriter( dirFile )
+    val csvFile = Collections.getAggregationPath.resolve(collectionId + ".csv").toFile
+    logger.info( s"Generating Collection ${csvFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
+    val completeVariableMap: Map[String,String] = if( csvFile.exists() ) { getAggregationMap( csvFile ) ++ variableMap } else variableMap
+    val pw = new PrintWriter( csvFile )
     pw.write(s"# title, ${collectionTitle}\n")
     pw.write(s"# dir, ${Collections.getAggregationPath.toString}\n")
     pw.write(s"# format, ${agFormat}\n")
-    variableMap foreach { case ( varName, aggregation ) =>
+    completeVariableMap foreach { case ( varName, aggregation ) =>
       pw.write(s"$varName, ${aggregation}\n")
     }
     pw.close
@@ -534,9 +556,9 @@ object Aggregation extends Loggable {
   def toFloat( tok: String ): Float = if( tok.isEmpty ) { 0 } else { tok.toFloat }
   def getAgFile( aggregationId: String, format: String = "ag1" ): File = Collections.getAggregationPath.resolve(aggregationId + "." + format).toFile
 
-  def write( aggregationId: String, files: IndexedSeq[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {
+  def write( aggregationId: String, files: List[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {
     try {
-      val fileHeaders = FileHeader.getFileHeaders( files, false )
+      val fileHeaders = FileHeader.getFileHeaders( aggregationId, files.toIndexedSeq, false )
       if( !format.isEmpty ) { writeAggregation(  Collections.getAggregationPath.resolve(aggregationId + "." + format).toFile, fileHeaders, format ) }
       fileHeaders
     } catch {
