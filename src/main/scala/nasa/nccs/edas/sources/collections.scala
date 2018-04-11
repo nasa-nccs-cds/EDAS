@@ -23,8 +23,11 @@ import ucar.{ma2, nc2}
 
 import scala.collection.concurrent.TrieMap
 import scala.io.Source
+import scala.util.matching.Regex
 import scala.xml.factory.XMLLoader
 import scala.xml.{Node, SAXParser, XML}
+
+
 
 object AxisNames {
   def apply( x: String = "", y: String = "", z: String = "", t: String = "" ): Option[AxisNames] = {
@@ -340,11 +343,12 @@ class CollectionGridFileLoader( val collId: String,val collectionFile: File ) ex
 }
 
 
-
 object Collections extends XmlResource with Loggable {
   val maxCapacity: Int=500
   val initialCapacity: Int=10
   private val _datasets: TrieMap[String,Collection] =  TrieMap.empty[String,Collection]
+  implicit def filter(r: Regex): FilenameFilter = new FilenameFilter { def accept( dir: File,  name: String ): Boolean  = name match { case r(_*) => true; case _ => false } }
+
 
   //  def initCollectionList = if( datasets.isEmpty ) { refreshCollectionList }
 
@@ -376,6 +380,14 @@ object Collections extends XmlResource with Loggable {
   }
 
   def getAggregationPath: Path = getCachePath("agg")
+  def clearCacheFiles( id: String, ext: String ): Unit = getAggregationPath.toFile.listFiles( s"""$id.*\.$ext""".r  ).foreach( _.delete )
+  def clearCacheFilesByType( ext: String ): Unit = getAggregationPath.toFile.listFiles( s""".*\.$ext""".r  ).foreach( _.delete )
+  def clearCacheFilesById( id: String ): Unit = {
+    val dir = getAggregationPath.toFile
+    val files = dir.listFiles( s"""$id.*""".r  )
+    files.foreach( _.delete )
+  }
+
 
   //  def refreshCollectionList = {
   //    var collPath: Path = null

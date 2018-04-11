@@ -237,10 +237,11 @@ object CDScan extends Loggable {
     var inputs = mutable.ListBuffer.empty[String]
     EDASLogManager.isMaster
     val argIter = args.iterator
+    var clear = false
     while( argIter.hasNext ) {
       val arg = argIter.next
       if(arg(0) == '-') arg match {
-        case "-o" => optionMap += (( "overwrite", "true" ))
+        case "-o" => { clear = true; optionMap += (( "overwrite", "true" )) }
         case "-f" => optionMap += (( "filter", argIter.next ))
         case "-t" => optionMap += (( "title", argIter.next ))
         case x => throw new Exception( "Unrecognized option: " + x )
@@ -249,6 +250,7 @@ object CDScan extends Loggable {
     if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
     val collectionId = inputs(0).toLowerCase
     val pathFile = new File( inputs(1) )
+    if( clear ) { Collections.clearCacheFilesById(collectionId) }
     AggregationWriter.extractAggregations( collectionId, pathFile.toPath, optionMap.toMap )
     FileHeader.term()
   }
@@ -347,7 +349,7 @@ object CDScanTest {
   def main(args: Array[String]) {
     val collectionId = "giss-test"
     val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1"
-    CDScan.main( Array( collectionId, dataPath))
+    CDScan.main( Array( "-o", collectionId, dataPath) )
   }
 }
 

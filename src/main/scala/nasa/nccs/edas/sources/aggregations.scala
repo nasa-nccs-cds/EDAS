@@ -125,6 +125,7 @@ object AggregationWriter extends Loggable {
     val varMap: Map[String,String] = groupedFileHeaders flatMap { case ( group_key, groupedFileHeaders ) =>
       val aggregationId: String = commonElements( dataLocation, groupedFileHeaders )
       val agFile = Aggregation.getAgFile( aggregationId, agFormat )
+      if( overwrite && agFile.exists ) { Collections.clearCacheFilesById( aggregationId ) }
       if( agFile.exists ) {
 //        logger.info(s" %X% skipping Aggregation($aggregationId)-> aggregation file ${agFile.toString} already exists." )
         List.empty[(String,String)]
