@@ -189,7 +189,13 @@ object CDGrid extends Loggable {
                   try {
                     gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, bounds))
                   } catch {
-                    case err: Exception => logger.error(s"Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}, shape: ${cvarBnds.getShape}, data length: ${bounds.length}: " + err.toString )
+                    case err1: Exception =>
+                      try {
+                        val bounds: Array[Double] = cvarBnds.read.asInstanceOf[Array[Double]]
+                        gridWriter.write(newVarBnds, ma2.Array.factory(ma2.DataType.DOUBLE, cvarBnds.getShape, bounds))
+                      } catch {
+                        case err: Exception => logger.error(s"\n @@@@----> Error creating bounds in grid file $gridFilePath for coordinate var ${coordAxis1D.getShortName}, shape: ${cvarBnds.getShape.mkString(",")}, data length: ${bounds.length}: " + err.toString)
+                      }
                   }
                 case None => Unit
               }
