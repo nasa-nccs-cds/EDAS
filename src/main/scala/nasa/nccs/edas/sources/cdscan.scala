@@ -261,32 +261,27 @@ object CDMultiScan extends Loggable {
                 -o  overwrite:  Delete any existing configurations for this collection before processing.
   """
   def main(args: Array[String]) {
-    if( args.length < 1 ) { println( "Usage: 'mkcols <collectionsMetaFile>' or  'mkcols <aggId> <aggregationsDirectory> <args>'"); return }
+    if( args.length < 1 ) { println( usage ); return }
     EDASLogManager.isMaster
-    val collectionsMetaFile = new File(args(0))    // cols:  depth, template, collectionID, collectionRootPath
+    var optCollectionsMetaFile: Option[File] = None
+    var optionMap = mutable.HashMap.empty[String, String]
+    val argIter = args.iterator
+    while( argIter.hasNext ) {
+      val arg = argIter.next
+      if(arg(0) == '-') arg match {
+        case "-o" => optionMap += (( "overwrite", "true" ))
+        case "-r" => optionMap += (( "refresh", "true" ))
+        case x => throw new Exception( "Unrecognized option: " + x )
+      } else {
+        optCollectionsMetaFile = Some( new File(arg) )
+      }
+    }
+    val collectionsMetaFile = optCollectionsMetaFile.getOrElse( throw new Exception( "Must specify CollectionsMetaFile  " ) )
     if( collectionsMetaFile.isFile ) {
       val ncmlDir = Collections.getAggregationPath.toFile
       ncmlDir.mkdirs
-      AggregationWriter.generateAggregations(collectionsMetaFile)
+      AggregationWriter.generateAggregations( collectionsMetaFile, optionMap.toMap )
       FileHeader.term()
-    } else if( args.length > 1 ) {
-      val aggPath = new File(args(1))
-      if( aggPath.isDirectory ) {
-        var optionMap = mutable.HashMap.empty[String, String]
-        val argIter = args.slice(2,args.length).iterator
-        while( argIter.hasNext ) {
-          val arg = argIter.next
-          if(arg(0) == '-') arg match {
-            case "-d" => optionMap += (( "depth", argIter.next ))
-            case "-f" => optionMap += (( "filter", argIter.next ))
-            case "-t" => optionMap += (( "title", argIter.next ))
-            case x => throw new Exception( "Unrecognized option: " + x )
-          }
-        }
-        for( dir <- aggPath.listFiles.filter( _.isDirectory ) ) {
-          scala.concurrent.Future[Unit] { AggregationWriter.extractAggregations( args(0) + "-" + dir.getName, dir.toPath, optionMap.toMap ) }
-        }
-      }
     } else {
       throw new Exception( "CollectionsMetaFile does not exist: " + collectionsMetaFile.toString )
     }

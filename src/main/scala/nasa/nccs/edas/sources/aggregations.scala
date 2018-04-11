@@ -54,12 +54,12 @@ object AggregationWriter extends Loggable {
 
   def isInt( ival: String ): Boolean = try { ival.toInt; true } catch { case ex: Throwable => false }
 
-  def generateAggregations(collectionsFile: File ): Unit = {
+  def generateAggregations(collectionsFile: File, options: Map[String,String] ): Unit = {
     logger.info(s"Generate NCML file from specs in " + collectionsFile.getAbsolutePath )
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
       val mdata = tline.split(",").map(_.trim)
       assert( (mdata.length == 4) && new File(mdata(3)).exists, s"Format error in Collections csv file, columns = { CollectionId: String, filter: RegEx, title: String, rootCollectionPath: String }, incorrect line: { ${mdata.mkString(" || ")} }" )
-      extractAggregations( mdata(0), Paths.get( mdata(3) ), Map( "filter" -> mdata(1), "title" -> mdata(2) ) )
+      extractAggregations( mdata(0), Paths.get( mdata(3) ), options ++ Map( "filter" -> mdata(1), "title" -> mdata(2) ) )
     }
   }
 
