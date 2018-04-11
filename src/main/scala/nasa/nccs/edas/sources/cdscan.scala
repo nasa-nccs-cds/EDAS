@@ -276,7 +276,7 @@ object CDMultiScan extends Loggable {
         optCollectionsMetaFile = Some( new File(arg) )
       }
     }
-    if( refresh ) {  Collections.clearCacheFilesByTypes( List("ag1","csv") ) }
+    if( refresh ) {  Collections.clearCacheFilesByTypes( List("ag1","csv","ncml","nc") ) }
     val collectionsMetaFile = optCollectionsMetaFile.getOrElse( throw new Exception( "Must specify CollectionsMetaFile  " ) )
     if( collectionsMetaFile.isFile ) {
       val ncmlDir = Collections.getAggregationPath.toFile

@@ -4,6 +4,9 @@ import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.net.URI
 import java.nio.file.{Path, Paths}
 import java.util.Date
+
+import nasa.nccs.edas.portal.RandomString
+
 import scala.util.control.Breaks._
 import nasa.nccs.edas.sources.netcdf.NCMLWriter
 import nasa.nccs.esgf.process.CDSection
@@ -41,6 +44,7 @@ case class Axis( name: String, longName: String, ctype: String, shape: Array[Int
 }
 
 object AggregationWriter extends Loggable {
+  val randomIds = new RandomString(4)
   val ncExtensions = Seq( "nc", "nc4")
   val colIdSep = "."
 
@@ -252,7 +256,9 @@ object AggregationWriter extends Loggable {
     } else {
       commonElems.mkString("-")
     }
-    if( commonStr.contains(collectionId) ) { commonStr } else { collectionId + "-" + commonStr }
+    if( commonStr.isEmpty || (commonStr == collectionId) ) {
+      collectionId + "-" + base.iterator.toList.last.toString + randomIds.nextString()
+    } else if( commonStr.contains(collectionId) ) { commonStr } else { collectionId + "-" + commonStr }
   }
 
   def filterCommonElements( paths: Iterable[ Seq[String] ] ): Iterable[ Seq[String] ] = {
