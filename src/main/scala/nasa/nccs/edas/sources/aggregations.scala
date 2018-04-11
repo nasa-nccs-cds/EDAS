@@ -312,6 +312,7 @@ object AggregationWriter extends Loggable {
   }
 
   def getAggregationMap( csvFile: File ): Map[String,String] = {
+    logger.error(  s" Incorporating entries from csv file: ${csvFile.toString}")
     val entries = for (line <- Source.fromFile( csvFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) yield { tline.split(",").map(_.trim) }
     entries.map( e => e(0) -> e(1) ).toMap
   }
