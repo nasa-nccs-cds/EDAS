@@ -252,9 +252,9 @@ object AggregationWriter extends Loggable {
           buffer += elem
         }
       }}
-      buffer.toString
+      buffer.toString.trim
     } else {
-      commonElems.mkString("-")
+      commonElems.mkString("-").trim
     }
     if( commonStr.isEmpty || (commonStr == collectionId) ) {
       collectionId + "-" + base.iterator.toList.last.toString + randomIds.nextString()
