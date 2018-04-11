@@ -123,7 +123,7 @@ object AggregationWriter extends Loggable {
     val agFormat = "ag1"
     val groupedFileHeaders: Map[String, Iterable[FileHeader]] = FileHeader.getGroupedFileHeaders( collectionId )
     val varMap: Map[String,String] = groupedFileHeaders flatMap { case ( group_key, groupedFileHeaders ) =>
-      val aggregationId: String = commonElements( dataLocation, groupedFileHeaders )
+      val aggregationId: String = getIdentifier( collectionId, dataLocation, groupedFileHeaders )
       val agFile = Aggregation.getAgFile( aggregationId, agFormat )
       if( overwrite && agFile.exists ) { Collections.clearCacheFilesById( aggregationId ) }
       if( agFile.exists ) {
@@ -229,7 +229,7 @@ object AggregationWriter extends Loggable {
 
   def extractCommonElements( paths: Iterable[ Seq[String] ] ): Seq[String] = paths.head.filter( elem => paths.forall( _.contains(elem) ) )
 
-  def commonElements( base: Path, headers: Iterable[ FileHeader ] ): String = {
+  def getIdentifier( collectionId: String, base: Path, headers: Iterable[ FileHeader ] ): String = {
     val disectedPaths: Iterable[Array[String]] = headers.map(_.relFile.split('/') )
     val commonElems = ArrayBuffer.empty[String]
     if (disectedPaths.head.length > 1) {
@@ -239,7 +239,7 @@ object AggregationWriter extends Loggable {
         }
       }
     }}
-    if( commonElems.isEmpty ) {
+    val commonStr = if( commonElems.isEmpty ) {
       val paths = headers.map( _.relFile )
       val buffer = new StringBuilder( paths.head.length )
       breakable { for (index <- 0 until paths.head.length - 1; elem = paths.head(index)) {
@@ -251,6 +251,7 @@ object AggregationWriter extends Loggable {
     } else {
       commonElems.mkString("-")
     }
+    if( commonStr.contains(collectionId) ) { commonStr } else { collectionId + "-" + commonStr }
   }
 
   def filterCommonElements( paths: Iterable[ Seq[String] ] ): Iterable[ Seq[String] ] = {
