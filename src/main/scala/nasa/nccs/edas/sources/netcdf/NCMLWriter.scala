@@ -93,13 +93,13 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
 
   def getAggDatasetTUC(fileHeader: FileHeader,
                        timeRegular: Boolean = false): xml.Node =
-      <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} timeUnitsChange="true"/>
+      <netcdf location={fileHeader.toPath.toString} ncoords={fileHeader.nElem.toString} timeUnitsChange="true"/>
 
   def getAggDataset(fileHeader: FileHeader, timeRegular: Boolean = false): xml.Node =
     if (timeRegular || !overwriteTime)
-        <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString}/>
+        <netcdf location={fileHeader.toPath.toString} ncoords={fileHeader.nElem.toString}/>
     else
-        <netcdf location={fileHeader.filePath} ncoords={fileHeader.nElem.toString} coordValue={fileHeader.axisValues.map( EDTime.toString ).mkString(", ")}/>
+        <netcdf location={fileHeader.toPath.toString} ncoords={fileHeader.nElem.toString} coordValue={fileHeader.axisValues.map( EDTime.toString ).mkString(", ")}/>
   def getDataType( axisType: AxisType ): String = if( axisType == AxisType.Time ) { EDTime.datatype } else { "float" }
 
   def getVariable(fileMetadata: FileMetadata, variable: nc2.Variable,  timeRegularSpecs: Option[(Double, Double)]): xml.Node = {
@@ -173,7 +173,7 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
       val varNames: List[String] = List.empty
       (varNames, result)
     } else {
-      val fileMetadata = FileMetadata( fileHeaders.head.filePath, outerDimensionSize )
+      val fileMetadata = FileMetadata( fileHeaders.head.toPath.toString, outerDimensionSize )
       try {
         logger.info(s"\n\n -----> FileMetadata: variables = ${fileMetadata.variables.map(_.getShortName).mkString(", ")}\n\n")
         val timeRegularSpecs = None //  getTimeSpecs( fileMetadata )

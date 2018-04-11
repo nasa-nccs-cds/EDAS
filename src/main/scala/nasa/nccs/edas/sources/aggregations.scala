@@ -102,10 +102,10 @@ object AggregationWriter extends Loggable {
     file.isFile &&  ncExtensions.contains( file.getName.split('.').last )
   }
 
-  def recursiveListNcFiles( rootPath: Path, optSearchSubDir: Option[Path] = None ): Array[Path] = {
+  def recursiveListNcFiles( rootPath: Path, optSearchSubDir: Option[Path] = None ): Array[String] = {
     val children = optSearchSubDir.fold( rootPath )( rootPath.resolve ).toFile.listFiles
     //    print( s"\nrecursiveListNcFiles-> root: ${rootPath.toString}, rel: ${optSearchSubDir.fold("")(_.toString)}, children: [ ${children.map(_.toString).mkString(", ")} ]" )
-    val files = children.filter( isNcDataFile ).map( child => rootPath.relativize( child.toPath  ) )
+    val files = children.filter( isNcDataFile ).map( child => rootPath.relativize( child.toPath  ).toString )
     files ++ children.filter( _.isDirectory ).flatMap( dir => recursiveListNcFiles( rootPath, Some( rootPath.relativize(dir.toPath) ) ) )
   }
 
@@ -114,14 +114,14 @@ object AggregationWriter extends Loggable {
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
     //    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
-    FileHeader.factory( collectionId, ncSubPaths.map( relFilePath => dataLocation.resolve(relFilePath).toFile.getCanonicalPath ) )
+    FileHeader.factory( collectionId, dataLocation,  ncSubPaths )
     val refresh: Boolean = options.getOrElse("refresh","false").toBoolean
     val overwrite: Boolean = options.getOrElse("overwrite","false").toBoolean
     val nameTemplate: Regex = options.getOrElse("filter",".*").r
     val collectionTitle = options.getOrElse("title","Collection")
     var subColIndex: Int = 0
     val agFormat = "ag1"
-    val groupedFileHeaders: Map[String, Iterable[FileHeader]] = FileHeader.getGroupedFileHeaders( collectionId)
+    val groupedFileHeaders: Map[String, Iterable[FileHeader]] = FileHeader.getGroupedFileHeaders( collectionId )
     val varMap: Map[String,String] = groupedFileHeaders flatMap { case ( group_key, groupedFileHeaders ) =>
       val aggregationId: String = commonElements( dataLocation, groupedFileHeaders )
       val agFile = Aggregation.getAgFile( aggregationId, agFormat )
@@ -131,7 +131,7 @@ object AggregationWriter extends Loggable {
         List.empty[(String,String)]
       } else {
         logger.info(s" %X% extract Aggregation($collectionId)-> group_key=$group_key, aggregationId=$aggregationId")
-        val fileHeaders = Aggregation.write(aggregationId, groupedFileHeaders.map(fh => dataLocation.resolve(fh.filePath).toString), agFormat)
+        val fileHeaders = Aggregation.write(aggregationId, groupedFileHeaders, agFormat)
         val writer = new NCMLWriter(aggregationId, fileHeaders)
         val varNames = writer.writeNCML(Collections.getAggregationPath.resolve(aggregationId + ".ncml").toFile)
         varNames.map(vname => vname -> aggregationId)
@@ -230,8 +230,7 @@ object AggregationWriter extends Loggable {
   def extractCommonElements( paths: Iterable[ Seq[String] ] ): Seq[String] = paths.head.filter( elem => paths.forall( _.contains(elem) ) )
 
   def commonElements( base: Path, headers: Iterable[ FileHeader ] ): String = {
-    val relPaths: Iterable[Path] = headers.map(fh => base.relativize(fh.toPath))
-    val disectedPaths: Iterable[Array[String]] = relPaths.map(_.iterator.map(_.toString).toArray)
+    val disectedPaths: Iterable[Array[String]] = headers.map(_.relFile.split('/') )
     val commonElems = ArrayBuffer.empty[String]
     if (disectedPaths.head.length > 1) {
       breakable { for (index <- 0 until disectedPaths.head.length - 1; elem = disectedPaths.head(index)) {
@@ -241,7 +240,7 @@ object AggregationWriter extends Loggable {
       }
     }}
     if( commonElems.isEmpty ) {
-      val paths = relPaths.map( _.toString )
+      val paths = headers.map( _.relFile )
       val buffer = new StringBuilder( paths.head.length )
       breakable { for (index <- 0 until paths.head.length - 1; elem = paths.head(index)) {
         if( paths.exists(path => path(index) != elem) ) { break } else {
@@ -569,9 +568,9 @@ object Aggregation extends Loggable {
   def toFloat( tok: String ): Float = if( tok.isEmpty ) { 0 } else { tok.toFloat }
   def getAgFile( aggregationId: String, format: String = "ag1" ): File = Collections.getAggregationPath.resolve(aggregationId + "." + format).toFile
 
-  def write( aggregationId: String, files: Iterable[String], format: String = "ag1" ): IndexedSeq[FileHeader] = {
+  def write( aggregationId: String, files: Iterable[FileHeader], format: String = "ag1" ): IndexedSeq[FileHeader] = {
     try {
-      val fileHeaders = FileHeader.getFileHeaders( aggregationId, files.toIndexedSeq, false )
+      val fileHeaders = files.toIndexedSeq.sortBy(_.startDate)
       if( !format.isEmpty ) { writeAggregation(  Collections.getAggregationPath.resolve(aggregationId + "." + format).toFile, fileHeaders, format ) }
       fileHeaders
     } catch {
@@ -594,15 +593,14 @@ object Aggregation extends Loggable {
     val startTime = fileHeaders.head.startValue
     val endTime = fileHeaders.last.endValue
     val nTimeSteps: Int = fileHeaders.foldLeft(0)(_ + _.nElem)
-    val fileMetadata = FileMetadata( fileHeaders.head.filePath, nTimeSteps )
+    val fileMetadata = FileMetadata( fileHeaders.head.toPath.toString, nTimeSteps )
     logger.info( " ")
-    val ( basePath, reducedFileheaders ) = FileHeader.extractSubpath( fileHeaders )
     try {
       bw.write( s"P; time.nrows; ${fileHeaders.length}\n")
       bw.write( s"P; time.start; ${startTime}\n")
       bw.write( s"P; time.end; ${endTime}\n")
-      bw.write( s"P; base.path; $basePath\n")
-      bw.write( s"P; num.files; ${reducedFileheaders.length}\n")
+      bw.write( s"P; base.path; ${fileHeaders.head.dataLocation.toString}\n")
+      bw.write( s"P; num.files; ${fileHeaders.length}\n")
       for (attr <- fileMetadata.attributes ) { bw.write( s"P; ${attr.getFullName}; ${attr.getStringValue} \n") }
       for (coordAxis <- fileMetadata.coordinateAxes; ctype = coordAxis.getAxisType.getCFAxisName ) {
         if(ctype.equals("Z") ) {  bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n") }
@@ -610,8 +608,8 @@ object Aggregation extends Loggable {
       }
       for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} \n" ) }
       for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName}; ${variable.getFullName}; ${variable.getDODSName};  ${variable.getDescription};  ${getShapeStr(variable.getDimensionsString,nTimeSteps,variable.getShape)};  ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
-      for (fileHeader <- reducedFileheaders) {
-        bw.write( s"F; ${EDTime.toString(fileHeader.startValue)}; ${fileHeader.nElem.toString}; ${fileHeader.filePath}\n" )
+      for (fileHeader <- fileHeaders) {
+        bw.write( s"F; ${EDTime.toString(fileHeader.startValue)}; ${fileHeader.nElem.toString}; ${fileHeader.relFile}\n" )
       }
     } finally {
       fileMetadata.close
