@@ -380,16 +380,9 @@ object Collections extends XmlResource with Loggable {
   }
 
   def getAggregationPath: Path = getCachePath("agg")
-  def clearCacheFiles( id: String, ext: String ): Unit = getAggregationPath.toFile.listFiles( s"""$id.*\.$ext""".r  ).foreach( _.delete )
-  def clearCacheFilesByType( ext: String ): Unit = getAggregationPath.toFile.listFiles( s""".*\.$ext""".r  ).foreach( _.delete )
+  def clearCacheFilesByType( ext: String ): Unit = getAggregationPath.toFile.listFiles( (""".*\.""" + ext).r  ).foreach( _.delete )
   def clearCacheFilesByTypes( exts: List[String] ): Unit =  exts foreach ( ftype => Collections.clearCacheFilesByType(ftype));
-  def clearCacheFilesById( id: String ): Unit = {
-    val dir = getAggregationPath.toFile
-    val files: Array[File] = dir.listFiles( s"""$id.*""".r  )
-    logger.info( s" Clear Cache Files By Id ($id): " + files.map(_.toString).mkString(", ") )
-    files.foreach( _.delete )
-  }
-
+  def clearCacheFilesById( id: String ): Unit = getAggregationPath.toFile.listFiles( s"""$id.*""".r  ).foreach( _.delete )
 
   //  def refreshCollectionList = {
   //    var collPath: Path = null
