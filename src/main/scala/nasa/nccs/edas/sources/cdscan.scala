@@ -239,7 +239,7 @@ object CDScan extends Loggable {
     while( argIter.hasNext ) {
       val arg = argIter.next
       if(arg(0) == '-') arg match {
-        case "-o" => { clear = true; optionMap += (( "overwrite", "true" )) }
+        case "-o" => optionMap += (( "overwrite", "true" ))
         case "-f" => optionMap += (( "filter", argIter.next ))
         case "-t" => optionMap += (( "title", argIter.next ))
         case x => throw new Exception( "Unrecognized option: " + x )
@@ -248,7 +248,6 @@ object CDScan extends Loggable {
     if( inputs.length < 2 ) { throw new Exception( "Missing input(s): " + usage ) }
     val collectionId = inputs(0).toLowerCase
     val pathFile = new File( inputs(1) )
-    if( clear ) { Collections.clearCacheFilesById(collectionId) }
     AggregationWriter.extractAggregations( collectionId, pathFile.toPath, optionMap.toMap )
     FileHeader.term()
   }
@@ -265,17 +264,19 @@ object CDMultiScan extends Loggable {
     EDASLogManager.isMaster
     var optCollectionsMetaFile: Option[File] = None
     var optionMap = mutable.HashMap.empty[String, String]
+    var refresh = false
     val argIter = args.iterator
     while( argIter.hasNext ) {
       val arg = argIter.next
       if(arg(0) == '-') arg match {
         case "-o" => optionMap += (( "overwrite", "true" ))
-        case "-r" => optionMap += (( "refresh", "true" ))
+        case "-r" => { refresh = true; optionMap += (( "refresh", "true" )) }
         case x => throw new Exception( "Unrecognized option: " + x )
       } else {
         optCollectionsMetaFile = Some( new File(arg) )
       }
     }
+    if( refresh ) {  Collections.clearCacheFilesByTypes( List("ag1","csv") ) }
     val collectionsMetaFile = optCollectionsMetaFile.getOrElse( throw new Exception( "Must specify CollectionsMetaFile  " ) )
     if( collectionsMetaFile.isFile ) {
       val ncmlDir = Collections.getAggregationPath.toFile

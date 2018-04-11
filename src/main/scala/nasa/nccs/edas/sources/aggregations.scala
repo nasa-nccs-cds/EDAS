@@ -55,7 +55,7 @@ object AggregationWriter extends Loggable {
   def isInt( ival: String ): Boolean = try { ival.toInt; true } catch { case ex: Throwable => false }
 
   def generateAggregations(collectionsFile: File, options: Map[String,String] ): Unit = {
-    logger.info(s"Generate NCML file from specs in " + collectionsFile.getAbsolutePath )
+    logger.info(s"Generate NCML file from specs in " + collectionsFile.getAbsolutePath + ", Options: " + options.mkString("; ") )
     for (line <- Source.fromFile( collectionsFile.getAbsolutePath ).getLines; tline = line.trim; if !tline.isEmpty && !tline.startsWith("#")  ) {
       val mdata = tline.split(",").map(_.trim)
       assert( (mdata.length == 4) && new File(mdata(3)).exists, s"Format error in Collections csv file, columns = { CollectionId: String, filter: RegEx, title: String, rootCollectionPath: String }, incorrect line: { ${mdata.mkString(" || ")} }" )
@@ -110,13 +110,14 @@ object AggregationWriter extends Loggable {
   }
 
   def extractAggregations(collectionId: String, dataPath: Path, options: Map[String,String] = Map.empty ): Unit = {
+    val overwrite: Boolean = options.getOrElse("overwrite","false").toBoolean
+    if( overwrite ) { Collections.clearCacheFilesById( collectionId ) }
     val dataLocation: Path = if(dataPath.toFile.exists) { dataPath } else { Paths.get( new java.io.File(".").getCanonicalPath, dataPath.toString ) }
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
     //    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
     FileHeader.factory( collectionId, dataLocation,  ncSubPaths )
     val refresh: Boolean = options.getOrElse("refresh","false").toBoolean
-    val overwrite: Boolean = options.getOrElse("overwrite","false").toBoolean
     val nameTemplate: Regex = options.getOrElse("filter",".*").r
     val collectionTitle = options.getOrElse("title","Collection")
     var subColIndex: Int = 0
