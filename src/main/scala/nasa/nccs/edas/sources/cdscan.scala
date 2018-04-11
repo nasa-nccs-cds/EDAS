@@ -224,9 +224,7 @@ class FileMetadata(val ncDataset: NetcdfDataset, val nTS: Int ) {
 
 object CDScan extends Loggable {
   val usage = """
-    Usage: mkcol [-r] [-o] [-f {collectionNameFilter: RegExp}] [-t {collectionTitle: String}] <collectionID> <datPath>
-      Options:  -r  refresh:    Clear all existing collections and begin with a blank slate.
-                -o  overwrite:  Delete any existing configurations for this collection before processing.
+    Usage: mkcol [-f {collectionNameFilter: RegExp}] [-t {collectionTitle: String}] <collectionID> <datPath>
   """
 
   def main(args: Array[String]) {
@@ -239,7 +237,6 @@ object CDScan extends Loggable {
     while( argIter.hasNext ) {
       val arg = argIter.next
       if(arg(0) == '-') arg match {
-        case "-o" => optionMap += (( "overwrite", "true" ))
         case "-f" => optionMap += (( "filter", argIter.next ))
         case "-t" => optionMap += (( "title", argIter.next ))
         case x => throw new Exception( "Unrecognized option: " + x )
@@ -255,9 +252,8 @@ object CDScan extends Loggable {
 
 object CDMultiScan extends Loggable {
   val usage = """
-    Usage: mkcols [-r] [-o] <collectionsMetaFile>
+    Usage: mkcols [-r] <collectionsMetaFile>
       Options:  -r  refresh:    Clear all existing collections and begin with a blank slate.
-                -o  overwrite:  Delete any existing configurations for this collection before processing.
   """
   def main(args: Array[String]) {
     if( args.length < 1 ) { println( usage ); return }
@@ -269,7 +265,6 @@ object CDMultiScan extends Loggable {
     while( argIter.hasNext ) {
       val arg = argIter.next
       if(arg(0) == '-') arg match {
-        case "-o" => optionMap += (( "overwrite", "true" ))
         case "-r" => { refresh = true; optionMap += (( "refresh", "true" )) }
         case x => throw new Exception( "Unrecognized option: " + x )
       } else {
@@ -343,7 +338,7 @@ object CDScanTest {
   def main(args: Array[String]) {
     val collectionId = "giss-test"
     val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1"
-    CDScan.main( Array( "-o", collectionId, dataPath) )
+    CDScan.main( Array( collectionId, dataPath) )
   }
 }
 

@@ -114,8 +114,7 @@ object AggregationWriter extends Loggable {
   }
 
   def extractAggregations(collectionId: String, dataPath: Path, options: Map[String,String] = Map.empty ): Unit = {
-    val overwrite: Boolean = options.getOrElse("overwrite","false").toBoolean
-    if( overwrite ) { Collections.clearCacheFilesById( collectionId ) }
+    Collections.clearCacheFilesById( collectionId )
     val dataLocation: Path = if(dataPath.toFile.exists) { dataPath } else { Paths.get( new java.io.File(".").getCanonicalPath, dataPath.toString ) }
     assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
     //    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
@@ -130,28 +129,23 @@ object AggregationWriter extends Loggable {
     val varMap: Map[String,String] = groupedFileHeaders flatMap { case ( group_key, groupedFileHeaders ) =>
       val aggregationId: String = getIdentifier( collectionId, dataLocation, groupedFileHeaders )
       val agFile = Aggregation.getAgFile( aggregationId, agFormat )
-      if( overwrite && agFile.exists ) { Collections.clearCacheFilesById( aggregationId ) }
-      if( agFile.exists ) {
-//        logger.info(s" %X% skipping Aggregation($aggregationId)-> aggregation file ${agFile.toString} already exists." )
-        List.empty[(String,String)]
-      } else {
-        logger.info(s" %X% extract Aggregation($collectionId)-> group_key=$group_key, aggregationId=$aggregationId")
-        val fileHeaders = Aggregation.write(aggregationId, groupedFileHeaders, agFormat)
-        val writer = new NCMLWriter(aggregationId, fileHeaders)
-        val varNames = writer.writeNCML(Collections.getAggregationPath.resolve(aggregationId + ".ncml").toFile)
-        varNames.map(vname => vname -> aggregationId)
-      }
+      if( agFile.exists ) { Collections.clearCacheFilesById( aggregationId ) }
+      logger.info(s" %X% extract Aggregation($collectionId)-> group_key=$group_key, aggregationId=$aggregationId")
+      val fileHeaders = Aggregation.write(aggregationId, groupedFileHeaders, agFormat)
+      val writer = new NCMLWriter(aggregationId, fileHeaders)
+      val varNames = writer.writeNCML(Collections.getAggregationPath.resolve(aggregationId + ".ncml").toFile)
+      varNames.map(vname => vname -> aggregationId)
     }
     //    logger.info(s" %C% extract Aggregations varMap: " + varMap.map(_.toString()).mkString("; ") )
     if( varMap.isEmpty ) {
       logger.info(s" %X% No new aggregations for collection ${collectionId} " )
     } else {
-      logger.info(s" %X% Adding ${varMap.size} new aggregations for collection ${collectionId} " )
+//      logger.info(s" %X% Adding ${varMap.size} new aggregations for collection ${collectionId} " )
 //      val contextualizedVarMap: Seq[(String, String)] = varMap.groupBy { _._1 }.values.map(scopeRepeatedVarNames).toSeq.flatten
 //      addAggregations(collectionId, collectionTitle, Map(contextualizedVarMap: _*), agFormat)
       addAggregations(collectionId, collectionTitle, varMap, agFormat)
-      FileHeader.clearCache
     }
+    FileHeader.clearCache
   }
 
   def rid( len: Int = 6 ) = RandomStringUtils.random( 6, true, true )
