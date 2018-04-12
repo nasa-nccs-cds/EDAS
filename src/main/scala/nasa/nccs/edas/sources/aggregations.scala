@@ -492,7 +492,7 @@ object Aggregation extends Loggable {
         case "P" =>
           parameters += toks(1) -> toks(2)
           if( toks(1).equals("num.files") ) { files = new mutable.ArrayBuffer[FileInput]( toks(2).toInt ) }
-        case "V" => variables += Variable( toks(1), toks(2).split(",").map( toInt ), toks(3), toks(4) )
+        case "V" => variables += Variable( toks(1), toks(5).split(",").map( toInt ), toks(6), toks(7) )
         case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( toInt ) )
         case "A" => axes += Axis( toks(1), toks(2), toks(3).split(",").map( toInt ), toks(4), toFloat(toks(5)), toFloat(toks(6)) )
         case _ => Unit
