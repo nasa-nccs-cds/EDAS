@@ -497,7 +497,12 @@ object Collections extends XmlResource with Loggable {
 
   def getAggregations(collectionFilePath: String ): Map[String,Aggregation] = {
     val aggs = mutable.HashMap.empty[String,Aggregation]
-    val agFiles: Iterator[(String,String)] = for (line <- Source.fromFile(collectionFilePath).getLines; elems = line.split(",").map(_.trim)) yield elems.head -> new File( elems.last ).getAbsolutePath
+    val partitionedLines = Source.fromFile(collectionFilePath).getLines.partition( _.startsWith("#") )
+    val metadata: Map[String,String] = partitionedLines._1.map( _.split(',') ).map( toks => toks(0).substring(1).trim -> toks(1).trim ).toMap
+    val dir = metadata.getOrElse("dir","/")
+    val format = metadata.getOrElse("format","ag1")
+    logger.info( s" ---> Loading aggregation from file ${collectionFilePath}, dir = ${dir}, metadata = { ${metadata.mkString(";")} }")
+    val agFiles: Iterator[(String,String)] = for (line <- partitionedLines._2; elems = line.split(",").map(_.trim)) yield elems.head -> Paths.get( dir, elems.last + "." + format ).toString
     val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( file ) ) }
     agMapIter.toMap[String,Aggregation]
   }
