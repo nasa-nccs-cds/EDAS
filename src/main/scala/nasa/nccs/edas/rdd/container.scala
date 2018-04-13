@@ -634,17 +634,17 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
   val filePath: String = if( basePath.isEmpty ) { fileInput.path } else { Paths.get( basePath, fileInput.path ).toString }
   override def toString = s"Partition{ Var[${varName}], ${fileInput.toString}, ${cdsection.toString}, ${partitionRange.toString}, localPartRange: ${partitionRange.toRange( fileInput.firstRowIndex ).toString} }"
 
-  def getTimeSliceRange = {
-    val localPartRange = partitionRange.toRange( fileInput.firstRowIndex )
-    val interSect: ma2.Section = cdsection.toSection.replaceRange(0,localPartRange)
-    val dataset = NetcdfDatasetMgr.aquireFile(filePath, 77.toString)
-    val fileTimeAxis = NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
-    val timeAxis: CoordinateAxis1DTime = fileTimeAxis.section( localPartRange )
-    val slice0 = getSliceRanges(interSect, 0).head
-    val slice1 = getSliceRanges(interSect, timeAxis.getShape(0)-1).head
-    dataset.close()
-    s"SliceRange[${slice0.first}:${slice1.first}]"
-  }
+//  def getTimeSliceRange = {
+//    val localPartRange = partitionRange.toRange( fileInput.firstRowIndex )
+//    val interSect: ma2.Section = cdsection.toSection.replaceRange(0,localPartRange)
+//    val dataset = NetcdfDatasetMgr.aquireFile(filePath, 77.toString)
+//    val fileTimeAxis = NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
+//    val timeAxis: CoordinateAxis1DTime = fileTimeAxis.section( localPartRange )
+//    val slice0 = getSliceRanges(interSect, 0).head
+//    val slice1 = getSliceRanges(interSect, timeAxis.getShape(0)-1).head
+//    dataset.close()
+//    s"SliceRange[${slice0.first}:${slice1.first}]"
+//  }
 
   def getGlobalOrigin( localOrigin: Array[Int], timeIndexOffest: Int ):  Array[Int] =
     localOrigin.zipWithIndex map { case ( ival, index ) => if( index == 0 ) { ival + timeIndexOffest } else {ival} }
@@ -658,12 +658,12 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
     val fileTimeAxis = NetcdfDatasetMgr.getTimeAxis(dataset) getOrElse { throw new Exception(s"Can't find time axis in data file ${filePath}") }
     val timeAxis: CoordinateAxis1DTime = fileTimeAxis.section( localPartRange )
     val nTimesteps = timeAxis.getShape(0)
-    val slices = for (slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map( _.getMillis ) ) yield {
-      val sliceRanges = getSliceRanges(interSect, slice_index)
+    val levels: IndexedSeq[Int] = getLevels( interSect )
+    val slices = for (slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map( _.getMillis ); level_index <- levels ) yield {
+      val (data_shape, sliceRanges) = getSliceRanges(interSect, slice_index, level_index )
       val data_section = variable.read(sliceRanges)
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
-      val data_shape: Array[Int] = data_section.getShape
-      val arraySpec = ArraySpec( getMissing(variable), data_section.getShape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array, None )
+      val arraySpec = ArraySpec( getMissing(variable), data_shape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array, None )
       val time_index = sliceRanges.head.first
       CDRecord(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
     }
@@ -672,9 +672,25 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
     slices.toIterator
   }
 
-  private def getSliceRanges( section: ma2.Section, slice_index: Int ): java.util.List[ma2.Range] = {
-    section.getRanges.zipWithIndex map { case (range: ma2.Range, index: Int) =>
-      if (index == 0) { new ma2.Range("time", range.first + slice_index, range.first + slice_index) } else { range } }
+  private def getLevels( section: ma2.Section ): IndexedSeq[Int] = {
+    val nRanges = section.getShape.length
+  }
+
+  private def getSliceRanges( section: ma2.Section, slice_index: Int, level_index: Int = 0 ): ( Array[Int], IndexedSeq[ma2.Range] ) = {
+    val nRanges = section.getShape.length
+    val shapeBuffer = ListBuffer[Int]()
+    val ranges:  IndexedSeq[ma2.Range] = for ( index <- 0 until 4 ) yield { index match {
+      case 0 =>
+        val range = section.getRange(0)
+        Some( new ma2.Range("time", range.first + slice_index, range.first + slice_index) )
+      case 1 =>
+        if( nRanges == 4 ) { new ma2.Range( "level", level_index, level_index ) }
+      case 2 =>
+        if( nRanges == 3 ) { section.getRange(1) } else { section.getRange(2) }
+      case 3 =>
+        if( nRanges == 3 ) { section.getRange(2) } else { section.getRange(3) }
+    }}
+    ( shapeBuffer.toArray, ranges )
   }
 }
 
