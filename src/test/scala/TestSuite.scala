@@ -685,9 +685,56 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
   }
 
+  test("binning-yearlyAve-GISS") {
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 230.1202, 224.2958, 228.4658, 228.0224, 226.1936, 225.7275, 222.0484, 223.9207, 223.3873, 222.8198, 225.1187, 224.4428, 229.7138, 229.7007, 229.8149, 229.4356, 227.8259, 228.9415 ).map(_.toFloat), Float.MaxValue )
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":5,"end":7,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":"1850-01-15T00:00:00Z","end":"1851-01-15T00:00:00Z","system":"timestamps"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[{ "name":"CDSpark.ave", "axes":"t", "input":"v1", "groupBy":"year" }]]""".stripMargin
+    val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkDataString(", ")  )
+    println( "Verified Result: " + nco_verified_result.mkDataString(", ") )
+  }
+
+  test("1yearAve-GISS") {
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array( 230.1202, 224.2958, 228.4658, 228.0224, 226.1936, 225.7275, 222.0484, 223.9207, 223.3873, 222.8198, 225.1187, 224.4428, 229.7138, 229.7007, 229.8149, 229.4356, 227.8259, 228.9415 ).map(_.toFloat), Float.MaxValue )
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":5,"end":7,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":"1851-01-01T00:00:00Z","end":"1852-01-01T00:00:00Z","system":"timestamps"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[{ "name":"CDSpark.ave", "axes":"t", "input":"v1" }]]""".stripMargin
+    val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkDataString(", ")  )
+    println( "Verified Result: " + nco_verified_result.mkDataString(", ") )
+    assert( result_data.maxScaledDiff( nco_verified_result )  < eps, s" Incorrect value computed for 1yearAve")
+  }
+
+  test("SpaceAve-GISS-R1i1p1-dates1") {
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":5,"end":7,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":"1850-01-10T00:00:00Z","end":"1851-01-10T00:00:00Z","system":"timestamps"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]""".stripMargin
+    val result_node = executeTest( datainputs, Map( "response" -> "file" ) )
+    val dataset = getResultDatasets( result_node ).headOption.getOrElse( throw new Exception( "Missing result data file, result node: " + result_node.toString() ) )
+    dataset.getCoordinateAxes.find( _.getAxisType.getCFAxisName == "T" ) match {
+      case Some(coordAxis) =>
+        val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(dataset, coordAxis, new Formatter())
+        println( "Op Result time axis units:       " + timeAxis.getUnitsString )
+        val nDates = timeAxis.getSize.toInt
+        val time_values = (0 until nDates) map timeAxis.getCoordValue
+        println( "Op Result times: " + (0 until nDates).map( iTime => timeAxis.getCalendarDate(iTime).toString ).mkString(", ") )
+        println( "Op Result bounds: " + (0 until nDates).map( iTime => timeAxis.getCoordBoundsDate(iTime).map(_.toString).mkString( " - ") ).mkString(", ") )
+      case None => throw new Exception( "Missing Time Axis in data file: " + dataset.getLocation )
+    }
+  }
+
   test("SpaceAve-GISS-R1i1p1-dates") {
     val result_vals = CDFloatArray( Array(  1.05339E7, 1.05777E7, 1.06215E7, 1.06653E7, 1.07091E7, 1.07529E7, 1.07967E7, 1.08405E7, 1.08843E7, 1.09281E7, 1.09719E7, 1.10157E7, 1.10595E7, 1.11033E7, 1.11471E7, 1.11909E7, 1.12347E7, 1.12785E7, 1.13223E7, 1.13661E7, 1.14099E7, 1.14537E7, 1.14975E7, 1.15413E7, 1.15851E7, 1.16289E7, 1.16727E7, 1.17165E7, 1.17603E7, 1.18041E7, 1.18479E7, 1.18917E7, 1.19355E7, 1.19793E7, 1.20231E7, 1.20669E7 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"},"time":{"start":"1990-01-01T00:00:00Z","end":"1992-12-31T23:59:00Z","system":"timestamps"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":5,"end":25,"system":"indices"},"lon":{"start":5,"end":25,"system":"indices"},"time":{"start":"1990-01-01T00:00:00Z","end":"1992-12-31T23:59:00Z","system":"timestamps"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]""".stripMargin
     val result_node = executeTest( datainputs, Map( "response" -> "file" ) )
     val dataset = getResultDatasets( result_node ).headOption.getOrElse( throw new Exception( "Missing result data file, result node: " + result_node.toString() ) )
     dataset.getCoordinateAxes.find( _.getAxisType.getCFAxisName == "T" ) match {

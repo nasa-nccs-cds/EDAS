@@ -13,8 +13,8 @@ import nasa.nccs.esgf.process.CDSection
 import nasa.nccs.utilities.{EDTime, Loggable}
 import org.apache.commons.lang.RandomStringUtils
 import ucar.nc2
-import ucar.nc2.time.CalendarDate
 import ucar.ma2
+import ucar.nc2.time.{Calendar, CalendarDate}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -399,7 +399,7 @@ case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: I
       val r0 = (time_value - firstValue)/dt
       val ri: Int = Math.round( r0 - 0.001 ).toInt
       val rval = if( range_position == RangeStart ) { ri } else { ri - 1 }
-//      logger.info( s" @DSX: toRowIndex: firstValue: ${CalendarDate.of(firstValue).toString}, lastValue: ${CalendarDate.of(lastValue).toString}, firstRow: ${firstRow}, nRows: ${nRows}, time_value: ${CalendarDate.of(time_value).toString}, r0: ${r0}, rval: ${rval}, result: ${firstRow + rval}, boundsStatus: ${boundsStatus} ")
+//      logger.info( s" @DSX: toRowIndex: firstRow: ${firstRow}, nRows: ${nRows}, r0: ${r0}, rval: ${rval}, result: ${firstRow + rval}, boundsStatus: ${boundsStatus} ")
       BoundedIndex( firstRow + rval.toLong, boundsStatus )
     case BoundedIndex.AboveRange =>
       BoundedIndex( firstRow, boundsStatus)
@@ -436,6 +436,7 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
   val dt: Long = time_duration/time_nrows
   val ave_file_dt: Long = time_duration/files.length
   val ave_file_nrows: Long = time_nrows/files.length
+  val calendar: Calendar = Calendar.get( parms.getOrElse("calendar","default"))
   def findVariable( varName: String ): Option[Variable] = variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
   def gridFilePath: String = getRelatedFile( "nc")
@@ -453,6 +454,9 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
   }
 
   private def _fileInputsFromTimeValue( time_value: Long, estimated_file_index: Int ): TimeRange = {
+    val start_date = CalendarDate.of( calendar, time_start )
+    val end_date = CalendarDate.of( calendar, time_end )
+    val value_date = CalendarDate.of( calendar, time_value )
     if( time_value < time_start ) { return  TimeRange( time_start, time_start, 0, 0, BoundedIndex.BelowRange )  }
     if( time_value >= time_end ) { return TimeRange( time_end, time_end, time_nrows-1, 0, BoundedIndex.AboveRange ) }
     val file0 = files( estimated_file_index )
@@ -462,7 +466,7 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     } else {
       val file1 = files(estimated_file_index + 1)
       if (time_value >= file1.startTime) { return _fileInputsFromTimeValue(time_value, estimated_file_index + 1) }
-//      logger.info( s" @DSX: MappingTimeValue: estimated_file_index=${estimated_file_index} file start Time=${file0.startTime} agg time range=[ ${CalendarDate.of(time_start).toString} <-> ${CalendarDate.of(time_end).toString} ], row=${file0.firstRowIndex}, file time range=[ ${CalendarDate.of(file0.startTime).toString} <-> ${CalendarDate.of(file1.startTime).toString} ]")
+//      logger.info( s" @DSX: MappingTimeValue: estimated_file_index=${estimated_file_index} file start Time=${file0.startTime}, row=${file0.firstRowIndex}")
       TimeRange(file0.startTime, file1.startTime, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange)
     }
 
@@ -594,6 +598,7 @@ object Aggregation extends Loggable {
     logger.info("Processing %d files with %d workers".format(fileHeaders.length, nReadProcessors))
     val bw = new BufferedWriter(new FileWriter(aggFile))
     val startTime = fileHeaders.head.startValue
+    val calendar = fileHeaders.head.calendar
     val endTime = fileHeaders.last.endValue
     val nTimeSteps: Int = fileHeaders.foldLeft(0)(_ + _.nElem)
     val fileMetadata = FileMetadata( fileHeaders.head.toPath.toString, nTimeSteps )
@@ -602,6 +607,7 @@ object Aggregation extends Loggable {
       bw.write( s"P; time.nrows; ${fileHeaders.length}\n")
       bw.write( s"P; time.start; ${startTime}\n")
       bw.write( s"P; time.end; ${endTime}\n")
+      bw.write( s"P; time.calendar; ${calendar.name}\n")
       bw.write( s"P; base.path; ${fileHeaders.head.dataLocation.toString}\n")
       bw.write( s"P; num.files; ${fileHeaders.length}\n")
       for (attr <- fileMetadata.attributes ) { bw.write( s"P; ${attr.getFullName}; ${attr.getStringValue} \n") }

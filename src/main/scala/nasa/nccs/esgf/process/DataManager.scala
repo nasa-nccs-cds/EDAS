@@ -224,7 +224,8 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
           if( dom_start < axis_len ) {
             Some( new ma2.Range(getCFAxisName, dom_start, math.min( domainAxis.end.toInt, axis_len-1 ), 1) )
           } else None
-        case asys if asys.startsWith("val") || asys.startsWith("time") => getIndexBounds( domainAxis.start, domainAxis.end )
+        case asys if asys.startsWith("val") || asys.startsWith("time") =>
+          getIndexBounds( domainAxis.start, domainAxis.end )
         case _ => throw new IllegalStateException("CDSVariable: Illegal system value in axis bounds: " + domainAxis.system)
       }
       case None => Some( new ma2.Range( getCFAxisName, 0, axis_len-1, 1 ) )

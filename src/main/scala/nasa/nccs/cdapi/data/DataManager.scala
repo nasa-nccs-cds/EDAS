@@ -95,17 +95,6 @@ trait BinSorter {
   def getVaryingAxis: Int = -1
 }
 
-object TimeCycleSorter {
-  val Undef = -1
-  val Diurnal = 0
-  val Monthly = 1
-  val Seasonal = 2
-
-  val Month = 1
-  val MonthOfYear = 2
-  val Year = 3
-}
-
 class TimeSpecs( val input_data: HeapFltArray, val startIndex: Int ) extends Loggable {
   logger.info( "\n    *************>>>>>>>>>>> Opening gridSpec: " + input_data.gridSpec )
   private val __gridDS: NetcdfDataset = NetcdfDatasetMgr.aquireFile( input_data.gridSpec, 12.toString )
@@ -115,109 +104,6 @@ class TimeSpecs( val input_data: HeapFltArray, val startIndex: Int ) extends Log
   __gridDS.close()
 }
 
-class TimeCycleSorter(val input_data: HeapFltArray, val cycleParm: String, val binParm: String, val startIndex: Int ) extends BinSorter with Loggable {
-  import TimeCycleSorter._
-  val timeSpecs = new TimeSpecs( input_data, startIndex )
-  val cycle = cycleParm match {
-    case x if (x == "diurnal") || x.startsWith("hour")  => Diurnal
-    case x if x.startsWith("month") => Monthly
-    case x if x.startsWith("season") => Seasonal
-  }
-  val bin = binParm match {
-    case x if x.startsWith("month") => Month
-    case x if x.startsWith("monthof") => MonthOfYear
-    case x if x.startsWith("year") => Year
-    case x => Undef
-  }
-  private var _startBinIndex = -1
-  private var _currentDate: CalendarDate = CalendarDate.of(0L)
-  val _startMonth = timeSpecs.dateRange._1.getFieldValue( CalendarPeriod.Field.Month )
-  val _startYear = timeSpecs.dateRange._1.getFieldValue( CalendarPeriod.Field.Year )
-  lazy val yearRange = timeSpecs.dateList.last.getFieldValue( CalendarPeriod.Field.Year ) - timeSpecs.dateList.head.getFieldValue( CalendarPeriod.Field.Year )
-  lazy val monthRange = timeSpecs.dateList.last.getFieldValue( CalendarPeriod.Field.Month ) - timeSpecs.dateList.head.getFieldValue( CalendarPeriod.Field.Month )
-  lazy val fullYearRange = timeSpecs.dateRange._2.getFieldValue( CalendarPeriod.Field.Year ) - timeSpecs.dateRange._1.getFieldValue( CalendarPeriod.Field.Year )
-  lazy val fullMonthRange = timeSpecs.dateRange._2.getFieldValue( CalendarPeriod.Field.Month ) - timeSpecs.dateRange._1.getFieldValue( CalendarPeriod.Field.Month )
-
-  def getNumBins: Int = nBins
-  def getSeason( monthIndex: Int ): Int = ( monthIndex - 2 ) / 3
-
-  val nBins: Int = cycle match {
-    case Diurnal => 24
-    case Monthly => 12
-    case Seasonal => 4
-  }
-
-  val nItems: Int = bin match {
-    case Month => monthRange + 1 + 12*yearRange
-    case MonthOfYear => 12
-    case Year => yearRange + 1
-    case Undef => 1
-  }
-
-  val nTotalItems: Int = bin match {
-    case Month => fullMonthRange + 1 + 12*fullYearRange
-    case MonthOfYear => 12
-    case Year => fullYearRange + 1
-    case Undef => 1
-  }
-
-  def getReducedShape( shape: Array[Int]  ): Array[Int] = {
-    var newshape = Array.fill[Int](shape.length)(1)
-    newshape(0) = nTotalItems
-    newshape
-  }
-
-  def setCurrentCoords( coords: Array[Int] ): Unit = {
-    _currentDate = timeSpecs.dateList( coords(0) )
-  }
-
-  def getBinIndex: Int = cycle match {
-    case Diurnal => _currentDate.getHourOfDay
-    case Monthly => _currentDate.getFieldValue( CalendarPeriod.Field.Month ) - 1
-    case Seasonal => getSeason( _currentDate.getFieldValue( CalendarPeriod.Field.Month ) - 1 )
-  }
-
-  def getItemIndex: Int = bin match {
-    case Month =>         _currentDate.getFieldValue( CalendarPeriod.Field.Month ) - _startMonth + ( _currentDate.getFieldValue( CalendarPeriod.Field.Year ) - _startYear ) * 12
-    case MonthOfYear =>   _currentDate.getFieldValue( CalendarPeriod.Field.Month ) - _startMonth
-    case Year =>          _currentDate.getFieldValue( CalendarPeriod.Field.Year ) - _startYear
-    case Undef => 0
-  }
-}
-
-
-class AnomalySorter(val input_data: HeapFltArray, val axesParm: String, grid: GridContext, val startIndex: Int ) extends BinSorter with Loggable {
-  import TimeCycleSorter._
-  val axes = axesParm.toLowerCase
-  val timeSpecs = new TimeSpecs( input_data, startIndex )
-  val yIndex: Int = grid.getAxisIndices( "y" ).getAxes(0)
-  val (cycle, nBins) = if( axes.contains('t') ) ( Monthly,  12 ) else ( Undef, 1 )
-  val removeYvar = axes.contains('y')
-  private var _currentDate: CalendarDate = CalendarDate.of(0L)
-  private var _currentCoords: Array[Int] = Array.emptyIntArray
-
-  override def getVaryingAxis: Int = if( removeYvar ) { yIndex } else { -1 }
-
-  def getNumBins: Int = nBins
-
-  def getReducedShape( shape: Array[Int]  ): Array[Int] = {
-    var newshape = Array.fill[Int](shape.length)(1)
-    if( removeYvar ) { newshape(yIndex) = shape(yIndex) }
-    newshape
-  }
-
-  def setCurrentCoords( coords: Array[Int] ): Unit = {
-    _currentDate = timeSpecs.dateList( coords(0) )
-    _currentCoords = coords
-  }
-
-  def getBinIndex: Int = cycle match {
-    case Monthly => _currentDate.getFieldValue( CalendarPeriod.Field.Month ) - 1
-    case Undef => 0
-  }
-
-  def getItemIndex: Int = if( removeYvar ) { _currentCoords(yIndex) } else { 0 }
-}
 
 object FastMaskedArray {
   var profileTime = 0f

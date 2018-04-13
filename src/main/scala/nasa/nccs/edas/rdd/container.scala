@@ -2,7 +2,7 @@ package nasa.nccs.edas.rdd
 
 
 import java.nio.file.Paths
-import java.util.{Calendar, Date}
+import java.util.{Calendar, Date, TimeZone}
 
 import nasa.nccs.caching.BatchSpec
 import nasa.nccs.cdapi.cdm.{CDGrid, OperationDataInput}
@@ -213,7 +213,6 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   lazy val midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDRecord ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDRecord ): Long = Math.max( endTime, other.endTime )
-  def dateRange: (CalendarDate,CalendarDate) = ( CalendarDate.of(startTime), CalendarDate.of(endTime) )
   def dateRangeStr: String = s"(${CalendarDate.of(startTime)}<->${CalendarDate.of(endTime)})"
   def section( section: CDSection ): Option[CDRecord] = {
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
@@ -311,9 +310,14 @@ object TSGroup {
   }
 }
 
-class TSGroup( val calOp: (Calendar) => Int, val isCyclic: Boolean  ) extends Serializable {
-  lazy val calendar = Calendar.getInstance()
-  def group( slice: CDRecord ): Int = { calendar.setTimeInMillis(slice.midpoint); calOp( calendar ) }
+class TSGroup( val calOp: (Calendar) => Int, val isCyclic: Boolean  ) extends Serializable with Loggable {
+  lazy val calendar = Calendar.getInstance(TimeZone.getTimeZone("Z"))
+  def group( slice: CDRecord ): Int = {
+    calendar.setTimeInMillis(slice.midpoint);
+    val rv = calOp( calendar )
+//    logger.info( s"TSGroup: date ${}")
+    rv
+  }
   def isNonCyclic = !isCyclic
 }
 
@@ -501,7 +505,7 @@ class PartitionExtensionGenerator(val partIndex: Int) extends Serializable {
     val sliceIter = existingSlices.sortBy(_.startTime) map { tSlice =>
       val fileInput: FileInput = fileBase.getFileInput( tSlice.startTime )
       val generator: TimeSliceGenerator = _getGenerator( varId, varName, section, fileInput, optBasePath )
-//      println( s" ***  P[${partIndex}]-ExtendPartition for varId: ${varId}, varName: ${varName}: StartTime: ${tSlice.startTime}, date: ${new Date(tSlice.startTime).toString}, FileInput start date: ${CalendarDate.of(fileInput.startTime).toString} ${fileInput.nRows} ${fileInput.path}  ")
+//      println( s" ***  P[${partIndex}]-ExtendPartition for varId: ${varId}, varName: ${varName}: StartTime: ${tSlice.startTime}, date: ${new Date(tSlice.startTime).toString} ${fileInput.nRows} ${fileInput.path}  ")
       val newSlice: CDRecord = generator.getSlice( tSlice )
       tSlice ++ newSlice
     }

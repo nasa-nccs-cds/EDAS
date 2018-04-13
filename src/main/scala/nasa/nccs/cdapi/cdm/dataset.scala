@@ -24,6 +24,7 @@ import scala.collection.{concurrent, mutable}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.esgf.wps.ProcessManager
+import ucar.nc2.time.Calendar
 import ucar.nc2.{dataset, _}
 import ucar.nc2.write.Nc4Chunking
 
@@ -172,8 +173,9 @@ object CDGrid extends Loggable {
           }
         }
         if( coordAxis.getAxisType == AxisType.Time ) {
-          val ( time_values, bounds ) = FileHeader.getTimeValues( ncDataset, coordAxis )
+          val ( calendar, time_values, bounds ) = FileHeader.getTimeValues( ncDataset, coordAxis )
           newVar.addAttribute( new Attribute( CDM.UNITS, EDTime.units ) )
+          newVar.addAttribute( new Attribute( "calendar", calendar.name() ) )
           gridWriter.write( newVar, ma2.Array.factory( EDTime.ucarDatatype, coordAxis.getShape, time_values ) )
           boundsVarOpt flatMap varMap.get match {
             case Some( ( cvarBnds, newVarBnds )  ) => gridWriter.write( newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, cvarBnds.getShape, bounds.flatten ) )
@@ -296,8 +298,9 @@ object CDGrid extends Loggable {
       for (newVar <- newVars; cvar = ncDataset.findVariable(newVar.getFullName)) cvar match {
         case coordAxis: CoordinateAxis =>
           if (coordAxis.getAxisType == AxisType.Time) {
-            val (time_values, bounds): (Array[Double], Array[Array[Double]]) = FileHeader.getTimeValues(ncDataset, coordAxis)
+            val (calendar, time_values, bounds): (Calendar, Array[Double], Array[Array[Double]]) = FileHeader.getTimeValues(ncDataset, coordAxis)
             newVar.addAttribute(new Attribute(CDM.UNITS, EDTime.units))
+            newVar.addAttribute(new Attribute("calendar", calendar.name()))
             gridWriter.write(newVar, ma2.Array.factory(EDTime.ucarDatatype, coordAxis.getShape, time_values))
           } else {
             gridWriter.write(newVar, coordAxis.read())

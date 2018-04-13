@@ -8,7 +8,6 @@ import nasa.nccs.cdapi.cdm.OperationInput
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
-import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import ucar.{ma2, nc2}
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}

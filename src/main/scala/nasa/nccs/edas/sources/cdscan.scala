@@ -16,7 +16,7 @@ import ucar.nc2.Group
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset._
-import ucar.nc2.time.CalendarDate
+import ucar.nc2.time.{Calendar, CalendarDate}
 
 import scala.collection.mutable
 import collection.mutable.{HashMap, ListBuffer}
@@ -69,10 +69,10 @@ object FileHeader extends Loggable {
     _instanceCache.getOrElse( filePath, {
       val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.aquireFile(filePath, 2.toString)
       try {
-        val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
+        val (calendar, axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
         val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
         val variableNames = variables map { _.getShortName }
-        val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, timeRegular, variableNames, coordVars map { _.getShortName } )
+        val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, calendar, timeRegular, variableNames, coordVars map { _.getShortName } )
         _instanceCache.put( filePath, fileHeader  )
         fileHeader
       } finally {
@@ -131,7 +131,7 @@ object FileHeader extends Loggable {
     }
   }
 
-  def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): ( Array[Double], Array[Array[Double]] ) = {
+  def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): ( Calendar, Array[Double], Array[Array[Double]] ) = {
     val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
     val timeCalValues: List[CalendarDate] = timeAxis.getCalendarDates.toList
     val timeMillis: Array[Long] = timeCalValues.map( _.getMillis ).toArray
@@ -144,41 +144,44 @@ object FileHeader extends Loggable {
         timeMillis.map( value => Array( EDTime.toValue(value-dt2), EDTime.toValue(value+dt2) ) )
       }
     }
+    val calendar = timeCalValues.head.getCalendar
     val timeValues = timeMillis.map( EDTime.toValue )
     //    val datesSample = timeCalValues.subList(0,5)
     //    val timeValuesSample = timeValues.slice(0,5)
     //    logger.info( s" Writing Time values, dates: [ ${datesSample.map(_.toString).mkString(", ")} ], ${EDTime.units}: [ ${timeValuesSample.map(_.toString).mkString(", ")} ] ")
-    ( timeValues, bounds )
+    ( calendar, timeValues, bounds )
   }
 
 
-  def getTimeCoordValues(ncDataset: NetcdfDataset): ( Array[Double], Array[Array[Double]] ) = {
-    val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
+  def getTimeCoordValues(ncDataset: NetcdfDataset): ( Calendar, Array[Double], Array[Array[Double]] ) =
+    Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
       case Some(timeAxis) => getTimeValues(ncDataset, timeAxis)
       case None => throw new Exception( "ncDataset does not have a time axis: " + ncDataset.getReferencedFile.getLocation )
     }
-    result
-  }
 }
 
 class FileHeader( val dataLocation: Path,
                   val relFile: String,
-                 val axisValues: Array[Double],
-                 val boundsValues: Array[Array[Double]],
-                 val timeRegular: Boolean,
-                 val varNames: List[String],
-                 val coordVarNames: List[String]
+                  val axisValues: Array[Double],
+                  val boundsValues: Array[Array[Double]],
+                  val calendar: Calendar,
+                  val timeRegular: Boolean,
+                  val varNames: List[String],
+                  val coordVarNames: List[String]
                 ) {
+
   def nElem: Int = axisValues.length
   def startValue: Double = boundsValues.head(0)
   def endValue: Double = boundsValues.last(1)
   def dt = ( endValue + 1 - startValue ) / boundsValues.length
   def toPath: Path = dataLocation.resolve( relFile )
-  def startDate: String = EDTime.toDate(startValue).toString
+  def startDate: String = EDTime.toDate(calendar, startValue).toString
+  val sd = startDate
+  val test = 1;
   override def toString: String = " *** FileHeader { path='%s', relFile='%s',nElem=%d, startValue=%d startDate=%s} ".format( dataLocation.toString, relFile, nElem, startValue, startDate)
   def dropPrefix( nElems: Int ): FileHeader = {
     val path = toPath
-    new FileHeader( path.subpath(0,nElems), path.subpath(nElems,path.getNameCount).toString, axisValues, boundsValues, timeRegular, varNames, coordVarNames )
+    new FileHeader( path.subpath(0,nElems), path.subpath(nElems,path.getNameCount).toString, axisValues, boundsValues, calendar, timeRegular, varNames, coordVarNames )
   }
 }
 
@@ -336,9 +339,19 @@ class FileHeaderGenerator( collectionId: String, dataLocation: Path, file: Strin
 
 object CDScanTest {
   def main(args: Array[String]) {
-    val collectionId = "giss-test"
-    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1"
+    val collectionId = "giss-r1i1p1-test"
+    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1_agg"
     CDScan.main( Array( collectionId, dataPath) )
   }
 }
+
+object CDMultiScanTest {
+  def main(args: Array[String]) {
+    val dataPath = "/Users/tpmaxwel/.edas/cache/collections.csv"
+    CDMultiScan.main( Array( dataPath) )
+  }
+}
+
+
+
 
