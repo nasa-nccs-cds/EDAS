@@ -213,7 +213,6 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   lazy val midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDRecord ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDRecord ): Long = Math.max( endTime, other.endTime )
-  def dateRangeStr: String = s"(${CalendarDate.of(startTime)}<->${CalendarDate.of(endTime)})"
   def section( section: CDSection ): Option[CDRecord] = {
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
     if( new_elements.isEmpty ) { None } else { Some( new CDRecord(startTime, endTime, new_elements, metadata) ) }

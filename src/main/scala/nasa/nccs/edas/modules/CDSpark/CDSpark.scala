@@ -232,8 +232,6 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
     rv
   }
 
-  def date( time_index: Long ): String = CalendarDate.of(time_index).toString
-
   def interpolate(numPartitions: Int, times: Array[(Long,Long)] )(partitionIndex: Int, segments: Iterator[Array[CDRecord]] ) : Iterator[CDRecord] = {
     val segSeq  = segments.toSeq
     val nSegments = segSeq.length
@@ -247,7 +245,6 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
           else if( ( segmentIndex == nSegments-1 ) && ( partitionIndex == numPartitions-1 )   )  {  (startRec.midpoint,   midRec.midpoint,  endRec.endTime  ) }
           else { (startRec.midpoint,   midRec.midpoint,  endRec.midpoint ) }
         val segmentTimes = times.filter { case (sliceT0, sliceT1) => { val midT = (sliceT0+sliceT1)/2;  (midT < end_time) && (midT > start_time) } }
-        logger.info( s"   #I# -->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
         segmentTimes.map { case (sliceT0, sliceT1) => {
           val sliceT = (sliceT0 + sliceT1) / 2
           if( sliceT < mid_time ) {
@@ -264,7 +261,6 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
           if( segmentIndex == nSegments-1 ) { (startRec.midpoint,  endRec.endTime  ) }
           else { (startRec.midpoint,  endRec.midpoint ) }
         val segmentTimes = times.filter { case (sliceT0, sliceT1) => (sliceT0 < end_time) && (sliceT1 > start_time) }
-        logger.info( s"   #I# -->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
         segmentTimes.map { case (sliceT0, sliceT1) => CDRecord.interpolate( sliceT0, sliceT1, startRec, endRec ) }
       } else { Iterator.empty }
     }}

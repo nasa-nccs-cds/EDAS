@@ -7,11 +7,12 @@ import java.util.jar.JarFile
 import java.nio.file.{Files, Path, Paths}
 
 import com.joestelmach.natty
-import ucar.nc2.time.{ Calendar, CalendarDate }
+import ucar.nc2.time.{Calendar, CalendarDate}
 import java.nio.file.{Files, Path}
 import java.text.SimpleDateFormat
 
 import nasa.nccs.esgf.process.UID
+import org.joda.time.{DateTime, DateTimeZone}
 import ucar.ma2
 
 import scala.collection.JavaConversions._
@@ -240,11 +241,13 @@ object cdsutils {
     import com.joestelmach.natty
     private val parser = new natty.Parser()
 
-    def parse( input: String): CalendarDate = {
+    def parse( calendar: Calendar, input: String): CalendarDate = {
       val caldates = mutable.ListBuffer[CalendarDate]()
       val full_date = input
       val groups = parser.parse( full_date ).toList
-      for (group: natty.DateGroup <- groups; date: java.util.Date <- group.getDates.toList) caldates += CalendarDate.of(date)
+      for (group: natty.DateGroup <- groups; date: java.util.Date <- group.getDates.toList; dateTime = new DateTime(date, DateTimeZone.UTC)) {
+        caldates += CalendarDate.of( calendar, dateTime.year.get, dateTime.monthOfYear.get, dateTime.dayOfMonth.get, dateTime.hourOfDay.get, dateTime.minuteOfDay.get, dateTime.secondOfDay.get )
+      }
       assert( caldates.size == 1, " DateTime Parser Error: parsing '%s'".format(input) )
       caldates.head
     }

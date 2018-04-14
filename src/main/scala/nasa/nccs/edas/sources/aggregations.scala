@@ -23,13 +23,13 @@ import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 import scala.util.matching.Regex
 
-case class FileInput(fileIndex: Int, startTime: Long, timeStep: Long, firstRowIndex: Int, nRows: Int, path: String ) extends Serializable {
+case class FileInput(fileIndex: Int, startTime: Long, calendar: Calendar, timeStep: Long, firstRowIndex: Int, nRows: Int, path: String ) extends Serializable {
   def lastRowIndex = firstRowIndex + nRows - 1
   def getRowIndexRange: ma2.Range = new ma2.Range( firstRowIndex, firstRowIndex + nRows - 1 )
   def intersects( row_index_range: ma2.Range ) = getRowIndexRange.intersects( row_index_range )
   def intersect( row_index_range: ma2.Range ): ma2.Range = getRowIndexRange.intersect( row_index_range )
-  def rowToDate( iRow: Int ): CalendarDate = CalendarDate.of( startTime + (iRow-firstRowIndex) * timeStep )
-  override def toString = s"FileInput(${fileIndex})[ ${path}, firstRow: ${firstRowIndex}, nRows: ${nRows}, time: ${CalendarDate.of(startTime).toString} (${startTime}) ]"
+  def rowToDate( iRow: Int ): CalendarDate = CalendarDate.of( calendar, startTime + (iRow-firstRowIndex) * timeStep )
+  override def toString = s"FileInput($fileIndex)[ $path, firstRow: $firstRowIndex, nRows: $nRows, time: ${CalendarDate.of(calendar,startTime).toString} ($startTime) ]"
 }
 
 case class Variable( name: String, fullName: String, dodsName: String, description: String, shape: Array[Int], dims: String, units: String ) extends Serializable {
@@ -436,7 +436,7 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
   val dt: Long = time_duration/time_nrows
   val ave_file_dt: Long = time_duration/files.length
   val ave_file_nrows: Long = time_nrows/files.length
-  val calendar: Calendar = Calendar.get( parms.getOrElse("calendar","default"))
+  val calendar: Calendar = Calendar.get( parms.getOrElse("time.calendar","default"))
   def findVariable( varName: String ): Option[Variable] = variables.find( _.name.equals(varName) )
   def id: String = { new File(dataPath).getName }
   def gridFilePath: String = getRelatedFile( "nc")
@@ -553,7 +553,8 @@ object Aggregation extends Loggable {
           val nTS = toks(2).toInt
           val time_axis = axes.find( _.ctype == "T" ).getOrElse( throw new Exception( s"Missing Time Axis in Aggregation ${aggFile}"))
           val dT = CalendarDate.parseUdunits( null, time_axis.udstep )
-          files += FileInput(files.length, EDTime.toMillis(toks(1).toDouble), dT.getMillis, timeIndex, nTS, toks(3) )
+          val calendar = Calendar.get( parameters.getOrElse( "time.calendar", "default" ) )
+          files += FileInput(files.length, EDTime.toMillis(toks(1).toDouble), calendar, dT.getMillis, timeIndex, nTS, toks(3) )
           timeIndex += nTS
         case "P" =>
           parameters += toks(1) -> toks(2)

@@ -175,7 +175,7 @@ object CDGrid extends Loggable {
         if( coordAxis.getAxisType == AxisType.Time ) {
           val ( calendar, time_values, bounds ) = FileHeader.getTimeValues( ncDataset, coordAxis )
           newVar.addAttribute( new Attribute( CDM.UNITS, EDTime.units ) )
-          newVar.addAttribute( new Attribute( "calendar", calendar.name() ) )
+          newVar.addAttribute( new Attribute( "time.calendar", calendar.name() ) )
           gridWriter.write( newVar, ma2.Array.factory( EDTime.ucarDatatype, coordAxis.getShape, time_values ) )
           boundsVarOpt flatMap varMap.get match {
             case Some( ( cvarBnds, newVarBnds )  ) => gridWriter.write( newVarBnds, ma2.Array.factory( ma2.DataType.DOUBLE, cvarBnds.getShape, bounds.flatten ) )
@@ -300,7 +300,7 @@ object CDGrid extends Loggable {
           if (coordAxis.getAxisType == AxisType.Time) {
             val (calendar, time_values, bounds): (Calendar, Array[Double], Array[Array[Double]]) = FileHeader.getTimeValues(ncDataset, coordAxis)
             newVar.addAttribute(new Attribute(CDM.UNITS, EDTime.units))
-            newVar.addAttribute(new Attribute("calendar", calendar.name()))
+            newVar.addAttribute(new Attribute("time.calendar", calendar.name()))
             gridWriter.write(newVar, ma2.Array.factory(EDTime.ucarDatatype, coordAxis.getShape, time_values))
           } else {
             gridWriter.write(newVar, coordAxis.read())

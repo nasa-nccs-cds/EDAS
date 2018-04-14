@@ -700,7 +700,7 @@ class DefaultTestSuite extends EDASTestSuite {
   test("1yearAve-GISS") {
     val nco_verified_result: CDFloatArray = CDFloatArray( Array( 230.1202, 224.2958, 228.4658, 228.0224, 226.1936, 225.7275, 222.0484, 223.9207, 223.3873, 222.8198, 225.1187, 224.4428, 229.7138, 229.7007, 229.8149, 229.4356, 227.8259, 228.9415 ).map(_.toFloat), Float.MaxValue )
     val datainputs =
-      s"""[domain=[{"name":"d0","lat":{"start":5,"end":7,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":"1851-01-01T00:00:00Z","end":"1852-01-01T00:00:00Z","system":"timestamps"}}],
+      s"""[domain=[{"name":"d0","lat":{"start":5,"end":7,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"},"time":{"start":"1850-01-01T00:00:00Z","end":"1851-01-01T00:00:00Z","system":"timestamps"}}],
          | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
          | operation=[{ "name":"CDSpark.ave", "axes":"t", "input":"v1" }]]""".stripMargin
     val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
