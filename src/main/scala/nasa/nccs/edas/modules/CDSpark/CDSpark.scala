@@ -197,7 +197,7 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
 
     val groupedRDD  =  context.profiler.profile(s"lowpass.group(${KernelContext.getProcessAddress})")(() => {
       val groupBy = context.getGroup.getOrElse(throw new Exception("lowpass operation requires a groupBy parameter"))
-      val grouped_RDD = CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy).map(_._2)
+      val grouped_RDD = CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy, input.calendar ).map(_._2)
       if( context.profiler.activated ) { grouped_RDD.cache; grouped_RDD.count }
       grouped_RDD
     })
@@ -337,7 +337,7 @@ class write extends KernelImpl( Map.empty ) {
     val resultDir = new File( getResultDir.toString + s"/$resultName" )
     resultDir.mkdirs()
     context.operation.config("groupBy") map TSGroup.getGroup match {
-      case Some( groupBy ) => input.rdd.groupBy( groupBy.group ).mapValues( slices=> writeSlicesToFile( context, resultName, resultDir )( slices.toIterator ) )
+      case Some( groupBy ) => input.rdd.groupBy( groupBy.group(input.calendar) ).mapValues( slices=> writeSlicesToFile( context, resultName, resultDir )( slices.toIterator ) )
       case None => input.rdd.mapPartitions( writeSlicesToFile( context, resultName, resultDir ) )
     }
     input
