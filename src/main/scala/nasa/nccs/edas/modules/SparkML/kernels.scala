@@ -58,7 +58,7 @@ class svd extends KernelImpl {
       }
       (Uelems ++ Velems).toMap
     } else { Velems.toMap }
-    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, elems, topSlice.metadata )
+    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, topSlice.levelIndex, elems, topSlice.metadata )
     logger.info( s"@SVD Created modes, nModes = ${Velems.length}, time = ${(System.nanoTime - t0) / 1.0E9}" )
     new QueryResultCollection( Array( slice ), input.metadata + ("lambdas" -> lambdas) )
   }
@@ -86,7 +86,7 @@ class rescale extends KernelImpl {
     val results: RDD[CDRecord] = scaling_result.zip( input.rdd ).map { case ( vec, rec ) =>
       val headElem = rec.elements.values.head
       val elem = new ArraySpec( headElem.missing, headElem.shape, headElem.origin, vec.toArray.map(_.toFloat), headElem.optGroup )
-      new CDRecord( rec.startTime, rec.endTime, Map( rid -> elem ), rec.metadata )
+      new CDRecord( rec.startTime, rec.endTime, rec.levelIndex, Map( rid -> elem ), rec.metadata )
     }
     val rv = new QueryResultCollection( results.collect, input.metadata )
     val top_array = rv.records.head.elements.head._2

@@ -486,7 +486,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
       }
     }
     val t3 = System.nanoTime
-    new CDRecord(a0.mergeStart(a1), a0.mergeEnd(a1), elems, a0.metadata )
+    new CDRecord(a0.mergeStart(a1), a0.mergeEnd(a1), a0.levelIndex, elems, a0.metadata )
   }
 
   protected def combineRDD(context: KernelContext)(rec0: CDRecord, rec1: CDRecord ): CDRecord = {
@@ -504,7 +504,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
         case None =>
           None
       }}
-      CDRecord(rec0.mergeStart(rec1), rec0.mergeEnd(rec1), TreeMap(new_elements.toSeq: _*), rec0.metadata )
+      CDRecord(rec0.mergeStart(rec1), rec0.mergeEnd(rec1), rec0.levelIndex, TreeMap(new_elements.toSeq: _*), rec0.metadata )
     })
   }
 
@@ -754,7 +754,7 @@ abstract class SingularRDDKernel( options: Map[String,String] = Map.empty ) exte
         Seq(context.operation.rid -> input_array )
     } }
     val dt = (System.nanoTime - t0) / 1.0E9
-    CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata )
+    CDRecord(inputs.startTime, inputs.endTime, inputs.levelIndex,inputs.elements ++ elems, inputs.metadata )
   })
 }
 
@@ -764,7 +764,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
       val grouped_input_arrays: Map[String, List[(String,ArraySpec)]] = getInputArrays( inputs, context ) groupBy { case (uid,array) => uid.split('-').head }
       val results: Map[String,ArraySpec] = grouped_input_arrays.map { case ( vid, input_arrays ) => vid + "-" + context.operation.rid -> input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) ) }
-      CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ results, inputs.metadata )
+      CDRecord(inputs.startTime, inputs.endTime, inputs.levelIndex, inputs.elements ++ results, inputs.metadata )
     } else { inputs }
   }
 }
@@ -837,7 +837,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val reprocessed_input_map = resultArrays.toMap
       logger.info("Gateway[T:%s]: Executed operation %s, time: %.2f".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9))
       val result_arrays = reprocessed_input_map ++ acceptable_array_map.map { case (key, value) => ( context.operation.output(key), value) }
-      CDRecord( inputs.startTime, inputs.endTime, result_arrays, inputs.metadata + ("gridspec" -> gridFile) )
+      CDRecord( inputs.startTime, inputs.endTime, inputs.levelIndex, result_arrays, inputs.metadata + ("gridspec" -> gridFile) )
     }
   })
 }
@@ -884,7 +884,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
         val result = ArraySpec(tvar)
         context.operation.rid + ":" + uid + "~" + tvar.id() -> result
       }
-      CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ resultItems, inputs.metadata )
+      CDRecord(inputs.startTime, inputs.endTime, inputs.levelIndex, inputs.elements ++ resultItems, inputs.metadata )
     } finally {
       workerManager.releaseWorker(worker)
     }

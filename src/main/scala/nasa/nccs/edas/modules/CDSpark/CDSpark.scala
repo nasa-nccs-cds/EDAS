@@ -519,7 +519,7 @@ class norm extends KernelImpl(Map.empty) {
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
     val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
-    CDRecord(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
+    CDRecord(inputs.startTime, inputs.endTime, inputs.levelIndex, Map.empty, inputs.metadata )
   }
 }
 
@@ -537,7 +537,7 @@ class cor extends KernelImpl(Map.empty) {
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     val input_arrays: List[ArraySpec] = context.operation.inputs.map( id => inputs.findElements(id) ).foldLeft(List[ArraySpec]())( _ ++ _ )
     val input_fastArrays: Array[FastMaskedArray] = input_arrays.map(_.toFastMaskedArray).toArray
-    CDRecord(inputs.startTime, inputs.endTime, Map.empty, inputs.metadata )
+    CDRecord(inputs.startTime, inputs.endTime, inputs.levelIndex, Map.empty, inputs.metadata )
   }
 }
 
@@ -565,7 +565,7 @@ class eAve extends KernelImpl(Map.empty) {
       context.operation.rid -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, resultArray.getData, groupOpt ),
       context.operation.rid + "_WEIGHTS_" -> ArraySpec( input_array.missing, input_array.shape, input_array.origin, weightArray.getData, groupOpt )
     ).toMap
-    CDRecord(inputs.startTime, inputs.endTime, elems, inputs.metadata )
+    CDRecord(inputs.startTime, inputs.endTime, inputs.levelIndex, elems, inputs.metadata )
   }
 }
 
@@ -639,7 +639,7 @@ class ave extends SingularRDDKernel( Map( "mapOp" -> "avew", "reduceOp" -> "avew
     })
 //    logger.info("T[%.2f] @P@ Executed Kernel %s map op, input = %s, time = %.4f s".format(t0, name,  id, (t1 - t0) ))
 //    context.addTimestamp( "Map Op complete" )
-    val rv = CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ elems, inputs.metadata )
+    val rv = CDRecord(inputs.startTime, inputs.endTime, inputs.levelIndex, inputs.elements ++ elems, inputs.metadata )
 //    logger.info("Returning result value")
     rv
   } )

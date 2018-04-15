@@ -111,7 +111,7 @@ case class CDTimeInterval(startTime: Long, endTime: Long ) {
 
 object CDRecord extends Loggable {
   type ReduceOp = (CDRecord,CDRecord)=>CDRecord
-  def empty = new CDRecord(-1, 0, Map.empty[String,ArraySpec], Map.empty[String, String] )
+  def empty = new CDRecord(-1, 0, 0, Map.empty[String,ArraySpec], Map.empty[String, String] )
   def join( recPairs: Iterator[(Long,(CDRecord,CDRecord))]): Iterator[CDRecord] = { recPairs map { case ( index, ( rec0, rec1 ) )  => rec0 ++ rec1 } }
 
   def interpolate(startTime: Long, endTime: Long, startRec: CDRecord, endRec: CDRecord ): CDRecord = {
@@ -125,7 +125,7 @@ object CDRecord extends Loggable {
         val arraySpec1 = endRec.element(key).getOrElse( throw new Exception( "Missing element in interploate input: " + key ))
         key -> ArraySpec.interpolate( arraySpec0, w0, arraySpec1, w1 )
       } }
-      new CDRecord( startTime, endTime, interp_elems,  startRec.metadata )
+      new CDRecord( startTime, endTime, startRec.levelIndex, interp_elems,  startRec.metadata )
     }
   }
 
@@ -139,7 +139,7 @@ object CDRecord extends Loggable {
       Seq(   key -> ArraySpec( array0.missing, array0.shape, array0.origin, results.getData, array0.optGroup ),
         key + "_WEIGHTS_" -> ArraySpec( array0.missing, array0.shape, array0.origin, weights.getData, array0.optGroup ) )
     }
-    CDRecord(input0.startTime, input1.endTime, elems, input0.metadata )
+    CDRecord(input0.startTime, input1.endTime, input0.levelIndex, elems, input0.metadata )
   }
 
   def concat(arrays: Seq[Array[Float]]): Array[Float] = {
@@ -205,11 +205,11 @@ object CDRecord extends Loggable {
 
 }
 
-case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArraySpec], metadata: Map[String, String] ) {
+case class CDRecord(startTime: Long, endTime: Long, levelIndex: Int, elements: Map[String, ArraySpec], metadata: Map[String, String] ) {
   import CDRecord._
-  def ++( other: CDRecord ): CDRecord = { new CDRecord(startTime, endTime, elements ++ other.elements, metadata) }
+  def ++( other: CDRecord ): CDRecord = { new CDRecord(startTime, endTime, levelIndex, elements ++ other.elements, metadata) }
   def <+( other: CDRecord ): CDRecord = append( other )
-  def clear: CDRecord = { new CDRecord(startTime, endTime, Map.empty[String,ArraySpec], metadata) }
+  def clear: CDRecord = { new CDRecord(startTime, endTime, levelIndex, Map.empty[String,ArraySpec], metadata) }
   lazy val midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDRecord ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDRecord ): Long = Math.max( endTime, other.endTime )
@@ -217,7 +217,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   def dateRangeStr: String = s"(${CalendarDate.of(startTime)}<->${CalendarDate.of(endTime)})"
   def section( section: CDSection ): Option[CDRecord] = {
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
-    if( new_elements.isEmpty ) { None } else { Some( new CDRecord(startTime, endTime, new_elements, metadata) ) }
+    if( new_elements.isEmpty ) { None } else { Some( new CDRecord(startTime, endTime, levelIndex, new_elements, metadata) ) }
   }
   def toVector( selectElems: Seq[String] ): Vector = {
     val selectedElems: Map[String, ArraySpec] = elements.filter { case (key,array) => selectElems.exists( elem => key.split(':').last.endsWith( elem ) ) }
@@ -226,15 +226,15 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   }
   def partitionByShape: Map[String,CDRecord] = {
     val groupedElems = elements.groupBy { case (id,array) => array.shape.mkString(",") }
-    groupedElems.mapValues( elems => new CDRecord(startTime, endTime, elems, metadata ) )
+    groupedElems.mapValues( elems => new CDRecord(startTime, endTime, levelIndex, elems, metadata ) )
   }
-  def shiftTime( startTime: Long, endTime: Long ) = new CDRecord( startTime, endTime, elements, metadata )
-  def release( keys: Iterable[String] ): CDRecord = { new CDRecord(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
-  def selectElement( elemId: String ): CDRecord = CDRecord(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)
-  def selectElements( select: String => Boolean ): CDRecord = CDRecord(startTime, endTime, elements filterKeys ( key => select(key) ), metadata)
+  def shiftTime( startTime: Long, endTime: Long ) = new CDRecord( startTime, endTime, levelIndex, elements, metadata )
+  def release( keys: Iterable[String] ): CDRecord = { new CDRecord(startTime, endTime, levelIndex, elements.filterKeys(key => !keys.contains(key) ), metadata) }
+  def selectElement( elemId: String ): CDRecord = CDRecord(startTime, endTime, levelIndex, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)
+  def selectElements( select: String => Boolean ): CDRecord = CDRecord(startTime, endTime, levelIndex, elements filterKeys ( key => select(key) ), metadata)
   def selectAndRenameElements( select: String => Boolean, rename: String => String ): CDRecord =
-    CDRecord( startTime, endTime, elements filterKeys ( key => select(key) ) map { case ( key, value ) =>  rename(key) -> value } , metadata )
-  def renameElements(rename: String => String ): CDRecord = CDRecord( startTime, endTime, elements map { case ( key, value ) =>  rename(key) -> value } , metadata )
+    CDRecord( startTime, endTime, levelIndex, elements filterKeys ( key => select(key) ) map { case ( key, value ) =>  rename(key) -> value } , metadata )
+  def renameElements(rename: String => String ): CDRecord = CDRecord( startTime, endTime, levelIndex, elements map { case ( key, value ) =>  rename(key) -> value } , metadata )
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def filterElements( id: String ): Array[(String,ArraySpec)] =  elements filter { case (key,value) => key.split(':').last.endsWith(id) } toArray
   def element( id: String ): Option[ArraySpec] =  elements find { case (key,value) => key.split(':').last.equals(id) } map ( _._2 )
@@ -246,14 +246,14 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   }
   def setGroupId( group: TSGroup, group_index: Long ): CDRecord = {
     val new_elems = elements.mapValues( _.setGroupId(group,group_index) )
-    new CDRecord( startTime, endTime, elements, metadata )
+    new CDRecord( startTime, endTime, levelIndex, elements, metadata )
   }
   def contains( other: CDRecord ): Boolean = contains( other.startTime )
   def ~( other: CDRecord ) =  { assert( (endTime == other.endTime) && (startTime == other.startTime) , s"Mismatched Time slices: { $startTime $endTime } vs { ${other.startTime} ${other.endTime} }" ) }
   def precedes( other: CDRecord ) = {assert(  startTime < other.startTime, s"Disordered Time slices: { $startTime $endTime -> ${startTime+endTime} } vs { ${other.startTime} ${other.endTime} }" ) }
   def append( other: CDRecord ): CDRecord = {
     this precedes other;
-    new CDRecord(mergeStart(other), mergeEnd(other), elements.flatMap { case (key, array0) => other.elements.get(key).map(array1 => key -> (array0 ++ array1)) }, metadata)
+    new CDRecord(mergeStart(other), mergeEnd(other), other.levelIndex, elements.flatMap { case (key, array0) => other.elements.get(key).map(array1 => key -> (array0 ++ array1)) }, metadata)
   }
 
   def addExtractedSlice( collection: QueryResultCollection ): CDRecord =
@@ -261,7 +261,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
       case None =>
         throw new Exception( s"Missing matching slice in broadcast: { ${startTime}, ${endTime} }")
       case Some( extracted_slice ) =>
-        CDRecord( startTime, endTime, elements ++ extracted_slice.elements, metadata )
+        CDRecord( startTime, endTime, levelIndex, elements ++ extracted_slice.elements, metadata )
     }
 }
 
@@ -351,7 +351,7 @@ object CDRecordRDD extends Serializable {
       val newData = arraySpec.toFastMaskedArray / wts.toFastMaskedArray
       key -> new ArraySpec(newData.missing, newData.shape, arraySpec.origin, newData.getData, arraySpec.optGroup )
     }
-    CDRecord(slice.startTime, slice.endTime, new_elements, slice.metadata )
+    CDRecord(slice.startTime, slice.endTime, slice.levelIndex, new_elements, slice.metadata )
   }
 
   def postOp( postOpId: String )( slice: CDRecord ): CDRecord = {
@@ -370,7 +370,7 @@ object CDRecordRDD extends Serializable {
       }
       values_key -> ArraySpec(valuesArray.missing, valuesArray.shape, valuesSpec.origin, resultValues.getData, valuesSpec.optGroup )
     }
-    CDRecord( slice.startTime, slice.endTime, new_elems.toMap, slice.metadata )
+    CDRecord( slice.startTime, slice.endTime, slice.levelIndex, new_elems.toMap, slice.metadata )
   }
 
   def reduceRddByGroup(rdd: RDD[CDRecord], op: (CDRecord,CDRecord) => CDRecord, postOpId: String, groupBy: TSGroup ): RDD[(Int,CDRecord)] =
@@ -665,7 +665,7 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
       val arraySpec = ArraySpec( getMissing(variable), data_shape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array, None )
       val time_index = sliceRanges.head.first
-      CDRecord(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
+      CDRecord(time_bounds(0), time_bounds(1), level_index, Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
     }
     dataset.close()
     logger.info(" [%s] Completed Read of %d timeSlices in %.4f sec, partitionRange = %s".format(KernelContext.getProcessAddress, nTimesteps, (System.nanoTime() - t0) / 1.0E9, partitionRange.toString ) )
@@ -674,23 +674,25 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
 
   private def getLevels( section: ma2.Section ): IndexedSeq[Int] = {
     val nRanges = section.getShape.length
+    ( 0 until nRanges )
   }
 
-  private def getSliceRanges( section: ma2.Section, slice_index: Int, level_index: Int = 0 ): ( Array[Int], IndexedSeq[ma2.Range] ) = {
-    val nRanges = section.getShape.length
-    val shapeBuffer = ListBuffer[Int]()
-    val ranges:  IndexedSeq[ma2.Range] = for ( index <- 0 until 4 ) yield { index match {
-      case 0 =>
-        val range = section.getRange(0)
-        Some( new ma2.Range("time", range.first + slice_index, range.first + slice_index) )
-      case 1 =>
-        if( nRanges == 4 ) { new ma2.Range( "level", level_index, level_index ) }
-      case 2 =>
-        if( nRanges == 3 ) { section.getRange(1) } else { section.getRange(2) }
-      case 3 =>
-        if( nRanges == 3 ) { section.getRange(2) } else { section.getRange(3) }
-    }}
-    ( shapeBuffer.toArray, ranges )
+  def insert(list: Array[Int], i: Int, value: Int) = {
+    val (front, back) = list.splitAt(i)
+    front ++ Array(value) ++ back
+  }
+
+  private def getSliceRanges( section: ma2.Section, slice_index: Int, level_index: Int = 0 ): ( Array[Int], List[ma2.Range] ) = {
+    val section_shape = section.getShape
+    val nRanges = section_shape.length
+    val ranges = section.getRanges
+    val time_range = ranges.head
+    val slice_time_range = new ma2.Range("time", time_range.first + slice_index, time_range.first + slice_index)
+    val new_ranges = List(slice_time_range) ++ ranges.tail
+    val new_shape = if      ( nRanges == 3 )   {  insert( section_shape, 1, 1 )  }
+                    else if ( nRanges == 4 )   {  section_shape   }
+                    else { throw new Exception( s"Unexpected number of axes: ${nRanges}") }
+    ( new_shape, new_ranges )
   }
 }
 
@@ -714,8 +716,7 @@ class DatesBase( val dates: List[CalendarDate] ) extends Loggable with Serializa
       }
       return _getDateIndex(timestamp, indexEstimate + 1)
     } catch {
-      case ex: Exception =>
-        throw ex
+      case ex: Exception => throw ex
     }
   }
 }
@@ -747,7 +748,7 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
     val data_shape: Array[Int] = data_section.getShape
     val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array, None )
-    CDRecord(template_slice.startTime, template_slice.endTime, Map( varId -> arraySpec ), template_slice.metadata )
+    CDRecord(template_slice.startTime, template_slice.endTime, template_slice.levelIndex, Map( varId -> arraySpec ), template_slice.metadata )
   }
 
   def getMissing( variable: Variable, default_value: Float = Float.NaN ): Float = {
