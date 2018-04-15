@@ -246,7 +246,7 @@ object cdsutils {
       val full_date = input
       val groups = parser.parse( full_date ).toList
       for (group: natty.DateGroup <- groups; date: java.util.Date <- group.getDates.toList; dateTime = new DateTime(date, DateTimeZone.UTC)) {
-        caldates += CalendarDate.of( calendar, dateTime.year.get, dateTime.monthOfYear.get, dateTime.dayOfMonth.get, dateTime.hourOfDay.get, dateTime.minuteOfDay.get, dateTime.secondOfDay.get )
+        caldates += CalendarDate.of( calendar, dateTime.year.get, dateTime.monthOfYear.get, dateTime.dayOfMonth.get, dateTime.hourOfDay.get, dateTime.minuteOfHour().get, dateTime.secondOfMinute().get )
       }
       assert( caldates.size == 1, " DateTime Parser Error: parsing '%s'".format(input) )
       caldates.head
