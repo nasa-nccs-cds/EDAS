@@ -147,7 +147,7 @@ class Responder extends Thread {
         status_reports.put(rid,status);
         if( status.startsWith("executing") ) {
             try {   executing_jobs.put( rid, new Response( "executing", cId, rid ) );  } catch ( Exception ex ) {;}
-        } else if( (status == "error") || (status == "completed") ) {
+        } else if( (status.startsWith("error")) || (status.startsWith("completed") ) ) {
             try {   executing_jobs.remove( rid );  } catch ( Exception ex ) {;}
         }
     }

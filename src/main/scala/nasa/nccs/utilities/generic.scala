@@ -7,12 +7,12 @@ import java.util.jar.JarFile
 import java.nio.file.{Files, Path, Paths}
 
 import com.joestelmach.natty
-import ucar.nc2.time.CalendarDate
+import ucar.nc2.time.{Calendar, CalendarDate}
 import java.nio.file.{Files, Path}
 import java.text.SimpleDateFormat
-import java.util.Calendar
 
 import nasa.nccs.esgf.process.UID
+import org.joda.time.{DateTime, DateTimeZone}
 import ucar.ma2
 
 import scala.collection.JavaConversions._
@@ -47,7 +47,7 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   logFileDir.toFile.mkdirs()
   val logFilePath: Path = logFileDir.resolve( LNAME + LID + ".log" ) // Paths.get( "/tmp", System.getProperty("user.name"), "logs", LNAME + LID + ".log" )
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
-  def timestamp = Calendar.getInstance().getTime
+  def timestamp = java.util.Calendar.getInstance().getTime
   def timeStr = s"(${timeFormatter.format(timestamp)})"
 
   lazy val writer = {
@@ -132,7 +132,7 @@ object EDTime {
 
   def toValue( date: CalendarDate ): Double = date.getMillis / millisPerMinute
   def toValue( millis: Long ): Double = millis / millisPerMinute
-  def toDate( value: Double ): CalendarDate = CalendarDate.of( ( value * millisPerMinute ).toLong )
+  def toDate( calendar: Calendar, value: Double ): CalendarDate = CalendarDate.of( calendar, ( value * millisPerMinute ).toLong )
   def toMillis( value: Double ): Long = ( value * millisPerMinute ).toLong
   def toString( value: Double ): String = "%f".format( value )
 
@@ -241,11 +241,13 @@ object cdsutils {
     import com.joestelmach.natty
     private val parser = new natty.Parser()
 
-    def parse(input: String): CalendarDate = {
+    def parse( calendar: Calendar, input: String): CalendarDate = {
       val caldates = mutable.ListBuffer[CalendarDate]()
       val full_date = input
       val groups = parser.parse( full_date ).toList
-      for (group: natty.DateGroup <- groups; date: java.util.Date <- group.getDates.toList) caldates += CalendarDate.of(date)
+      for (group: natty.DateGroup <- groups; date: java.util.Date <- group.getDates.toList; dateTime = new DateTime(date, DateTimeZone.UTC)) {
+        caldates += CalendarDate.of( calendar, dateTime.year.get, dateTime.monthOfYear.get, dateTime.dayOfMonth.get, dateTime.hourOfDay.get, dateTime.minuteOfHour().get, dateTime.secondOfMinute().get )
+      }
       assert( caldates.size == 1, " DateTime Parser Error: parsing '%s'".format(input) )
       caldates.head
     }

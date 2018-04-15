@@ -6,7 +6,7 @@ import java.nio.file.{FileSystems, PathMatcher, Paths}
 import java.nio.{ByteBuffer, FloatBuffer, MappedByteBuffer}
 import java.text.SimpleDateFormat
 import java.util.concurrent.TimeUnit
-import java.util.{Calendar, Comparator}
+import java.util.Comparator
 
 import com.googlecode.concurrentlinkedhashmap.{ConcurrentLinkedHashMap, EntryWeigher, EvictionListener}
 import nasa.nccs.caching.EDASPartitioner.{partitionSize, recordSize}
@@ -24,7 +24,7 @@ import nasa.nccs.utilities.{Loggable, cdsutils}
 import org.apache.commons.io.{FileUtils, IOUtils}
 import ucar.ma2.Range
 import ucar.nc2.dataset.CoordinateAxis1DTime
-import ucar.nc2.time.CalendarDate
+import ucar.nc2.time.{Calendar, CalendarDate}
 import ucar.nc2.time.CalendarPeriod.Field.{Month, Year}
 import ucar.nc2.units.TimeUnit
 import ucar.{ma2, nc2}
@@ -116,20 +116,20 @@ class Partitions( private val _section: ma2.Section, val parts: Array[Partition]
 }
 
 object CachePartition {
-  def apply(index: Int, path: String, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], fragShape: Array[Int]): CachePartition = {
+  def apply(index: Int, path: String, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, calendar: Calendar, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], fragShape: Array[Int]): CachePartition = {
     val partShape = getPartitionShape(partSize, fragShape)
-    new CachePartition(index, path, dimIndex, startIndex, partSize, start_date, end_date, recordSize, sliceMemorySize, origin, partShape)
+    new CachePartition(index, path, dimIndex, startIndex, partSize, start_date, end_date, calendar, recordSize, sliceMemorySize, origin, partShape)
   }
   def apply(path: String, partition: RegularPartition ): CachePartition = {
     val partShape = getPartitionShape( partition.partSize, partition.shape )
-    new CachePartition( partition.index, path, partition.dimIndex, partition.startIndex, partition.partSize, partition.start_time, partition.end_time, partition.recordSize, partition.sliceMemorySize, partition.origin, partShape )
+    new CachePartition( partition.index, path, partition.dimIndex, partition.startIndex, partition.partSize, partition.start_time, partition.end_time, partition.calendar, partition.recordSize, partition.sliceMemorySize, partition.origin, partShape )
   }
   def getPartitionShape(partSize: Int, fragShape: Array[Int]): Array[Int] = {
     var shape = fragShape.clone(); shape(0) = partSize; shape
   }
 }
 
-class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: Int, partSize: Int, start_time: Long, end_time: Long, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int]) extends RegularPartition(index, dimIndex, startIndex, partSize, start_time, end_time, recordSize, sliceMemorySize, origin, shape) {
+class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: Int, partSize: Int, start_time: Long, end_time: Long, calendar: Calendar, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int]) extends RegularPartition(index, dimIndex, startIndex, partSize, start_time, end_time, calendar, recordSize, sliceMemorySize, origin, shape) {
 
   def data(missing_value: Float): CDFloatArray = {
     val file = new RandomAccessFile(path, "r")
@@ -156,11 +156,11 @@ class CachePartition( index: Int, val path: String, dimIndex: Int, startIndex: I
     }
 }
 
-abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int, val partSize: Int, val start_time: Long, val end_time: Long, val sliceMemorySize: Long, val origin: Array[Int], val shape: Array[Int] ) extends Loggable with Serializable {
+abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int, val partSize: Int, val start_time: Long, val end_time: Long, val calendar: Calendar, val sliceMemorySize: Long, val origin: Array[Int], val shape: Array[Int] ) extends Loggable with Serializable {
   val partitionOrigin: Array[Int] = origin.zipWithIndex map { case (value, ival) => if( ival== 0 ) value + startIndex else value }
   val endIndex: Int = startIndex + partSize - 1
-  def start_date: CalendarDate = CalendarDate.of(start_time)
-  def end_date: CalendarDate = CalendarDate.of(end_time)
+  def start_date: CalendarDate = CalendarDate.of(calendar,start_time)
+  def end_date: CalendarDate = CalendarDate.of(calendar,end_time)
 
   def recordSection( section: ma2.Section, iRecord: Int, timeAxis: CoordinateAxis1DTime, start_time: Long, end_time: Long ): ma2.Section = {
     val start_index = timeAxis.findTimeIndexFromCalendarDate(start_date)
@@ -212,17 +212,16 @@ abstract class Partition(val index: Int, val dimIndex: Int, val startIndex: Int,
 }
 
 object RegularPartition {
-  def apply(index: Int, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], fragShape: Array[Int]): RegularPartition = {
+  def apply(index: Int, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, calendar: Calendar, recordSize: Int, sliceMemorySize: Long, origin: Array[Int], fragShape: Array[Int]): RegularPartition = {
     val partShape = getPartitionShape(partSize, fragShape)
-    new RegularPartition( index, dimIndex, startIndex, partSize, start_date, end_date, recordSize, sliceMemorySize, origin, partShape )
+    new RegularPartition( index, dimIndex, startIndex, partSize, start_date, end_date, calendar, recordSize, sliceMemorySize, origin, partShape )
   }
   def getPartitionShape(partSize: Int, fragShape: Array[Int]): Array[Int] = {
     var shape = fragShape.clone(); shape(0) = partSize; shape
   }
-  val empty = new RegularPartition( -1, -1, -1, -1, -1, -1, -1, -1, Array.empty[Int], Array.empty[Int] )
 }
 
-class RegularPartition( index: Int,  dimIndex: Int,  startIndex: Int,  partSize: Int, start_date: Long, end_date: Long,  val recordSize: Int,  sliceMemorySize: Long,  origin: Array[Int],  shape: Array[Int]) extends Partition(index, dimIndex, startIndex, partSize, start_date, end_date, sliceMemorySize, origin, shape) {
+class RegularPartition( index: Int,  dimIndex: Int,  startIndex: Int,  partSize: Int, start_date: Long, end_date: Long, calendar: Calendar, val recordSize: Int,  sliceMemorySize: Long,  origin: Array[Int],  shape: Array[Int]) extends Partition(index, dimIndex, startIndex, partSize, start_date, end_date, calendar, sliceMemorySize, origin, shape) {
 
   override val toString: String = s"Part[$index]{dim:$dimIndex start:$startIndex partSize:$partSize recordSize:$recordSize sliceMemorySize:$sliceMemorySize origin:${origin.mkString(",")} shape:${shape.mkString(",")})"
   override def nRecords: Int = math.ceil(partSize / recordSize.toDouble).toInt
@@ -249,7 +248,7 @@ class RegularPartition( index: Int,  dimIndex: Int,  startIndex: Int,  partSize:
   def recordIndexArray: IndexedSeq[Int] = (0 until nRecords)
 }
 
-class FilteredPartition(index: Int, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int], val records: IndexedSeq[FilteredRecordSpec] ) extends Partition( index, dimIndex, startIndex, partSize, start_date, end_date, sliceMemorySize, origin, shape ) {
+class FilteredPartition(index: Int, dimIndex: Int, startIndex: Int, partSize: Int, start_date: Long, end_date: Long, calendar: Calendar, sliceMemorySize: Long, origin: Array[Int], shape: Array[Int], val records: IndexedSeq[FilteredRecordSpec] ) extends Partition( index, dimIndex, startIndex, partSize, start_date, end_date, calendar, sliceMemorySize, origin, shape ) {
   override def recordStartIndex( iRecord: Int ) = records(iRecord).first
   override def recordRange(iRecord: Int): ma2.Range = {
     val start = recordStartIndex(iRecord);
@@ -491,10 +490,11 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
           val parts = (0 until pSpecs.nPartitions) map (partIndex => {
             val relStartIndex = partIndex * pSpecs.nSlicesPerPart
             val partSize = Math.min (pSpecs.nSlicesPerPart, baseShape(0) - relStartIndex )
-            val start_date: Long = timeAxis.getCalendarDate( time_section_start_index + relStartIndex ).getMillis
+            val startDate = timeAxis.getCalendarDate( time_section_start_index + relStartIndex )
+            val start_date_value: Long = startDate.getMillis
             val ts_ms = timeAxis.getTimeResolution.getValueInSeconds * 1000.0
-            val end_date: Long = ( start_date + partSize * ts_ms ).toLong
-            RegularPartition(partIndex, 0, relStartIndex, partSize, start_date, end_date, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
+            val end_date: Long = ( start_date_value + partSize * ts_ms ).toLong
+            RegularPartition(partIndex, 0, relStartIndex, partSize, start_date_value, end_date, startDate.getCalendar, pSpecs.nSlicesPerRecord, sliceMemorySize, _section.getOrigin, baseShape)
           })
           logger.info(  s"\n---------------------------------------------\n %E% Generating regular batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, maxInputSize: ${EDASPartitioner.maxInputSize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${pSpecs.nSlicesPerRecord}, recordMemorySize: ${pSpecs.recordMemorySize/M.toFloat} M, nRecordsPerPart: ${pSpecs.nRecordsPerPart}, partMemorySize: ${pSpecs.partMemorySize/M.toFloat} M, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
@@ -502,9 +502,10 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
         case cpSpecs: CustomPartitionSpecs => {
           val parts = for (partIndex <- 0 until cpSpecs.nPartitions; pRange = cpSpecs.parts(partIndex)) yield {
             val nSlicesPerRec = math.min(cpSpecs.nSlicesPerRecord, pRange.length)
-            val start_date: Long = timeAxis.getCalendarDate(pRange.first).getMillis
+            val startDate = timeAxis.getCalendarDate(pRange.first)
+            val start_date_value: Long = startDate.getMillis
             val end_date: Long = timeAxis.getCalendarDate(pRange.first+pRange.length).getMillis
-            RegularPartition(partIndex, 0, pRange.first, pRange.length, start_date, end_date, nSlicesPerRec, sliceMemorySize, _section.getOrigin, baseShape)
+            RegularPartition(partIndex, 0, pRange.first, pRange.length, start_date_value, end_date, startDate.getCalendar, nSlicesPerRec, sliceMemorySize, _section.getOrigin, baseShape)
           }
           logger.info(  s"\n---------------------------------------------\n ~~~~ Generating custom batched partitions: numDataFiles: ${numDataFiles}, sectionMemorySize: ${sectionMemorySize/M.toFloat} M, sliceMemorySize: ${sliceMemorySize/M.toFloat} M, nSlicesPerRecord: ${cpSpecs.nSlicesPerRecord}, nPartitions: ${parts.length}, constraints: ${constraints.toString} \n---------------------------------------------\n")
           parts
@@ -521,9 +522,10 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
       val all_records = for( seasonFilter <- seasonFilters; record <- seasonFilter.getRecords ) yield { record }
       val partitions: IndexedSeq[Partition] = if( all_records.length <= BatchSpec.nParts ) {
         for( ( record, partIndex ) <- all_records.zipWithIndex ) yield {
-          val start_date: Long = timeAxis.getCalendarDate(record.first).getMillis
+          val startDate = timeAxis.getCalendarDate(record.first)
+          val start_date_value: Long = startDate.getMillis
           val end_date: Long = timeAxis.getCalendarDate(record.first+record.length).getMillis
-          new FilteredPartition(partIndex, 0, record.first, record.length, start_date, end_date, sliceMemorySize, _section.getOrigin, baseShape, Array(record))
+          new FilteredPartition(partIndex, 0, record.first, record.length, start_date_value, end_date, startDate.getCalendar, sliceMemorySize, _section.getOrigin, baseShape, Array(record))
         }
       } else {
         val nRecs = seasonFilters(0).getNRecords
@@ -533,9 +535,10 @@ class EDASPartitioner( val uid: String, private val _section: ma2.Section, val p
         ( 0 until nParts ) map ( partIndex => {
           val iRecStart = partIndex*seasonRecsPerPartition
           val records = seasonFilters flatMap ( _.getPartitionRecords(iRecStart,seasonRecsPerPartition) )
-          val start_date: Long = timeAxis.getCalendarDate(records.head.first).getMillis
+          val startDate = timeAxis.getCalendarDate(records.head.first)
+          val start_date_value: Long = startDate.getMillis
           val end_date: Long = timeAxis.getCalendarDate(records.head.first+partSize).getMillis
-          new FilteredPartition(partIndex, 0, records.head.first, partSize, start_date, end_date, sliceMemorySize, _section.getOrigin, baseShape, records )
+          new FilteredPartition(partIndex, 0, records.head.first, partSize, start_date_value, end_date, startDate.getCalendar, sliceMemorySize, _section.getOrigin, baseShape, records )
         } )
       }
       logger.info(  s"\n---------------------------------------------\n ~~~~ Generating partitions for ${BatchSpec.nParts} procs: \n ${partitions.map( _.toString ).mkString( "\n\t" )}  \n---------------------------------------------\n")
@@ -871,7 +874,7 @@ class RDDTransientVariable(val result: QueryResultCollection,
                            val operation: OperationContext,
                            val request: RequestContext) {
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
-  def timestamp = Calendar.getInstance().getTime
+  def timestamp = java.util.Calendar.getInstance().getTime
   def getTimestamp = timeFormatter.format(timestamp)
 }
 

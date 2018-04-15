@@ -5,6 +5,7 @@ import java.net.URI
 import java.nio.file.{FileSystems, Path, Paths}
 import java.util.Formatter
 import java.util.concurrent.{Executors, Future, TimeUnit}
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 import nasa.nccs.cdapi.tensors.CDDoubleArray
@@ -15,7 +16,7 @@ import ucar.nc2.Group
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset._
-import ucar.nc2.time.CalendarDate
+import ucar.nc2.time.{Calendar, CalendarDate}
 
 import scala.collection.mutable
 import collection.mutable.{HashMap, ListBuffer}
@@ -57,24 +58,30 @@ class DatasetFileHeaders(val aggDim: String, val aggFileMap: Seq[FileHeader]) {
 object FileHeader extends Loggable {
   val maxOpenAttempts = 1
   val retryIntervalSecs = 10
-  private val _instanceCache = new ConcurrentLinkedHashMap.Builder[String, FileHeader].initialCapacity(64).maximumWeightedCapacity(100000).build()
+  private val _instanceCache = new ConcurrentLinkedHashMap.Builder[String, FileHeader].initialCapacity(64).maximumWeightedCapacity(10000).build()
   private val _pool = Executors.newFixedThreadPool( Runtime.getRuntime.availableProcessors )
 
-  def apply( uri: URI, timeRegular: Boolean ): FileHeader = apply( uri.toString, timeRegular )
-  def apply( file: File, timeRegular: Boolean ): FileHeader = apply( file.getCanonicalPath, timeRegular )
+//  def apply( collectionId: String, uri: URI, timeRegular: Boolean ): FileHeader = apply( collectionId, uri.toString, timeRegular )
+  def apply( collectionId: String, dataLocation: Path, file: File, timeRegular: Boolean ): FileHeader = apply( collectionId, dataLocation, file.getCanonicalPath, timeRegular )
 
-  def apply( filePath: String, timeRegular: Boolean ): FileHeader = _instanceCache.getOrElse( filePath, {
-    val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.aquireFile(filePath, 2.toString)
-    try {
-      val (axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
-      val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
-      val fileHeader = new FileHeader(filePath, axisValues, boundsValues, timeRegular, variables map { _.getShortName }, coordVars map { _.getShortName } )
-      _instanceCache.put( filePath, fileHeader )
-      fileHeader
-    } finally {
-      ncDataset.close()
-    }
-  })
+  def apply( collectionId: String, dataLocation: Path, relFile: String, timeRegular: Boolean ): FileHeader = {
+    val filePath = dataLocation.resolve( relFile ).toAbsolutePath.toString
+    _instanceCache.getOrElse( filePath, {
+      val ncDataset: NetcdfDataset =  NetcdfDatasetMgr.aquireFile(filePath, 2.toString)
+      try {
+        val (calendar, axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
+        val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
+        val variableNames = variables map { _.getShortName }
+        val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, calendar, timeRegular, variableNames, coordVars map { _.getShortName } )
+        _instanceCache.put( filePath, fileHeader  )
+        fileHeader
+      } finally {
+        ncDataset.close()
+      }
+    })
+  }
+
+  def getGroupedFileHeaders( collectionId: String ): Map[String, Iterable[FileHeader]] = _instanceCache.values.groupBy ( _.varNames.sorted.mkString("-") )
 
   def term() = {
     _pool.shutdown()
@@ -92,25 +99,19 @@ object FileHeader extends Loggable {
     waitUntilDone( filterCompleted(seq) )
   }
 
-  def factory(files: IndexedSeq[String], timeRegular: Boolean = false ):Unit = {
-    val futures: IndexedSeq[Future[_]] = files.filter { file => !isCached(file) } map { file => _pool.submit( new FileHeaderGenerator(file,timeRegular) ) }
+  def factory(collectionId: String, dataLocation: Path, files: Array[String], timeRegular: Boolean = false ):Unit = {
+    val futures: IndexedSeq[Future[_]] = files.filter { file => !isCached(file) } map { file => _pool.submit( new FileHeaderGenerator(collectionId, dataLocation, file, timeRegular) ) }
     waitUntilDone( futures )
   }
 
-  def getFileHeaders(files: IndexedSeq[String], timeRegular: Boolean = false ): IndexedSeq[FileHeader] = {
-    factory( files, timeRegular )
-    files.map( file => FileHeader( file, timeRegular ) ).sortBy(_.startDate)
-  }
+//  def getFileHeaders(collectionId: String, dataLocation: Path, files: IndexedSeq[String], timeRegular: Boolean = false ): IndexedSeq[FileHeader] = {
+//    factory( collectionId, dataLocation, files, timeRegular )
+//    files.map( file => FileHeader( collectionId, dataLocation, file, timeRegular ) ).sortBy(_.startDate)
+//  }
 
   def getNumCommonElements( elemList: IndexedSeq[Array[String]] ): Int = {
     if( elemList.length > 1 ) { elemList.indices.foreach { elemIndex => if (elemList.map(array => array(elemIndex)).toSet.size > 1) return elemIndex } }
     elemList.head.length - 1
-  }
-
-  def extractSubpath( headers: IndexedSeq[FileHeader] ): ( String, IndexedSeq[FileHeader] ) = {
-    val elemList: IndexedSeq[Array[String]] = headers.map( header => header.filePath.split('/'))
-    val nCommon = getNumCommonElements(elemList)
-    ( elemList.head.take(nCommon).mkString("/"), headers.map( _.dropPrefix(nCommon) ) )
   }
 
   def getTimeAxisRegularity(ncFile: URI): Boolean = {
@@ -130,7 +131,7 @@ object FileHeader extends Loggable {
     }
   }
 
-  def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): ( Array[Double], Array[Array[Double]] ) = {
+  def getTimeValues(ncDataset: NetcdfDataset, coordAxis: VariableDS, start_index: Int = 0, end_index: Int = -1, stride: Int = 1): ( Calendar, Array[Double], Array[Array[Double]] ) = {
     val timeAxis: CoordinateAxis1DTime = CoordinateAxis1DTime.factory(ncDataset, coordAxis, new Formatter())
     val timeCalValues: List[CalendarDate] = timeAxis.getCalendarDates.toList
     val timeMillis: Array[Long] = timeCalValues.map( _.getMillis ).toArray
@@ -143,47 +144,51 @@ object FileHeader extends Loggable {
         timeMillis.map( value => Array( EDTime.toValue(value-dt2), EDTime.toValue(value+dt2) ) )
       }
     }
+    val calendar = timeCalValues.head.getCalendar
     val timeValues = timeMillis.map( EDTime.toValue )
     //    val datesSample = timeCalValues.subList(0,5)
     //    val timeValuesSample = timeValues.slice(0,5)
     //    logger.info( s" Writing Time values, dates: [ ${datesSample.map(_.toString).mkString(", ")} ], ${EDTime.units}: [ ${timeValuesSample.map(_.toString).mkString(", ")} ] ")
-    ( timeValues, bounds )
+    ( calendar, timeValues, bounds )
   }
 
 
-  def getTimeCoordValues(ncDataset: NetcdfDataset): ( Array[Double], Array[Array[Double]] ) = {
-    val result = Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
+  def getTimeCoordValues(ncDataset: NetcdfDataset): ( Calendar, Array[Double], Array[Array[Double]] ) =
+    Option(ncDataset.findCoordinateAxis(AxisType.Time)) match {
       case Some(timeAxis) => getTimeValues(ncDataset, timeAxis)
       case None => throw new Exception( "ncDataset does not have a time axis: " + ncDataset.getReferencedFile.getLocation )
     }
-    result
-  }
 }
 
-class FileHeader(val filePath: String,
-                 val axisValues: Array[Double],
-                 val boundsValues: Array[Array[Double]],
-                 val timeRegular: Boolean,
-                 val varNames: List[String],
-                 val coordVarNames: List[String]
+class FileHeader( val dataLocation: Path,
+                  val relFile: String,
+                  val axisValues: Array[Double],
+                  val boundsValues: Array[Array[Double]],
+                  val calendar: Calendar,
+                  val timeRegular: Boolean,
+                  val varNames: List[String],
+                  val coordVarNames: List[String]
                 ) {
+
   def nElem: Int = axisValues.length
   def startValue: Double = boundsValues.head(0)
   def endValue: Double = boundsValues.last(1)
   def dt = ( endValue + 1 - startValue ) / boundsValues.length
-  def startDate: String = EDTime.toDate(startValue).toString
-  override def toString: String = " *** FileHeader { path='%s', nElem=%d, startValue=%d startDate=%s} ".format(filePath, nElem, startValue, startDate)
-  def dropPrefix( nElems: Int ): FileHeader = new FileHeader( filePath.split("/").drop(nElems).mkString("/"), axisValues, boundsValues, timeRegular, varNames, coordVarNames )
+  def toPath: Path = dataLocation.resolve( relFile )
+  def startDate: String = EDTime.toDate(calendar, startValue).toString
+  val sd = startDate
+  val test = 1;
+  override def toString: String = " *** FileHeader { path='%s', relFile='%s',nElem=%d, startValue=%d startDate=%s} ".format( dataLocation.toString, relFile, nElem, startValue, startDate)
+  def dropPrefix( nElems: Int ): FileHeader = {
+    val path = toPath
+    new FileHeader( path.subpath(0,nElems), path.subpath(nElems,path.getNameCount).toString, axisValues, boundsValues, calendar, timeRegular, varNames, coordVarNames )
+  }
 }
 
-
-
-
-
 object FileMetadata extends Loggable {
-  def apply(file: String): FileMetadata = {
+  def apply( file: String, nTS: Int ): FileMetadata = {
     val dataset  = NetcdfDatasetMgr.aquireFile(file.toString, 4.toString)
-    new FileMetadata(dataset)
+    new FileMetadata(dataset,nTS)
   }
   def getVariableLists(ncDataset: NetcdfDataset): ( List[nc2.Variable], List[nc2.Variable] ) = {
     val all_vars = ncDataset.getVariables
@@ -196,15 +201,19 @@ object FileMetadata extends Loggable {
   }
 }
 
-class FileMetadata(val ncDataset: NetcdfDataset) {
+class FileMetadata(val ncDataset: NetcdfDataset, val nTS: Int ) {
   import FileMetadata._
   val coordinateAxes: List[CoordinateAxis] = ncDataset.getCoordinateAxes.toList
-  val dimensions: List[nc2.Dimension] = ncDataset.getDimensions.toList
+  val dimensions: List[nc2.Dimension] = ncDataset.getDimensions.toList.map( dim =>
+    if( dim.getDODSName.toLowerCase.startsWith("t") ) { new nc2.Dimension(dim.getShortName,nTS,dim.isShared,dim.isUnlimited,dim.isVariableLength) } else { dim }
+  )
   val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable] ) = getVariableLists(ncDataset)
   val attributes: List[nc2.Attribute] = ncDataset.getGlobalAttributes.toList
   val dimNames: List[String] = dimensions.map(AggregationWriter.getName(_))
+  logger.info( s" #FM# FileMetadata, NTS: ${getNTimesteps}")
   def close = ncDataset.close()
   def getCoordinateAxis(name: String): Option[nc2.dataset.CoordinateAxis] = coordinateAxes.find(p => AggregationWriter.getName(p).equalsIgnoreCase(name))
+  def getNTimesteps: Int = nTS
 
   def getAxisType(variable: nc2.Variable): AxisType = variable match {
     case coordVar: CoordinateAxis1D => coordVar.getAxisType;
@@ -218,7 +227,7 @@ class FileMetadata(val ncDataset: NetcdfDataset) {
 
 object CDScan extends Loggable {
   val usage = """
-    Usage: mkcol [-d {collectionBifurcationDepth: Int)}] [-t {collectionNameTemplate: RegExp}] <collectionID> <datPath>
+    Usage: mkcol [-f {collectionNameFilter: RegExp}] [-t {collectionTitle: String}] <collectionID> <datPath>
   """
 
   def main(args: Array[String]) {
@@ -227,11 +236,12 @@ object CDScan extends Loggable {
     var inputs = mutable.ListBuffer.empty[String]
     EDASLogManager.isMaster
     val argIter = args.iterator
+    var clear = false
     while( argIter.hasNext ) {
       val arg = argIter.next
       if(arg(0) == '-') arg match {
-        case "-d" => optionMap += (( "depth", argIter.next ))
-        case "-t" => optionMap += (( "template", argIter.next ))
+        case "-f" => optionMap += (( "filter", argIter.next ))
+        case "-t" => optionMap += (( "title", argIter.next ))
         case x => throw new Exception( "Unrecognized option: " + x )
       } else { inputs += arg }
     }
@@ -244,40 +254,41 @@ object CDScan extends Loggable {
 }
 
 object CDMultiScan extends Loggable {
+  val usage = """
+    Usage: mkcols [-r] <collectionsMetaFile>
+      Options:  -r  refresh:    Clear all existing collections and begin with a blank slate.
+  """
   def main(args: Array[String]) {
-    if( args.length < 1 ) { println( "Usage: 'mkcols <collectionsMetaFile>' or  'mkcols <aggId> <aggregationsDirectory> <args>'"); return }
+    if( args.length < 1 ) { println( usage ); return }
     EDASLogManager.isMaster
-    val collectionsMetaFile = new File(args(0))    // cols:  depth, template, collectionID, collectionRootPath
+    var optCollectionsMetaFile: Option[File] = None
+    var optionMap = mutable.HashMap.empty[String, String]
+    var refresh = false
+    val argIter = args.iterator
+    while( argIter.hasNext ) {
+      val arg = argIter.next
+      if(arg(0) == '-') arg match {
+        case "-r" => { refresh = true; optionMap += (( "refresh", "true" )) }
+        case x => throw new Exception( "Unrecognized option: " + x )
+      } else {
+        optCollectionsMetaFile = Some( new File(arg) )
+      }
+    }
+    if( refresh ) {  Collections.clearCacheFilesByTypes( List("ag1","csv","ncml","nc") ) }
+    val collectionsMetaFile = optCollectionsMetaFile.getOrElse( throw new Exception( "Must specify CollectionsMetaFile  " ) )
     if( collectionsMetaFile.isFile ) {
       val ncmlDir = Collections.getAggregationPath.toFile
       ncmlDir.mkdirs
-      AggregationWriter.generateAggregations(collectionsMetaFile)
+      AggregationWriter.generateAggregations( collectionsMetaFile, optionMap.toMap )
       FileHeader.term()
-    } else if( args.length > 1 ) {
-      val aggPath = new File(args(1))
-      if( aggPath.isDirectory ) {
-        var optionMap = mutable.HashMap.empty[String, String]
-        val argIter = args.slice(2,args.length).iterator
-        while( argIter.hasNext ) {
-          val arg = argIter.next
-          if(arg(0) == '-') arg match {
-            case "-d" => optionMap += (( "depth", argIter.next ))
-            case "-t" => optionMap += (( "template", argIter.next ))
-            case x => throw new Exception( "Unrecognized option: " + x )
-          }
-        }
-        for( dir <- aggPath.listFiles.filter( _.isDirectory ) ) {
-          scala.concurrent.Future[Unit] { AggregationWriter.extractAggregations( args(0) + "-" + dir.getName, dir.toPath, optionMap.toMap ) }
-        }
-      }
     } else {
       throw new Exception( "CollectionsMetaFile does not exist: " + collectionsMetaFile.toString )
     }
   }
 }
 
-class FileHeaderGenerator(file: String, timeRegular: Boolean ) extends Runnable {
-  override def run(): Unit = { FileHeader( file, timeRegular ) }
+class FileHeaderGenerator( collectionId: String, dataLocation: Path, file: String, timeRegular: Boolean ) extends Runnable {
+  override def run(): Unit = { FileHeader( collectionId: String, dataLocation, file, timeRegular ) }
 }
 
 
@@ -328,9 +339,19 @@ class FileHeaderGenerator(file: String, timeRegular: Boolean ) extends Runnable 
 
 object CDScanTest {
   def main(args: Array[String]) {
-    val collectionId = "giss-test"
-    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H"
-    CDMultiScan.main( Array( collectionId, dataPath))
+    val collectionId = "giss-r1i1p1-test"
+    val dataPath = "/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1_agg"
+    CDScan.main( Array( collectionId, dataPath) )
   }
 }
+
+object CDMultiScanTest {
+  def main(args: Array[String]) {
+    val dataPath = "/Users/tpmaxwel/.edas/cache/collections.csv"
+    CDMultiScan.main( Array( dataPath) )
+  }
+}
+
+
+
 

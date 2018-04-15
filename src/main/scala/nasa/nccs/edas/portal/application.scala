@@ -22,7 +22,7 @@ import org.apache.spark.sql.{DataFrame, Dataset, SQLContext, SQLImplicits}
 import ucar.ma2.{ArrayFloat, IndexIterator}
 import ucar.nc2.Variable
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 // import org.apache.spark.implicits._
 import org.apache.spark.SparkEnv
 import org.apache.spark.api.java.function.MapPartitionsFunction
@@ -106,9 +106,10 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val executionCallback: ExecutionCallback = new ExecutionCallback {
       override def success( results: xml.Node ): Unit = {
         logger.info(s" *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType} *** ")
-        if (responseType == "object") { sendDirectResponse(response_syntax, clientId, jobId, results) }
-        else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
-        setExeStatus(clientId, jobId, "completed")
+        val metadata  =  if (responseType == "object")    { sendDirectResponse(response_syntax, clientId, jobId, results) }
+                         else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
+                         else { Map.empty }
+        setExeStatus(clientId, jobId, "completed|" + ( metadata.map { case (key,value) => key + ":" + value } mkString(",") ) )
       }
       override def failure( msg: String ): Unit = {
         logger.error( s"ERROR CALLBACK ($jobId:$clientId): " + msg )
@@ -142,7 +143,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   override def shutdown = processManager.term
 
-  def sendDirectResponse( response_format: ResponseSyntax.Value, clientId: String, responseId: String, response: xml.Node ): Unit =  {
+  def sendDirectResponse( response_format: ResponseSyntax.Value, clientId: String, responseId: String, response: xml.Node ): Map[String,String] =  {
     val refs: xml.NodeSeq = response \\ "data"
     val resultHref = refs.flatMap( _.attribute("href") ).find( _.nonEmpty ).map( _.text ) match {
       case Some( href ) =>
@@ -169,6 +170,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
         logger.error( "Can't find result Id in direct response: " + response.toString() )
         sendErrorReport( response_format, clientId, responseId, new Exception( "Can't find result Id in direct response: " + response.toString()  ) )
     }
+    Map.empty[String,String]
   }
 
   def getNodeAttribute( node: xml.Node, attrId: String ): Option[String] = {
@@ -177,8 +179,9 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   def getNodeAttributes( node: xml.Node ): String = node.attributes.toString()
 
-  def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, jobId: String, response: xml.Node  ): Unit =  {
+  def sendFileResponse( response_format: ResponseSyntax.Value, clientId: String, jobId: String, response: xml.Node  ): Map[String,String] =  {
     val refs: xml.NodeSeq = response \\ "data"
+    var result_files = new ArrayBuffer[String]()
     for( node: xml.Node <- refs; hrefOpt = getNodeAttribute( node,"href"); fileOpt = getNodeAttribute( node,"files") ) {
       if (hrefOpt.isDefined && fileOpt.isDefined) {
         val sharedDataDir = appParameters( "wps.shared.data.dir" )
@@ -186,12 +189,13 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 //        val rid = href.split("[/]").last
         fileOpt.get.split(",").foreach( filepath => {
           logger.info("     ****>> Found file node for jobId: " + jobId + ", clientId: " + clientId + ", sending File: " + filepath + " ****** ")
-          sendFile( clientId, jobId, "publish", filepath, sharedDataDir.isEmpty )
+          result_files += sendFile( clientId, jobId, "publish", filepath, sharedDataDir.isEmpty )
         })
       } else {
         sendErrorReport( response_format, clientId, jobId, new Exception( "Can't find href or files in attributes: " + getNodeAttributes( node ) ) )
       }
     }
+    Map( "files" -> result_files.mkString(",") )
   }
 
   override def getCapabilities(utilSpec: Array[String]): Message = {

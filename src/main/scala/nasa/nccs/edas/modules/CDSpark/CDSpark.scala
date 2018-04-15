@@ -8,7 +8,6 @@ import nasa.nccs.cdapi.cdm.OperationInput
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}
-import nasa.nccs.cdapi.data.TimeCycleSorter._
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import ucar.{ma2, nc2}
 import nasa.nccs.cdapi.tensors.{CDFloatArray, CDIndexMap}
@@ -198,7 +197,7 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
 
     val groupedRDD  =  context.profiler.profile(s"lowpass.group(${KernelContext.getProcessAddress})")(() => {
       val groupBy = context.getGroup.getOrElse(throw new Exception("lowpass operation requires a groupBy parameter"))
-      val grouped_RDD = CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy).map(_._2)
+      val grouped_RDD = CDRecordRDD.reduceRddByGroup(filteredRdd, CDRecord.weightedSum(context), "normw", groupBy, input.calendar ).map(_._2)
       if( context.profiler.activated ) { grouped_RDD.cache; grouped_RDD.count }
       grouped_RDD
     })
@@ -233,8 +232,6 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
     rv
   }
 
-  def date( time_index: Long ): String = CalendarDate.of(time_index).toString
-
   def interpolate(numPartitions: Int, times: Array[(Long,Long)] )(partitionIndex: Int, segments: Iterator[Array[CDRecord]] ) : Iterator[CDRecord] = {
     val segSeq  = segments.toSeq
     val nSegments = segSeq.length
@@ -248,7 +245,6 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
           else if( ( segmentIndex == nSegments-1 ) && ( partitionIndex == numPartitions-1 )   )  {  (startRec.midpoint,   midRec.midpoint,  endRec.endTime  ) }
           else { (startRec.midpoint,   midRec.midpoint,  endRec.midpoint ) }
         val segmentTimes = times.filter { case (sliceT0, sliceT1) => { val midT = (sliceT0+sliceT1)/2;  (midT < end_time) && (midT > start_time) } }
-        logger.info( s"   #I# -->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
         segmentTimes.map { case (sliceT0, sliceT1) => {
           val sliceT = (sliceT0 + sliceT1) / 2
           if( sliceT < mid_time ) {
@@ -265,7 +261,6 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
           if( segmentIndex == nSegments-1 ) { (startRec.midpoint,  endRec.endTime  ) }
           else { (startRec.midpoint,  endRec.midpoint ) }
         val segmentTimes = times.filter { case (sliceT0, sliceT1) => (sliceT0 < end_time) && (sliceT1 > start_time) }
-        logger.info( s"   #I# -->  Segment Times ${date(segmentTimes.head._1)} -> ${date(segmentTimes.last._2)}, NT: ${segmentTimes.length} ")
         segmentTimes.map { case (sliceT0, sliceT1) => CDRecord.interpolate( sliceT0, sliceT1, startRec, endRec ) }
       } else { Iterator.empty }
     }}
@@ -342,7 +337,7 @@ class write extends KernelImpl( Map.empty ) {
     val resultDir = new File( getResultDir.toString + s"/$resultName" )
     resultDir.mkdirs()
     context.operation.config("groupBy") map TSGroup.getGroup match {
-      case Some( groupBy ) => input.rdd.groupBy( groupBy.group ).mapValues( slices=> writeSlicesToFile( context, resultName, resultDir )( slices.toIterator ) )
+      case Some( groupBy ) => input.rdd.groupBy( groupBy.group(input.calendar) ).mapValues( slices=> writeSlicesToFile( context, resultName, resultDir )( slices.toIterator ) )
       case None => input.rdd.mapPartitions( writeSlicesToFile( context, resultName, resultDir ) )
     }
     input

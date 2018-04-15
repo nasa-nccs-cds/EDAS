@@ -822,7 +822,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       val (gridFile, resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${KernelContext.getProcessAddress})")(() => {
         val rID = UID()
         val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
-        logger.info(s" RRR Sending regrid request to python worker, op=${context.operation.identifier}, rid = ${rID}, date range = ${inputs.dateRangeStr}, keys = [ ${regrid_array_map.keys.mkString(", ")} ], operation metadata: { ${context_metadata.mkString(", ")} }")
+        logger.info(s" RRR Sending regrid request to python worker, op=${context.operation.identifier}, rid = ${rID}, keys = [ ${regrid_array_map.keys.mkString(", ")} ], operation metadata: { ${context_metadata.mkString(", ")} }")
         worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
         var gFile = ""
         val resultItems: Iterable[(String, ArraySpec)] = for (uid <- regrid_array_map.keys) yield {

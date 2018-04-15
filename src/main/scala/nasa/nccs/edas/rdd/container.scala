@@ -2,7 +2,7 @@ package nasa.nccs.edas.rdd
 
 
 import java.nio.file.Paths
-import java.util.{Calendar, Date}
+import java.util.{Date, TimeZone}
 
 import nasa.nccs.caching.BatchSpec
 import nasa.nccs.cdapi.cdm.{CDGrid, OperationDataInput}
@@ -26,7 +26,7 @@ import org.spark_project.guava.io.Files
 import ucar.ma2
 import ucar.nc2.Variable
 import ucar.nc2.dataset.CoordinateAxis1DTime
-import ucar.nc2.time.{CalendarDate, CalendarPeriod}
+import ucar.nc2.time.{Calendar, CalendarDate, CalendarPeriod}
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
 
 import scala.collection.JavaConversions._
@@ -213,8 +213,6 @@ case class CDRecord(startTime: Long, endTime: Long, levelIndex: Int, elements: M
   lazy val midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDRecord ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDRecord ): Long = Math.max( endTime, other.endTime )
-  def dateRange: (CalendarDate,CalendarDate) = ( CalendarDate.of(startTime), CalendarDate.of(endTime) )
-  def dateRangeStr: String = s"(${CalendarDate.of(startTime)}<->${CalendarDate.of(endTime)})"
   def section( section: CDSection ): Option[CDRecord] = {
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
     if( new_elements.isEmpty ) { None } else { Some( new CDRecord(startTime, endTime, levelIndex, new_elements, metadata) ) }
@@ -270,17 +268,18 @@ class DataCollection( val metadata: Map[String,String] ) extends Serializable {
 }
 
 object TSGroup {
+  import CalendarPeriod.Field._
   def season( month: Int ): Int = ( (month+1) % 12 )/3
   def getGroup( groupBy: String ): TSGroup = {
-    if( groupBy.equalsIgnoreCase("monthofyear") ) { new TSGroup ( cal => cal.get( Calendar.MONTH ), true ) }
-    else if( groupBy.equalsIgnoreCase("decade") ) { new TSGroup ( cal => cal.get( Calendar.YEAR )/10, false ) }
-    else if( groupBy.equalsIgnoreCase("year") ) { new TSGroup ( cal => cal.get( Calendar.YEAR ), false ) }
-    else if( groupBy.equalsIgnoreCase("month") ) { new TSGroup ( cal =>  ( cal.get( Calendar.YEAR ) - 1970 )*12 + cal.get( Calendar.MONTH ), false ) }
-    else if( groupBy.equalsIgnoreCase("hourofday") ) { new TSGroup ( cal =>  cal.get( Calendar.HOUR_OF_DAY ), true ) }
-    else if( groupBy.equalsIgnoreCase("season") ) { new TSGroup ( cal =>  ( cal.get( Calendar.YEAR ) - 1970 )*4 + season( cal.get( Calendar.MONTH ) ), false ) }
-    else if( groupBy.equalsIgnoreCase("seasonofyear") ) { new TSGroup ( cal =>  season( cal.get( Calendar.MONTH ) ), true ) }
-    else if( groupBy.equalsIgnoreCase("day") ) { new TSGroup ( cal =>  ( cal.get( Calendar.YEAR ) - 1970 )*365 + cal.get( Calendar.DAY_OF_YEAR ), false ) }
-    else if( groupBy.equalsIgnoreCase("dayofyear") ) { new TSGroup ( cal => cal.get( Calendar.DAY_OF_YEAR ), true ) }
+    if( groupBy.equalsIgnoreCase("monthofyear") ) { new TSGroup ( date => date.getFieldValue( Month ), true ) }
+    else if( groupBy.equalsIgnoreCase("decade") ) { new TSGroup ( date => date.getFieldValue( Year )/10, false ) }
+    else if( groupBy.equalsIgnoreCase("year") ) { new TSGroup ( date => date.getFieldValue( Year ), false ) }
+    else if( groupBy.equalsIgnoreCase("month") ) { new TSGroup ( date =>  ( date.getFieldValue( Year ) - 1970 )*12 + date.getFieldValue( Month ), false ) }
+    else if( groupBy.equalsIgnoreCase("hourofday") ) { new TSGroup ( date =>  date.getFieldValue( Hour ), true ) }
+    else if( groupBy.equalsIgnoreCase("season") ) { new TSGroup ( date =>  ( date.getFieldValue( Year ) - 1970 )*4 + season( date.getFieldValue( Month ) ), false ) }
+    else if( groupBy.equalsIgnoreCase("seasonofyear") ) { new TSGroup ( date =>  season( date.getFieldValue( Month ) ), true ) }
+    else if( groupBy.equalsIgnoreCase("day") ) { new TSGroup ( date =>  ( date.getFieldValue( Year ) - 1970 )*365 + date.getFieldValue( Day ), false ) }
+    else if( groupBy.equalsIgnoreCase("dayofyear") ) { new TSGroup ( date => date.getFieldValue( Day ), true ) }
     else {
       val groupToks: Array[String] = groupBy.split("of")
       val baseGroup = groupToks(0)
@@ -291,18 +290,18 @@ object TSGroup {
       val unit = baseGroupToks(1)
       val binSize = binToks(0).toInt
       val offset = binToks.drop(0).headOption.fold( 0 )( _.toInt )
-      if( unit.toLowerCase.startsWith("year") ) { new TSGroup ( cal => ( cal.get( Calendar.YEAR ) - 1970 + offset ) / binSize, false ) }
+      if( unit.toLowerCase.startsWith("year") ) { new TSGroup ( date => ( date.getFieldValue( Year ) - 1970 + offset ) / binSize, false ) }
       else if( unit.toLowerCase.startsWith("month") ) {
         if( cycle.toLowerCase.startsWith("year") ) {
-          new TSGroup(cal => ( ( cal.get( Calendar.MONTH ) + offset) % 12 ) / binSize, false )
+          new TSGroup(date => ( ( date.getFieldValue( Month ) + offset) % 12 ) / binSize, false )
         } else {
-          new TSGroup ( cal =>  ( ( cal.get( Calendar.YEAR ) - 1970 )*12 + cal.get( Calendar.MONTH ) + offset ) / binSize, false )
+          new TSGroup ( date =>  ( ( date.getFieldValue( Year ) - 1970 )*12 + date.getFieldValue( Month ) + offset ) / binSize, false )
         }
       } else if( unit.toLowerCase.startsWith("day") ) {
         if( cycle.toLowerCase.startsWith("year") ) {
-          new TSGroup(cal => ( ( cal.get( Calendar.DAY_OF_YEAR ) + offset ) % 365) / binSize, false )
+          new TSGroup(date => ( ( date.getFieldValue( Year ) + offset ) % 365) / binSize, false )
         } else {
-          new TSGroup ( cal =>  ( ( cal.get( Calendar.YEAR ) - 1970 )*365 + cal.get( Calendar.DAY_OF_YEAR ) + offset ) / binSize, false )
+          new TSGroup ( date =>  ( ( date.getFieldValue( Year ) - 1970 )*365 + date.getFieldValue( Day ) + offset ) / binSize, false )
         }
       } else {
         throw new Exception(s"Unrecognized groupBy argument: ${groupBy}")
@@ -311,15 +310,14 @@ object TSGroup {
   }
 }
 
-class TSGroup( val calOp: (Calendar) => Int, val isCyclic: Boolean  ) extends Serializable {
-  lazy val calendar = Calendar.getInstance()
-  def group( slice: CDRecord ): Int = { calendar.setTimeInMillis(slice.midpoint); calOp( calendar ) }
+class TSGroup( val calOp: (CalendarDate) => Int, val isCyclic: Boolean  ) extends Serializable with Loggable {
+  def group( calendar: Calendar )( slice: CDRecord ): Int = calOp( CalendarDate.of( calendar, slice.midpoint ) )
   def isNonCyclic = !isCyclic
 }
 
 class TSGroupIdentifier( val group: TSGroup, val group_index: Long )  extends Serializable {
-  def matches( slice: CDRecord ): Boolean = {
-    val index = group.group( slice )
+  def matches( calendar: Calendar )( slice: CDRecord ): Boolean = {
+    val index = group.group( calendar )( slice )
     index == group_index
   }
 }
@@ -373,8 +371,8 @@ object CDRecordRDD extends Serializable {
     CDRecord( slice.startTime, slice.endTime, slice.levelIndex, new_elems.toMap, slice.metadata )
   }
 
-  def reduceRddByGroup(rdd: RDD[CDRecord], op: (CDRecord,CDRecord) => CDRecord, postOpId: String, groupBy: TSGroup ): RDD[(Int,CDRecord)] =
-    reduceKeyedRddByGroup( rdd.keyBy( groupBy.group ), op, postOpId, groupBy )
+  def reduceRddByGroup(rdd: RDD[CDRecord], op: (CDRecord,CDRecord) => CDRecord, postOpId: String, groupBy: TSGroup, calendar: Calendar ): RDD[(Int,CDRecord)] =
+    reduceKeyedRddByGroup( rdd.keyBy( groupBy.group( calendar ) ), op, postOpId, groupBy )
 
   def reduceKeyedRddByGroup(rdd: RDD[(Int,CDRecord)], op: (CDRecord,CDRecord) => CDRecord, postOpId: String, groupBy: TSGroup ): RDD[(Int,CDRecord)] =
     rdd.reduceByKey( op ) map { case ( key, slice ) => key -> postOp( postOpId )( slice ).setGroupId( groupBy, key ) }
@@ -382,6 +380,7 @@ object CDRecordRDD extends Serializable {
 
 class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val variableRecords: Map[String,VariableRecord] ) extends DataCollection(metadata) with Loggable {
   import CDRecordRDD._
+  val calendar: Calendar = Calendar.get( metadata.getOrElse("time.calendar","default"))
   def cache() = rdd.cache()
   def nSlices = rdd.count
   def exe: CDRecordRDD = { rdd.cache; rdd.count; this }
@@ -402,7 +401,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def join( other: RDD[CDRecord] ) = CDRecordRDD( rdd.keyBy( _.startTime ).join( other.keyBy( _.startTime ) ).mapPartitions( CDRecord.join ), metadata, variableRecords )
 
   def reduceByGroup(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): CDRecordRDD = {
-    val keyedRDD: RDD[(Int,CDRecord)] = rdd.keyBy( groupBy.group )
+    val keyedRDD: RDD[(Int,CDRecord)] = rdd.keyBy( groupBy.group( calendar )  )
     val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceKeyedRddByGroup( keyedRDD.mapValues( _.selectElements( elemFilter ) ), op, postOpId, groupBy )
     val result_rdd = keyedRDD.join( groupedRDD ) map { case ( key, (slice0, slice1) ) => slice0 ++ slice1 }
     new CDRecordRDD( result_rdd, metadata, variableRecords )
@@ -431,7 +430,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
         )
         QueryResultCollection( slice, metadata)
       case Some( groupBy ) =>
-        val partialProduct = filteredRdd.groupBy( groupBy.group ).mapValues( CDRecordRDD.sortedReducePartition(op) ).map(item => postOp( postOpId )( item._2 ) )
+        val partialProduct = filteredRdd.groupBy( groupBy.group(calendar) ).mapValues( CDRecordRDD.sortedReducePartition(op) ).map(item => postOp( postOpId )( item._2 ) )
         QueryResultCollection( partialProduct.collect.sortBy( _.startTime ), metadata )
     }
     else optGroupBy match {
@@ -439,7 +438,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
         val slice: CDRecord = postOp( postOpId )( filteredRdd.treeReduce(op) )
         QueryResultCollection( slice, metadata )
       case Some( groupBy ) =>
-        val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceRddByGroup( filteredRdd, op, postOpId, groupBy )
+        val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceRddByGroup( filteredRdd, op, postOpId, groupBy, calendar )
         QueryResultCollection( groupedRDD.values.collect, metadata )
     }
   }
@@ -501,7 +500,7 @@ class PartitionExtensionGenerator(val partIndex: Int) extends Serializable {
     val sliceIter = existingSlices.sortBy(_.startTime) map { tSlice =>
       val fileInput: FileInput = fileBase.getFileInput( tSlice.startTime )
       val generator: TimeSliceGenerator = _getGenerator( varId, varName, section, fileInput, optBasePath )
-//      println( s" ***  P[${partIndex}]-ExtendPartition for varId: ${varId}, varName: ${varName}: StartTime: ${tSlice.startTime}, date: ${new Date(tSlice.startTime).toString}, FileInput start date: ${CalendarDate.of(fileInput.startTime).toString} ${fileInput.nRows} ${fileInput.path}  ")
+//      println( s" ***  P[${partIndex}]-ExtendPartition for varId: ${varId}, varName: ${varName}: StartTime: ${tSlice.startTime}, date: ${new Date(tSlice.startTime).toString} ${fileInput.nRows} ${fileInput.path}  ")
       val newSlice: CDRecord = generator.getSlice( tSlice )
       tSlice ++ newSlice
     }
