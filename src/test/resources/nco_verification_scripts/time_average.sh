@@ -7,8 +7,8 @@
 
 
 datafile_agg="/Users/tpmaxwel/Dropbox/Tom/Data/GISS/CMIP5/E2H/r1i1p1_agg/tas_Amon_GISS-E2-H_historical_r1i1p1_agg.nc"
-ncwa -O -v tas -d lat,5,5 -d lon,5,10 -a time -y total ${datafile_agg} ~/test/out/minval.nc
-ncdump ~/test/out/minval.nc
+ncwa -O -v tas -d lat,5,7 -d lon,5,10 -d time,36,47 -a time ${datafile_agg} ~/test/out/year1_ave.nc
+ncdump ~/test/out/year1_ave.nc
 
 
 
