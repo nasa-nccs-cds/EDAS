@@ -587,6 +587,15 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
   }
 
+  test("Highpass-GISS-R1i1p1-1") {
+    val datainputs =
+      s"""  [     domain=[{"name":"d0","lat":{"start":-30,"end":30,"system":"values"},"lon":{"start":0,"end":60,"system":"values"},"time":{"start":"1850-01-30T00:00:00Z","end":"1856-07-28T00:00:00Z","system":"timestamps"}}],
+         |        variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         |        operation=[{"name":"CDSpark.highpass","input":"v1","domain":"d0","groupBy":"year"}]]""".stripMargin
+    val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
+  }
+
+
   test("Ave-1-Space-GISS-R1i1p1") {
     //  ncks -O -v tas -d lat,25,30 -d lon,20,25 -d time,45,50 ${datafile} ~/test/out/subset.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array(  289.0866, 290.5467, 292.9329, 294.6103, 295.5956, 294.7446   ).map(_.toFloat), Float.MaxValue )
