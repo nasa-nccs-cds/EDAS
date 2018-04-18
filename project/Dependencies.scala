@@ -25,7 +25,7 @@ object Library {
   val netcdf4        = "edu.ucar"           % "netcdf4"         % Versions.ucar
   val opendap        = "edu.ucar"           % "opendap"         % Versions.ucar
   val netlib         = "com.github.fommil.netlib"  % "all"      % "1.1.2"
-  val nd4s           = "org.nd4j"           % "nd4s_2.11"       % "0.4-rc3.8"
+  val nd4s           = "org.nd4j"           %% "nd4s"       % "0.4-rc3.8"
   val nd4j           =  "org.nd4j"          % "nd4j-x86"        % "0.4-rc3.8"
   val httpservices   = "edu.ucar"           %  "httpservices"   % Versions.ucar
   val httpclient     = "org.apache.httpcomponents" % "httpclient" % "4.5.2"
@@ -42,7 +42,7 @@ object Library {
   val scalaparser    = "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.3"
   val jacksonCore = "com.fasterxml.jackson.core" % "jackson-core" % Versions.jackson
   val jacksonDatabind = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jackson
-  val jacksonModule = "com.fasterxml.jackson.module" % "jackson-module-scala_2.10" % Versions.jackson
+  val jacksonModule = "com.fasterxml.jackson.module" %% "jackson-module-scala" % Versions.jackson
 
 }
 
