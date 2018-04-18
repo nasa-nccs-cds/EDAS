@@ -1,6 +1,8 @@
+import java.io.File
 import java.net.URI
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import java.util.Formatter
+import java.util.regex.Pattern
 
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.engine.ExecutionCallback
@@ -593,6 +595,16 @@ class DefaultTestSuite extends EDASTestSuite {
          |        variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
          |        operation=[{"name":"CDSpark.highpass","input":"v1","domain":"d0","groupBy":"year"}]]""".stripMargin
     val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
+  }
+
+  def find_spark_home: String = {
+    import sys.process._
+    val path = "which spark-submit" !!;
+    new File(path).getParentFile.getParent
+  }
+
+  test("find_path") {
+    print( find_spark_home );
   }
 
 

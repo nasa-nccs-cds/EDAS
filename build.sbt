@@ -1,4 +1,4 @@
-import java.io.{FileWriter, FilenameFilter, PrintWriter}
+import java.io.{File, FileWriter, FilenameFilter, PrintWriter}
 import java.nio.file.Files.copy
 import java.nio.file.Files.deleteIfExists
 import java.nio.file.Paths.get
@@ -38,15 +38,6 @@ mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
 libraryDependencies ++= ( Dependencies.cache  ++ Dependencies.geo ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test  ) // ++ Dependencies.jackson ++ Dependencies.breeze
-
-libraryDependencies ++= {
-  sys.env.get("YARN_CONF_DIR") match {
-    case Some(yarn_config) => Seq.empty
-    case None => Dependencies.spark ++ Dependencies.scala                     // ++ Dependencies.xml     : For 2.11 or later!
-  }
-}
-
-// dependencyOverrides ++= Set( "com.fasterxml.jackson.core" % "jackson-databind" % "2.4.4" )
 
 dependencyOverrides += Library.jacksonCore
 dependencyOverrides += Library.jacksonDatabind
@@ -91,12 +82,14 @@ lazy val edas_conf_dir = settingKey[File]("The EDAS conf directory.")
 lazy val edas_sbin_dir = settingKey[File]("The EDAS sbin directory.")
 lazy val edas_logs_dir = settingKey[File]("The EDAS logs directory.")
 lazy val conda_lib_dir = settingKey[Option[File]]("The Conda lib directory.")
+lazy val spark_jars_dir = settingKey[File]("The Spark jars directory.")
 val edasProperties = settingKey[Properties]("The edas properties map")
 
 edas_conf_dir := baseDirectory.value / "src" / "universal" / "conf"
 edas_sbin_dir := getEDASbinDir
 edas_logs_dir := getEDASlogsDir
 conda_lib_dir := getCondaLibDir
+spark_jars_dir := getSparkJarDir
 
 //lazy val installNetcdfTask = taskKey[Unit]("Install Netcdf jar")
 //
@@ -125,8 +118,8 @@ unmanagedJars in Compile ++= {
 //  }
 //}
 
-unmanagedClasspath in Test ++= conda_lib_dir.value.toSeq
-unmanagedClasspath in (Compile, runMain) ++= conda_lib_dir.value.toSeq
+unmanagedClasspath in Test ++= conda_lib_dir.value.toSeq ++ Seq( spark_jars_dir )
+unmanagedClasspath in (Compile, runMain) ++= conda_lib_dir.value.toSeq ++ Seq( spark_jars_dir )
 classpathTypes += "dylib"
 classpathTypes += "so"
 
@@ -205,6 +198,13 @@ def getEDASbinDir: File = {
   val bin_dir =  file(System.getProperty("user.home")) / ".edas" / "sbin";
   bin_dir.mkdirs();
   bin_dir
+}
+
+def getSparkJarDir: File = {
+  import sys.process._
+  val path = "which spark-submit" !!;
+  val spark_home = new File(path).getParentFile.getParent
+  file(spark_home) / "jars"
 }
 
 def getEDASlogsDir: File = {
