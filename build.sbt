@@ -82,7 +82,7 @@ lazy val edas_conf_dir = settingKey[File]("The EDAS conf directory.")
 lazy val edas_sbin_dir = settingKey[File]("The EDAS sbin directory.")
 lazy val edas_logs_dir = settingKey[File]("The EDAS logs directory.")
 lazy val conda_lib_dir = settingKey[Option[File]]("The Conda lib directory.")
-lazy val spark_jars_dir = settingKey[File]("The Spark jars directory.")
+lazy val spark_jars_dir = settingKey[PathFinder]("The Spark jars directory.")
 val edasProperties = settingKey[Properties]("The edas properties map")
 
 edas_conf_dir := baseDirectory.value / "src" / "universal" / "conf"
@@ -102,24 +102,19 @@ spark_jars_dir := getSparkJarDir
 
 unmanagedJars in Compile ++= {
   val jars_dir: String = sys.env.getOrElse( "EDAS_UNMANAGED_JARS", (baseDirectory.value / "lib").toString )
-    val customJars: PathFinder =  file(jars_dir) ** (("*.jar" -- "*concurrentlinkedhashmap*") -- "*netcdf*")
-    val classpath_file = edas_cache_dir.value / "classpath.txt"
-    val pw = new PrintWriter( classpath_file )
-    val jars_list = customJars.getPaths.mkString("\n")
-    println("Custom jars: " + jars_list + ", dir: " + jars_dir )
-    pw.write( jars_list )
-    customJars.classpath
+  val customJars: PathFinder =  file(jars_dir) ** (("*.jar" -- "*concurrentlinkedhashmap*") -- "*netcdf*") +++ spark_jars_dir.value
+  val classpath_file = edas_cache_dir.value / "classpath.txt"
+  val pw = new PrintWriter( classpath_file )
+  val jars_list = customJars.getPaths.mkString("\n")
+  println("Custom jars: " + jars_list + ", dir: " + jars_dir )
+  pw.write( jars_list )
+  customJars.classpath
 }
 
-//unmanagedJars in Compile ++= {
-//  sys.env.get("SPARK_HOME") match {
-//    case Some(spark_dir) =>  ( file(spark_dir) ** "*.jar" ).classpath
-//    case None => PathFinder.empty.classpath
-//  }
-//}
-
-unmanagedClasspath in Test ++= conda_lib_dir.value.toSeq ++ Seq( spark_jars_dir )
-unmanagedClasspath in (Compile, runMain) ++= conda_lib_dir.value.toSeq ++ Seq( spark_jars_dir )
+unmanagedClasspath in Test ++= spark_jars_dir.value.classpath
+unmanagedClasspath in Test ++= conda_lib_dir.value.toSeq
+unmanagedClasspath in (Compile, runMain) ++= spark_jars_dir.value.classpath
+unmanagedClasspath in (Compile, runMain) ++= conda_lib_dir.value.toSeq
 classpathTypes += "dylib"
 classpathTypes += "so"
 
@@ -200,11 +195,14 @@ def getEDASbinDir: File = {
   bin_dir
 }
 
-def getSparkJarDir: File = {
+def getSparkJarDir: PathFinder = {
   import sys.process._
-  val path = "which spark-submit" !!;
-  val spark_home = new File(path).getParentFile.getParent
-  file(spark_home) / "jars"
+  try {
+    val path = "which spark-submit" !!;
+    val spark_home = new File(path).getParentFile.getParent
+    val spark_jars_dir: sbt.File = file(spark_home) / "jars"
+    spark_jars_dir ** "*.jar"
+  } catch { case err: Exception => PathFinder.empty }
 }
 
 def getEDASlogsDir: File = {

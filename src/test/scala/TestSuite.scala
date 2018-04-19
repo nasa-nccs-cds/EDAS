@@ -597,14 +597,16 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
   }
 
-  def find_spark_home: String = {
+  def find_executable_parent( exe: String ): Option[String] = {
     import sys.process._
-    val path = "which spark-submit" !!;
-    new File(path).getParentFile.getParent
+    try {
+      val path = s"which $exe" !!;
+      Some(new File(path).getParentFile.getParent)
+    } catch { case err: Exception => None }
   }
 
   test("find_path") {
-    print( find_spark_home );
+    print( find_executable_parent("spark-sub") );
   }
 
 
