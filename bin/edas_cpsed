@@ -2,9 +2,7 @@
 
 import sys, re
 
-inputs = sys.argv[1:] if len( sys.argv ) > 1 else sys.stdin.read()
+inputs = ' '.join(sys.argv[1:]) if len( sys.argv ) > 1 else sys.stdin.read()
 
-result = ' '.join(inputs)
-
-print re.sub(r"\s+", ':', result)
+print re.sub(r"\s+", ':', inputs)
 

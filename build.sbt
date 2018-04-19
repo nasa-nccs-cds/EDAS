@@ -88,7 +88,8 @@ val edasProperties = settingKey[Properties]("The edas properties map")
 edas_conf_dir := baseDirectory.value / "src" / "universal" / "conf"
 edas_sbin_dir := getEDASbinDir
 edas_logs_dir := getEDASlogsDir
-conda_lib_dir := getCondaLibDir
+// conda_lib_dir := getCondaLibDir
+conda_lib_dir := None
 spark_jars_dir := getSparkJarDir
 
 //lazy val installNetcdfTask = taskKey[Unit]("Install Netcdf jar")
