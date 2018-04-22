@@ -40,7 +40,7 @@ import scala.collection.mutable
 
 class Logger( val name: String, val test: Boolean, val master: Boolean ) extends Serializable {
   val LNAME = if( test ) name + "-test" else name + "-"
-  val LID = if( master ) "master" else UID().uid
+  val LID = if( master ) "master-" + UID().uid else UID().uid
   var newline_state = true
 //  val logFileDir: Path = Paths.get( "/tmp", System.getProperty("user.name"), "logs" )
   val logFileDir: Path = Paths.get( System.getProperty("user.home"), ".edas", "logs" )
