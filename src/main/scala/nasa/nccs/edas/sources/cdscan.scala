@@ -78,6 +78,10 @@ object FileHeader extends Loggable {
         val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, calendar, timeRegular, resolution, variableNames, coordVars map { _.getShortName } )
         _instanceCache.put( filePath, fileHeader  )
         fileHeader
+      } catch {
+        case err: Exception =>
+          logger.error( "Error generating FileHeader: " + err.toString )
+          throw err
       } finally {
         ncDataset.close()
       }
