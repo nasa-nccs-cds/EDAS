@@ -37,7 +37,7 @@ enablePlugins(JavaAppPackaging)
 mainClass in (Compile, run) := Some("nasa.nccs.edas.portal.EDASApplication")
 mainClass in (Compile, packageBin) := Some("nasa.nccs.edas.portal.EDASApplication")
 
-libraryDependencies ++= ( Dependencies.cache  ++ Dependencies.geo ++ Dependencies.socket ++ Dependencies.xml ++ Dependencies.spark ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test  ) // ++ Dependencies.jackson ++ Dependencies.breeze
+libraryDependencies ++= ( Dependencies.cache  ++ Dependencies.geo ++ Dependencies.xml ++ Dependencies.spark ++ Dependencies.netcdf ++ Dependencies.socket ++ Dependencies.utils ++ Dependencies.test  ) // ++ Dependencies.jackson ++ Dependencies.breeze
 
 dependencyOverrides += Library.jacksonCore
 dependencyOverrides += Library.jacksonDatabind

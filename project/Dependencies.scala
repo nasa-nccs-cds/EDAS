@@ -16,7 +16,7 @@ object Library {
   val sparkCore      = "org.apache.spark"  %% "spark-core"      % Versions.spark
   val sparkStreaming = "org.apache.spark"  %% "spark-streaming" % Versions.spark
   val commonsIO      = "commons-io"         % "commons-io"      % "2.5"
-  val zeromq         = "org.zeromq"         % "jeromq"          % "0.4.2"
+  val zeromq         = "org.zeromq"         % "jeromq"          % "0.4.3"
   val breezeNlp      = "org.scalanlp"       %% "breeze"         % Versions.breeze
   val breezeNative   = "org.scalanlp"      %% "breeze-natives"  % Versions.breeze
   val breezeViz      = "org.scalanlp"      %% "breeze-viz"      % Versions.breeze
