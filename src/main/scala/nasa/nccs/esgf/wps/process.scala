@@ -122,14 +122,14 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node  =  {
     val response = portal.sendMessage( "describeProcess", List( name ).toArray )
     val message = response.split('!').last
-    logger.info( "Received 'describeProcess' response, Sample:: " + message.substring(0,Math.min(100,message.length)) )
+    logger.info( "Received 'describeProcess' response, Sample:: " + message.substring(0,Math.min(500,message.length)) )
     EDAS_XML.loadString( message )
   }
 
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node = {
     val response = portal.sendMessage( "getCapabilities", List( identifier ).toArray )
     val message = response.split('!').last
-    logger.info( "Received 'getCapabilities' response, Sample:: " + message.substring(0,Math.min(100,message.length)) )
+    logger.info( s" EDASW: Received getCapabilities(${identifier}) response: \n" + response.substring( 0, Math.min(500,response.length) ) )
     EDAS_XML.loadString( message )
   }
 

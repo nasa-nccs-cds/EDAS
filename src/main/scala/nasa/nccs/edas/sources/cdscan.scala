@@ -71,8 +71,10 @@ object FileHeader extends Loggable {
       try {
         val (calendar, axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
         val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
+        val axes = ncDataset.getCoordinateAxes
+        val resolution: Map[String,Float] = axes.flatMap( axis => getResolution( axis ) ).toMap
         val variableNames = variables map { _.getShortName }
-        val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, calendar, timeRegular, variableNames, coordVars map { _.getShortName } )
+        val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, calendar, timeRegular, resolution, variableNames, coordVars map { _.getShortName } )
         _instanceCache.put( filePath, fileHeader  )
         fileHeader
       } finally {
@@ -80,6 +82,13 @@ object FileHeader extends Loggable {
       }
     })
   }
+
+  def getResolution( cAxis: CoordinateAxis): Option[(String,Float)] = try {
+    val name = cAxis.getAxisType.toString
+    val size = if ( name.equalsIgnoreCase("t") ) { cAxis.getShape(0) * 1.0e9 } else { cAxis.getShape(0) }
+    Some( name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / size.toFloat )
+  } catch { case ex: Throwable => None }
+
 
   def getGroupedFileHeaders( collectionId: String ): Map[String, Iterable[FileHeader]] = _instanceCache.values.groupBy ( _.varNames.sorted.mkString("-") )
 
@@ -166,6 +175,7 @@ class FileHeader( val dataLocation: Path,
                   val boundsValues: Array[Array[Double]],
                   val calendar: Calendar,
                   val timeRegular: Boolean,
+                  val resolution: Map[String,Float],
                   val varNames: List[String],
                   val coordVarNames: List[String]
                 ) {
@@ -179,10 +189,10 @@ class FileHeader( val dataLocation: Path,
   val sd = startDate
   val test = 1;
   override def toString: String = " *** FileHeader { path='%s', relFile='%s',nElem=%d, startValue=%d startDate=%s} ".format( dataLocation.toString, relFile, nElem, startValue, startDate)
-  def dropPrefix( nElems: Int ): FileHeader = {
-    val path = toPath
-    new FileHeader( path.subpath(0,nElems), path.subpath(nElems,path.getNameCount).toString, axisValues, boundsValues, calendar, timeRegular, varNames, coordVarNames )
-  }
+//  def dropPrefix( nElems: Int ): FileHeader = {
+//    val path = toPath
+//    new FileHeader( path.subpath(0,nElems), path.subpath(nElems,path.getNameCount).toString, axisValues, boundsValues, calendar, timeRegular, varNames, coordVarNames )
+//  }
 }
 
 object FileMetadata extends Loggable {
