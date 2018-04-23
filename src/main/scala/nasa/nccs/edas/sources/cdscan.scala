@@ -88,25 +88,25 @@ object FileHeader extends Loggable {
     })
   }
 
-  def getDuration( cAxis: CoordinateAxis ): Long = {
+  def getDuration( cAxis: CoordinateAxis ): Double = {
     val s1 = s"${cAxis.getMaxValue.toString} ${cAxis.getUnitsString}".trim.split("since")
     val s0 = s"${cAxis.getMinValue.toString} ${cAxis.getUnitsString}".trim.split("since")
     val units: String = s1.head.split(" ").last.trim.toLowerCase
-    val value1 = s1.head.split(" ").head.trim.toFloat
-    val value0 = s0.head.split(" ").head.trim.toFloat
+    val value1 = s1.head.split(" ").head.trim.toDouble
+    val value0 = s0.head.split(" ").head.trim.toDouble
     val multiplier =  if(units.startsWith("d")) { 1000*60*60*24 }
                       else if(units.startsWith("h")) { 1000*60*60 }
                       else if(units.startsWith("m")) { 1000*60 }
                       else if(units.startsWith("s")) { 1000 }
                       else { throw new Exception("Unrecognized time units: " + units )  }
-    ( ( value1 - value0 ) * multiplier ).toLong
+    ( value1 - value0 ) * multiplier
   }
 
   def getResolution( cAxis: CoordinateAxis): Option[(String,Float)] = try {
     val name: String = cAxis.getAxisType.getCFAxisName
     val shape: Array[Int] = cAxis.getShape()
-    val length: Long = if ( name.equalsIgnoreCase("t") ) { getDuration(cAxis) } else { (cAxis.getMaxValue - cAxis.getMinValue).toLong }
-    Some( name -> length / shape(0) )
+    val length: Double = if ( name.equalsIgnoreCase("t") ) { getDuration(cAxis) } else { (cAxis.getMaxValue - cAxis.getMinValue) }
+    Some( name -> ( length / shape(0) ).toFloat )
   } catch {
     case err: Exception => None
   }
