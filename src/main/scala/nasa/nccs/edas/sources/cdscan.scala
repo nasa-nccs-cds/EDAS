@@ -12,6 +12,7 @@ import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.utilities._
 import org.apache.commons.lang.RandomStringUtils
+import org.joda.time.DateTime
 import ucar.nc2.Group
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
@@ -85,8 +86,12 @@ object FileHeader extends Loggable {
 
   def getResolution( cAxis: CoordinateAxis): Option[(String,Float)] = try {
     val name = cAxis.getAxisType.getCFAxisName
-    val size = if ( name.equalsIgnoreCase("t") ) { cAxis.getShape(0) * 1.0e9 } else { cAxis.getShape(0) }
-    Some( name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / size.toFloat )
+    if ( name.equalsIgnoreCase("t") ) {
+      val units = cAxis.getUnitsString
+      val time0 = DateTime.parse( s"${cAxis.getMaxValue.toString} ${units}")
+      val time1 = DateTime.parse( s"${cAxis.getMinValue.toString} ${units}")
+      Some( name ->  ( time1.getMillis - time0.getMillis ) / cAxis.getShape(0) )
+    } else { Some(  name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / cAxis.getShape(0) ) }
   } catch { case ex: Throwable => None }
 
 
