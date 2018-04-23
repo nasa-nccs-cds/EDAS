@@ -12,7 +12,7 @@ import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.utilities._
 import org.apache.commons.lang.RandomStringUtils
-import org.joda.time.{DateTime, Duration}
+import java.time.Duration
 import ucar.nc2.Group
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
@@ -89,11 +89,17 @@ object FileHeader extends Loggable {
   }
 
   def getDuration( cAxis: CoordinateAxis ): Long = {
-    val s1 = s"${cAxis.getMaxValue.toString} ${cAxis.getUnitsString}".split("since")
-    val s0 = s"${cAxis.getMinValue.toString} ${cAxis.getUnitsString}".split("since")
-    val d0 = new Duration( s0.head )
-    val d1 = new Duration( s1.head )
-    d1.minus(d0).getMillis
+    val s1 = s"${cAxis.getMaxValue.toString} ${cAxis.getUnitsString}".trim.split("since")
+    val s0 = s"${cAxis.getMinValue.toString} ${cAxis.getUnitsString}".trim.split("since")
+    val units: String = s1.head.split(" ").last.trim.toLowerCase
+    val value1 = s1.head.split(" ").head.trim.toFloat
+    val value0 = s0.head.split(" ").head.trim.toFloat
+    val multiplier =  if(units.startsWith("d")) { 1000*60*60*24 }
+                      else if(units.startsWith("h")) { 1000*60*60 }
+                      else if(units.startsWith("m")) { 1000*60 }
+                      else if(units.startsWith("s")) { 1000 }
+                      else { 0 }
+    ( ( value1 - value0 ) * multiplier ).toLong
   }
 
   def getResolution( cAxis: CoordinateAxis): (String,Float) = {
