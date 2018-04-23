@@ -98,7 +98,7 @@ object FileHeader extends Loggable {
                       else if(units.startsWith("h")) { 1000*60*60 }
                       else if(units.startsWith("m")) { 1000*60 }
                       else if(units.startsWith("s")) { 1000 }
-                      else { 0 }
+                      else { throw new Exception("Unrecognized time units: " + units )  }
     ( ( value1 - value0 ) * multiplier ).toLong
   }
 
