@@ -80,7 +80,7 @@ object FileHeader extends Loggable {
         fileHeader
       } catch {
         case err: Exception =>
-          logger.error( "Error generating FileHeader: " + err.toString )
+          logger.error( "Error generating FileHeader: " + err.toString + "\n\t" + err.getStackTrace.mkString("\n\t") )
           throw err
       } finally {
         ncDataset.close()
