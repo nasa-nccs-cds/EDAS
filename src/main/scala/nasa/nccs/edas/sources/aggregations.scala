@@ -5,6 +5,7 @@ import java.net.URI
 import java.nio.file.{Path, Paths}
 import java.util.Date
 
+import nasa.nccs.cdapi.cdm.CDGrid
 import nasa.nccs.edas.portal.RandomString
 
 import scala.util.control.Breaks._
@@ -32,8 +33,8 @@ case class FileInput(fileIndex: Int, startTime: Long, calendar: Calendar, timeSt
   override def toString = s"FileInput($fileIndex)[ $path, firstRow: $firstRowIndex, nRows: $nRows, time: ${CalendarDate.of(calendar,startTime).toString} ($startTime) ]"
 }
 
-case class Variable( name: String, fullName: String, dodsName: String, description: String, shape: Array[Int], dims: String, units: String ) extends Serializable {
-  def toXml: xml.Elem = { <variable name={name} fullName={fullName} dodsName={dodsName} description={description} shape={shape.mkString(",")} dims={dims} units={units} /> }
+case class Variable( name: String, fullName: String, dodsName: String, description: String, shape: Array[Int], resolution: String, dims: String, units: String ) extends Serializable {
+  def toXml: xml.Elem = { <variable name={name} fullName={fullName} dodsName={dodsName} shape={shape.mkString(",")} resolution={resolution} dims={dims} units={units} /> }
   override def toString: String = s"name:${name};shape:${shape.mkString(",")};dims:${dims};units:${units}"
   def toMap: Map[String,String] = Seq( "name"->name, "shape"->shape.mkString(","), "dims"->dims, "units"->units ).toMap
 }
@@ -559,7 +560,7 @@ object Aggregation extends Loggable {
         case "P" =>
           parameters += toks(1) -> toks(2)
           if( toks(1).equals("num.files") ) { files = new mutable.ArrayBuffer[FileInput]( toks(2).toInt ) }
-        case "V" => variables += Variable( toks(1), toks(2), toks(3), toks(4), toks(5).split(",").map( toInt ), toks(6), toks(7) )
+        case "V" => variables += Variable( toks(1), toks(2), toks(3), toks(4), toks(5).split(",").map( toInt ), parameters.getOrElse("resolution",""), toks(6), toks(7) )
         case "C" => coordinates += Coordinate( toks(1), toks(2).split(",").map( toInt ) )
         case "A" => axes += Axis( toks(1), toks(2), toks(3), toks(4).split(",").map( toInt ), toks(5), toFloat(toks(6)), toFloat(toks(7)) )
         case _ => Unit
@@ -602,12 +603,14 @@ object Aggregation extends Loggable {
     val calendar = fileHeaders.head.calendar
     val endTime = fileHeaders.last.endValue
     val nTimeSteps: Int = fileHeaders.foldLeft(0)(_ + _.nElem)
+    val resolution = fileHeaders.head.resolution.map( item => s"${item._1}:${item._1.toString}").mkString(",")
     val fileMetadata = FileMetadata( fileHeaders.head.toPath.toString, nTimeSteps )
     logger.info( " ")
     try {
       bw.write( s"P; time.nrows; ${fileHeaders.length}\n")
       bw.write( s"P; time.start; ${startTime}\n")
       bw.write( s"P; time.end; ${endTime}\n")
+      bw.write( s"P; resolution; ${resolution}\n")
       bw.write( s"P; time.calendar; ${calendar.name}\n")
       bw.write( s"P; base.path; ${fileHeaders.head.dataLocation.toString}\n")
       bw.write( s"P; num.files; ${fileHeaders.length}\n")
@@ -617,7 +620,7 @@ object Aggregation extends Loggable {
         else {                    bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n" ) }
       }
       for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} \n" ) }
-      for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName}; ${variable.getFullName}; ${variable.getDODSName};  ${variable.getDescription};  ${getShapeStr(variable.getDimensionsString,nTimeSteps,variable.getShape)};  ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
+      for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName}; ${variable.getFullName}; ${variable.getDODSName};  ${variable.getDescription};  ${getShapeStr(variable.getDimensionsString,nTimeSteps,variable.getShape)}; ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
       for (fileHeader <- fileHeaders) {
         bw.write( s"F; ${EDTime.toString(fileHeader.startValue)}; ${fileHeader.nElem.toString}; ${fileHeader.relFile}\n" )
       }
