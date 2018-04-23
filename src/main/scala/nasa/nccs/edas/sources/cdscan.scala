@@ -106,7 +106,7 @@ object FileHeader extends Loggable {
     val name: String = cAxis.getAxisType.getCFAxisName
     val shape: Array[Int] = cAxis.getShape()
     val length: Double = if ( name.equalsIgnoreCase("t") ) { getDuration(cAxis) } else { (cAxis.getMaxValue - cAxis.getMinValue) }
-    Some( name -> ( length / shape(0) ).toFloat )
+    Some( name -> ( length / (shape(0)-1) ).toFloat )
   } catch {
     case err: Exception => None
   }
