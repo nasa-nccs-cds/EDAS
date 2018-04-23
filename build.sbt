@@ -118,8 +118,8 @@ unmanagedJars in Compile ++= {
 //  }
 //}
 
-unmanagedClasspath in Test ++= conda_lib_dir.value.toSeq ++ Seq( spark_jars_dir )
-unmanagedClasspath in (Compile, runMain) ++= conda_lib_dir.value.toSeq ++ Seq( spark_jars_dir )
+unmanagedClasspath in Test ++= conda_lib_dir.value.toSeq      // ++ Seq( spark_jars_dir )
+unmanagedClasspath in (Compile, runMain) ++= conda_lib_dir.value.toSeq     // ++ Seq( spark_jars_dir )
 classpathTypes += "dylib"
 classpathTypes += "so"
 
