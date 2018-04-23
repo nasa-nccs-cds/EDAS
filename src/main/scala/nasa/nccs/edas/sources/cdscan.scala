@@ -12,7 +12,7 @@ import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.utilities._
 import org.apache.commons.lang.RandomStringUtils
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Duration}
 import ucar.nc2.Group
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
@@ -88,15 +88,18 @@ object FileHeader extends Loggable {
     })
   }
 
+  def getDuration( cAxis: CoordinateAxis ): Long = {
+    val s1 = s"${cAxis.getMaxValue.toString} ${cAxis.getUnitsString}".split("since")
+    val s0 = s"${cAxis.getMinValue.toString} ${cAxis.getUnitsString}".split("since")
+    val d0 = new Duration( s0.head )
+    val d1 = new Duration( s1.head )
+    d1.minus(d0).getMillis
+  }
+
   def getResolution( cAxis: CoordinateAxis): (String,Float) = {
     val name = cAxis.getAxisType.getCFAxisName
-    if (name.equalsIgnoreCase("t")) {
-      val time0 = DateTime.parse(s"${cAxis.getMaxValue.toString} ${cAxis.getUnitsString}")
-      val time1 = DateTime.parse(s"${cAxis.getMinValue.toString} ${cAxis.getUnitsString}")
-      name -> (time1.getMillis - time0.getMillis) / cAxis.getShape(0)
-    } else {
-      name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / cAxis.getShape(0)
-    }
+    val length = if ( name.equalsIgnoreCase("t") ) { getDuration(cAxis) } else { (cAxis.getMaxValue - cAxis.getMinValue).toFloat }
+    name -> length / cAxis.getShape(0)
   }
 
 
