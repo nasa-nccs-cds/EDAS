@@ -73,7 +73,7 @@ object FileHeader extends Loggable {
         val (calendar, axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
         val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
         val axes = ncDataset.getCoordinateAxes
-        val resolution: Map[String,Float] = axes.map( axis => getResolution( axis ) ).toMap
+        val resolution: Map[String,Float] = axes.flatMap( axis => getResolution( axis ) ).toMap
         val variableNames = variables map { _.getShortName }
         val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, calendar, timeRegular, resolution, variableNames, coordVars map { _.getShortName } )
         _instanceCache.put( filePath, fileHeader  )
@@ -102,11 +102,13 @@ object FileHeader extends Loggable {
     ( ( value1 - value0 ) * multiplier ).toLong
   }
 
-  def getResolution( cAxis: CoordinateAxis): (String,Float) = {
+  def getResolution( cAxis: CoordinateAxis): Option[(String,Float)] = try {
     val name: String = cAxis.getAxisType.getCFAxisName
     val shape: Array[Int] = cAxis.getShape()
     val length: Long = if ( name.equalsIgnoreCase("t") ) { getDuration(cAxis) } else { (cAxis.getMaxValue - cAxis.getMinValue).toLong }
-    name -> length / shape(0)
+    Some( name -> length / shape(0) )
+  } catch {
+    case err: Exception => None
   }
 
 
