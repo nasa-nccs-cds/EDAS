@@ -84,7 +84,7 @@ object FileHeader extends Loggable {
   }
 
   def getResolution( cAxis: CoordinateAxis): Option[(String,Float)] = try {
-    val name = cAxis.getAxisType.toString
+    val name = cAxis.getAxisType.getCFAxisName
     val size = if ( name.equalsIgnoreCase("t") ) { cAxis.getShape(0) * 1.0e9 } else { cAxis.getShape(0) }
     Some( name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / size.toFloat )
   } catch { case ex: Throwable => None }

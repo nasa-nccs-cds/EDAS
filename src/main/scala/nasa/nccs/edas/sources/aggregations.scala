@@ -603,14 +603,13 @@ object Aggregation extends Loggable {
     val calendar = fileHeaders.head.calendar
     val endTime = fileHeaders.last.endValue
     val nTimeSteps: Int = fileHeaders.foldLeft(0)(_ + _.nElem)
-    val resolution = fileHeaders.head.resolution.map( item => s"${item._1}:${item._1.toString}").mkString(",")
+    val resolution = fileHeaders.head.resolution.map( item => s"${item._1}:${item._2.toString}").mkString(",")
     val fileMetadata = FileMetadata( fileHeaders.head.toPath.toString, nTimeSteps )
     logger.info( " ")
     try {
       bw.write( s"P; time.nrows; ${fileHeaders.length}\n")
       bw.write( s"P; time.start; ${startTime}\n")
       bw.write( s"P; time.end; ${endTime}\n")
-      bw.write( s"P; resolution; ${resolution}\n")
       bw.write( s"P; time.calendar; ${calendar.name}\n")
       bw.write( s"P; base.path; ${fileHeaders.head.dataLocation.toString}\n")
       bw.write( s"P; num.files; ${fileHeaders.length}\n")
@@ -620,7 +619,7 @@ object Aggregation extends Loggable {
         else {                    bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n" ) }
       }
       for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} \n" ) }
-      for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName}; ${variable.getFullName}; ${variable.getDODSName};  ${variable.getDescription};  ${getShapeStr(variable.getDimensionsString,nTimeSteps,variable.getShape)}; ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
+      for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName}; ${variable.getFullName}; ${variable.getDODSName};  ${variable.getDescription};  ${getShapeStr(variable.getDimensionsString,nTimeSteps,variable.getShape)}; ${resolution}; ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
       for (fileHeader <- fileHeaders) {
         bw.write( s"F; ${EDTime.toString(fileHeader.startValue)}; ${fileHeader.nElem.toString}; ${fileHeader.relFile}\n" )
       }
