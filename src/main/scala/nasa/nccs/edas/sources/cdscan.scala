@@ -73,7 +73,7 @@ object FileHeader extends Loggable {
         val (calendar, axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
         val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
         val axes = ncDataset.getCoordinateAxes
-        val resolution: Map[String,Float] = axes.flatMap( axis => getResolution( axis ) ).toMap
+        val resolution: Map[String,Float] = axes.map( axis => getResolution( axis ) ).toMap
         val variableNames = variables map { _.getShortName }
         val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, calendar, timeRegular, resolution, variableNames, coordVars map { _.getShortName } )
         _instanceCache.put( filePath, fileHeader  )
@@ -84,15 +84,16 @@ object FileHeader extends Loggable {
     })
   }
 
-  def getResolution( cAxis: CoordinateAxis): Option[(String,Float)] = try {
+  def getResolution( cAxis: CoordinateAxis): (String,Float) = {
     val name = cAxis.getAxisType.getCFAxisName
-    if ( name.equalsIgnoreCase("t") ) {
-      val units = cAxis.getUnitsString
-      val time0 = DateTime.parse( s"${cAxis.getMaxValue.toString} ${units}")
-      val time1 = DateTime.parse( s"${cAxis.getMinValue.toString} ${units}")
-      Some( name ->  ( time1.getMillis - time0.getMillis ) / cAxis.getShape(0) )
-    } else { Some(  name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / cAxis.getShape(0) ) }
-  } catch { case ex: Throwable => None }
+    if (name.equalsIgnoreCase("t")) {
+      val time0 = DateTime.parse(s"${cAxis.getMaxValue.toString} ${cAxis.getUnitsString}")
+      val time1 = DateTime.parse(s"${cAxis.getMinValue.toString} ${cAxis.getUnitsString}")
+      name -> (time1.getMillis - time0.getMillis) / cAxis.getShape(0)
+    } else {
+      name -> (cAxis.getMaxValue - cAxis.getMinValue).toFloat / cAxis.getShape(0)
+    }
+  }
 
 
   def getGroupedFileHeaders( collectionId: String ): Map[String, Iterable[FileHeader]] = _instanceCache.values.groupBy ( _.varNames.sorted.mkString("-") )
