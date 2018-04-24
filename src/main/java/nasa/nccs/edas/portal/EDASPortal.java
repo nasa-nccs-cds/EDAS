@@ -10,16 +10,12 @@ import nasa.nccs.utilities.EDASLogManager;
 import ucar.nc2.time.CalendarDate;
 import java.io.*;
 import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Map;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 class Response {
     String clientId = null;
@@ -87,6 +83,7 @@ class Responder extends Thread {
     Logger logger = EDASLogManager.getCurrentLogger();
     String client_address = null;
     ConcurrentLinkedQueue<Response> response_queue = null;
+    ConcurrentSkipListSet<String> clients = null;
     ConcurrentHashMap<String,Response> executing_jobs = null;
     HashMap<String,String> status_reports = null;
 
@@ -96,7 +93,12 @@ class Responder extends Thread {
         response_queue = new ConcurrentLinkedQueue<Response>();
         executing_jobs = new ConcurrentHashMap<String,Response>();
         status_reports = new HashMap<String,String>();
+        clients = new ConcurrentSkipListSet<String>();
         client_address = _client_address;
+    }
+
+    public void registerClient( String client ) {
+        clients.add(client) ;
     }
 
     public void sendResponse( Response msg ) {
@@ -153,15 +155,18 @@ class Responder extends Thread {
     }
 
     void heartbeat(ZMQ.Socket socket) {
-        for ( Response r : executing_jobs.values() ) try {
-            Message hb_msg = new Message( r.clientId, "status", r.responseId + ": " + status_reports.get( r.responseId ) );
-            doSendMessage(socket, hb_msg);
-        } catch ( Exception ex ) {;}
+        Iterator itr = clients.iterator();
+        while(itr.hasNext()) {
+            try {
+                Message hb_msg = new Message( itr.next().toString(), "status", "heartbeat" );
+                doSendMessage(socket, hb_msg);
+            } catch (Exception ex) {  ;  }
+        }
     }
 
     public void run( )  {
         int pause_time = 100;
-        int heartbeat_interval = 2000;
+        int heartbeat_interval = 20 * 1000;
         long last_heartbeat_time = System.currentTimeMillis();
         ZMQ.Socket socket  = context.socket(ZMQ.PUB);
         try{
@@ -320,6 +325,7 @@ public abstract class EDASPortal {
             logger.info( String.format( "Listening for requests on port: %d, host: %s",  request_port, getHostInfo() ) );
             String request_header = new String(request_socket.recv(0)).trim();
             parts = request_header.split("[!]");
+            responder.registerClient( parts[0] );
             try {
                 String timeStamp = timeFormatter.format(Calendar.getInstance().getTime());
                 logger.info(String.format("  ###  Processing %s request: %s @(%s)", parts[1], request_header, timeStamp));

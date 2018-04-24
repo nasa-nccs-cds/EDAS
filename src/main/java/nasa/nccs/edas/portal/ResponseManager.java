@@ -19,14 +19,14 @@ import java.util.*;
 
 class HeartbeatManager  {
     Long heartbeatTime = null;
-    Long maxHeartbeatPeriod = 30 * 1000L;
+    Long maxHeartbeatPeriod = 3 * 60 * 1000L;
     protected Logger logger = EDASLogManager.getCurrentLogger();
 
     public HeartbeatManager() { processHeartbeat("init"); }
 
     public void processHeartbeat(String type) {
         heartbeatTime =  Calendar.getInstance().getTimeInMillis();
-        logger.info( "  ################ ProcessHeartbeat-> " +  type + ": " + new DateTime(heartbeatTime).toString("dd-M-yyyy hh:mm:ss") );
+        logger.info( "  ################ ProcessHeartbeat-> " + new DateTime(heartbeatTime).toString("hh:mm:ss dd-M-yyyy") + ": " +  type );
     }
 
     public boolean serverIsDown() {
