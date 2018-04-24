@@ -197,7 +197,7 @@ public class ResponseManager extends Thread {
         String role = header_toks[2];
         String fileName = header_toks[3];
 //        String fileName = response_id.substring( response_id.lastIndexOf(':') + 1 ) + ".nc";
-        Path outFilePath = Paths.get( publishDir, role, fileName );
+        Path outFilePath = getPublishFile( role, fileName );
         logger.debug(" ##saveFile: role=" + role + " fileName=" + fileName + " id=" + id + " outFilePath=" + outFilePath );
         DataOutputStream os = new DataOutputStream(new FileOutputStream(outFilePath.toFile()));
         os.write(data, offset, data.length-offset );
