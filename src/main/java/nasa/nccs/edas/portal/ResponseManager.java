@@ -206,14 +206,15 @@ public class ResponseManager extends Thread {
     }
 
 
-//    public Path getPublishFile( String role, String fileName  ) throws IOException {
-//        java.util.Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrwx");
-//        FileAttribute<Set<PosixFilePermission>> fileAttr = PosixFilePermissions.asFileAttribute(perms);
-//        Path directory = Paths.get( publishDir, role );
-//        Path filePath = Paths.get( publishDir, role, fileName );
-//        Files.createDirectories( directory, fileAttr );
-//        return  Files.createFile( filePath, fileAttr );
-//    }
+    public Path getPublishFile( String role, String fileName  ) throws IOException {
+        Path pubishDir = Paths.get( publishDir, role );
+        if( !pubishDir.toFile().exists() ) {
+            java.util.Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrwx");
+            FileAttribute<Set<PosixFilePermission>> fileAttr = PosixFilePermissions.asFileAttribute(perms);
+            Files.createDirectories( pubishDir, fileAttr );
+        }
+        return Paths.get( publishDir, role, fileName );
+    }
 
 
     public List<String> getResponses( String rId, Boolean wait ) {
