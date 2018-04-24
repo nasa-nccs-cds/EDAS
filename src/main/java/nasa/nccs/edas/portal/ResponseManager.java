@@ -201,7 +201,8 @@ public class ResponseManager extends Thread {
         logger.debug(" ##saveFile: role=" + role + " fileName=" + fileName + " id=" + id + " outFilePath=" + outFilePath );
         DataOutputStream os = new DataOutputStream(new FileOutputStream(outFilePath.toFile()));
         os.write(data, offset, data.length-offset );
-        setFilePermissions( outFilePath, "rwxrwxrwx");
+        os.close();
+        Files.setPosixFilePermissions( outFilePath, PosixFilePermissions.fromString("rwxrwxrwx") );
         return outFilePath;
     }
 
