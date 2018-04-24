@@ -3,7 +3,9 @@ package nasa.nccs.edas.portal;
 import nasa.nccs.edas.engine.ExecutionCallback;
 import nasa.nccs.edas.workers.TransVar;
 import nasa.nccs.utilities.EDASLogManager;
+import nasa.nccs.utilities.Loggable;
 import nasa.nccs.utilities.Logger;
+import org.joda.time.DateTime;
 import org.zeromq.ZMQ;
 import org.apache.commons.lang.exception.ExceptionUtils;
 
@@ -15,13 +17,17 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-class HeartbeatManager {
+class HeartbeatManager  {
     Long heartbeatTime = null;
     Long maxHeartbeatPeriod = 30 * 1000L;
+    protected Logger logger = EDASLogManager.getCurrentLogger();
 
-    public HeartbeatManager() { processHeartbeat(); }
+    public HeartbeatManager() { processHeartbeat("init"); }
 
-    public void processHeartbeat() { heartbeatTime =  Calendar.getInstance().getTimeInMillis(); }
+    public void processHeartbeat(String type) {
+        heartbeatTime =  Calendar.getInstance().getTimeInMillis();
+        logger.info( "  ################ ProcessHeartbeat-> " +  type + ": " + new DateTime(heartbeatTime).toString("dd-M-yyyy hh:mm:ss") );
+    }
 
     public boolean serverIsDown() {
         Long currentTime = Calendar.getInstance().getTimeInMillis();
@@ -79,9 +85,9 @@ public class ResponseManager extends Thread {
         });
     }
 
-    public void processHeartbeat() {
+    public void processHeartbeat( String type ) {
         if (heartbeatManager == null) { heartbeatManager = new HeartbeatManager(); }
-        heartbeatManager.processHeartbeat();
+        heartbeatManager.processHeartbeat(type);
     }
 
     public void setFilePermissions( Path directory, String perms ) {
@@ -152,7 +158,7 @@ public class ResponseManager extends Thread {
             String[] toks = response.split("[!]");
             String rId = toks[0];
             String type = toks[1];
-            processHeartbeat();
+            processHeartbeat(type);
             if ( type.equals("array") ) {
                 String header = toks[2];
                 byte[] data = socket.recv(0);

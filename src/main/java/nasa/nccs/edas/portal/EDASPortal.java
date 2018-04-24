@@ -161,8 +161,8 @@ class Responder extends Thread {
 
     public void run( )  {
         int pause_time = 100;
-        int accum_sleep_time = 0;
         int heartbeat_interval = 2000;
+        long last_heartbeat_time = System.currentTimeMillis();
         ZMQ.Socket socket  = context.socket(ZMQ.PUB);
         try{
             socket.bind(String.format("tcp://%s:%d", client_address, response_port));
@@ -173,14 +173,13 @@ class Responder extends Thread {
                 Response response = response_queue.poll();
                 if (response == null) {
                     Thread.sleep(pause_time);
-                    accum_sleep_time += pause_time;
-                    if( accum_sleep_time >= heartbeat_interval ) {
+                    long current_time = System.currentTimeMillis();
+                    if( ( current_time - last_heartbeat_time) >= heartbeat_interval ) {
                         heartbeat( socket );
-                        accum_sleep_time = 0;
+                        last_heartbeat_time = current_time;
                     }
                 } else {
                     doSendResponse(socket,response);
-                    accum_sleep_time = 0;
                 }
             }
         } catch ( InterruptedException ex ) {;}
