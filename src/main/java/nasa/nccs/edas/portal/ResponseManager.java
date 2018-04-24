@@ -197,23 +197,24 @@ public class ResponseManager extends Thread {
         String role = header_toks[2];
         String fileName = header_toks[3];
 //        String fileName = response_id.substring( response_id.lastIndexOf(':') + 1 ) + ".nc";
-        Path outFilePath = getPublishFile( role, fileName );
+        Path outFilePath = Paths.get( publishDir, role, fileName );
         logger.debug(" ##saveFile: role=" + role + " fileName=" + fileName + " id=" + id + " outFilePath=" + outFilePath );
         DataOutputStream os = new DataOutputStream(new FileOutputStream(outFilePath.toFile()));
         os.write(data, offset, data.length-offset );
-        setFilePermissions( outFilePath.getParent(), "rwxrwxrwx");
+        setFilePermissions( outFilePath, "rwxrwxrwx");
         return outFilePath;
     }
 
 
-    public Path getPublishFile( String role, String fileName  ) throws IOException {
-        java.util.Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrwx");
-        FileAttribute<Set<PosixFilePermission>> fileAttr = PosixFilePermissions.asFileAttribute(perms);
-        Path directory = Paths.get( publishDir, role );
-        Path filePath = Paths.get( publishDir, role, fileName );
-        Files.createDirectories( directory, fileAttr );
-        return  Files.createFile( filePath, fileAttr );
-    }
+//    public Path getPublishFile( String role, String fileName  ) throws IOException {
+//        java.util.Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrwx");
+//        FileAttribute<Set<PosixFilePermission>> fileAttr = PosixFilePermissions.asFileAttribute(perms);
+//        Path directory = Paths.get( publishDir, role );
+//        Path filePath = Paths.get( publishDir, role, fileName );
+//        Files.createDirectories( directory, fileAttr );
+//        return  Files.createFile( filePath, fileAttr );
+//    }
+
 
     public List<String> getResponses( String rId, Boolean wait ) {
         while (true) {
