@@ -152,7 +152,6 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     try {
       logger.info( "zmqProcessManager executeProcess: " + job.requestId.toString )
       val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
-
       message = response.substring( response.indexOf('!') + 1 )
       logger.info( "Received 'execute' response, Sample: " + response.substring(0,Math.min(250,message.length)) )
       val resultNode = EDAS_XML.loadString(message)
