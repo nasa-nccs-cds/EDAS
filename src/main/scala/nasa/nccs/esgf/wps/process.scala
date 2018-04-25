@@ -151,7 +151,8 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
 
   def getResults( message: String, job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Node = {
     try {
-      val xmlResults = EDAS_XML.loadString(message)
+      val responses = response_manager.getResponses(job.requestId,true).toList
+      val xmlResults = EDAS_XML.loadString(responses(0))
       executionCallback.foreach(_.success(xmlResults))
       xmlResults
     } catch {
