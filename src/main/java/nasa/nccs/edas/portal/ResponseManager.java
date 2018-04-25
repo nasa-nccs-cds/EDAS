@@ -109,7 +109,10 @@ public class ResponseManager extends Thread {
 
     public void cacheResult(String id, String result) { getResults(id).add(result); }
 
-    public boolean hasResult( String id ) { return (cached_results.get(id) != null); }
+    public boolean hasResult( String id ) {
+        logger.info( "Checking for result '" + id + "', cached results =  " + cached_results.keySet().toString() );
+        return (cached_results.get(id) != null);
+    }
 
     public List<String> getResults(String id) {
         List<String> results = cached_results.get(id);
