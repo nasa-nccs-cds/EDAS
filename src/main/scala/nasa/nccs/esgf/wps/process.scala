@@ -35,7 +35,9 @@ trait GenericProcessManager {
   def hasResult( service: String, resultId: String ): Boolean
   def serverIsDown: Boolean
   def term();
-  def waitUntilJobCompletes( service: String, resultId: String  ) = { while( !hasResult(service,resultId) ) { Thread.sleep(500); } }
+  def waitUntilJobCompletes( service: String, resultId: String  ) = {
+    while( !hasResult(service,resultId) ) { Thread.sleep(500); }
+  }
 }
 
 class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericProcessManager with Loggable {
