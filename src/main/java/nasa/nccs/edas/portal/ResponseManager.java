@@ -160,8 +160,9 @@ public class ResponseManager extends Thread {
     public void processNextResponse( ZMQ.Socket socket ) {
         try {
             String response = new String(socket.recv(0)).trim();
+            logger.info( "##$## Received Response: " + response );
             String[] toks = response.split("[!]");
-            String rId = toks[0];
+            String rId = toks[0].split("[:]")[0];
             String type = toks[1];
             processHeartbeat(type);
             if ( type.equals("array") ) {
