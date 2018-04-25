@@ -117,7 +117,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
       }
     }
     try {
-      val responseElem = processManager.executeProcess( process, Job(jobId, process_name, dataInputsSpec, runargs, 1f ), Some(executionCallback) )
+      val (rid, responseElem) = processManager.executeProcess( process, Job(jobId, process_name, dataInputsSpec, runargs, 1f ), Some(executionCallback) )
       new Message(clientId, jobId, printer.format(responseElem))
     } catch  {
       case e: Throwable =>

@@ -25,7 +25,7 @@ import scala.collection.concurrent.TrieMap
 import scala.io.Source
 import scala.util.matching.Regex
 import scala.xml.factory.XMLLoader
-import scala.xml.{Node, SAXParser, XML}
+import scala.xml.{Elem, Node, SAXParser, XML}
 
 
 
@@ -42,7 +42,7 @@ class AxisNames( val nameMap: Map[Char,String]  ) {
   }
 }
 
-object EDAS_XML extends XMLLoader[Node]  {
+object EDAS_XML extends XMLLoader[Elem]  {
 
   override def parser: SAXParser = {
     val f = SAXParserFactory.newInstance()

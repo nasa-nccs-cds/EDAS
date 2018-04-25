@@ -28,7 +28,7 @@ case class Job( requestId: String, identifier: String, datainputs: String, priva
 trait GenericProcessManager {
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node;
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node;
-  def executeProcess( service: String, job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node
+  def executeProcess( service: String, job: Job, executionCallback: Option[ExecutionCallback] = None): ( String, xml.Elem )
 //  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String]
   def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
@@ -65,11 +65,11 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getWPSCapabilities( identifier, runArgs )
   }
 
-  def executeProcess( service: String, job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Elem = {
+  def executeProcess( service: String, job: Job, executionCallback: Option[ExecutionCallback] = None ): ( String, xml.Elem ) = {
     val dataInputsObj = if( !job.datainputs.isEmpty ) wpsObjectParser.parseDataInputs( job.datainputs ) else Map.empty[String, Seq[Map[String, Any]]]
     val request: TaskRequest = TaskRequest( job.requestId, job.identifier, dataInputsObj )
     val serviceProvider = apiManager.getServiceProvider("edas")
-    serviceProvider.executeProcess( request, job.datainputs, job.runargs, executionCallback )
+    ( job.requestId, serviceProvider.executeProcess( request, job.datainputs, job.runargs, executionCallback ) )
   }
 
 //  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String] = {
@@ -147,22 +147,24 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
 //    logger.info( "Received responses:\n\t--> " + responses.mkString("\n\t--> "))
 //    EDAS_XML.loadString( responses(0) )
 
-  def executeProcess( service: String, job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node = {
+  def executeProcess( service: String, job: Job, executionCallback: Option[ExecutionCallback] = None): ( String, xml.Elem ) = {
     var message = ""
+    var resultId = ""
     try {
       logger.info( "zmqProcessManager executeProcess: " + job.requestId.toString )
       val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
+      resultId = response.split(':').head
       message = response.substring( response.indexOf('!') + 1 )
       logger.info( "Received 'execute' response, Sample: " + response.substring(0,Math.min(250,message.length)) )
       val resultNode = EDAS_XML.loadString(message)
       executionCallback.foreach( _.success(resultNode) )
-      resultNode
+      ( resultId, resultNode )
     } catch {
       case ex: Exception =>
         val err_msg = message + " :" + ex.toString
         executionCallback.foreach( _.failure(err_msg) )
         val response = new WPSExecuteStatusError( "EDAS", err_msg, job.requestId )
-        response.toXml( ResponseSyntax.WPS )
+        ( resultId, response.toXml( ResponseSyntax.WPS ) )
     }
   }
 
