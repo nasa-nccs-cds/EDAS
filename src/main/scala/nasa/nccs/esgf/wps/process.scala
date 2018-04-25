@@ -142,23 +142,20 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
 //    EDAS_XML.loadString( responses(0) )
 
   def executeProcess(job: Job, executionCallback: Option[ExecutionCallback] = None): xml.Node = {
-    logger.info( "zmqProcessManager executeProcess: " + job.requestId.toString )
-    val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
-    val message = response.substring( response.indexOf('!') + 1 )
-    logger.info( "Received 'execute' response, Sample: " + response.substring(0,Math.min(250,message.length)) )
-    getResults( message, job, executionCallback )
-  }
-
-  def getResults( message: String, job: Job, executionCallback: Option[ExecutionCallback] = None ): xml.Node = {
+    var message = ""
     try {
-      val responses = response_manager.getResponses(job.requestId,true).toList
-      val xmlResults = EDAS_XML.loadString(responses(0))
-      executionCallback.foreach(_.success(xmlResults))
-      xmlResults
+      logger.info( "zmqProcessManager executeProcess: " + job.requestId.toString )
+      val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
+      message = response.substring( response.indexOf('!') + 1 )
+      logger.info( "Received 'execute' response, Sample: " + response.substring(0,Math.min(250,message.length)) )
+      val resultNode = EDAS_XML.loadString(message)
+      executionCallback.foreach( _.success(resultNode) )
+      resultNode
     } catch {
       case ex: Exception =>
-        executionCallback.foreach( _.failure(message) )
-        val response = new WPSExecuteStatusError( "EDAS", message, job.requestId )
+        val err_msg = message + " :" + ex.toString
+        executionCallback.foreach( _.failure(err_msg) )
+        val response = new WPSExecuteStatusError( "EDAS", err_msg, job.requestId )
         response.toXml( ResponseSyntax.WPS )
     }
   }
