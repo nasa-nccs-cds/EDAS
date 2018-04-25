@@ -107,7 +107,9 @@ public class ResponseManager extends Thread {
         callbacks.put( jobId, callback );
     }
 
-    public void cacheResult(String id, String result) { getResults(id).add(result); }
+    public void cacheResult(String id, String result) {
+        if( result != "heartbeat" ) { getResults(id).add(result); }
+    }
 
     public boolean hasResult( String id ) {
         logger.info( "Checking for result '" + id + "', cached results =  " + cached_results.keySet().toString() );
@@ -170,7 +172,8 @@ public class ResponseManager extends Thread {
             if ( type.equals("array") ) {
                 String header = toks[2];
                 byte[] data = socket.recv(0);
-                cacheArray(rId, new TransVar( header, data, 8) );
+                cacheArray( rId, new TransVar( header, data, 8) );
+                cacheResult( rId, header );
             } else if ( type.equals("file") ) {
                 try {
                     String header = toks[2];
@@ -179,6 +182,7 @@ public class ResponseManager extends Thread {
                     List<String> paths = file_paths.getOrDefault(rId, new LinkedList<String>() );
                     paths.add( outFilePath.toString() );
                     file_paths.put( rId, paths );
+                    cacheResult( rId, header );
                     logger.info( String.format("Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
                 } catch( Exception err ) {
                     logger.error(String.format("Unable to write to output file: %s", err.getMessage() ) );
