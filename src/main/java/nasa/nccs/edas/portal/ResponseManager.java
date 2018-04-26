@@ -108,7 +108,10 @@ public class ResponseManager extends Thread {
     }
 
     public void cacheResult(String id, String result) {
-        if( result != "heartbeat" ) { getResults(id).add(result); }
+        if( !result.startsWith("heart") ) {
+            logger.info( " #CR# Caching result for id = "+id+", value =  " + result );
+            getResults(id).add(result);
+        }
     }
 
     public boolean hasResult( String id ) {
