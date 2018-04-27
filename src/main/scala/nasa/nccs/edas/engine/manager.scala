@@ -164,7 +164,7 @@ object EDASExecutionManager extends Loggable {
     var fileIndex = -1
     partitioned_records.map { case (shape, record) =>
       fileIndex = fileIndex + 1
-      saveResultToFile(executor, record, result.getMetadata, dsetMetadata, fileIndex )
+      saveResultToFile(executor, record, result.getMetadata, dsetMetadata, fileIndex, partitioned_records.size )
     }
   }
   def ex( msg: String ) = throw new Exception( msg )
@@ -184,7 +184,7 @@ object EDASExecutionManager extends Loggable {
 //    newRange.
 //  }
 
-  def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute], fileIndex: Int  ): String = {
+  def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute], fileIndex: Int, nFiles: Int  ): String = {
     val t0 = System.nanoTime()
     val multiFiles = false
     val head_elem: ArraySpec = slice.elements.values.head
@@ -302,6 +302,7 @@ object EDASExecutionManager extends Loggable {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
         writer.write(variable, maskedTensor)
       } }
+      writer.addGroupAttribute( null, new Attribute("nFiles", nFiles) )
 
       writer.close()
       originalDataset.foreach( _.close )
