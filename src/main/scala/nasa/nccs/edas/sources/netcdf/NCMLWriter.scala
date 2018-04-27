@@ -224,10 +224,17 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
 
   def writeNCML(ncmlFile: File): List[String] = {
     logger.info("Writing *NCML* File: " + ncmlFile.toString)
-    val bw = new BufferedWriter(new FileWriter(ncmlFile))
-    val ( varNames, result ) = getNCMLVerbose
-    bw.write( XMLParser.serialize(result).toString )
-    bw.close()
-    varNames
+    try {
+      val bw = new BufferedWriter(new FileWriter(ncmlFile))
+      val (varNames, result) = getNCMLVerbose
+      bw.write(XMLParser.serialize(result).toString)
+      bw.close()
+      logger.error( "Completed writing NCML file" )
+      varNames
+    } catch {
+      case err: Exception =>
+        logger.error( "Error writing NCML file: " + err.toString )
+        List.empty
+    }
   }
 }
