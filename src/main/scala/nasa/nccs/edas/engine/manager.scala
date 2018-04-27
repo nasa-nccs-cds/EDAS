@@ -190,8 +190,7 @@ object EDASExecutionManager extends Loggable {
     val head_elem: ArraySpec = slice.elements.values.head
     val resultId: String = if(multiFiles) { executor.requestCx.jobId + "-" + slice.elements.keys.head } else { executor.requestCx.jobId }
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
-//    val fileName = if( fileIndex == 0 ) { resultId } else { resultId + "-" + fileIndex }
-    val fileName = resultId + "-" + fileIndex
+    val fileName = if( fileIndex == 0 ) { resultId } else { resultId + "-" + fileIndex }
     val resultFile = Kernel.getResultFile( fileName, true )
     val path = resultFile.getAbsolutePath
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, path, chunker)
@@ -303,7 +302,7 @@ object EDASExecutionManager extends Loggable {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
         writer.write(variable, maskedTensor)
       } }
-      
+
       writer.close()
       originalDataset.foreach( _.close )
       optGridDset.foreach( _.close )
