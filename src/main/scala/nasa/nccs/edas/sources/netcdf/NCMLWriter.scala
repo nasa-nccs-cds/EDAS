@@ -229,7 +229,7 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
       val (varNames, result) = getNCMLVerbose
       bw.write(XMLParser.serialize(result).toString)
       bw.close()
-      logger.error( "Completed writing NCML file" )
+      logger.info( "Completed writing NCML file" )
       varNames
     } catch {
       case err: Exception =>
