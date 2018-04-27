@@ -288,6 +288,7 @@ object EDASExecutionManager extends Loggable {
         dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
         ( variable, maskedTensor )
       }
+      writer.addGroupAttribute( null, new Attribute("nFiles", nFiles) )
 
       writer.create()
 
@@ -302,8 +303,7 @@ object EDASExecutionManager extends Loggable {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
         writer.write(variable, maskedTensor)
       } }
-      writer.addGroupAttribute( null, new Attribute("nFiles", nFiles) )
-
+      
       writer.close()
       originalDataset.foreach( _.close )
       optGridDset.foreach( _.close )
