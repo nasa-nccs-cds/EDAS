@@ -688,10 +688,10 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
     val time_range = ranges.head
     val slice_time_range = new ma2.Range("time", time_range.first + slice_index, time_range.first + slice_index)
     val new_ranges = List(slice_time_range) ++ ranges.tail
-    val new_shape = if      ( nRanges == 3 )   {  insert( section_shape, 1, 1 )  }
+    val new_section_shape = if      ( nRanges == 3 )   {  insert( section_shape, 1, 1 )  }
                     else if ( nRanges == 4 )   {  section_shape   }
                     else { throw new Exception( s"Unexpected number of axes: ${nRanges}") }
-    ( new_shape, new_ranges )
+    ( Array(1) ++ new_section_shape.tail, new_ranges )
   }
 }
 
