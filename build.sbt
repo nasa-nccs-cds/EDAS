@@ -82,14 +82,14 @@ lazy val edas_conf_dir = settingKey[File]("The EDAS conf directory.")
 lazy val edas_sbin_dir = settingKey[File]("The EDAS sbin directory.")
 lazy val edas_logs_dir = settingKey[File]("The EDAS logs directory.")
 lazy val conda_lib_dir = settingKey[Option[File]]("The Conda lib directory.")
-lazy val spark_jars_dir = settingKey[File]("The Spark jars directory.")
+// lazy val spark_jars_dir = settingKey[File]("The Spark jars directory.")
 val edasProperties = settingKey[Properties]("The edas properties map")
 
 edas_conf_dir := baseDirectory.value / "src" / "universal" / "conf"
 edas_sbin_dir := getEDASbinDir
 edas_logs_dir := getEDASlogsDir
 conda_lib_dir := getCondaLibDir
-spark_jars_dir := getSparkJarDir
+// spark_jars_dir := getSparkJarDir
 
 //lazy val installNetcdfTask = taskKey[Unit]("Install Netcdf jar")
 //
