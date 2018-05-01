@@ -380,7 +380,8 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     val t0 = System.nanoTime()
 //    logger.info(s" @WW@ mapReduce: ${context.operation.identifier}, inputs: ${input.rdd.first.elements.keys.mkString(",")} " )
     val mapresult: CDRecordRDD = context.profiler.profile("mapReduce.mapRDD") (() => { mapRDD(input, context) } )
-    val test = mapresult.rdd.first
+//    val test = input.rdd.first
+//    val sz = input.rdd.count
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
     val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge || orderedReduce(context) ) } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))

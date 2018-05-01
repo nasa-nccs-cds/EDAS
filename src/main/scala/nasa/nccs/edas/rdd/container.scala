@@ -541,6 +541,8 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val optVar = agg.findVariable( vspec.varShortName )
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { val rddSize = sliceRdd.count() }
     logger.info( s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nPartGens = ${partGens.length}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, prep time = ${(t1-t0)/1e9} , total time = ${(System.nanoTime-t0)/1e9} ")
+    val first = sliceRdd.first
+    val count = sliceRdd.count
     CDRecordRDD( sliceRdd, agg.parms, Map( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap)) ) )
   }
 
@@ -659,7 +661,7 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
     val nTimesteps = timeAxis.getShape(0)
     val levels: IndexedSeq[Int] = getLevels( interSect )
     val slices = for (slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map( _.getMillis ); level_index <- levels ) yield {
-      val (data_shape, sliceRanges) = getSliceRanges(interSect, slice_index, level_index )
+      val (data_shape, sliceRanges) = getSliceRanges(interSect, slice_index )
       val data_section = variable.read(sliceRanges)
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
       val arraySpec = ArraySpec( getMissing(variable), data_shape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array, None )
@@ -671,17 +673,14 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
     slices.toIterator
   }
 
-  private def getLevels( section: ma2.Section ): IndexedSeq[Int] = {
-    val nRanges = section.getShape.length
-    ( 0 until nRanges )
-  }
+  private def getLevels( section: ma2.Section ): IndexedSeq[Int] = if( section.getShape.length == 4 ) { 0 until section.getShape()(1) } else { IndexedSeq( 0 ) }
 
   def insert(list: Array[Int], i: Int, value: Int) = {
     val (front, back) = list.splitAt(i)
     front ++ Array(value) ++ back
   }
 
-  private def getSliceRanges( section: ma2.Section, slice_index: Int, level_index: Int = 0 ): ( Array[Int], List[ma2.Range] ) = {
+  private def getSliceRanges( section: ma2.Section, slice_index: Int ): ( Array[Int], List[ma2.Range] ) = {
     val section_shape = section.getShape
     val nRanges = section_shape.length
     val ranges = section.getRanges
