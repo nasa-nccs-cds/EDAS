@@ -513,7 +513,10 @@ class DefaultTestSuite extends EDASTestSuite {
   test("pyTimeSum-dap") { if( test_python) {
 //    ncwa -O -v tas -d lat,5,5 -d lon,5,10 -a time -y total ${datafile_agg} ~/test/out/minval.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array( 431859.2, 429501.2, 426810.8, 424555.2, 422398.5, 420567.7 ).map(_.toFloat), Float.MaxValue )
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"python.numpyModule.sum","input":"v1","domain":"d0","axes":"t"}]]"""
+    val datainputs =
+      s"""[  domain=[{"name":"d0","lat":{"start":5,"end":5,"system":"indices"},"lon":{"start":5,"end":10,"system":"indices"}}],
+         |   variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         |   operation=[{"name":"python.numpyModule.sum","input":"v1","domain":"d0","axes":"t"}]]""".stripMargin
     val result_node = executeTest(datainputs)
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.getStorageArray.mkString(",")  )
