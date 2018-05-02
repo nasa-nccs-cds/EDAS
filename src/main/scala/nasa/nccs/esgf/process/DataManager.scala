@@ -522,12 +522,12 @@ object GridContext extends Loggable {
     val axisMap: Map[Char,Option[( Int, HeapDblArray )]] = Map( List( 'z', 'y', 'x' ).map( axis => axis -> targetGrid.getSpatialAxisData(axis) ):_* )
     val timeAxis: Option[ HeapLongArray ] = targetGrid.getTimeAxisData
     val cfAxisNames: Array[String] = ( 0 until targetGrid.getRank ).map( dim_index => targetGrid.getCFAxisName( dim_index ) ).toArray
-    new GridContext( uid, axisMap, timeAxis, cfAxisNames, targetGrid.collection.id, targetGrid.getGridFile )
+    val axisIndexMap: Map[String,Int] = Map( cfAxisNames.map( cfAxisName => cfAxisName.toLowerCase -> targetGrid.getAxisIndex(cfAxisName) ):_* )
+    new GridContext( uid, axisMap, timeAxis, cfAxisNames, axisIndexMap, targetGrid.collection.id, targetGrid.getGridFile )
   }
 }
 
-class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblArray )]], val timeAxis: Option[ HeapLongArray ], val cfAxisNames: Array[String], val collectionId: String, val gridFile: String ) extends Serializable {
-  val axisIndexMap: Map[String,Int] = Map( "t"->0, "z"->1, "y"->2, "x"->3 )
+class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblArray )]], val timeAxis: Option[ HeapLongArray ], val cfAxisNames: Array[String], val axisIndexMap: Map[String,Int], val collectionId: String, val gridFile: String ) extends Serializable {
   def getAxisIndices( axisConf: String ): AxisIndices = new AxisIndices( axisIds=axisConf.map( ch => getAxisIndex( ch.toString.toLowerCase ) ).toSet )
   def getAxisIndex( cfAxisName: String ): Int = axisIndexMap.getOrElse( cfAxisName, throw new Exception( "Unrecognized axis name ( should be 'x', 'y', 'z', or 't' ): " + cfAxisName ) )
   def getCFAxisName( dimension_index: Int ): String = cfAxisNames(dimension_index)
