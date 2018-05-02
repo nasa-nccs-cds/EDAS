@@ -649,8 +649,11 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
 //    s"SliceRange[${slice0.first}:${slice1.first}]"
 //  }
 
-  def getGlobalOrigin( localOrigin: Array[Int], timeIndexOffest: Int ):  Array[Int] =
-    localOrigin.zipWithIndex map { case ( ival, index ) => if( index == 0 ) { ival + timeIndexOffest } else {ival} }
+  def getGlobalOrigin( localOrigin: Array[Int], timeIndexOffest: Int ):  Array[Int] = {
+    val slice_origin = localOrigin.zipWithIndex map { case (ival, index) => if (index == 0) { ival + timeIndexOffest } else { ival } }
+//    if( slice_origin.length == 4 ) { slice_origin } else { Array( slice_origin(0), 0, slice_origin(1), slice_origin(2) ) }
+    slice_origin
+  }
 
   def getSlices: Iterator[CDRecord] = {
     val t0 = System.nanoTime()
@@ -689,9 +692,10 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
     val time_range = ranges.head
     val slice_time_range = new ma2.Range("time", time_range.first + slice_index, time_range.first + slice_index)
     val new_ranges = List(slice_time_range) ++ ranges.tail
-    val new_section_shape = if      ( nRanges == 3 )   {  insert( section_shape, 1, 1 )  }
-                    else if ( nRanges == 4 )   {  section_shape   }
-                    else { throw new Exception( s"Unexpected number of axes: ${nRanges}") }
+//    val new_section_shape = if      ( nRanges == 3 )   {  insert( section_shape, 1, 1 )  }
+//                    else if ( nRanges == 4 )   {  section_shape   }
+//                    else { throw new Exception( s"Unexpected number of axes: ${nRanges}") }
+    val new_section_shape = section_shape
     ( Array(1) ++ new_section_shape.tail, new_ranges )
   }
 }
@@ -748,8 +752,10 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
     val raw_data_shape: Array[Int] = data_section.getShape()
     val raw_data_origin: Array[Int] = interSect.getOrigin
-    val data_shape: Array[Int] = if( raw_data_shape.length == 4 ) { raw_data_shape } else { Array( raw_data_shape(0), 1, raw_data_shape(1), raw_data_shape(2) ) }
-    val data_origin: Array[Int] = if( raw_data_origin.length == 4 ) { raw_data_origin } else { Array( raw_data_origin(0), 0, raw_data_origin(1), raw_data_origin(2) ) }
+//    val data_shape: Array[Int] = if( raw_data_shape.length == 4 ) { raw_data_shape } else { Array( raw_data_shape(0), 1, raw_data_shape(1), raw_data_shape(2) ) }
+//    val data_origin: Array[Int] = if( raw_data_origin.length == 4 ) { raw_data_origin } else { Array( raw_data_origin(0), 0, raw_data_origin(1), raw_data_origin(2) ) }
+    val data_shape: Array[Int] = raw_data_shape
+    val data_origin: Array[Int] = raw_data_origin
     val arraySpec = ArraySpec( missing, data_shape, data_origin, data_array, None )
     CDRecord(template_slice.startTime, template_slice.endTime, template_slice.levelIndex, Map( varId -> arraySpec ), template_slice.metadata )
   }

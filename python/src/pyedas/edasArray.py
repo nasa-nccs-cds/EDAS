@@ -4,6 +4,7 @@ import time, traceback, logging, struct, sys
 from messageParser import mParse
 IO_DType = np.dtype( np.float32 ).newbyteorder('>')
 from abc import ABCMeta, abstractmethod
+from cdms2.dataset import Dataset
 
 def getFillValue( array ):
     try:    return array.get_fill_value()
@@ -209,8 +210,8 @@ class npArray(CDArray):
             grid = baseGrid if ((latInterval is None) or (lonInterval is None)) else baseGrid.subGrid(latInterval, lonInterval)
             partition_axes = self.subsetAxes( self.dimensions, gridfile, self.origin, self.shape, latInterval, lonInterval )
 
-            self.logger.info( "Creating Variable {0}, gridfile = {1}, data shape = [ {2} ], self.shape = [ {3} ], grid shape = [ {4} ], roi = {5}, baseGrid shape = [ {6} ], latInterval = {7}, lonInterval = {8}".format(
-                self.name, gridFilePath, a2s(self.array.shape), a2s(self.shape), a2s(grid.shape), str(self.roi), a2s(baseGrid.shape), str(latInterval), str(lonInterval) ) )
+            self.logger.info( "#CV# Creating Variable {0}, gridfile = {1}, data shape = [ {2} ], self.shape = [ {3} ], grid shape = [ {4} ], roi = {5}, baseGrid shape = [ {6} ], latInterval = {7}, lonInterval = {8}, dimensions = {9}".format(
+                self.name, gridFilePath, a2s(self.array.shape), a2s(self.shape), a2s(grid.shape), str(self.roi), a2s(baseGrid.shape), str(latInterval), str(lonInterval), str(self.dimensions) ) )
             self.variable = cdms2.createVariable( self.array, typecode=None, copy=0, savespace=0, mask=None, fill_value=var.getMissing(), missing_value=var.getMissing(),
                                             grid=grid, axes=partition_axes, attributes=self.metadata, id=self.collection + "-" + self.name)
             self.variable.createattribute("gridfile", self.gridFile)
@@ -225,7 +226,16 @@ class npArray(CDArray):
         return self.variable
 
     def subsetAxes( self, dimensions, gridfile, origin, shape, latBounds, lonBounds ):
+        """
+        :type dimensions:  list[str]
+        :type gridfile:   Dataset
+        :type origin:  list[int]
+        :type shape:   list[int]
+        :type latBounds:  list[float]
+        :type lonBounds:  list[float]
+        """
         subAxes = []
+        gridfile.axes
         try:
             for index in range( len(dimensions) ):
                 length = shape[index]
@@ -238,6 +248,8 @@ class npArray(CDArray):
         except Exception as err:
             self.logger.info( "\n-------------------------------\nError subsetting Axes: {0}\n{1}-------------------------------\n".format(err, traceback.format_exc() ) )
             raise err
+        if( len( subAxes ) == 3 ):
+            subAxes.append( )
         return subAxes
 
 

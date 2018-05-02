@@ -132,10 +132,12 @@ object CDGrid extends Loggable {
     val dimMap = Map(ncDataset.getDimensions.map(d => AggregationWriter.getName(d) -> gridWriter.addDimension(null, AggregationWriter.getName(d), d.getLength)): _*)
     val groupMap = mutable.HashMap.empty[String,nc2.Group]
     var nDataFiles = getNumFiles( ncDataset )
+    var hasZAxis = false
 
     val varTups = for (cvar <- ncDataset.getVariables) yield {
       val dataType = cvar match {
         case coordAxis: CoordinateAxis =>
+          if( coordAxis.getAxisType.getCFAxisName == "Z" ) { hasZAxis = true }
           if(coordAxis.getAxisType == AxisType.Time) EDTime.ucarDatatype
           else cvar.getDataType
         case x => cvar.getDataType
