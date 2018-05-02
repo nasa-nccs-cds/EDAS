@@ -3,7 +3,7 @@ package nasa.nccs.edas.rdd
 
 import java.nio.file.Paths
 import java.util.{Date, TimeZone}
-
+import breeze.linalg
 import nasa.nccs.caching.BatchSpec
 import nasa.nccs.cdapi.cdm.{CDGrid, OperationDataInput}
 import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, FastMaskedArray, HeapFltArray}
@@ -53,6 +53,8 @@ case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], dat
   def ++( other: ArraySpec ): ArraySpec = concat( other )
   def toHeapFltArray( gridSpec: String, metadata: Map[String,String] = Map.empty) = new HeapFltArray( shape, origin, data, Option( missing ), gridSpec, metadata + ( "gridfile" -> gridSpec ) )
   def toFastMaskedArray: FastMaskedArray = FastMaskedArray( shape, data, missing )
+  def toMatrix: linalg.DenseMatrix[Float] = new linalg.DenseMatrix( shape(0), shape(1), data, 0, shape(1), true )   // rows => y,  cols => x
+  def toVector: linalg.DenseVector[Float] = new linalg.DenseVector( data )
   def toCDFloatArray: CDFloatArray = CDFloatArray(shape,data,missing)
   def getSection: ma2.Section = new ma2.Section( origin, shape )
   def getRelativeSection: ma2.Section = new ma2.Section( origin, shape ).shiftOrigin( new ma2.Section( origin, shape ) )
