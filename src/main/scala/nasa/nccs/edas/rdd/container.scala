@@ -533,11 +533,12 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val nUsableParts = if (  nTSperPart == -1 ) { nPartitions } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
     val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), vspec.metadata, nTSperPart ) )
     val partitions = partGens.flatMap( _.getTimeSlicePartitions )
-    logger.info( " @DSX FIRST Partition: " + partitions.headOption.fold("")(_.toString) )
+    val spart0 = partitions.headOption.fold("")(_.toString)
+    logger.info( " @DSX FIRST Partition: " + spart0 )
     logger.info( " @DSX LAST Partition:  " + partitions.lastOption.fold("")(_.toString) )
     val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partitions )
     val t1 = System.nanoTime
-    val sliceRdd: RDD[CDRecord] =  slicePartitions.mapPartitions( iter => {runtime.printMemoryUsage; iter.flatMap( _.getSlices )} )
+    val sliceRdd: RDD[CDRecord] =  slicePartitions.mapPartitions( iter => iter.flatMap( _.getSlices ) )
     val optVar = agg.findVariable( vspec.varShortName )
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { val rddSize = sliceRdd.count() }
     logger.info( s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nPartGens = ${partGens.length}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, prep time = ${(t1-t0)/1e9} , total time = ${(System.nanoTime-t0)/1e9} ")
@@ -551,7 +552,8 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val collection: Collection = vspec.getCollection
     val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
     val optVar = agg.findVariable( vspec.varShortName )
-    val section = template.getParameter( "section" )
+    val sectionParameter = template.getParameter( "section" )
+    val section = vspec.section.toString()
     val basePath = agg.parms.get("base.path")
     val rdd = template.rdd.mapPartitionsWithIndex( ( index, tSlices ) => PartitionExtensionGenerator(index).extendPartition( tSlices.toSeq, agg.getFilebase, vspec.uid, vspec.varShortName, section, agg.getBasePath ).toIterator )
     CDRecordRDD( rdd, agg.parms, template.variableRecords ++ Seq( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap) ) ) )
@@ -744,8 +746,11 @@ class TimeSliceGenerator(val varId: String, val varName: String, val section: St
     }
     val data_section = variable.read( getSliceRanges( interSect, getSliceIndex(template_slice.startTime)) )
     val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
-    val data_shape: Array[Int] = data_section.getShape
-    val arraySpec = ArraySpec( missing, data_section.getShape, interSect.getOrigin, data_array, None )
+    val raw_data_shape: Array[Int] = data_section.getShape()
+    val raw_data_origin: Array[Int] = interSect.getOrigin
+    val data_shape: Array[Int] = if( raw_data_shape.length == 4 ) { raw_data_shape } else { Array( raw_data_shape(0), 1, raw_data_shape(1), raw_data_shape(2) ) }
+    val data_origin: Array[Int] = if( raw_data_origin.length == 4 ) { raw_data_origin } else { Array( raw_data_origin(0), 0, raw_data_origin(1), raw_data_origin(2) ) }
+    val arraySpec = ArraySpec( missing, data_shape, data_origin, data_array, None )
     CDRecord(template_slice.startTime, template_slice.endTime, template_slice.levelIndex, Map( varId -> arraySpec ), template_slice.metadata )
   }
 

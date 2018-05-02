@@ -414,7 +414,17 @@ class DefaultTestSuite extends EDASTestSuite {
   }
 
   test("anomaly-spatial") { if(test_binning) {
-    val datainputs = s"""[domain=[{"name":"d0","lat":{"start":0,"end":60,"system":"values"},"lon":{"start":0,"end":60,"system":"values"},"time": {"start": 0, "end": 100, "crs": "indices"}},{"name":"d1","lat":{"start":30,"end":30,"system":"values"},"lon":{"start":30,"end":30,"system":"values"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"},{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d1"}],operation=[{"name":"CDSpark.ave","input":"v0","axes":"xy","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave"}]]"""
+    val datainputs =
+      s"""[
+         | domain=[
+         |  {"name":"d0","lat":{"start":0,"end":60,"system":"indices"},"lon":{"start":0,"end":80,"system":"indices"},"time": {"start": 0, "end": 100, "crs": "indices"}},
+         |  {"name":"d1","lat":{"start":30,"end":30,"system":"indices"},"lon":{"start":40,"end":40,"system":"indices"}, "time": {"start": 0, "end": 100, "crs": "indices"}}],
+         | variable=[
+         |  {"uri":"collection:/giss_r1i1p1","name":"tas:v0","domain":"d0"},
+         |  {"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d1"}],
+         | operation=[
+         |  {"name":"CDSpark.ave","input":"v0","axes":"xy","id":"v1ave"},
+         |  {"name":"CDSpark.eDiff","input":"v1,v1ave"}]]""".stripMargin
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
