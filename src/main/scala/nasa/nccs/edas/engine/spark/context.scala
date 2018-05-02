@@ -23,7 +23,7 @@ import nasa.nccs.cdapi.tensors.CDCoordMap
 import nasa.nccs.edas.engine.EDASExecutionManager.logger
 import nasa.nccs.edas.rdd.CDRecord
 import ucar.nc2.dataset.CoordinateAxis1DTime
-
+import org.apache.log4j.{Level, Logger}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.io.Source
@@ -41,17 +41,16 @@ object CDSparkContext extends Loggable {
     val conf: SparkConf = CDSparkContext.getSparkConf( appName )
     val spark = SparkSession.builder().appName(appName).config(conf).getOrCreate()
     val rv = new CDSparkContext( spark )
-    val spark_log_level = Level.toLevel( "WARN" )
     val rootLogger = Logger.getRootLogger()
-    rootLogger.setLevel(spark_log_level)
+    rootLogger.setLevel(Level.WARN)
     spark.sparkContext.setLogLevel( "WARN" )
-    Logger.getLogger("org").setLevel(spark_log_level)
-    Logger.getLogger("akka").setLevel(spark_log_level)
-    Logger.getLogger("dag-scheduler-event-loop").setLevel(spark_log_level)
-    Logger.getLogger("DAGScheduler").setLevel(spark_log_level)
-    Logger.getLogger("BlockManager").setLevel(spark_log_level)
-    Logger.getLogger("TaskSetManager").setLevel(spark_log_level)
-    Logger.getLogger("main").setLevel(spark_log_level)
+    Logger.getLogger("org").setLevel(Level.WARN)
+    Logger.getLogger("akka").setLevel(Level.WARN)
+    Logger.getLogger("dag-scheduler-event-loop").setLevel(Level.WARN)
+    Logger.getLogger("DAGScheduler").setLevel(Level.WARN)
+    Logger.getLogger("BlockManager").setLevel(Level.WARN)
+    Logger.getLogger("TaskSetManager").setLevel(Level.WARN)
+    Logger.getLogger("main").setLevel(Level.WARN)
 
     val log_level: Level = Level.toLevel( appParameters("edas.log.level", "INFO" ) )
     Logger.getLogger("edas").setLevel(log_level)

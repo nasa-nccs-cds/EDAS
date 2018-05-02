@@ -1,6 +1,8 @@
+import java.io.File
 import java.net.URI
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import java.util.Formatter
+import java.util.regex.Pattern
 
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.engine.ExecutionCallback
@@ -600,6 +602,25 @@ class DefaultTestSuite extends EDASTestSuite {
     val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
   }
 
+  test("Highpass-GISS-R1i1p1-1") {
+    val datainputs =
+      s"""  [     domain=[{"name":"d0","lat":{"start":-30,"end":30,"system":"values"},"lon":{"start":0,"end":60,"system":"values"},"time":{"start":"1850-01-30T00:00:00Z","end":"1856-07-28T00:00:00Z","system":"timestamps"}}],
+         |        variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         |        operation=[{"name":"CDSpark.highpass","input":"v1","domain":"d0","groupBy":"year"}]]""".stripMargin
+    val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
+  }
+
+  def find_spark_home: String = {
+    import sys.process._
+    val path = "which spark-submit" !!;
+    new File(path).getParentFile.getParent
+  }
+
+  test("find_path") {
+    print( find_spark_home );
+  }
+
+
   test("Ave-1-Space-GISS-R1i1p1") {
     //  ncks -O -v tas -d lat,25,30 -d lon,20,25 -d time,45,50 ${datafile} ~/test/out/subset.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array(  289.0866, 290.5467, 292.9329, 294.6103, 295.5956, 294.7446   ).map(_.toFloat), Float.MaxValue )
@@ -1145,7 +1166,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
       }
       override def failure( msg: String ): Unit = { logger.error( s"ERROR CALLBACK ($rId): " + msg ) }
     }
-    val response: xml.Elem = webProcessManager.executeProcess( Job( rId, process_name, datainputs, runargs, 1f ) )
+    val ( rid, response ) = webProcessManager.executeProcess( service, Job( rId, process_name, datainputs, runargs, 1f ) )
     for( child_node <- response.child ) if ( child_node.label.startsWith("exception")) {
       throw new Exception( child_node.toString )
     }

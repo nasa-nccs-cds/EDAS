@@ -3,7 +3,9 @@ package nasa.nccs.edas.portal;
 import nasa.nccs.edas.engine.ExecutionCallback;
 import nasa.nccs.edas.workers.TransVar;
 import nasa.nccs.utilities.EDASLogManager;
+import nasa.nccs.utilities.Loggable;
 import nasa.nccs.utilities.Logger;
+import org.joda.time.DateTime;
 import org.zeromq.ZMQ;
 import org.apache.commons.lang.exception.ExceptionUtils;
 
@@ -15,13 +17,17 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-class HeartbeatManager {
+class HeartbeatManager  {
     Long heartbeatTime = null;
-    Long maxHeartbeatPeriod = 30 * 1000L;
+    Long maxHeartbeatPeriod = 3 * 60 * 1000L;
+    protected Logger logger = EDASLogManager.getCurrentLogger();
 
-    public HeartbeatManager() { processHeartbeat(); }
+    public HeartbeatManager() { processHeartbeat("init"); }
 
-    public void processHeartbeat() { heartbeatTime =  Calendar.getInstance().getTimeInMillis(); }
+    public void processHeartbeat(String type) {
+        heartbeatTime =  Calendar.getInstance().getTimeInMillis();
+        logger.info( "  ################ ProcessHeartbeat-> " + new DateTime(heartbeatTime).toString("hh:mm:ss dd-M-yyyy") + ": " +  type );
+    }
 
     public boolean serverIsDown() {
         Long currentTime = Calendar.getInstance().getTimeInMillis();
@@ -79,9 +85,9 @@ public class ResponseManager extends Thread {
         });
     }
 
-    public void processHeartbeat() {
+    public void processHeartbeat( String type ) {
         if (heartbeatManager == null) { heartbeatManager = new HeartbeatManager(); }
-        heartbeatManager.processHeartbeat();
+        heartbeatManager.processHeartbeat(type);
     }
 
     public void setFilePermissions( Path directory, String perms ) {
@@ -101,7 +107,19 @@ public class ResponseManager extends Thread {
         callbacks.put( jobId, callback );
     }
 
-    public void cacheResult(String id, String result) { getResults(id).add(result); }
+    public void cacheResult(String id, String result) {
+        if( !result.startsWith("heart") ) {
+            logger.info( " #CR# Caching result for id = "+id+", value =  " + result );
+            getResults(id).add(result);
+        }
+    }
+
+    public boolean hasResult( String id ) {
+        logger.info( "Checking for result '" + id + "', cached results =  " + cached_results.keySet().toString() );
+        List<String> cached_result = cached_results.get(id);
+        if(cached_result != null) {  logger.info( " #CR# Cached result values =  " + cached_result.toString() );  }
+        return (cached_result != null);
+    }
 
     public List<String> getResults(String id) {
         List<String> results = cached_results.get(id);
@@ -149,14 +167,16 @@ public class ResponseManager extends Thread {
     public void processNextResponse( ZMQ.Socket socket ) {
         try {
             String response = new String(socket.recv(0)).trim();
+            logger.info( "##$## Received Response: " + response );
             String[] toks = response.split("[!]");
-            String rId = toks[0];
+            String rId = toks[0].split("[:]")[0];
             String type = toks[1];
-            processHeartbeat();
+            processHeartbeat(type);
             if ( type.equals("array") ) {
                 String header = toks[2];
                 byte[] data = socket.recv(0);
-                cacheArray(rId, new TransVar( header, data, 8) );
+                cacheArray( rId, new TransVar( header, data, 8) );
+                cacheResult( rId, header );
             } else if ( type.equals("file") ) {
                 try {
                     String header = toks[2];
@@ -165,6 +185,7 @@ public class ResponseManager extends Thread {
                     List<String> paths = file_paths.getOrDefault(rId, new LinkedList<String>() );
                     paths.add( outFilePath.toString() );
                     file_paths.put( rId, paths );
+                    cacheResult( rId, header );
                     logger.info( String.format("Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
                 } catch( Exception err ) {
                     logger.error(String.format("Unable to write to output file: %s", err.getMessage() ) );
@@ -195,19 +216,22 @@ public class ResponseManager extends Thread {
         logger.debug(" ##saveFile: role=" + role + " fileName=" + fileName + " id=" + id + " outFilePath=" + outFilePath );
         DataOutputStream os = new DataOutputStream(new FileOutputStream(outFilePath.toFile()));
         os.write(data, offset, data.length-offset );
-        setFilePermissions( outFilePath.getParent(), "rwxrwxrwx");
+        os.close();
+        Files.setPosixFilePermissions( outFilePath, PosixFilePermissions.fromString("rwxrwxrwx") );
         return outFilePath;
     }
 
 
     public Path getPublishFile( String role, String fileName  ) throws IOException {
-        java.util.Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrwx");
-        FileAttribute<Set<PosixFilePermission>> fileAttr = PosixFilePermissions.asFileAttribute(perms);
-        Path directory = Paths.get( publishDir, role );
-        Path filePath = Paths.get( publishDir, role, fileName );
-        Files.createDirectories( directory, fileAttr );
-        return  Files.createFile( filePath, fileAttr );
+        Path pubishDir = Paths.get( publishDir, role );
+        if( !pubishDir.toFile().exists() ) {
+            java.util.Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrwx");
+            FileAttribute<Set<PosixFilePermission>> fileAttr = PosixFilePermissions.asFileAttribute(perms);
+            Files.createDirectories( pubishDir, fileAttr );
+        }
+        return Paths.get( publishDir, role, fileName );
     }
+
 
     public List<String> getResponses( String rId, Boolean wait ) {
         while (true) {

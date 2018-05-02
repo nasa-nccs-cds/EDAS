@@ -114,13 +114,17 @@ public class CleanupManager {
         }
         public void execute( ) {
             File folder = new File( directory );
-            File[] listOfFiles = folder.listFiles();
-            logger.info( " %C% ------------------------ Cleaning up directory ------------------------" + directory );
-            for (int i = 0; i < listOfFiles.length; i++) {
-                File file = listOfFiles[i];
-                if( file.getName().matches(fileFilter) ) {
-                    cleanup( file );
+            if( folder.isDirectory() ) {
+                File[] listOfFiles = folder.listFiles();
+                logger.info(" %C% ------------------------ Cleaning up directory ------------------------" + directory);
+                for (int i = 0; i < listOfFiles.length; i++) {
+                    File file = listOfFiles[i];
+                    if (file.getName().matches(fileFilter)) {
+                        cleanup(file);
+                    }
                 }
+            } else {
+                logger.info(" %C% ------------------------ Can't clean up non existent directory ------------------------" + directory);
             }
         }
         public void cleanup(File file) {

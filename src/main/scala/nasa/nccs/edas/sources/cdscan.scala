@@ -12,6 +12,7 @@ import nasa.nccs.cdapi.tensors.CDDoubleArray
 import nasa.nccs.edas.sources.netcdf.{NCMLWriter, NetcdfDatasetMgr}
 import nasa.nccs.utilities._
 import org.apache.commons.lang.RandomStringUtils
+import java.time.Duration
 import ucar.nc2.Group
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
@@ -71,15 +72,45 @@ object FileHeader extends Loggable {
       try {
         val (calendar, axisValues, boundsValues) = FileHeader.getTimeCoordValues(ncDataset)
         val (variables, coordVars): (List[nc2.Variable], List[nc2.Variable]) = FileMetadata.getVariableLists(ncDataset)
+        val axes = ncDataset.getCoordinateAxes
+        val resolution: Map[String,Float] = axes.flatMap( axis => getResolution( axis ) ).toMap
         val variableNames = variables map { _.getShortName }
-        val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, calendar, timeRegular, variableNames, coordVars map { _.getShortName } )
+        val fileHeader = new FileHeader(dataLocation, relFile, axisValues, boundsValues, calendar, timeRegular, resolution, variableNames, coordVars map { _.getShortName } )
         _instanceCache.put( filePath, fileHeader  )
         fileHeader
+      } catch {
+        case err: Exception =>
+          logger.error( "Error generating FileHeader: " + err.toString + "\n\t" + err.getStackTrace.mkString("\n\t") )
+          throw err
       } finally {
         ncDataset.close()
       }
     })
   }
+
+  def getDuration( cAxis: CoordinateAxis ): Double = {
+    val s1 = s"${cAxis.getMaxValue.toString} ${cAxis.getUnitsString}".trim.split("since")
+    val s0 = s"${cAxis.getMinValue.toString} ${cAxis.getUnitsString}".trim.split("since")
+    val units: String = s1.head.split(" ").last.trim.toLowerCase
+    val value1 = s1.head.split(" ").head.trim.toDouble
+    val value0 = s0.head.split(" ").head.trim.toDouble
+    val multiplier =  if(units.startsWith("d")) { 1000*60*60*24 }
+                      else if(units.startsWith("h")) { 1000*60*60 }
+                      else if(units.startsWith("m")) { 1000*60 }
+                      else if(units.startsWith("s")) { 1000 }
+                      else { throw new Exception("Unrecognized time units: " + units )  }
+    ( value1 - value0 ) * multiplier
+  }
+
+  def getResolution( cAxis: CoordinateAxis): Option[(String,Float)] = try {
+    val name: String = cAxis.getAxisType.getCFAxisName
+    val shape: Array[Int] = cAxis.getShape()
+    val length: Double = if ( name.equalsIgnoreCase("t") ) { getDuration(cAxis) } else { (cAxis.getMaxValue - cAxis.getMinValue) }
+    Some( name -> ( length / (shape(0)-1) ).toFloat )
+  } catch {
+    case err: Exception => None
+  }
+
 
   def getGroupedFileHeaders( collectionId: String ): Map[String, Iterable[FileHeader]] = _instanceCache.values.groupBy ( _.varNames.sorted.mkString("-") )
 
@@ -166,6 +197,7 @@ class FileHeader( val dataLocation: Path,
                   val boundsValues: Array[Array[Double]],
                   val calendar: Calendar,
                   val timeRegular: Boolean,
+                  val resolution: Map[String,Float],
                   val varNames: List[String],
                   val coordVarNames: List[String]
                 ) {
@@ -179,10 +211,10 @@ class FileHeader( val dataLocation: Path,
   val sd = startDate
   val test = 1;
   override def toString: String = " *** FileHeader { path='%s', relFile='%s',nElem=%d, startValue=%d startDate=%s} ".format( dataLocation.toString, relFile, nElem, startValue, startDate)
-  def dropPrefix( nElems: Int ): FileHeader = {
-    val path = toPath
-    new FileHeader( path.subpath(0,nElems), path.subpath(nElems,path.getNameCount).toString, axisValues, boundsValues, calendar, timeRegular, varNames, coordVarNames )
-  }
+//  def dropPrefix( nElems: Int ): FileHeader = {
+//    val path = toPath
+//    new FileHeader( path.subpath(0,nElems), path.subpath(nElems,path.getNameCount).toString, axisValues, boundsValues, calendar, timeRegular, varNames, coordVarNames )
+//  }
 }
 
 object FileMetadata extends Loggable {

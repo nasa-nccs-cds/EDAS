@@ -25,7 +25,7 @@ import scala.collection.concurrent.TrieMap
 import scala.io.Source
 import scala.util.matching.Regex
 import scala.xml.factory.XMLLoader
-import scala.xml.{Node, SAXParser, XML}
+import scala.xml.{Elem, Node, SAXParser, XML}
 
 
 
@@ -42,7 +42,7 @@ class AxisNames( val nameMap: Map[Char,String]  ) {
   }
 }
 
-object EDAS_XML extends XMLLoader[Node]  {
+object EDAS_XML extends XMLLoader[Elem]  {
 
   override def parser: SAXParser = {
     val f = SAXParserFactory.newInstance()
@@ -514,8 +514,13 @@ object Collections extends XmlResource with Loggable {
     val format = metadata.getOrElse("format","ag1")
     logger.info( s" ---> Loading aggregation from file ${collectionFilePath}, dir = ${dir}, metadata = { ${metadata.mkString(";")} }")
     val agFiles: Iterator[(String,String)] = for (line <- partitionedLines._2; elems = line.split(",").map(_.trim)) yield elems.head -> Paths.get( dir, elems.last + "." + format ).toString
-    val agMapIter = agFiles.map { case ( varId, file) => varId -> aggs.getOrElseUpdate( file, Aggregation.read( file ) ) }
-    agMapIter.toMap[String,Aggregation]
+    agFiles.flatMap { case ( varId, file) => getAggregation(varId, file, aggs ) } .toMap[String,Aggregation]
+  }
+
+  def getAggregation( varId: String, file: String, aggs: mutable.HashMap[String,Aggregation] ): Option[(String,Aggregation)] = try {
+    Some( varId -> aggs.getOrElseUpdate( file, Aggregation.read( file ) ) )
+  } catch {
+    case err: Exception => None
   }
 
 

@@ -117,7 +117,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
       }
     }
     try {
-      val responseElem = processManager.executeProcess(Job(jobId, process_name, dataInputsSpec, runargs, 1f ), Some(executionCallback) )
+      val (rid, responseElem) = processManager.executeProcess( process, Job(jobId, process_name, dataInputsSpec, runargs, 1f ), Some(executionCallback) )
       new Message(clientId, jobId, printer.format(responseElem))
     } catch  {
       case e: Throwable =>
@@ -224,8 +224,8 @@ object EDASApplication extends Loggable {
     val run_program = elem(args, 3, "")
     val appConfiguration = getConfiguration( parameter_file )
     val client_address: String = appConfiguration.getOrElse("client","*")
-    EDASExecutionManager.addTestProcess( new TestDatasetProcess( "testDataset") )
-    EDASExecutionManager.addTestProcess( new TestClockProcess( "testClock") )
+//    EDASExecutionManager.addTestProcess( new TestDatasetProcess( "testDataset") )
+//    EDASExecutionManager.addTestProcess( new TestClockProcess( "testClock") )
     val app = new EDASapp( client_address, request_port, response_port, appConfiguration )
     app.start( run_program )
     logger.info(s"EXIT EDASApplication");
