@@ -40,9 +40,32 @@ class DefaultTestSuite extends EDASTestSuite {
   val test_python = true
   val test_binning = true
   val test_regrid = true
+  val test_ta_1980 = true
   val reanalysis_ensemble = false
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
+
+  test("AveTest-ta-xy")  { if(test_ta_1980) {
+    val datainputs =
+      s"""[ domain=[{"name":"d0","lat":{"start":150,"end":160,"system":"indices"},"lon":{"start":0,"end":10,"system":"indices"},"time":{"start":0,"end":10,"system":"indices"}}],
+         |  variable=[{"uri":"collection:/merra2-ta-1980","name":"ta:v1","domain":"d0"}],
+         |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]""".stripMargin
+    val result_node = executeTest(datainputs )
+    val result_array = CDFloatArray( getResultData( result_node ) )
+    println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
+    println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
+  }}
+
+  test("AveTest-ta-z")  { if(test_ta_1980) {
+    val datainputs =
+      s"""[ domain=[{"name":"d0","lat":{"start":150,"end":155,"system":"indices"},"lon":{"start":10,"end":10,"system":"indices"},"time":{"start":0,"end":10,"system":"indices"}}],
+         |  variable=[{"uri":"collection:/merra2-ta-1980","name":"ta:v1","domain":"d0"}],
+         |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"z"}]]""".stripMargin
+    val result_node = executeTest(datainputs )
+    val result_array = CDFloatArray( getResultData( result_node ) )
+    println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
+    println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
+  }}
 
   test("getCollections") {
     CollectionLoadServices.startService()

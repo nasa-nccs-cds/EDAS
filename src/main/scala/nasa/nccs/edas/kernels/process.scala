@@ -344,6 +344,8 @@ abstract class MultiKernel( options: Map[String,String] = Map.empty ) extends Ke
   def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext]
 }
 
+case class MergeAnalysis( startTime: Long, endTime: Long, level: Int, doMerge: Boolean )
+
 abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Kernel(options) {
   import Kernel._
   val weighted: Boolean
@@ -380,8 +382,8 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     val t0 = System.nanoTime()
 //    logger.info(s" @WW@ mapReduce: ${context.operation.identifier}, inputs: ${input.rdd.first.elements.keys.mkString(",")} " )
     val mapresult: CDRecordRDD = context.profiler.profile("mapReduce.mapRDD") (() => { mapRDD(input, context) } )
-//    val test = input.rdd.first
-//    val sz = input.rdd.count
+    val test = input.rdd.first
+    val sz = input.rdd.count
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
     val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge || orderedReduce(context) ) } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
@@ -444,7 +446,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     }
   }
 
-  private def orderedReduce(context: KernelContext) = { reduceCombineOp.isEmpty || ! context.getAxes.includes(0) }
+  private def orderedReduce(context: KernelContext) = { reduceCombineOp.isEmpty || !context.getAxes.includes(0) || ( context.getAxes.includes(0) && context.getGroup.isDefined ) }
 
   private def combine(context: KernelContext)(a0: DataFragment, a1: DataFragment, axes: AxisIndices): DataFragment = reduceCombineOp match {
     case Some(combineOp) =>
@@ -492,21 +494,33 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
 
   protected def combineRDD(context: KernelContext)(rec0: CDRecord, rec1: CDRecord ): CDRecord = {
     if( rec0.isEmpty ) { rec1 } else if (rec1.isEmpty) { rec0 } else context.profiler.profile[CDRecord]( "Kernel.combineRDD" ) (() => {
-      val axes = context.getAxes
+      val axes: AxisIndices = context.getAxes
+      val do_merge = analyzeMerge( axes, rec0, rec1 )
       val keys = rec0.elements.keys
-      val new_elements: Iterator[(String, ArraySpec)] = rec0.elements.iterator flatMap { case (key0, array0) => rec1.elements.get(key0) match {
+      val new_elements: Seq[(String, ArraySpec)] = ( rec0.elements.iterator flatMap { case (key0, array0) => rec1.elements.get(key0) match {
         case Some(array1) => reduceCombineOp match {
           case Some(combineOp) =>
-            if (axes.includes(0)) Some( key0 -> array0.combine( combineOp, array1, weighted ) )
+            if (do_merge) Some( key0 -> array0.combine( combineOp, array1, weighted ) )
             else Some( key0 -> (array0 ++ array1) )
           case None =>
             Some( key0 -> (array0 ++ array1) )
         }
         case None =>
           None
-      }}
-      CDRecord(rec0.mergeStart(rec1), rec0.mergeEnd(rec1), rec0.levelIndex, TreeMap(new_elements.toSeq: _*), rec0.metadata )
+      }} ).toSeq
+      logger.info( s" #CR# rec0.startTime:${rec0.startTime} rec1.startTime:${rec1.startTime} rec0.levelIndex:${rec0.levelIndex} rec1.levelIndex:${rec1.levelIndex} do_merge:${do_merge} shape:[${new_elements.head._2.shape.mkString(",")}]")
+      CDRecord(rec0.mergeStart(rec1), rec0.mergeEnd(rec1), rec0.levelIndex, TreeMap(new_elements: _*), rec0.metadata )
     })
+  }
+
+  private def analyzeMerge( axes: AxisIndices, rec0: CDRecord, rec1: CDRecord ): Boolean = {
+    if( axes.includes(0) ) {
+      if( axes.includes(1) ) { true }
+      else { rec0.levelIndex == rec1.levelIndex }
+    } else {
+      if( axes.includes(1) ) { rec0.startTime == rec1.startTime }
+      else { false }
+    }
   }
 
   private def combineElements( key: String, elements0: Map[String,HeapFltArray], elements1: Map[String,HeapFltArray] ): IndexedSeq[(String,HeapFltArray)] =

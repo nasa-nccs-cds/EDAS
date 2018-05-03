@@ -214,6 +214,7 @@ case class CDRecord(startTime: Long, endTime: Long, levelIndex: Int, elements: M
   def clear: CDRecord = { new CDRecord(startTime, endTime, levelIndex, Map.empty[String,ArraySpec], metadata) }
   lazy val midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDRecord ): Long = Math.min( startTime, other.startTime )
+  def ordering: Double = startTime.toDouble + levelIndex * .001
   def mergeEnd( other: CDRecord ): Long = Math.max( endTime, other.endTime )
   def section( section: CDSection ): Option[CDRecord] = {
     val new_elements = elements.flatMap { case (key, array) => array.section(section).map( sarray => (key,sarray) ) }
@@ -341,7 +342,7 @@ object CDRecordRDD extends Serializable {
   def apply(rdd: RDD[CDRecord], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ): CDRecordRDD = new CDRecordRDD( rdd, metadata, variableRecords )
   def sortedReducePartition(op: (CDRecord,CDRecord) => CDRecord )(slices: Iterable[CDRecord]): CDRecord = {
     val nSlices = slices.size
-    slices.toSeq.sortBy( _.startTime ).fold(CDRecord.empty)(op)
+    slices.toSeq.sortBy( _.ordering ).fold(CDRecord.empty)(op)
   }
   def reducePartition(op: (CDRecord,CDRecord) => CDRecord )(slices: Iterable[CDRecord]): CDRecord = { slices.toSeq.reduce(op) }
 
@@ -399,7 +400,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def selectElements(  elemFilter: String => Boolean  ): CDRecordRDD = CDRecordRDD ( rdd.map( _.selectElements( elemFilter ) ), metadata, variableRecords )
   def toMatrix(selectElems: Seq[String]): RowMatrix = { new RowMatrix(rdd.map(_.toVector( selectElems ))) }
   def toVectorRDD(selectElems: Seq[String]): RDD[Vector] = { rdd.map(_.toVector( selectElems )) }
-  def collect: QueryResultCollection = { QueryResultCollection( rdd.collect.sortBy(_.startTime), metadata ) }
+  def collect: QueryResultCollection = { QueryResultCollection( rdd.collect.sortBy(_.ordering), metadata ) }
   def join( other: RDD[CDRecord] ) = CDRecordRDD( rdd.keyBy( _.startTime ).join( other.keyBy( _.startTime ) ).mapPartitions( CDRecord.join ), metadata, variableRecords )
 
   def reduceByGroup(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): CDRecordRDD = {
@@ -433,7 +434,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
         QueryResultCollection( slice, metadata)
       case Some( groupBy ) =>
         val partialProduct = filteredRdd.groupBy( groupBy.group(calendar) ).mapValues( CDRecordRDD.sortedReducePartition(op) ).map(item => postOp( postOpId )( item._2 ) )
-        QueryResultCollection( partialProduct.collect.sortBy( _.startTime ), metadata )
+        QueryResultCollection( partialProduct.collect.sortBy( _.ordering ), metadata )
     }
     else optGroupBy match {
       case None =>
@@ -457,7 +458,7 @@ case class QueryResultCollection(records: Array[CDRecord], metadata: Map[String,
   def section( section: CDSection ): QueryResultCollection = {
     QueryResultCollection( records.flatMap( _.section(section) ), metadata )
   }
-  def sort(): QueryResultCollection = { QueryResultCollection( records.sortBy( _.startTime ), metadata ) }
+  def sort(): QueryResultCollection = { QueryResultCollection( records.sortBy( _.ordering ), metadata ) }
   val nslices: Int = records.length
 
   def merge(other: QueryResultCollection, op: CDRecord.ReduceOp ): QueryResultCollection = {
@@ -499,7 +500,7 @@ class PartitionExtensionGenerator(val partIndex: Int) extends Serializable {
   }
 
   def extendPartition(existingSlices: Seq[CDRecord], fileBase: FileBase, varId: String, varName: String, section: String, optBasePath: Option[String] ): Seq[CDRecord] = {
-    val sliceIter = existingSlices.sortBy(_.startTime) map { tSlice =>
+    val sliceIter = existingSlices.sortBy(_.ordering) map { tSlice =>
       val fileInput: FileInput = fileBase.getFileInput( tSlice.startTime )
       val generator: TimeSliceGenerator = _getGenerator( varId, varName, section, fileInput, optBasePath )
 //      println( s" ***  P[${partIndex}]-ExtendPartition for varId: ${varId}, varName: ${varName}: StartTime: ${tSlice.startTime}, date: ${new Date(tSlice.startTime).toString} ${fileInput.nRows} ${fileInput.path}  ")
@@ -651,8 +652,12 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
 //    s"SliceRange[${slice0.first}:${slice1.first}]"
 //  }
 
-  def getGlobalOrigin( localOrigin: Array[Int], timeIndexOffest: Int ):  Array[Int] = {
-    val slice_origin = localOrigin.zipWithIndex map { case (ival, index) => if (index == 0) { ival + timeIndexOffest } else { ival } }
+  def getGlobalOrigin( localOrigin: Array[Int], timeIndexOffest: Int, levelIndexOffest: Int ):  Array[Int] = {
+    val slice_origin = localOrigin.zipWithIndex map { case (ival, index) =>
+      if (index == 0) { ival + timeIndexOffest }
+      else if (index == 1) { ival + levelIndexOffest }
+      else { ival }
+    }
 //    if( slice_origin.length == 4 ) { slice_origin } else { Array( slice_origin(0), 0, slice_origin(1), slice_origin(2) ) }
     slice_origin
   }
@@ -668,10 +673,10 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
     val nTimesteps = timeAxis.getShape(0)
     val levels: IndexedSeq[Int] = getLevels( interSect )
     val slices = for (slice_index <- 0 until nTimesteps; time_bounds = timeAxis.getCoordBoundsDate(slice_index).map( _.getMillis ); level_index <- levels ) yield {
-      val (data_shape, sliceRanges) = getSliceRanges(interSect, slice_index )
+      val (data_shape, sliceRanges) = getSliceRanges(interSect, slice_index, level_index )
       val data_section = variable.read(sliceRanges)
       val data_array: Array[Float] = data_section.getStorage.asInstanceOf[Array[Float]]
-      val arraySpec = ArraySpec( getMissing(variable), data_shape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex ), data_array, None )
+      val arraySpec = ArraySpec( getMissing(variable), data_shape, getGlobalOrigin( interSect.getOrigin, fileInput.firstRowIndex, level_index ), data_array, None )
       val time_index = sliceRanges.head.first
       CDRecord(time_bounds(0), time_bounds(1), level_index, Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
     }
@@ -687,18 +692,21 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
     front ++ Array(value) ++ back
   }
 
-  private def getSliceRanges( section: ma2.Section, slice_index: Int ): ( Array[Int], List[ma2.Range] ) = {
+  private def getSliceRanges( section: ma2.Section, slice_index: Int, level_index: Int ): ( Array[Int], List[ma2.Range] ) = {
     val section_shape = section.getShape
     val nRanges = section_shape.length
+    assert( ( nRanges == 4 ) || ( nRanges == 3 ), s"Too little or too many axes: ${nRanges}")
     val ranges = section.getRanges
     val time_range = ranges.head
     val slice_time_range = new ma2.Range("time", time_range.first + slice_index, time_range.first + slice_index)
-    val new_ranges = List(slice_time_range) ++ ranges.tail
-//    val new_section_shape = if      ( nRanges == 3 )   {  insert( section_shape, 1, 1 )  }
-//                    else if ( nRanges == 4 )   {  section_shape   }
-//                    else { throw new Exception( s"Unexpected number of axes: ${nRanges}") }
-    val new_section_shape = section_shape
-    ( Array(1) ++ new_section_shape.tail, new_ranges )
+    val top_ranges = if( nRanges == 4 ) {
+      val level_range = new ma2.Range( ranges(1).getName, level_index, level_index )
+      List( slice_time_range, level_range )
+    } else {
+      List( slice_time_range )
+    }
+    val data_shape = if( nRanges == 4 ) { Array(1,1) ++ section_shape.takeRight(2) } else { Array(1) ++ section_shape.tail }
+    ( data_shape, top_ranges ++ ranges.takeRight(2) )
   }
 }
 

@@ -204,7 +204,7 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
 
 
     val regroupedRDD  =  context.profiler.profile(s"lowpass.regroup(${KernelContext.getProcessAddress})")(() => {
-      val regrouped_RDD: RDD[Array[CDRecord]] = input.newData(groupedRDD.sortBy(_.startTime)).sliding(3, 2)
+      val regrouped_RDD: RDD[Array[CDRecord]] = input.newData(groupedRDD.sortBy(_.ordering)).sliding(3, 2)
       if( context.profiler.activated ) { regrouped_RDD.cache; regrouped_RDD.count }
       regrouped_RDD
     })
@@ -236,7 +236,7 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
     val segSeq  = segments.toSeq
     val nSegments = segSeq.length
     logger.info( s"   #I# --> Partition[$partitionIndex/$numPartitions], nSegments: ${nSegments}, Times: ${times.length} " )
-    val interpRecs = segSeq.sortBy( _(0).startTime ).zipWithIndex.flatMap { case ( segment, segmentIndex ) => {
+    val interpRecs = segSeq.sortBy( _(0).ordering ).zipWithIndex.flatMap { case ( segment, segmentIndex ) => {
       logger.info( s"   #I# --> Segment[${segmentIndex}], num elements = ${segment.length}" )
       if( segment.length == 3 ) {
         val (startRec, midRec, endRec) = ( segment(0), segment(1), segment(2) )
@@ -265,7 +265,7 @@ class lowpass extends KernelImpl( Map( "reduceOp" -> "avew" ) ) {
       } else { Iterator.empty }
     }}
     logger.info( s"   #I# --> Interp Times: ${interpRecs.length} " )
-    interpRecs.sortBy(_.startTime).toIterator
+    interpRecs.sortBy(_.ordering).toIterator
   }
 
 //  def interploate( numPartitions: Int, times: Array[(Long,Long)] )( partitionIndex: Int, segments: Iterator[Array[CDRecord]] ) : Iterator[CDRecord] = {
