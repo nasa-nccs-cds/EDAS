@@ -208,28 +208,35 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def executeKernel(executor: WorkflowExecutor ):  KernelExecutionResult = {
     val root_node = executor.rootNode
     val kernelCx: KernelContext  = root_node.getKernelContext( executor )
-    val isIterative = false // executor.hasBatch(1)
-    var batchIndex = 0
-    var aggResult = QueryResultCollection.empty
+
     var resultFiles = mutable.ListBuffer.empty[String]
-    do {
-      val ts0 = System.nanoTime()
-      val batchResult:  QueryResultCollection = executeBatch( executor, kernelCx, batchIndex )
-      val ts1 = System.nanoTime()
-      if( kernelCx.doesTimeReduction || !isIterative  ) {
-        val reduceOp = executor.getReduceOp(kernelCx)
-        aggResult = aggResult.merge( batchResult, reduceOp )
-      } else {
-        if( executor.requestCx.task.getUserAuth > 0 ) {
-          resultFiles ++= EDASExecutionManager.saveResultToFile(executor, batchResult, List.empty[nc2.Attribute])
-          executor.releaseBatch
-        } else {
-          throw new Exception( "Must be authorized to execute a request this big- please contact the service administrator for instructions.")
-        }
-      }
-      val ts2 = System.nanoTime()
-      logger.info(s" @CDS@ BATCH mapReduce time = %.3f sec, agg time = %.3f sec, total processing time = %.3f sec   ********** \n".format( (ts1 - ts0)/1.0E9 , (ts2 - ts1)/1.0E9, (ts2 - ts0)/1.0E9 ) )
-    } while ( { batchIndex+=1; false; /* executor.hasBatch(batchIndex) */ } )
+    val ts0 = System.nanoTime()
+    var batchIndex = 0
+    val aggResult:  QueryResultCollection = executeBatch( executor, kernelCx, batchIndex )
+    val ts1 = System.nanoTime()
+    logger.info(s" @CDS@ MapReduce time = %.3f sec   ********** \n".format( (ts1 - ts0)/1.0E9 ) )
+
+//    val isIterative = false // executor.hasBatch(1)
+//    var batchIndex = 0
+//    var aggResult = QueryResultCollection.empty
+//    do {
+//      val ts0 = System.nanoTime()
+//      val batchResult:  QueryResultCollection = executeBatch( executor, kernelCx, batchIndex )
+//      val ts1 = System.nanoTime()
+//      if( kernelCx.doesTimeReduction || !isIterative  ) {
+//        val reduceOp = executor.getReduceOp(kernelCx)
+//        aggResult = aggResult.merge( batchResult, reduceOp )
+//      } else {
+//        if( executor.requestCx.task.getUserAuth > 0 ) {
+//          resultFiles ++= EDASExecutionManager.saveResultToFile(executor, batchResult, List.empty[nc2.Attribute])
+//          executor.releaseBatch
+//        } else {
+//          throw new Exception( "Must be authorized to execute a request this big- please contact the service administrator for instructions.")
+//        }
+//      }
+//      val ts2 = System.nanoTime()
+//      logger.info(s" @CDS@ BATCH mapReduce time = %.3f sec, agg time = %.3f sec, total processing time = %.3f sec   ********** \n".format( (ts1 - ts0)/1.0E9 , (ts2 - ts1)/1.0E9, (ts2 - ts0)/1.0E9 ) )
+//    } while ( { batchIndex+=1; false; /* executor.hasBatch(batchIndex) */ } )
 
     if( Try( executor.requestCx.config("unitTest","false").toBoolean ).getOrElse(false)  ) { root_node.kernel.cleanUp(); }
     KernelExecutionResult( aggResult, resultFiles.toList )

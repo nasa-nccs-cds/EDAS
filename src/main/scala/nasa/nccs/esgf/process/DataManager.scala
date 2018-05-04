@@ -1,13 +1,15 @@
 package nasa.nccs.esgf.process
 import java.io.{File, PrintWriter}
 
+import com.googlecode.concurrentlinkedhashmap.{ConcurrentLinkedHashMap, Weigher}
+import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.cdapi.cdm._
 import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, HeapDblArray, HeapLongArray}
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext, WorkflowMode}
-import nasa.nccs.edas.rdd.{VariableRecord, _}
+import nasa.nccs.edas.rdd.{CDRecordRDD, VariableRecord, _}
 import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
@@ -64,6 +66,38 @@ object RegridSpec {
 }
 
 class RegridSpec( val gridFile: String, resolution: String, projection: String, val subgrid: String ) extends EDASCoordSystem( resolution, projection ) { }
+
+object GenericOperationResult {
+  def apply( rddResult: CDRecordRDD ): GenericOperationResult = GenericOperationResult( Some(rddResult), None )
+  def apply( collectionResult: QueryResultCollection ): GenericOperationResult = GenericOperationResult( None, Some(collectionResult) )
+  def empty = GenericOperationResult( None, None )
+
+}
+case class GenericOperationResult( optRDDResult: Option[CDRecordRDD], optCollectionResult: Option[QueryResultCollection] ) {
+  val EMPTY = 0
+  val RDD = 1
+  val COLLECTION = 2
+  def getType = if( optRDDResult.isDefined ) { RDD } else if ( optCollectionResult.isDefined ) { COLLECTION } else { EMPTY }
+  def getSize: Long = getType match {             // Number of 4B elements
+    case RDD => optRDDResult.get.getSize
+    case COLLECTION => optCollectionResult.get.getSize
+    case EMPTY => 0
+  }
+  def getWeight: Int = {  ( getSize / 250000 ).toInt }    // Memory size in MB
+}
+
+class ResultWeigher extends Weigher[GenericOperationResult] {
+  def	weightOf(result: GenericOperationResult): Int = result.getWeight
+}
+
+object ResultCacheManager {
+  private val resultMemoryCache: ConcurrentLinkedHashMap[ String, GenericOperationResult ] =
+    new ConcurrentLinkedHashMap.Builder[String, GenericOperationResult ].initialCapacity(1000).maximumWeightedCapacity(1000).weigher( new ResultWeigher ).build()  //  Weight = memory size in MB
+
+  def addResult( key: String, result: CDRecordRDD ) = resultMemoryCache.put( key, GenericOperationResult( result ) )
+  def addResult( key: String, result: QueryResultCollection ) = resultMemoryCache.put( key, GenericOperationResult( result ) )
+  def getResult( key: String ): GenericOperationResult = resultMemoryCache.getOrDefault( key, GenericOperationResult.empty )
+}
 
 class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {
   private var _inputsRDD: RDDContainer = new RDDContainer

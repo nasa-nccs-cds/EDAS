@@ -110,53 +110,43 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   def getGroup: Option[TSGroup]  = operation.config("groupBy") map TSGroup.getGroup
   def nonCyclicGroupOp: Boolean = getGroup.fold( false )( _.isNonCyclic )
   def getResultId( inputId: String ): String = operation.output(inputId)
-
+  def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
+  def getGridConfiguration(key: String): Option[String] = _configuration.get("crs").orElse(getDomains.flatMap(_.metadata.get("crs")).headOption)
+  def getWeightMode: Option[String] = _weightsOpt
+  def getDomains: List[DomainContainer] = operation.getDomains flatMap domains.get
+  def getDomainSections: List[CDSection] = operation.getDomains.flatMap(sectionMap.get).flatten
+  private def getCRS: Option[String] = getGridConfiguration("crs")
+  private def getTRS: Option[String] = getGridConfiguration("trs")
+  def commutativeReduction: Boolean = if (getAxes.includes(0)) { true } else { false }
   lazy val grid: GridContext = getTargetGridContext
   def addVariableRecords( varRecs: Map[String,VariableRecord] ): KernelContext = { _variableRecs = _variableRecs ++ varRecs; this }
   def getInputVariableRecord(vid: String): Option[VariableRecord] = _variableRecs.get(vid)
-
   def findGrid(gridRef: String): Option[GridContext] = grids.find(item => (item._1.equalsIgnoreCase(gridRef) || item._1.split('-')(0).equalsIgnoreCase(gridRef))).flatMap(_._2)
-
   def getConfiguration: Map[String, String] = configuration ++ operation.getConfiguration
   def addConfig( new_config_elems: (String,String)* ) = new KernelContext( operation, grids, sectionMap, domains, _configuration ++ new_config_elems, crsOpt, regridSpecOpt, profiler )
+  def getAxes: AxisIndices = axes
+  def getContextStr: String = getConfiguration map { case (key, value) => key + ":" + value } mkString ";"
+  def doesTimeOperations = axes.includes( 0 )
+  def doesTimeCollection = axes.includes( 0 ) && getGroup.isEmpty
+  def getCacheStatus: String =
+    if( config("cache", "").contains("m") ) {
+      if (doesTimeCollection) { "c" } else { "r" }
+    } else { ""}
+
+  def getCacheId: String = {
+    val cacheStatus = config("cache", "")
+    if( cacheStatus.contains("m") ) { config("jobId", operation.identifier.split('-')(1) ) } else { "" }
+  }
 
   def getReductionSize: Int = {
     val section: CDSection = sectionMap.head._2.getOrElse( throw new Exception(s"Can't find section for inputs of operation ${operation.identifier}") )
     getAxes.getAxes.map( axisIndex => section.getShape( axisIndex ) ).product
   }
 
-  def getAxes: AxisIndices = axes
-
-  def doesTimeOperations = axes.includes( 0 )
-
-  def getContextStr: String = getConfiguration map { case (key, value) => key + ":" + value } mkString ";"
-
   def getDomainMetadata(domId: String): Map[String, String] = domains.get(domId) match {
     case Some(dc) => dc.metadata;
     case None => Map.empty
   }
-
-
-
-  def findAnyGrid: GridContext = (grids.find { case (k, v) => v.isDefined }).getOrElse(("", None))._2.getOrElse(throw new Exception("Undefined grid in KernelContext for op " + operation.identifier))
-
-  def getGridConfiguration(key: String): Option[String] = _configuration.get("crs").orElse(getDomains.flatMap(_.metadata.get("crs")).headOption)
-
-  def getWeightMode: Option[String] = _weightsOpt
-
-  def getDomains: List[DomainContainer] = operation.getDomains flatMap domains.get
-
-  def getDomainSections: List[CDSection] = operation.getDomains.flatMap(sectionMap.get).flatten
-
-  private def getCRS: Option[String] = getGridConfiguration("crs")
-
-  private def getTRS: Option[String] = getGridConfiguration("trs")
-
-//  def conf(params: Map[String, String]): KernelContext = new KernelContext(operation, grids, sectionMap, domains, configuration ++ params, crsOpt, regridSpecOpt, profiler)
-
-  def commutativeReduction: Boolean = if (getAxes.includes(0)) { true } else { false }
-
-  def doesTimeReduction: Boolean = getAxes.includes(0)
 
   private def getTargetGridContext: GridContext = crsOpt match {
     case Some(crs) =>
@@ -388,9 +378,9 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     rv
   }
 
-  def reduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, ordered: Boolean = false ): QueryResultCollection = {
+  def reduce(input: CDRecordRDD, kcontext: KernelContext, batchIndex: Int, ordered: Boolean = false ): QueryResultCollection = {
     EDASExecutionManager.checkIfAlive
-    val rid = context.operation.rid.toLowerCase
+    val rid = kcontext.operation.rid.toLowerCase
     val postOpId: String = options.getOrElse( "postOp", "" )
     if( sampleInputs ) {
       val slices = input.rdd.collect()
@@ -399,9 +389,10 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     }
     if( !parallelizable ) { input.collect( elemFilter(rid), postOpId ) }
     else {
-      val axes = context.getAxes
-      val result: QueryResultCollection =  context.profiler.profile[QueryResultCollection]( "Kernel.reduce" ) (() => {
-          input.reduce( getReduceOp(context), elemFilter(rid), postOpId, context.getGroup, ordered )
+      val axes = kcontext.getAxes
+      val result: QueryResultCollection =  kcontext.profiler.profile[QueryResultCollection]( "Kernel.reduce" ) (() => {
+          val rcontext = ReduceContext( postOpId, kcontext.getGroup, ordered, kcontext.getCacheId, kcontext.getCacheStatus )
+          input.reduce( getReduceOp(kcontext), elemFilter(rid), rcontext )
         })
       result.sort
     }

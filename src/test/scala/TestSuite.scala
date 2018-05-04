@@ -627,7 +627,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[domain=[{"name":"d0","lat":{"start":25,"end":30,"system":"indices"},"lon":{"start":20,"end":25,"system":"indices"},"time":{"start":45,"end":50,"system":"indices"}}],
          |  variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
-         |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]""".stripMargin
+         |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy","cache":"mr"}]]""".stripMargin
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )

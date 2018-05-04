@@ -3,6 +3,7 @@ package nasa.nccs.edas.rdd
 
 import java.nio.file.Paths
 import java.util.{Date, TimeZone}
+
 import breeze.linalg
 import nasa.nccs.caching.BatchSpec
 import nasa.nccs.cdapi.cdm.{CDGrid, OperationDataInput}
@@ -17,7 +18,7 @@ import nasa.nccs.edas.sources.{Aggregation, Collection, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.edas.workers.TransVar
-import nasa.nccs.esgf.process.{CDSection, EDASCoordSystem, ServerContext}
+import nasa.nccs.esgf.process.{CDSection, EDASCoordSystem, ResultCacheManager, ServerContext}
 import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 import org.apache.spark.Partitioner
 import org.apache.spark.mllib.linalg.{Matrix, Vector, Vectors}
@@ -337,6 +338,11 @@ class KeyPartitioner( val nParts: Int ) extends Partitioner {
   }
 }
 
+case class ReduceContext( postOpId: String, optGroupBy: Option[TSGroup], ordered: Boolean = false, cacheId: String = "", cacheStatus: String = ""  ) {
+  def cacheRdd = cacheStatus.contains("r")
+  def cacheCollection = cacheStatus.contains("c")
+}
+
 object CDRecordRDD extends Serializable {
   def apply(rdd: RDD[CDRecord], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ): CDRecordRDD = new CDRecordRDD( rdd, metadata, variableRecords )
   def sortedReducePartition(op: (CDRecord,CDRecord) => CDRecord )(slices: Iterable[CDRecord]): CDRecord = {
@@ -395,6 +401,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def nodeList: Array[String] = rdd.mapPartitionsWithIndex { case ( index, tsIter )  => if(tsIter.isEmpty) { Iterator.empty } else { Seq( s"{P${index}-(${KernelContext.getProcessAddress}), size: ${tsIter.length}}" ).toIterator }  } collect
 //  def collect( op: PartialFunction[CDTimeSlice,CDTimeSlice] ): TimeSliceRDD = TimeSliceRDD( rdd.collect(op), metadata, variableRecords )
   def dataSize: Long = rdd.map( _.size ).reduce ( _ + _ )
+  def getSize = rdd.first.size * rdd.count               // Number of 4B elements
   def selectElement( elemId: String ): CDRecordRDD = CDRecordRDD ( rdd.map( _.selectElement( elemId ) ), metadata, variableRecords )
   def selectElements(  elemFilter: String => Boolean  ): CDRecordRDD = CDRecordRDD ( rdd.map( _.selectElements( elemFilter ) ), metadata, variableRecords )
   def toMatrix(selectElems: Seq[String]): RowMatrix = { new RowMatrix(rdd.map(_.toVector( selectElems ))) }
@@ -422,27 +429,33 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
       new SlidingRDD[CDRecord]( rdd, windowSize, step )
     }
   }
-  def reduce(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, optGroupBy: Option[TSGroup], ordered: Boolean = false ): QueryResultCollection = {
+  def reduce(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, context: ReduceContext ): QueryResultCollection = {
     val filteredRdd = rdd.map( _.selectElements( elemFilter ) )
-    if (ordered) optGroupBy match {
+    val queryResult: QueryResultCollection = if (context.ordered) context.optGroupBy match {
       case None =>
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ) ) }
         val partialProduct = filteredRdd.mapPartitions( slices => Iterator( CDRecordRDD.sortedReducePartition(op)(slices.toIterable) ) ).collect
-        val slice: CDRecord = postOp( postOpId )(
+        val slice: CDRecord = postOp( context.postOpId )(
           CDRecordRDD.sortedReducePartition(op)(partialProduct)
         )
         QueryResultCollection( slice, metadata)
       case Some( groupBy ) =>
-        val partialProduct = filteredRdd.groupBy( groupBy.group(calendar) ).mapValues( CDRecordRDD.sortedReducePartition(op) ).map(item => postOp( postOpId )( item._2 ) )
+        val partialProduct = filteredRdd.groupBy( groupBy.group(calendar) ).mapValues( CDRecordRDD.sortedReducePartition(op) ).map(item => postOp( context.postOpId )( item._2 ) )
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(partialProduct,metadata,variableRecords ) ) }
         QueryResultCollection( partialProduct.collect.sortBy( _.startTime ), metadata )
     }
-    else optGroupBy match {
+    else context.optGroupBy match {
       case None =>
-        val slice: CDRecord = postOp( postOpId )( filteredRdd.treeReduce(op) )
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ) ) }
+        val slice: CDRecord = postOp( context.postOpId )( filteredRdd.treeReduce(op) )
         QueryResultCollection( slice, metadata )
       case Some( groupBy ) =>
-        val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceRddByGroup( filteredRdd, op, postOpId, groupBy, calendar )
+        val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceRddByGroup( filteredRdd, op, context.postOpId, groupBy, calendar )
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(groupedRDD.map(_._2),metadata,variableRecords ) ) }
         QueryResultCollection( groupedRDD.values.collect, metadata )
     }
+    if( context.cacheCollection ) { ResultCacheManager.addResult( context.cacheId, queryResult ) }
+    queryResult
   }
 }
 
@@ -459,6 +472,7 @@ case class QueryResultCollection(records: Array[CDRecord], metadata: Map[String,
   }
   def sort(): QueryResultCollection = { QueryResultCollection( records.sortBy( _.startTime ), metadata ) }
   val nslices: Int = records.length
+  def getSize: Long = records.foldLeft(0L)( (size,rec) => rec.size + size )       // Number of 4B elements
 
   def merge(other: QueryResultCollection, op: CDRecord.ReduceOp ): QueryResultCollection = {
     val ( tsc0, tsc1 ) = ( sort(), other.sort() )
