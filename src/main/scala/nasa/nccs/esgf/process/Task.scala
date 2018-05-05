@@ -313,6 +313,7 @@ class OpInputSpec(val name: String, val source: DataSource, val declared_domain:
   def isReadable: Boolean = !source.isEmpty && !name.isEmpty && !declared_domain.isEmpty
   def getKey: Option[DataFragmentKey] = fragIdOpt map DataFragmentKey.apply
   def getDomain: Option[String] = _inferredDomains.headOption
+  def getVariable: CDSVariable = source.getVariable(name)
 
   private def _addDomain( domain_id: String ): Boolean = if( _inferredDomains.contains(domain_id) || domain_id.isEmpty ) { false; } else {
     logger.info( s" ----> Adding Domain ${domain_id}")
@@ -828,9 +829,7 @@ class DataContainer(val uid: String, private val optInputSpec: Option[OpInputSpe
   assert(optInputSpec.isDefined || operation.isDefined, s"Empty DataContainer: variable uid = $uid")
   assert(optInputSpec.isEmpty || operation.isEmpty, s"Conflicted DataContainer: variable uid = $uid")
 //  private val optSpecs = mutable.ListBuffer[OperationSpecs]()
-  private lazy val variable = {
-    val inputSpec = getInputSpec; inputSpec.source.getVariable(inputSpec.name)
-  }
+  private lazy val variable =  getInputSpec.getVariable
   def getInputDomain: Option[String] = optInputSpec.flatMap( _.getDomain )
 
 /*  def getDomains: List[String] = _domains.toList
@@ -958,9 +957,8 @@ object DataContainer extends ContainerBase {
                 throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
               }
             case "cache" =>
-              Collections.addCollection( cid ) getOrElse {
-                throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
-              }
+              val cachedInput = ResultCacheManager.getResult( cid )
+              if( cachedInput.isEmpty ) { throw new Exception(s"Attempt to acess a non existent cached result '$cid', results = ${ResultCacheManager.getContents.mkString(", ")}") }
           }
           for ((name, index) <- var_names.zipWithIndex) yield {
             val name_items = name.split(Array(':', '|'))

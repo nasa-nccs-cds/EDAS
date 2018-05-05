@@ -67,36 +67,26 @@ object RegridSpec {
 
 class RegridSpec( val gridFile: String, resolution: String, projection: String, val subgrid: String ) extends EDASCoordSystem( resolution, projection ) { }
 
-object GenericOperationResult {
-  def apply( rddResult: CDRecordRDD ): GenericOperationResult = GenericOperationResult( Some(rddResult), None )
-  def apply( collectionResult: QueryResultCollection ): GenericOperationResult = GenericOperationResult( None, Some(collectionResult) )
-  def empty = GenericOperationResult( None, None )
 
-}
-case class GenericOperationResult( optRDDResult: Option[CDRecordRDD], optCollectionResult: Option[QueryResultCollection] ) {
-  val EMPTY = 0
-  val RDD = 1
-  val COLLECTION = 2
-  def getType = if( optRDDResult.isDefined ) { RDD } else if ( optCollectionResult.isDefined ) { COLLECTION } else { EMPTY }
-  def getSize: Long = getType match {             // Number of 4B elements
-    case RDD => optRDDResult.get.getSize
-    case COLLECTION => optCollectionResult.get.getSize
-    case EMPTY => 0
-  }
+abstract class GenericOperationData(metadata: Map[String,String]) extends Serializable {
+  abstract def getSize: Long
   def getWeight: Int = {  ( getSize / 250000 ).toInt }    // Memory size in MB
+  def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
+  def getVars: Seq[String]
+  def getMetadata: Map[String,String] = metadata
 }
 
-class ResultWeigher extends Weigher[GenericOperationResult] {
-  def	weightOf(result: GenericOperationResult): Int = result.getWeight
+class ResultWeigher extends Weigher[GenericOperationData] {
+  def	weightOf(result: GenericOperationData): Int = result.getWeight
 }
 
 object ResultCacheManager {
-  private val resultMemoryCache: ConcurrentLinkedHashMap[ String, GenericOperationResult ] =
-    new ConcurrentLinkedHashMap.Builder[String, GenericOperationResult ].initialCapacity(1000).maximumWeightedCapacity(1000).weigher( new ResultWeigher ).build()  //  Weight = memory size in MB
+  private val resultMemoryCache: ConcurrentLinkedHashMap[ String, GenericOperationData ] =
+    new ConcurrentLinkedHashMap.Builder[String, GenericOperationData ].initialCapacity(1000).maximumWeightedCapacity(1000).weigher( new ResultWeigher ).build()  //  Weight = memory size in MB
 
-  def addResult( key: String, result: CDRecordRDD ) = resultMemoryCache.put( key, GenericOperationResult( result ) )
-  def addResult( key: String, result: QueryResultCollection ) = resultMemoryCache.put( key, GenericOperationResult( result ) )
-  def getResult( key: String ): GenericOperationResult = resultMemoryCache.getOrDefault( key, GenericOperationResult.empty )
+  def addResult( key: String, result: GenericOperationData ) = resultMemoryCache.put( key, result )
+  def getResult( key: String ): Option[GenericOperationData] = Option( resultMemoryCache.get( key ) )
+  def getContents: Seq[String] = resultMemoryCache.keys.toSeq
 }
 
 class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowContext ) extends Loggable  {

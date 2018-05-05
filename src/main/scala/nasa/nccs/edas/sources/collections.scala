@@ -140,7 +140,7 @@ object CollectionLoadServices {
   def loadCollection( collId: String ): Boolean = { startService.loadCollection(collId) }
 }
 
-class Collection( ctype: String, id: String, dataPath: String, val aggregations: Map[String,Aggregation], metadata: Map[String,String], vars: List[String] = List() ) extends DataSource(ctype, id, dataPath, metadata, vars) {
+class Collection( ctype: String, id: String, val dataPath: String, val aggregations: Map[String,Aggregation], metadata: Map[String,String], vars: List[String] = List() ) extends DataSource(ctype, id, metadata, vars) {
   val fileFilter = metadata.getOrElse("fileFilter","")
   private val _grids = new ConcurrentLinkedHashMap.Builder[String, CDGrid].initialCapacity(10).maximumWeightedCapacity(500).build()
   private val _variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()

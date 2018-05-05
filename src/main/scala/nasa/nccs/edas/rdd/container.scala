@@ -18,7 +18,7 @@ import nasa.nccs.edas.sources.{Aggregation, Collection, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.edas.workers.TransVar
-import nasa.nccs.esgf.process.{CDSection, EDASCoordSystem, ResultCacheManager, ServerContext}
+import nasa.nccs.esgf.process._
 import nasa.nccs.utilities.{EDTime, Loggable, cdsutils}
 import org.apache.spark.Partitioner
 import org.apache.spark.mllib.linalg.{Matrix, Vector, Vectors}
@@ -266,10 +266,6 @@ case class CDRecord(startTime: Long, endTime: Long, levelIndex: Int, elements: M
     }
 }
 
-class DataCollection( val metadata: Map[String,String] ) extends Serializable {
-  def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
-}
-
 object TSGroup {
   import CalendarPeriod.Field._
   def season( month: Int ): Int = ( (month+1) % 12 )/3
@@ -343,7 +339,7 @@ case class ReduceContext( postOpId: String, optGroupBy: Option[TSGroup], ordered
   def cacheCollection = cacheStatus.contains("c")
 }
 
-object CDRecordRDD extends Serializable {
+object CDRecordRDD  {
   def apply(rdd: RDD[CDRecord], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ): CDRecordRDD = new CDRecordRDD( rdd, metadata, variableRecords )
   def sortedReducePartition(op: (CDRecord,CDRecord) => CDRecord )(slices: Iterable[CDRecord]): CDRecord = {
     val nSlices = slices.size
@@ -386,7 +382,7 @@ object CDRecordRDD extends Serializable {
     rdd.reduceByKey( op ) map { case ( key, slice ) => key -> postOp( postOpId )( slice ).setGroupId( groupBy, key ) }
 }
 
-class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val variableRecords: Map[String,VariableRecord] ) extends DataCollection(metadata) with Loggable {
+class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val variableRecords: Map[String,VariableRecord] ) extends GenericOperationData(metadata) with Loggable {
   import CDRecordRDD._
   val calendar: Calendar = Calendar.get( metadata.getOrElse("time.calendar","default"))
   def cache() = rdd.cache()
@@ -408,6 +404,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def toVectorRDD(selectElems: Seq[String]): RDD[Vector] = { rdd.map(_.toVector( selectElems )) }
   def collect: QueryResultCollection = { QueryResultCollection( rdd.collect.sortBy(_.startTime), metadata ) }
   def join( other: RDD[CDRecord] ) = CDRecordRDD( rdd.keyBy( _.startTime ).join( other.keyBy( _.startTime ) ).mapPartitions( CDRecord.join ), metadata, variableRecords )
+  def getVars: Seq[String] = rdd.first.elements.keys.toSeq
 
   def reduceByGroup(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): CDRecordRDD = {
     val keyedRDD: RDD[(Int,CDRecord)] = rdd.keyBy( groupBy.group( calendar )  )
@@ -461,12 +458,12 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
 
 object QueryResultCollection {
   def apply(slice: CDRecord, metadata: Map[String,String] ): QueryResultCollection = QueryResultCollection( Array(slice), metadata )
+  def apply(records: Array[CDRecord], metadata: Map[String,String] ): QueryResultCollection = QueryResultCollection( records, metadata )
   def empty: QueryResultCollection = QueryResultCollection( Array.empty[CDRecord], Map.empty[String,String] )
 
 }
 
-case class QueryResultCollection(records: Array[CDRecord], metadata: Map[String,String] ) extends Serializable {
-  def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
+class QueryResultCollection(val records: Array[CDRecord], metadata: Map[String,String] ) extends GenericOperationData(metadata) {
   def section( section: CDSection ): QueryResultCollection = {
     QueryResultCollection( records.flatMap( _.section(section) ), metadata )
   }
@@ -482,7 +479,7 @@ case class QueryResultCollection(records: Array[CDRecord], metadata: Map[String,
     QueryResultCollection( merged_slices, metadata ++ other.metadata )
   }
 
-  def getMetadata: Map[String,String] = metadata ++ records.headOption.fold(Map.empty[String,String])(_.metadata) // slices.foldLeft(metadata)( _ ++ _.metadata )
+  override def getMetadata: Map[String,String] = metadata ++ records.headOption.fold(Map.empty[String,String])(_.metadata) // slices.foldLeft(metadata)( _ ++ _.metadata )
 
   def concatSlices: QueryResultCollection = {
     val concatSlices = sort().records.reduce( _ <+ _ )
@@ -490,6 +487,7 @@ case class QueryResultCollection(records: Array[CDRecord], metadata: Map[String,
   }
 
   def getConcatSlice: CDRecord = concatSlices.records.head
+  def getVars: Seq[String] = records.head.elements.keys.toSeq
 }
 
 object PartitionExtensionGenerator {
