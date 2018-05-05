@@ -427,7 +427,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
     val sourceContainers = request.variableMap.values.filter(_.isSource)
     val profileParm: String = request.operations.flatMap( _.getConfParm("profile") ).headOption.getOrElse( run_args.getOrElse("profile","") )
     val sources = for (data_container: DataContainer <- request.variableMap.values; if data_container.isSource ) yield {
-      val domainOpt: Option[DomainContainer] = data_container.getSource.getDomain.flatMap(request.getDomain)
+      val domainOpt: Option[DomainContainer] = data_container.getInputSpec.getDomain.flatMap(request.getDomain)
       serverContext.createInputSpec( data_container, domainOpt, request )
     }
     val sourceMap: Map[String,Option[DataFragmentSpec]] = Map(sources.toSeq:_*)
@@ -484,11 +484,11 @@ class EDASExecutionManager extends WPSServer with Loggable {
 //        FragmentPersistence.close()
 //        new WPSMergedEventReport( cached_data.map( cache_result => new UtilityExecutionResult( cache_result._1.toStrRep, <cache/> ) ).toList )
       case "dcol" =>
-        val colIds = request.variableMap.values.map( _.getSource.collection.id )
+        val colIds = request.variableMap.values.map( _.getInputSpec.source.id )
         val deletedCollections = Collections.removeCollections( colIds.toArray )
         new WPSMergedEventReport(List(new UtilityExecutionResult("dcol", <deleted collections={deletedCollections.mkString(",")}/> )))
       case "dfrag" =>
-        val fragIds: Iterable[String] = request.variableMap.values.flatMap( ds => ds.getSource.getDomain.map( domId => Array( ds.getSource.name, ds.getSource.collection.id, domId ).mkString("|") ) )
+        val fragIds: Iterable[String] = request.variableMap.values.flatMap( ds => ds.getInputSpec.getDomain.map(domId => Array( ds.getInputSpec.name, ds.getInputSpec.source.id, domId ).mkString("|") ) )
         deleteFragments( fragIds )
         new WPSMergedEventReport(List(new UtilityExecutionResult("dfrag", <deleted fragments={fragIds.mkString(",")}/> )))
       case "dres" =>

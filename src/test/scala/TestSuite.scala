@@ -635,6 +635,20 @@ class DefaultTestSuite extends EDASTestSuite {
     assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
   }
 
+  test("cache-retrieval-test") {
+    //  ncks -O -v tas -d lat,25,30 -d lon,20,25 -d time,45,50 ${datafile} ~/test/out/subset.nc
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array(  289.0866, 290.5467, 292.9329, 294.6103, 295.5956, 294.7446   ).map(_.toFloat), Float.MaxValue )
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":25,"end":30,"system":"indices"},"lon":{"start":20,"end":25,"system":"indices"},"time":{"start":45,"end":50,"system":"indices"}}],
+         |  variable=[{"uri":"cache:/aeiouTTT","name":"tas:v1","domain":"d0"}],
+         |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy","cache":"mr"}]]""".stripMargin
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    println( "Verified Result: " + nco_verified_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
+  }
+
   test("Ave-Full-Space-GISS-R1i1p1") {
     // ncwa -O -d time,75,80 -a lat,lon  ${datafile} ~/test/out/spatial_average2.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array(  277.941, 279.8109, 280.9602, 281.2116, 280.7651, 279.4151   ).map(_.toFloat), Float.MaxValue )

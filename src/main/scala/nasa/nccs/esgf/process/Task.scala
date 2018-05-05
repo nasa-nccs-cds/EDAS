@@ -13,7 +13,7 @@ import nasa.nccs.cdapi.data.RDDVariableSpec
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}
 import nasa.nccs.edas.kernels.AxisIndices
-import nasa.nccs.edas.sources.{Aggregation, Collection, CollectionLoadServices, Collections}
+import nasa.nccs.edas.sources._
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.process.UID.ndigits
 
@@ -71,7 +71,7 @@ class TaskRequest(val id: UID,
   def getTargetGrid(uid: String): Option[TargetGrid] = targetGridMap.get(uid)
 
   private def createTargetGrid(dataContainer: DataContainer): TargetGrid = {
-    val domainContainer: Option[DomainContainer] = dataContainer.getSource.getDomain flatMap ( getDomain )
+    val domainContainer: Option[DomainContainer] = dataContainer.getInputSpec.getDomain flatMap ( getDomain )
     val roiOpt: Option[List[DomainAxis]] = domainContainer.map(domainContainer => domainContainer.axes)
     val t0 = System.nanoTime
     lazy val variable: CDSVariable = dataContainer.getVariable
@@ -114,11 +114,11 @@ class TaskRequest(val id: UID,
       case _ => DataAccessMode.Read
     }
 
-  def getDomain(data_source: DataSource): Option[DomainContainer] = data_source.getDomain.map( domId => domainMap.getOrElse(domId, throw new Exception("Undefined domain for dataset " + data_source.name + ", domain = " + domId) ) )
+  def getDomain(data_source: OpInputSpec): Option[DomainContainer] = data_source.getDomain.map(domId => domainMap.getOrElse(domId, throw new Exception("Undefined domain for dataset " + data_source.name + ", domain = " + domId) ) )
   def getDomain(domId: String): Option[DomainContainer] = domainMap.get(domId)
 
   def validate() = {
-    for (variable <- inputVariables; if variable.isSource; domid <- variable.getSource.getDomain.iterator;  vid = variable.getSource.name; if !domid.isEmpty ) {
+    for (variable <- inputVariables; if variable.isSource; domid <- variable.getInputSpec.getDomain.iterator; vid = variable.getInputSpec.name; if !domid.isEmpty ) {
       if (!domainMap.contains(domid) && !domid.contains("|")) {
         var keylist = domainMap.keys.mkString("[", ",", "]")
         logger.error(s"Error, No $domid in $keylist in variable $vid")
@@ -303,14 +303,14 @@ class PartitionSpec(val axisIndex: Int, val nPart: Int, val partIndex: Int = 0) 
     s"PartitionSpec { axis = $axisIndex, nPart = $nPart, partIndex = $partIndex }"
 }
 
-class DataSource(val name: String, val collection: Collection, val declared_domain: Option[String], val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
+class OpInputSpec(val name: String, val source: DataSource, val declared_domain: Option[String], val autoCache: Boolean, val fragIdOpt: Option[String] = None) extends Loggable {
   private val _inferredDomains = new scala.collection.mutable.HashSet[String]()
   declared_domain.foreach( _addDomain )
-  def this(dsource: DataSource) = this(dsource.name, dsource.collection, dsource.getDomain, dsource.autoCache )
-  override def toString: String = s"DataSource { name = $name, \n\t\t\tcollection = %s, domain = ${declared_domain}, %s }" .format(collection.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
-  def toXml: xml.Node =  <dataset name={name} domain={declared_domain.getOrElse("")}> {collection.toXml} </dataset>
-  def isDefined: Boolean = !collection.isEmpty && !name.isEmpty
-  def isReadable: Boolean = !collection.isEmpty && !name.isEmpty && !declared_domain.isEmpty
+  def this(dsource: OpInputSpec) = this(dsource.name, dsource.source, dsource.getDomain, dsource.autoCache )
+  override def toString: String = s"DataSource { name = $name, \n\t\t\tcollection = %s, domain = ${declared_domain}, %s }" .format(source.toString, fragIdOpt.map(", fragment = " + _).getOrElse(""))
+  def toXml: xml.Node =  <dataset name={name} domain={declared_domain.getOrElse("")}> {source.toXml} </dataset>
+  def isDefined: Boolean = !source.isEmpty && !name.isEmpty
+  def isReadable: Boolean = !source.isEmpty && !name.isEmpty && !declared_domain.isEmpty
   def getKey: Option[DataFragmentKey] = fragIdOpt map DataFragmentKey.apply
   def getDomain: Option[String] = _inferredDomains.headOption
 
@@ -319,10 +319,9 @@ class DataSource(val name: String, val collection: Collection, val declared_doma
     _inferredDomains += domain_id;
     true
   }
-  def getAggregation( varName: String  ): Option[Aggregation] = collection.getAggregation(varName)
 
   def updateDomainsFromOperation( operation: OperationContext ): Boolean = if( declared_domain.isEmpty ) {
-    logger.info( s"DataSource(${collection.collId}:${name})--> Update Domains From Operation(${operation.name}) --> op domains: ${operation.getDomains.mkString(", ")}")
+    logger.info( s"DataSource(${source.id}:${name})--> Update Domains From Operation(${operation.name}) --> op domains: ${operation.getDomains.mkString(", ")}")
     val updated = operation.getDomains.exists( _addDomain )
     if( _inferredDomains.size > 1 ) { throw new Exception( s"Ambiguous Domain for input ${name}, domains: ${_inferredDomains.mkString(", ")}") }
     updated
@@ -825,14 +824,14 @@ class DataFragmentSpec(val uid: String,
 //    optargs.getOrElse(id, default)
 // }
 
-class DataContainer(val uid: String, private val source: Option[DataSource] = None, private val operation: Option[OperationContext] = None)  extends ContainerBase {
-  assert(source.isDefined || operation.isDefined, s"Empty DataContainer: variable uid = $uid")
-  assert(source.isEmpty || operation.isEmpty, s"Conflicted DataContainer: variable uid = $uid")
+class DataContainer(val uid: String, private val optInputSpec: Option[OpInputSpec] = None, private val operation: Option[OperationContext] = None)  extends ContainerBase {
+  assert(optInputSpec.isDefined || operation.isDefined, s"Empty DataContainer: variable uid = $uid")
+  assert(optInputSpec.isEmpty || operation.isEmpty, s"Conflicted DataContainer: variable uid = $uid")
 //  private val optSpecs = mutable.ListBuffer[OperationSpecs]()
   private lazy val variable = {
-    val source = getSource; source.collection.getVariable(source.name)
+    val inputSpec = getInputSpec; inputSpec.source.getVariable(inputSpec.name)
   }
-  def getInputDomain: Option[String] = source.flatMap( _.getDomain )
+  def getInputDomain: Option[String] = optInputSpec.flatMap( _.getDomain )
 
 /*  def getDomains: List[String] = _domains.toList
   private val _domains = new scala.collection.mutable.HashSet[String]()
@@ -845,31 +844,31 @@ class DataContainer(val uid: String, private val source: Option[DataSource] = No
 
   def toWPSDataInput: WPSDataInput = WPSDataInput(uid.toString, 1, 1)
   def getVariable: CDSVariable = variable
-  def updateDomainsFromOperation( operation: OperationContext ): Boolean = source.exists( _.updateDomainsFromOperation(operation) )
+  def updateDomainsFromOperation( operation: OperationContext ): Boolean = optInputSpec.exists( _.updateDomainsFromOperation(operation) )
 
   override def toString = {
     val embedded_val: String =
-      if (source.isDefined) source.get.toString else operation.get.toString
+      if (optInputSpec.isDefined) optInputSpec.get.toString else operation.get.toString
     s"DataContainer ( $uid ) { \n\t\t\t$embedded_val }"
   }
   override def toXml = {
     val embedded_xml =
-      if (source.isDefined) source.get.toXml else operation.get.toXml
+      if (optInputSpec.isDefined) optInputSpec.get.toXml else operation.get.toXml
     <dataset uid={uid}> embedded_xml </dataset>
   }
-  def isSource: Boolean = source.isDefined
+  def isSource: Boolean = optInputSpec.isDefined
 
   def isOperation: Boolean = operation.isDefined
 
-  def getSource: DataSource = {
+  def getInputSpec: OpInputSpec = {
     assert( isSource, s"Attempt to access an operation based DataContainer($uid) as a data source" )
-    source.get
+    optInputSpec.get
   }
   def getOperation: OperationContext = {
     assert( isOperation, s"Attempt to access a source based DataContainer($uid) as an operation")
     operation.get
   }
-  def getSourceOpt = { source }
+  def getSourceOpt = { optInputSpec }
 
 //  def addOpSpec(operation: OperationContext): Unit = { // used to inform data container what types of ops will be performed on it.
 //    def mergeOpSpec(oSpecList: mutable.ListBuffer[OperationSpecs], oSpec: OperationSpecs): Unit = oSpecList.headOption match {
@@ -930,7 +929,7 @@ object DataContainer extends ContainerBase {
   }
 
   def validateInputMethods( metadata: Map[String, Any] ): Unit = {
-    val allowed_input_methods = appParameters("inputs.methods.allowed","collection").split(',').map( _.toLowerCase.trim )
+    val allowed_input_methods = appParameters("inputs.methods.allowed","collection,cache").split(',').map( _.toLowerCase.trim )
     val uri = metadata.getOrElse("uri", throw new Exception("Missing required parameter 'uri' in variable spec") ).toString
     val input_method = uri.split(':').head.toLowerCase
     if( !allowed_input_methods.contains( input_method ) ) { throw new Exception( s"Input method '$input_method' is not permitted, allowed methods = ${allowed_input_methods.mkString("[ ",", "," ]")} ")}
@@ -950,20 +949,29 @@ object DataContainer extends ContainerBase {
         case None =>
           val var_names: Array[String] = fullname.toString.split(',')
           val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
-          val cid = dataPath.split('/').last
-          val collection = Collections.addCollection( cid ) getOrElse {
-            throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
+          val ctoks = dataPath.split('/')
+          val ctype = ctoks.head
+          val cid = ctoks.last
+          val collection = ctype match {
+            case "collection" =>
+              Collections.addCollection( cid ) getOrElse {
+                throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
+              }
+            case "cache" =>
+              Collections.addCollection( cid ) getOrElse {
+                throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
+              }
           }
           for ((name, index) <- var_names.zipWithIndex) yield {
             val name_items = name.split(Array(':', '|'))
-            val dsource = new DataSource( stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
+            val dsource = new OpInputSpec( stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
             val vid = stripQuotes(name_items.last)
             val vname = normalize(name_items.head)
             val dcid =
               if (vid.isEmpty) uid + s"c-$base_index$index"
               else if (vname.isEmpty) vid
               else uid + vid
-            new DataContainer(dcid, source = Some(dsource))
+            new DataContainer(dcid, optInputSpec = Some(dsource))
           }
         case Some(collection) =>
           val var_names: Array[String] =
@@ -972,23 +980,23 @@ object DataContainer extends ContainerBase {
           fragIdOpt match {
             case Some(fragId) =>
               val name_items = var_names.head.split(Array(':', '|'))
-              val dsource = new DataSource(stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache, fragIdOpt)
+              val dsource = new OpInputSpec(stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache, fragIdOpt)
               val vid = normalize(name_items.last)
               Array(
                 new DataContainer(if (vid.isEmpty) uid + s"c-$base_index"
                                   else uid + vid,
-                                  source = Some(dsource)))
+                                  optInputSpec = Some(dsource)))
             case None =>
               for ((name, index) <- var_names.zipWithIndex) yield {
                 val name_items = name.split(Array(':', '|'))
-                val dsource = new DataSource(stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
+                val dsource = new OpInputSpec(stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
                 val vid = stripQuotes(name_items.last)
                 val vname = normalize(name_items.head)
                 val dcid =
                   if (vid.isEmpty) uid + s"c-$base_index$index"
                   else if (vname.isEmpty) vid
                   else uid + vid
-                new DataContainer(dcid, source = Some(dsource))
+                new DataContainer(dcid, optInputSpec = Some(dsource))
               }
           }
       }
@@ -1003,7 +1011,7 @@ object DataContainer extends ContainerBase {
   def parseUri(uri: String): String = {
     if (uri.isEmpty) ""
     else {
-      val recognizedUrlTypes = List("file", "collection", "fragment")
+      val recognizedUrlTypes = List("file", "collection", "cache", "http")
       val uri_parts = uri.split(":")
       val url_type = normalize(uri_parts.head)
       if ( url_type.startsWith("http") ) {
@@ -1011,7 +1019,7 @@ object DataContainer extends ContainerBase {
       } else {
         if (recognizedUrlTypes.contains(url_type)) {
           val value = uri_parts.last.toLowerCase
-          if (List("collection", "fragment").contains(url_type))
+          if (List("collection", "cache").contains(url_type))
             value.stripPrefix("/").stripPrefix("/")
           else value
         } else

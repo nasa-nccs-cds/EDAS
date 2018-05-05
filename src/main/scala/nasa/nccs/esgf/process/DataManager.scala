@@ -749,7 +749,7 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
 
   def createInputSpec( dataContainer: DataContainer, domain_container_opt: Option[DomainContainer],  request: TaskRequest ): (String, Option[DataFragmentSpec]) = {
     val t0 = System.nanoTime
-    val data_source: DataSource = dataContainer.getSource
+    val data_source: OpInputSpec = dataContainer.getInputSpec
     val t1 = System.nanoTime
     val variable: CDSVariable = dataContainer.getVariable
     val t2 = System.nanoTime

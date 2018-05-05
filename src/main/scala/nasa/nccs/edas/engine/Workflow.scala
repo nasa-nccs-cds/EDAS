@@ -146,7 +146,7 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
     case _ => None
   }
 
-  def getCollectionIds: List[String] = Set( inputs.keys.flatMap( id => getDataFragmentSpec(id)).map ( _.collection.collId ).toSeq: _* ).toList
+  def getCollectionIds: List[String] = Set( inputs.keys.flatMap( id => getDataFragmentSpec(id)).map ( _.collection.id ).toSeq: _* ).toList
 
   def getGridRefInput: Option[OperationDataInput] = {
     val optGridObjectRef = getGridObjectRef
@@ -393,7 +393,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     val OptCrs = optCrsNode.flatMap( WorkflowNode(_).operation.getConfParm("crs") )
     if( OptCrs.isEmpty ) {
       val dataInputs = inputs.flatMap { case data_input: OperationDataInput => Some(data_input); case _ => None }
-      dataInputs.headOption.map( "~" + _.fragmentSpec.getCollection.collId )
+      dataInputs.headOption.map( "~" + _.fragmentSpec.getCollection.id )
     } else { OptCrs }
   }
 

@@ -541,7 +541,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val t0 = System.nanoTime
     val timeRange = vspec.section.getRange(0)
     val collection: Collection = vspec.getCollection
-    val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
+    val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.id}" ) }
     val files: Array[FileInput]  = agg.getIntersectingFiles( timeRange )
     val nTS = timeRange.length()
 //    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.max( 1, Math.round( nTS/nPartitions.toFloat ) ) }
@@ -566,7 +566,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
 
   def parallelize(template: CDRecordRDD, vspec: DirectRDDVariableSpec ): CDRecordRDD = {
     val collection: Collection = vspec.getCollection
-    val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.collId}" ) }
+    val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.id}" ) }
     val optVar = agg.findVariable( vspec.varShortName )
     val sectionParameter = template.getParameter( "section" )
     val section = vspec.section.toString()
