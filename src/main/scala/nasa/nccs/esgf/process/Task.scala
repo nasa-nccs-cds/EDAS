@@ -949,16 +949,18 @@ object DataContainer extends ContainerBase {
           val var_names: Array[String] = fullname.toString.split(',')
           val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
           val ctoks = dataPath.split('/')
-          val ctype = ctoks.head
+          val ctype = ctoks.head.stripSuffix(":")
           val cid = ctoks.last
-          val collection = ctype match {
-            case "collection" =>
-              Collections.addCollection( cid ) getOrElse {
-                throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
-              }
-            case "cache" =>
+          val collection: DataSource = if( ctype == "collection" ) {
+            Collections.addCollection(cid) getOrElse {
+              throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
+            }
+          } else if( ctype == "cache" ) {
               val cachedInput = ResultCacheManager.getResult( cid )
               if( cachedInput.isEmpty ) { throw new Exception(s"Attempt to acess a non existent cached result '$cid', results = ${ResultCacheManager.getContents.mkString(", ")}") }
+              CachedResult( cid, cachedInput.get )
+          } else {
+            throw new Exception( "Unrecognized ctype: " + ctype )
           }
           for ((name, index) <- var_names.zipWithIndex) yield {
             val name_items = name.split(Array(':', '|'))

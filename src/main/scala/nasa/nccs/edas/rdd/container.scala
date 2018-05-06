@@ -343,7 +343,8 @@ object CDRecordRDD  {
   def apply(rdd: RDD[CDRecord], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ): CDRecordRDD = new CDRecordRDD( rdd, metadata, variableRecords )
   def sortedReducePartition(op: (CDRecord,CDRecord) => CDRecord )(slices: Iterable[CDRecord]): CDRecord = {
     val nSlices = slices.size
-    slices.toSeq.sortBy( _.startTime ).fold(CDRecord.empty)(op)
+    val rv = slices.toSeq.sortBy( _.startTime ).fold(CDRecord.empty)(op)
+    rv
   }
   def reducePartition(op: (CDRecord,CDRecord) => CDRecord )(slices: Iterable[CDRecord]): CDRecord = { slices.toSeq.reduce(op) }
 
@@ -457,8 +458,8 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
 }
 
 object QueryResultCollection {
-  def apply(slice: CDRecord, metadata: Map[String,String] ): QueryResultCollection = QueryResultCollection( Array(slice), metadata )
-  def apply(records: Array[CDRecord], metadata: Map[String,String] ): QueryResultCollection = QueryResultCollection( records, metadata )
+  def apply(slice: CDRecord, metadata: Map[String,String] ): QueryResultCollection = new QueryResultCollection( Array(slice), metadata )
+  def apply(records: Array[CDRecord], metadata: Map[String,String] ): QueryResultCollection = new QueryResultCollection( records, metadata )
   def empty: QueryResultCollection = QueryResultCollection( Array.empty[CDRecord], Map.empty[String,String] )
 
 }

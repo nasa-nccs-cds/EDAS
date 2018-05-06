@@ -68,9 +68,9 @@ object RegridSpec {
 class RegridSpec( val gridFile: String, resolution: String, projection: String, val subgrid: String ) extends EDASCoordSystem( resolution, projection ) { }
 
 
-abstract class GenericOperationData(metadata: Map[String,String]) extends Serializable {
-  abstract def getSize: Long
-  def getWeight: Int = {  ( getSize / 250000 ).toInt }    // Memory size in MB
+abstract class GenericOperationData( val metadata: Map[String,String] ) extends Serializable {
+  def getSize: Long
+  def getWeight: Int = { math.max( 1, ( getSize / 25000.0 ).toInt ) }    // Memory size in 100 K
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
   def getVars: Seq[String]
   def getMetadata: Map[String,String] = metadata
@@ -82,9 +82,10 @@ class ResultWeigher extends Weigher[GenericOperationData] {
 
 object ResultCacheManager {
   private val resultMemoryCache: ConcurrentLinkedHashMap[ String, GenericOperationData ] =
-    new ConcurrentLinkedHashMap.Builder[String, GenericOperationData ].initialCapacity(1000).maximumWeightedCapacity(1000).weigher( new ResultWeigher ).build()  //  Weight = memory size in MB
+    new ConcurrentLinkedHashMap.Builder[String, GenericOperationData ].initialCapacity(10000).maximumWeightedCapacity(10000).weigher( new ResultWeigher ).build()  //  Weight = memory size in 100 K
 
-  def addResult( key: String, result: GenericOperationData ) = resultMemoryCache.put( key, result )
+  def addResult( key: String, result: GenericOperationData ) =
+    resultMemoryCache.put( key, result )
   def getResult( key: String ): Option[GenericOperationData] = Option( resultMemoryCache.get( key ) )
   def getContents: Seq[String] = resultMemoryCache.keys.toSeq
 }

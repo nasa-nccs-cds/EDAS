@@ -13,17 +13,20 @@ abstract class DataSource( val ctype: String, val id: String, val metadata: Map[
 
   def toXml: xml.Elem
   def getVariable(varName: String): CDSVariable
+  def isEmpty: Boolean
 }
 
 object CachedResult {
   def apply( id: String, genericOpData: GenericOperationData ): CachedResult = {
-    new CachedResult( "cache", id, genericOpData.getMetadata, genericOpData.getVars )
+    new CachedResult( id, genericOpData.getMetadata, genericOpData.getVars )
   }
 }
 
-class CachedResult( ctype: String, id: String, metadata: Map[String,String], vars: Seq[String] ) extends DataSource( ctype, id, metadata, vars ) {
+class CachedResult( id: String, metadata: Map[String,String], vars: Seq[String] ) extends DataSource( "cache", id, metadata, vars ) {
 
   def toXml: xml.Elem = {
     <cache id={id} title={title}> </cache>
   }
+  def isEmpty: Boolean = id.isEmpty
+  def getVariable(varName: String): CDSVariable = null
 }
