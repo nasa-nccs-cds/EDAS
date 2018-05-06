@@ -84,8 +84,7 @@ object ResultCacheManager {
   private val resultMemoryCache: ConcurrentLinkedHashMap[ String, GenericOperationData ] =
     new ConcurrentLinkedHashMap.Builder[String, GenericOperationData ].initialCapacity(10000).maximumWeightedCapacity(10000).weigher( new ResultWeigher ).build()  //  Weight = memory size in 100 K
 
-  def addResult( key: String, result: GenericOperationData ) =
-    resultMemoryCache.put( key, result )
+  def addResult( key: String, result: GenericOperationData ) = resultMemoryCache.put( key, result )
   def getResult( key: String ): Option[GenericOperationData] = Option( resultMemoryCache.get( key ) )
   def getContents: Seq[String] = resultMemoryCache.keys.toSeq
 }

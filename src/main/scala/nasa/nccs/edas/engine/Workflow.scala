@@ -429,7 +429,8 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
         case "object" =>
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, List.empty[String] ) )
         case "xml" =>
-          Some( new RDDExecutionResult("WPS", List(node.kernel), node.operation.identifier, executionResult.slice, resultId) )// TODO: serviceInstance
+          val cacheId = executionResult.results.getParameter("cacheId","")
+          Some( new RDDExecutionResult("WPS", List(node.kernel), node.operation.identifier, executionResult.slice, resultId, cacheId) )// TODO: serviceInstance
         case "file" =>
           val resultFiles: List[String] = executionMgr.getResultFilePath( executionResult, executor )
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFiles) )

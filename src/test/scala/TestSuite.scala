@@ -620,6 +620,21 @@ class DefaultTestSuite extends EDASTestSuite {
     print( find_spark_home );
   }
 
+  test("Ave-Roi-Space-GISS-R1i1p1") {
+    //  ncks -O -v tas -d lat,25,30 -d lon,20,25 -d time,45,50 ${datafile} ~/test/out/subset.nc
+    val nco_verified_result: CDFloatArray = CDFloatArray( Array(  289.0866, 290.5467, 292.9329, 294.6103, 295.5956, 294.7446   ).map(_.toFloat), Float.MaxValue )
+    val datainputs0 =
+      s"""[domain=[{"name":"d0","lat":{"start":25,"end":30,"system":"indices"},"lon":{"start":20,"end":25,"system":"indices"},"time":{"start":45,"end":50,"system":"indices"}}],
+         |  variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy","cache":"mr"}]]""".stripMargin
+    val result_node = executeTest( datainputs0 )
+    val result_data = getResultData( result_node )
+    val result_str = result_node.toString
+    println( "Op Result:       " + result_data.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    println( "Verified Result: " + nco_verified_result.getStorageArray.map(v=>f"$v%.5f").mkString(", ") )
+    assert( result_data.maxScaledDiff( nco_verified_result  )  < eps, s" Incorrect value computed for Ave")
+  }
+
   test("cache-retrieval-test") {
     //  ncks -O -v tas -d lat,25,30 -d lon,20,25 -d time,45,50 ${datafile} ~/test/out/subset.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array(  289.0866, 290.5467, 292.9329, 294.6103, 295.5956, 294.7446   ).map(_.toFloat), Float.MaxValue )
@@ -628,6 +643,7 @@ class DefaultTestSuite extends EDASTestSuite {
          |  variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
          |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy","cache":"mr"}]]""".stripMargin
     val result_node0 = executeTest( datainputs0 )
+    val result_str = result_node0.toString
     val cache_id = getCacheIds( result_node0 ).head
 
     val datainputs =
@@ -1139,7 +1155,7 @@ class EDASTestSuite extends FunSuite with Loggable with BeforeAndAfter {
     case None => -1
   }
 
-  def getCacheId( node: xml.Node ): Option[String] = node.attribute("id").map( _.text.split('-')(1) )
+  def getCacheId( node: xml.Node ): Option[String] = node.attribute("cacheId").map( _.text )
 
   def getResults( result_node: xml.Elem ): Array[Float] = {
     val data_nodes: xml.NodeSeq = getDataNodes( result_node )

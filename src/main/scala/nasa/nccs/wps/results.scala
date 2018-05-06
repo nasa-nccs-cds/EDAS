@@ -170,13 +170,13 @@ class WPSExecuteResult( val serviceInstance: String, val tvar: RDDTransientVaria
 
 abstract class WPSExecuteResponse( val serviceInstance: String ) extends WPSResponse  with Loggable {
 
-  def getData( response_syntax: ResponseSyntax.Value, id: String, array: CDFloatArray, units: String, maxSize: Int = Int.MaxValue ): xml.Elem =  getSyntax(response_syntax) match {
+  def getData( response_syntax: ResponseSyntax.Value, id: String, array: CDFloatArray, units: String, cacheId: String, maxSize: Int = Int.MaxValue ): xml.Elem =  getSyntax(response_syntax) match {
     case ResponseSyntax.WPS =>
       <wps:Data id={id}>
-        <wps:LiteralData uom={units} shape={array.getShape.mkString(",")}>  {array.mkBoundedDataString(",", maxSize)}  </wps:LiteralData>
+        <wps:LiteralData uom={units} cacheId={cacheId} shape={array.getShape.mkString(",")}>  {array.mkBoundedDataString(",", maxSize)}  </wps:LiteralData>
       </wps:Data>
     case ResponseSyntax.Generic =>
-      <data id={id} uom={units} shape={array.getShape.mkString(",")}>  {array.mkBoundedDataString(",", maxSize)}  </data>
+      <data id={id} uom={units} cacheId={cacheId} shape={array.getShape.mkString(",")}>  {array.mkBoundedDataString(",", maxSize)}  </data>
   }
 
   def getDataRef( response_syntax: ResponseSyntax.Value, id: String, resultId: String, filePaths: List[String] ): xml.Elem = getSyntax(response_syntax) match {
@@ -226,7 +226,7 @@ abstract class WPSProcessExecuteResponse( serviceInstance: String, val processes
     }
   }
 
-  def getProcessOutputs(response_syntax: ResponseSyntax.Value, process_id: String, output_id: String ): Iterable[xml.Elem] = Iterable.empty[xml.Elem]
+  def getProcessOutputs(response_syntax: ResponseSyntax.Value, process_id: String, output_id: String, cache_id: String = "" ): Iterable[xml.Elem] = Iterable.empty[xml.Elem]
   def getReferenceOutputs(response_syntax: ResponseSyntax.Value ): Iterable[xml.Elem] = Iterable.empty[xml.Elem]
 }
 
@@ -263,7 +263,7 @@ class MergedWPSExecuteResponse( serviceInstance: String, responses: Seq[WPSProce
   def getDapResultReference: Option[WPSReference] = responses.head.getDapResultReference
   if( process_ids.distinct.size != process_ids.size ) { logger.warn( "Error, non unique process IDs in process list: " + processes.mkString(", ") ) }
   val responseMap: Map[String,WPSProcessExecuteResponse] = Map( responses.flatMap( response => response.processes.map( process => ( process.identifier -> response ) ) ): _* )
-  override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, response_id: String ): Iterable[xml.Elem] = responseMap.get( process_id ) match {
+  override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, response_id: String, cache_id: String ): Iterable[xml.Elem] = responseMap.get( process_id ) match {
     case Some( response ) =>
       val syntax = getSyntax(response_syntax)
       response.getProcessOutputs( syntax, process_id, response_id );
@@ -271,15 +271,15 @@ class MergedWPSExecuteResponse( serviceInstance: String, responses: Seq[WPSProce
   }
 }
 
-class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], id: String, val result: CDRecord, resultId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  with Loggable {
-  override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
+class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], id: String, val result: CDRecord, resultId: String, cacheId: String ) extends WPSReferenceExecuteResponse( serviceInstance, processes, resultId )  with Loggable {
+  override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String, cache_id: String  ): Iterable[xml.Elem] = {
     val syntax = getSyntax(response_syntax)
-    result.elements map { case (id, array) => getData( syntax, id, array.toCDFloatArray, "TODO: units" ) }
+    result.elements map { case (id, array) => getData( syntax, id, array.toCDFloatArray, "TODO: units", cacheId ) }
   }
 }
 
 class RefExecutionResult(serviceInstance: String, process: WPSProcess, id: String, resultId: String, resultFiles: List[String] ) extends WPSReferenceExecuteResponse( serviceInstance, List(process), resultId, resultFiles )  with Loggable {
-  override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
+  override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String, cache_id: String  ): Iterable[xml.Elem] = {
     val syntax = getSyntax(response_syntax)
     Seq( getDataRef( syntax, id, resultId, resultFiles ) )
   }
@@ -393,6 +393,6 @@ class BlockingExecutionResult( serviceInstance: String, processes: List[WPSProce
   //    val results = result_tensor.mkDataString(",")
   //    <result id={id} op={idToks.head} rid={resultId.getOrElse("")}> { inputs } { grid } <data undefined={result_tensor.getInvalid.toString}> {results}  </data>  </result>
   //  }
-  override def getProcessOutputs( syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = List( getData( syntax, output_id, result_tensor, intputSpecs.head.units, 250 ) )
+  override def getProcessOutputs( syntax: ResponseSyntax.Value, process_id: String, output_id: String, cache_id: String  ): Iterable[xml.Elem] = List( getData( syntax, output_id, result_tensor, intputSpecs.head.units, cache_id, 250 ) )
 }
 

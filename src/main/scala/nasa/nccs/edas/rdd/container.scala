@@ -453,7 +453,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
         QueryResultCollection( groupedRDD.values.collect, metadata )
     }
     if( context.cacheCollection ) { ResultCacheManager.addResult( context.cacheId, queryResult ) }
-    queryResult
+    queryResult.addMetadata( "cacheId", context.cacheId )
   }
 }
 
@@ -489,6 +489,7 @@ class QueryResultCollection(val records: Array[CDRecord], metadata: Map[String,S
 
   def getConcatSlice: CDRecord = concatSlices.records.head
   def getVars: Seq[String] = records.head.elements.keys.toSeq
+  def addMetadata( key: String, value: String ): QueryResultCollection = { QueryResultCollection( records, metadata + ( key -> value ) ) }
 }
 
 object PartitionExtensionGenerator {
