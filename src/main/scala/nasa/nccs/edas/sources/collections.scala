@@ -147,7 +147,7 @@ class Collection( ctype: String, id: String, val dataPath: String, val aggregati
   override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
   def isEmpty = dataPath.isEmpty
   lazy val varNames = vars.map( varStr => varStr.split(Array(':', '|')).head )
-  def getGrid( varName: String ) = _grids.getOrElseUpdate( varName,  CDGrid( getRequiredAggregation(varName), dataPath ) )
+  override def getGrid( varName: String ) = _grids.getOrElseUpdate( varName,  CDGrid( getRequiredAggregation(varName), dataPath ) )
   def getAggregation( varName: String ): Option[Aggregation] = aggregations.get(varName)
   def getRequiredAggregation( varName: String ): Aggregation = getAggregation( varName ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${varName} in collection ${id}") )
 

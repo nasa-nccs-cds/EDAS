@@ -36,7 +36,9 @@ object CDGrid extends Loggable {
     if( !Files.exists( Paths.get( aggregation.gridFilePath ) ) ) { createGridFile( aggregation ) }
     CDGrid.create( aggregation.id, aggregation.gridFilePath )
   }
-
+  def apply( id: String, gridFilePath: String): CDGrid = {
+    CDGrid.create( id, gridFilePath )
+  }
   def create(name: String, gridFilePath: String): CDGrid = {
     val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 5.toString, true)
     val coordSystems: List[CoordinateSystem] = gridDS.getCoordinateSystems.toList

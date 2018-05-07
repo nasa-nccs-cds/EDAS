@@ -599,6 +599,7 @@ object Aggregation extends Loggable {
     val nReadProcessors = Math.min( Runtime.getRuntime.availableProcessors, maxCores )
     logger.info("Processing %d files with %d workers".format(fileHeaders.length, nReadProcessors))
     val bw = new BufferedWriter(new FileWriter(aggFile))
+    val gridFilePath = aggFile.toString.split('.').dropRight(1).mkString(".") + ".nc"
     val startTime = fileHeaders.head.startValue
     val calendar = fileHeaders.head.calendar
     val endTime = fileHeaders.last.endValue
@@ -609,10 +610,11 @@ object Aggregation extends Loggable {
     try {
       bw.write( s"P; time.nrows; ${fileHeaders.length}\n")
       bw.write( s"P; time.start; ${startTime}\n")
+      bw.write( s"P; gridfile.path; ${gridFilePath}\n")
       bw.write( s"P; time.end; ${endTime}\n")
       bw.write( s"P; time.calendar; ${calendar.name}\n")
       bw.write( s"P; base.path; ${fileHeaders.head.dataLocation.toString}\n")
-      bw.write( s"P; num.files; ${fileHeaders.length}\n")
+      bw.write( s"P; vnum.files; ${fileHeaders.length}\n")
       for (attr <- fileMetadata.attributes ) { bw.write( s"P; ${attr.getFullName}; ${attr.getStringValue} \n") }
       for (coordAxis <- fileMetadata.coordinateAxes; ctype = coordAxis.getAxisType.getCFAxisName ) {
         if(ctype.equals("Z") ) {  bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n") }

@@ -1,6 +1,6 @@
 package nasa.nccs.edas.sources
 
-import nasa.nccs.cdapi.cdm.CDSVariable
+import nasa.nccs.cdapi.cdm.{CDGrid, CDSVariable}
 import nasa.nccs.esgf.process.GenericOperationData
 import nasa.nccs.utilities.Loggable
 
@@ -14,6 +14,7 @@ abstract class DataSource( val ctype: String, val id: String, val metadata: Map[
   def toXml: xml.Elem
   def getVariable(varName: String): CDSVariable
   def isEmpty: Boolean
+  def getGrid( varName: String ) = CDGrid( varName + "-" + id, metadata.getOrElse("gridfile.path",throw new Exception( s"Can't find grid file for variable ${varName}")) )
 }
 
 object CachedResult {

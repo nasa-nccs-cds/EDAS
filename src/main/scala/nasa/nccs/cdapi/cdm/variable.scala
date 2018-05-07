@@ -7,7 +7,7 @@ import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.rdd.{CDRecord, QueryResultCollection}
-import nasa.nccs.edas.sources.{Aggregation, Collection}
+import nasa.nccs.edas.sources.{Aggregation, Collection, DataSource}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
 import ucar.{ma2, nc2, unidata}
 import ucar.nc2.dataset.{CoordinateAxis1D, _}
