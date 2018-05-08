@@ -405,7 +405,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
 object GridSection extends Loggable {
   def apply( variable: CDSVariable, roiOpt: Option[List[DomainAxis]] ): GridSection = {
     val t0 = System.nanoTime
-    val grid = variable.collection.getGrid( variable.name )
+    val grid = variable.getGrid
     val t1 = System.nanoTime
     val axes = variable.getCoordinateAxesList
     val t2 = System.nanoTime

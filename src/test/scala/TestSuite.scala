@@ -740,8 +740,9 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[domain=[{"name":"d0","lat":{"start":-75,"end":75,"system":"values"},"time":{"start":"1990-01-01T00:00:00Z","end":"1994-12-31T23:59:00Z","system":"timestamps"}}],
          | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
-         | operation=[{ "name":"SparkML.svd", "input":"v1", "modes":"4", "compu":"true", "grid":"uniform", "shape": "15,36", "res":"10,10" }]]""".stripMargin
+         | operation=[{ "name":"SparkML.svd", "input":"v1", "modes":"4", "grid":"uniform", "shape": "15,36", "res":"10,10" }]]""".stripMargin
     val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
+    print( result_node.toString )
   }
 
   test("binning-yearlyAve-GISS") {

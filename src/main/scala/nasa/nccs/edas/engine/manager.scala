@@ -223,6 +223,8 @@ object EDASExecutionManager extends Loggable {
           targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
       }
 
+//      println( " %%% Writing result to file " + path )
+
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
         resultId, path, slice.elements.keys.mkString(","), dimsMap.mapValues( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
         coordAxes.map { caxis => "%s: (%s)".format(caxis.getShortName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString ) )
@@ -294,7 +296,7 @@ object EDASExecutionManager extends Loggable {
       for (newCoordVar <- newCoordVars) {
         newCoordVar match {
           case (coordVar, coordData) =>
-            logger.info("Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString))
+            logger.info(" #CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString))
             writer.write(coordVar, coordData)
         }
       }

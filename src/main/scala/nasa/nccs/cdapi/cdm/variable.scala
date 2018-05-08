@@ -22,6 +22,34 @@ import scala.util.matching.Regex
 
 object BoundsRole extends Enumeration { val Start, End = Value }
 
+abstract class CDSBaseVariable( val name: String ) extends Loggable with Serializable {
+  def getAttributeValue( key: String, default_value: String  ): String
+  def getAttributeValue( key: String  ): String
+  def toXml: xml.Node
+  def toXmlHeader: xml.Node
+  def getMissing: Float
+  def getGrid: CDGrid
+  lazy val description = getAttributeValue( "description", "" )
+  lazy val units = getAttributeValue( "units", "" )
+  lazy val dims = getAttributeValue( "dims", "" ).split(' ')
+  lazy val shape = getAttributeValue( "shape", "" ).split(',').map( _.toInt )
+  lazy val fullname = getAttributeValue( "fullname", "" )
+  lazy val section = new ma2.Section( shape )
+  lazy val missing = getMissing
+  def getFullSection: ma2.Section = section
+  override def toString = "\nCDSVariable(%s) { description: '%s', shape: %s, dims: %s }".format(name, description, shape.mkString("[", " ", "]"), dims.mkString("[", ",", "]") )
+  def normalize(sval: String): String = sval.stripPrefix("\"").stripSuffix("\"").toLowerCase
+
+  def getCoordinateAxes: List[ CoordinateAxis1D ] = {
+    dims.flatMap( dim => getGrid.findCoordinateAxis( dim ).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) ) ).toList
+  }
+  def getCoordinateAxis( cname: String ): Option[CoordinateAxis1D] = {
+    val caxis = getGrid.findCoordinateAxis(cname)
+    caxis.map( CDSVariable.toCoordAxis1D(_) )
+  }
+  def getCoordinateAxesList = getGrid.getCoordinateAxes
+}
+
 object CDSVariable extends Loggable {
   def toCoordAxis1D(coordAxis: CoordinateAxis): CoordinateAxis1D = coordAxis match {
     case coordAxis1D: CoordinateAxis1D =>
@@ -39,29 +67,21 @@ object CDSVariable extends Loggable {
   def findAttributeValue( attributes: Map[String,nc2.Attribute], keyRegExp: String, default_value: String ): String = filterAttrMap( attributes, keyRegExp.r, default_value )
 }
 
-class CDSVariable( val name: String, val collection: Collection ) extends Loggable with Serializable {
+class CDSVariable( name: String, val collection: Collection ) extends CDSBaseVariable( name ) {
   import CDSVariable._
   val attributes: Map[String,nc2.Attribute] = nc2.Attribute.makeMap( collection.getVariableMetadata( name ) ).toMap
-  val missing = findAttributeValue( attributes, "^.*missing.*$", "" ) match {
-    case "" =>
-      logger.warn( "Can't find missing value, attributes = " + attributes.keys.mkString(", ") )
-      Float.MaxValue;
-    case s =>
-      logger.info( "Found missing attribute value: " + s )
-      s.toFloat
-  }
-  def getAggregation: Aggregation = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") )
   def getAttributeValue( key: String, default_value: String  ) =  attributes.get( key ) match { case Some( attr_val ) => attr_val.toString.split('=').last.replace('"',' ').trim; case None => default_value }
-  val description = getAttributeValue( "description", "" )
-  val units = getAttributeValue( "units", "" )
-  val dims = getAttributeValue( "dims", "" ).split(' ')
-  val shape = getAttributeValue( "shape", "" ).split(',').map( _.toInt )
-  val fullname = getAttributeValue( "fullname", "" )
-  val section = new ma2.Section( shape )
-  def getFullSection: ma2.Section = section
-  override def toString = "\nCDSVariable(%s) { description: '%s', shape: %s, dims: %s, }\n  --> Variable Attributes: %s".format(name, description, shape.mkString("[", " ", "]"), dims.mkString("[", ",", "]"), attributes.mkString("\n\t\t", "\n\t\t", "\n"))
-  def normalize(sval: String): String = sval.stripPrefix("\"").stripSuffix("\"").toLowerCase
   def getAttributeValue( name: String ): String =  attributes.getOrElse(name, new nc2.Attribute(new unidata.util.Parameter("",""))).getValue(0).toString
+
+  def getMissing() = findAttributeValue(attributes, "^.*missing.*$", "") match {
+      case "" =>
+        logger.warn("Can't find missing value, attributes = " + attributes.keys.mkString(", "))
+        Float.MaxValue;
+      case s =>
+        logger.info("Found missing attribute value: " + s)
+        s.toFloat
+    }
+  def getAggregation: Aggregation = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") )
   def toXml: xml.Node =
     <variable name={name} fullname={fullname} description={description} shape={shape.mkString("[", " ", "]")} units={units}>
       { for( dim: nc2.Dimension <- collection.getGrid(name).dimensions; name=dim.getFullName; dlen=dim.getLength ) yield getCoordinateAxis( name ) match {
@@ -81,17 +101,11 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
       }
   }
 
-  //  def read( section: ma2.Section ) = ncVariable.read(section)
-  def getTargetGrid( fragSpec: DataFragmentSpec ): TargetGrid = fragSpec.targetGridOpt match { case Some(targetGrid) => targetGrid;  case None => new TargetGrid( this, Some(fragSpec.getAxes) ) }
-  def getCoordinateAxes: List[ CoordinateAxis1D ] = {
-    dims.flatMap( dim => collection.getGrid(name).findCoordinateAxis( dim ).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) ) ).toList
-  }
+  def getGrid: CDGrid = collection.getGrid(name)
 
-  def getCoordinateAxis( cname: String ): Option[CoordinateAxis1D] = {
-    val caxis = collection.getGrid(name).findCoordinateAxis(cname)
-    caxis.map( CDSVariable.toCoordAxis1D(_) )
-  }
-  def getCoordinateAxesList = collection.getGrid(name).getCoordinateAxes
+  //  def read( section: ma2.Section ) = ncVariable.read(section)
+//  def getTargetGrid( fragSpec: DataFragmentSpec ): TargetGrid = fragSpec.targetGridOpt match { case Some(targetGrid) => targetGrid;  case None => new TargetGrid( this, Some(fragSpec.getAxes) ) }
+
 }
 
 class InputConsumer( val operation: OperationContext ) {
