@@ -244,7 +244,7 @@ object EDASExecutionManager extends Loggable {
             val coordDataType = if( coordAxis.getAxisType == AxisType.Time ) { DataType.DOUBLE } else { coordAxis.getDataType }
             val dims = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).toList
             val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, dims )
-            if( coordVar == null ) { None }
+            if( coordVar == null ) { logger.info("#CV# X2"); None }
             else {
               for (attr <- coordAxis.getAttributes; if attr != null) { writer.addVariableAttribute(coordVar, attr) }
               if (coordAxis.getAxisType == AxisType.Time) {
@@ -271,7 +271,7 @@ object EDASExecutionManager extends Loggable {
               }
               Some(coordVar, data)
             }
-          case None => None
+          case None => logger.info("#CV# X1"); None
         }
       }).flatten
 
@@ -291,12 +291,9 @@ object EDASExecutionManager extends Loggable {
 
       writer.create()
 
-      for (newCoordVar <- newCoordVars) {
-        newCoordVar match {
-          case (coordVar, coordData) =>
-            logger.info("Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString))
-            writer.write(coordVar, coordData)
-        }
+      for ((coordVar, coordData) <- newCoordVars) {
+        logger.info("#CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString))
+        writer.write(coordVar, coordData)
       }
       variables.foreach { case (variable, maskedTensor) => {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
