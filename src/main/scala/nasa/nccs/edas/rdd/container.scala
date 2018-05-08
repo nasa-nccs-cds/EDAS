@@ -7,7 +7,7 @@ import java.util.{Date, TimeZone}
 import breeze.linalg
 import nasa.nccs.caching.BatchSpec
 import nasa.nccs.cdapi.cdm.{CDGrid, OperationDataInput}
-import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, FastMaskedArray, HeapFltArray}
+import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, FastMaskedArray, HeapFltArray, RDDVariableSpec}
 import org.apache.commons.lang.ArrayUtils
 import nasa.nccs.cdapi.tensors.{CDArray, CDFloatArray}
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
@@ -537,42 +537,49 @@ class VariableRecord( val varName: String, val collection: String, val gridFileP
 
 class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggable {
 
-  def parallelize( kernelContext: KernelContext, vspec: DirectRDDVariableSpec ): CDRecordRDD = {
+  def parallelize( kernelContext: KernelContext, varspec: RDDVariableSpec ): CDRecordRDD = {
     val t0 = System.nanoTime
-    val timeRange = vspec.section.getRange(0)
-    val collection: Collection = vspec.getCollection
-    val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.id}" ) }
-    val files: Array[FileInput]  = agg.getIntersectingFiles( timeRange )
+    val timeRange = varspec.section.getRange(0)
     val nTS = timeRange.length()
-//    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.max( 1, Math.round( nTS/nPartitions.toFloat ) ) }
-    val nTSperPart = if( files.length >= nPartitions ) { -1 } else { Math.ceil(  nTS/nPartitions.toFloat ).toInt }
-    val nUsableParts = if (  nTSperPart == -1 ) { nPartitions } else { Math.ceil( nTS / nTSperPart.toFloat ).toInt }
-    val partGens: Array[TimeSlicePartitionGenerator]  = files.map( fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), vspec.metadata, nTSperPart ) )
-    val partitions = partGens.flatMap( _.getTimeSlicePartitions )
-    val spart0 = partitions.headOption.fold("")(_.toString)
-    logger.info( " @DSX FIRST Partition: " + spart0 )
-    logger.info( " @DSX LAST Partition:  " + partitions.lastOption.fold("")(_.toString) )
-    val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize( partitions )
-    val t1 = System.nanoTime
-    val sliceRdd: RDD[CDRecord] =  slicePartitions.mapPartitions( iter => iter.flatMap( _.getSlices ) )
-    val optVar = agg.findVariable( vspec.varShortName )
-    if( KernelContext.workflowMode == WorkflowMode.profiling ) { val rddSize = sliceRdd.count() }
-    logger.info( s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nPartGens = ${partGens.length}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, prep time = ${(t1-t0)/1e9} , total time = ${(System.nanoTime-t0)/1e9} ")
-    val first = sliceRdd.first
-    val count = sliceRdd.count
-    CDRecordRDD( sliceRdd, agg.parms, Map( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap)) ) )
+    varspec match {
+      case vspec: DirectRDDVariableSpec =>
+        val collection: Collection = vspec.getCollection
+        val agg: Aggregation = collection.getAggregation(vspec.varShortName) getOrElse {
+          throw new Exception(s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.id}")
+        }
+        val files: Array[FileInput] = agg.getIntersectingFiles(timeRange)
+        val nTSperPart = if (files.length >= nPartitions) { -1 } else { Math.ceil(nTS / nPartitions.toFloat).toInt }
+        val nUsableParts = if (nTSperPart == -1) { nPartitions } else { Math.ceil(nTS / nTSperPart.toFloat).toInt }
+        val partGens: Array[TimeSlicePartitionGenerator] = files.map(fileInput => TimeSlicePartitionGenerator(vspec.uid, vspec.varShortName, vspec.section, fileInput, agg.parms.getOrElse("base.path", ""), vspec.metadata, nTSperPart))
+        val partitions = partGens.flatMap(_.getTimeSlicePartitions)
+        val spart0 = partitions.headOption.fold("")(_.toString)
+        logger.info(" @DSX FIRST Partition: " + spart0)
+        logger.info(" @DSX LAST Partition:  " + partitions.lastOption.fold("")(_.toString))
+        val slicePartitions: RDD[TimeSlicePartition] = sc.sparkContext.parallelize(partitions)
+        val t1 = System.nanoTime
+        val sliceRdd: RDD[CDRecord] = slicePartitions.mapPartitions(iter => iter.flatMap(_.getSlices))
+        val optVar = agg.findVariable(vspec.varShortName)
+        if (KernelContext.workflowMode == WorkflowMode.profiling) { val rddSize = sliceRdd.count() }
+        logger.info(s" @XX Parallelize: timeRange = ${timeRange.toString}, nTS = ${nTS}, nPartGens = ${partGens.length}, Available Partitions = ${nPartitions}, Usable Partitions = ${nUsableParts}, prep time = ${(t1 - t0) / 1e9} , total time = ${(System.nanoTime - t0) / 1e9} ")
+        val first = sliceRdd.first
+        val count = sliceRdd.count
+        CDRecordRDD(sliceRdd, agg.parms, Map(vspec.uid -> VariableRecord(vspec, collection, optVar.fold(Map.empty[String, String])(_.toMap))))
+    }
   }
 
 
-  def parallelize(template: CDRecordRDD, vspec: DirectRDDVariableSpec ): CDRecordRDD = {
-    val collection: Collection = vspec.getCollection
-    val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.id}" ) }
-    val optVar = agg.findVariable( vspec.varShortName )
+  def parallelize(template: CDRecordRDD, varspec: RDDVariableSpec ): CDRecordRDD = {
     val sectionParameter = template.getParameter( "section" )
-    val section = vspec.section.toString()
-    val basePath = agg.parms.get("base.path")
-    val rdd = template.rdd.mapPartitionsWithIndex( ( index, tSlices ) => PartitionExtensionGenerator(index).extendPartition( tSlices.toSeq, agg.getFilebase, vspec.uid, vspec.varShortName, section, agg.getBasePath ).toIterator )
-    CDRecordRDD( rdd, agg.parms, template.variableRecords ++ Seq( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap) ) ) )
+    val section = varspec.section.toString()
+    varspec match {
+      case vspec: DirectRDDVariableSpec =>
+        val collection: Collection = vspec.getCollection
+        val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.id}" ) }
+        val basePath = agg.parms.get("base.path")
+        val optVar = agg.findVariable( vspec.varShortName )
+        val rdd = template.rdd.mapPartitionsWithIndex( ( index, tSlices ) => PartitionExtensionGenerator(index).extendPartition( tSlices.toSeq, agg.getFilebase, vspec.uid, vspec.varShortName, section, agg.getBasePath ).toIterator )
+        CDRecordRDD( rdd, agg.parms, template.variableRecords ++ Seq( vspec.uid -> VariableRecord( vspec, collection, optVar.fold(Map.empty[String,String])(_.toMap) ) ) )
+    }
   }
 }
 
@@ -842,7 +849,7 @@ class RDDContainer extends Loggable {
   def nPartitions: Int = _vault.fold(0)(_.nPartitions)
   def nodeList: Array[String] = _vault.fold( Array.empty[String] )( _.nodeList )
 
-  private def _extendRDD(generator: RDDGenerator, rdd: CDRecordRDD, vSpecs: List[DirectRDDVariableSpec]  ): CDRecordRDD = {
+  private def _extendRDD(generator: RDDGenerator, rdd: CDRecordRDD, vSpecs: List[RDDVariableSpec]  ): CDRecordRDD = {
     if( vSpecs.isEmpty ) { rdd }
     else {
       val vspec = vSpecs.head
@@ -851,9 +858,9 @@ class RDDContainer extends Loggable {
     }
   }
 
-  def extendVault( generator: RDDGenerator, vSpecs: List[DirectRDDVariableSpec] ) = { vault.update( _extendRDD( generator, _vault.get.value, vSpecs ), s"Extend for Inputs: [ ${vSpecs.map(_.uid).mkString(", ")} ]" ) }
+  def extendVault( generator: RDDGenerator, vSpecs: List[RDDVariableSpec] ) = { vault.update( _extendRDD( generator, _vault.get.value, vSpecs ), s"Extend for Inputs: [ ${vSpecs.map(_.uid).mkString(", ")} ]" ) }
 
-  def addFileInputs( sparkContext: CDSparkContext, kernelContext: KernelContext, vSpecs: List[DirectRDDVariableSpec] ): Unit = {
+  def addFileInputs( sparkContext: CDSparkContext, kernelContext: KernelContext, vSpecs: List[RDDVariableSpec] ): Unit = {
     val newVSpecs = vSpecs.filter( vspec => ! contents.contains(vspec.uid) )
     if( newVSpecs.nonEmpty ) {
       val generator = new RDDGenerator( sparkContext, BatchSpec.nParts )

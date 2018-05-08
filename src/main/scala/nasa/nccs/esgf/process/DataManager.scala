@@ -4,7 +4,7 @@ import java.io.{File, PrintWriter}
 import com.googlecode.concurrentlinkedhashmap.{ConcurrentLinkedHashMap, Weigher}
 import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.cdapi.cdm._
-import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, HeapDblArray, HeapLongArray}
+import nasa.nccs.cdapi.data.{DirectRDDVariableSpec, HeapDblArray, HeapLongArray, RDDVariableSpec}
 import nasa.nccs.cdapi.tensors.{CDByteArray, CDDoubleArray, CDFloatArray}
 import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, WorkflowNode}
 import nasa.nccs.edas.engine.spark.CDSparkContext
@@ -126,7 +126,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
       }
   }
 
-  def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[DirectRDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
+  def addFileInputs( serverContext: ServerContext, kernelCx: KernelContext, vSpecs: List[RDDVariableSpec], section: Option[CDSection], batchIndex: Int ): Unit = {
     _inputsRDD.addFileInputs( serverContext.spark, kernelCx, vSpecs )
   }
 
