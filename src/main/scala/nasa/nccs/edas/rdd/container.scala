@@ -420,6 +420,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
       new SlidingRDD[CDRecord]( rdd, windowSize, step )
     }
   }
+
   def reduce(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, optGroupBy: Option[TSGroup], ordered: Boolean = false ): QueryResultCollection = {
     val filteredRdd = rdd.map( _.selectElements( elemFilter ) )
     if (ordered) optGroupBy match {
