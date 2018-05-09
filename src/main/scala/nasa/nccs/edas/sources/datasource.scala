@@ -1,7 +1,7 @@
 package nasa.nccs.edas.sources
 
 import nasa.nccs.cdapi.cdm.{CDGrid, CDSVariable}
-import nasa.nccs.esgf.process.GenericOperationData
+import nasa.nccs.esgf.process.{GenericOperationData, GridContext, ResultCacheElement}
 import nasa.nccs.utilities.Loggable
 
 import scala.collection.immutable.Map
@@ -18,12 +18,12 @@ abstract class DataSource( val ctype: String, val id: String, val metadata: Map[
 }
 
 object CachedResult {
-  def apply( id: String, genericOpData: GenericOperationData ): CachedResult = {
-    new CachedResult( id, genericOpData.getMetadata, genericOpData.getVars )
+  def apply( id: String, cachedResult: ResultCacheElement ): CachedResult = {
+    new CachedResult( id, cachedResult.result.getMetadata, cachedResult.result.getVars, cachedResult.grid )
   }
 }
 
-class CachedResult( id: String, metadata: Map[String,String], vars: Seq[String] ) extends DataSource( "cache", id, metadata, vars ) {
+class CachedResult( id: String, metadata: Map[String,String], vars: Seq[String], val grid: GridContext ) extends DataSource( "cache", id, metadata, vars ) {
 
   def toXml: xml.Elem = {
     <cache id={id} title={title}> </cache>

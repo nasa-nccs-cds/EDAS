@@ -431,7 +431,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
     val filteredRdd = rdd.map( _.selectElements( elemFilter ) )
     val queryResult: QueryResultCollection = if (context.ordered) context.optGroupBy match {
       case None =>
-        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ) ) }
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ), kcontext.grid ) }
         val partialProduct = filteredRdd.mapPartitions( slices => Iterator( CDRecordRDD.sortedReducePartition(op)(slices.toIterable) ) ).collect
         val slice: CDRecord = postOp( context.postOpId )(
           CDRecordRDD.sortedReducePartition(op)(partialProduct)
@@ -439,20 +439,20 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
         QueryResultCollection( slice, metadata)
       case Some( groupBy ) =>
         val partialProduct = filteredRdd.groupBy( groupBy.group(calendar) ).mapValues( CDRecordRDD.sortedReducePartition(op) ).map(item => postOp( context.postOpId )( item._2 ) )
-        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(partialProduct,metadata,variableRecords ) ) }
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(partialProduct,metadata,variableRecords ), kcontext.grid ) }
         QueryResultCollection( partialProduct.collect.sortBy( _.startTime ), metadata )
     }
     else context.optGroupBy match {
       case None =>
-        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ) ) }
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ), kcontext.grid ) }
         val slice: CDRecord = postOp( context.postOpId )( filteredRdd.treeReduce(op) )
         QueryResultCollection( slice, metadata )
       case Some( groupBy ) =>
         val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceRddByGroup( filteredRdd, op, context.postOpId, groupBy, calendar )
-        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(groupedRDD.map(_._2),metadata,variableRecords ) ) }
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(groupedRDD.map(_._2),metadata,variableRecords ), kcontext.grid ) }
         QueryResultCollection( groupedRDD.values.collect, metadata )
     }
-    if( context.cacheCollection ) { ResultCacheManager.addResult( context.cacheId, queryResult ) }
+    if( context.cacheCollection ) { ResultCacheManager.addResult( context.cacheId, queryResult, kcontext.grid ) }
     queryResult.addMetadata( "cacheId", context.cacheId )
   }
 }

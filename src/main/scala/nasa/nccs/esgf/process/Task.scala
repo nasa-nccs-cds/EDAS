@@ -956,9 +956,9 @@ object DataContainer extends ContainerBase {
               throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
             }
           } else if( ctype == "cache" ) {
-              val cachedInput = ResultCacheManager.getResult( cid )
+              val cachedInput: Option[ResultCacheElement] = ResultCacheManager.getResult( cid )
               if( cachedInput.isEmpty ) { throw new Exception(s"Attempt to acess a non existent cached result '$cid', results = ${ResultCacheManager.getContents.mkString(", ")}") }
-              CachedResult( cid, cachedInput.get )
+              val cacheElement =  CachedResult( cid, cachedInput.get )
           } else {
             throw new Exception( "Unrecognized ctype: " + ctype )
           }
