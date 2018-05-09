@@ -215,16 +215,17 @@ object EDASExecutionManager extends Loggable {
       val t3 = System.nanoTime()
       val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
       val t4 = System.nanoTime()
-      val coordAxes: List[CoordinateAxis] = gridFileOpt match {
-        case Some( gridFilePath ) =>
-          val gridDSet = NetcdfDataset.openDataset(gridFilePath)
-          gridDSet.getCoordinateAxes.toList :+ timeCoordAxis
-        case None =>
-          targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
-      }
+      val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
+//      val coordAxes: List[CoordinateAxis] = gridFileOpt match {
+//        case Some( gridFilePath ) =>
+//          val gridDSet = NetcdfDataset.openDataset(gridFilePath)
+//          gridDSet.getCoordinateAxes.toList :+ timeCoordAxis
+//        case None =>
+//          targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
+//      }
 
 //      println( " %%% Writing result to file " + path )
-
+      logger.info(" #CV#  Grid file: " + gridFileOpt.getOrElse("") )
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
         resultId, path, slice.elements.keys.mkString(","), dimsMap.mapValues( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
         coordAxes.map { caxis => "%s: (%s)".format(caxis.getShortName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString ) )
@@ -296,7 +297,7 @@ object EDASExecutionManager extends Loggable {
       for (newCoordVar <- newCoordVars) {
         newCoordVar match {
           case (coordVar, coordData) =>
-            logger.info(" #CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString))
+            logger.info(" #CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s, data sample = [%f,%f,...]".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString, coordData.getFloat(0), coordData.getFloat(1)))
             writer.write(coordVar, coordData)
         }
       }

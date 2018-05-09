@@ -76,16 +76,18 @@ abstract class GenericOperationData( val metadata: Map[String,String] ) extends 
   def getMetadata: Map[String,String] = metadata
 }
 
-class ResultWeigher extends Weigher[GenericOperationData] {
-  def	weightOf(result: GenericOperationData): Int = result.getWeight
+class ResultWeigher extends Weigher[ResultCacheElement] {
+  def	weightOf(element: ResultCacheElement): Int = element.result.getWeight
 }
 
-object ResultCacheManager {
-  private val resultMemoryCache: ConcurrentLinkedHashMap[ String, GenericOperationData ] =
-    new ConcurrentLinkedHashMap.Builder[String, GenericOperationData ].initialCapacity(10000).maximumWeightedCapacity(10000).weigher( new ResultWeigher ).build()  //  Weight = memory size in 100 K
+case class ResultCacheElement( result: GenericOperationData, grid: GridContext )
 
-  def addResult( key: String, result: GenericOperationData ) = resultMemoryCache.put( key, result )
-  def getResult( key: String ): Option[GenericOperationData] = Option( resultMemoryCache.get( key ) )
+object ResultCacheManager {
+  private val resultMemoryCache: ConcurrentLinkedHashMap[ String, ResultCacheElement ] =
+    new ConcurrentLinkedHashMap.Builder[String, ResultCacheElement ].initialCapacity(10000).maximumWeightedCapacity(10000).weigher( new ResultWeigher ).build()  //  Weight = memory size in 100 K
+
+  def addResult( key: String, result: GenericOperationData, grid: GridContext ) = resultMemoryCache.put( key, ResultCacheElement(result,grid) )
+  def getResult( key: String ): Option[ResultCacheElement] = Option( resultMemoryCache.get( key ) )
   def getContents: Seq[String] = resultMemoryCache.keys.toSeq
 }
 

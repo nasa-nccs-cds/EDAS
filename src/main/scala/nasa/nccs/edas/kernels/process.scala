@@ -392,7 +392,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
       val axes = kcontext.getAxes
       val result: QueryResultCollection =  kcontext.profiler.profile[QueryResultCollection]( "Kernel.reduce" ) (() => {
           val rcontext = ReduceContext( postOpId, kcontext.getGroup, ordered, kcontext.getCacheId, kcontext.getCacheStatus )
-          input.reduce( getReduceOp(kcontext), elemFilter(rid), rcontext )
+          input.reduce( getReduceOp(kcontext), elemFilter(rid), rcontext, kcontext )
         })
       result.sort
     }
