@@ -243,8 +243,9 @@ object EDASExecutionManager extends Loggable {
           case Some(range) =>
             val coordDataType = if( coordAxis.getAxisType == AxisType.Time ) { DataType.DOUBLE } else { coordAxis.getDataType }
             val dims = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).toList
-            val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, dims )
-            if( coordVar == null ) { logger.info("#CV# X2"); None }
+            val newVar = writer.addVariable( null, coordAxis.getFullName, coordAxis.getDataType, dims )
+            val coordVar: nc2.Variable = if( newVar == null ) { writer.findVariable(coordAxis.getFullName) } else { newVar }
+            if( coordVar == null ) { logger.info("#CV# X2: " + coordAxis.getFullName ); None }
             else {
               for (attr <- coordAxis.getAttributes; if attr != null) { writer.addVariableAttribute(coordVar, attr) }
               if (coordAxis.getAxisType == AxisType.Time) {
