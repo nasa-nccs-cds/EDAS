@@ -2,7 +2,7 @@ import logging, os, getpass
 
 lname = "worker"
 lFilename = "edas-python-" + lname
-log_file = os.path.expanduser('/tmp/' + getpass.getuser() + '/logs/' + lFilename + "-" + str(os.getpid()) +'.log')
+log_file = os.path.expanduser('~/.edas/logs/' + lFilename + "-" + str(os.getpid()) +'.log')
 logger = logging.getLogger()
 formatter = logging.Formatter(lname + ': %(asctime)s %(levelname)s %(message)s')
 handler = logging.FileHandler( log_file )
