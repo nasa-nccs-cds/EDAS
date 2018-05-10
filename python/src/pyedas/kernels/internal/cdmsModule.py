@@ -3,7 +3,8 @@ from pyedas.edasArray import cdmsArray, npArray
 import cdms2, time, os, cdutil
 from pyedas.messageParser import mParse
 import numpy as np
-import regrid2
+import regrid2, threading
+from datetime import datetime
 
 def sa2f( sarray ):
     try: return [ float(x) for x in sarray ]
@@ -101,6 +102,8 @@ class RegridKernel(CDMSKernel):
         if( len(_inputs) == 0 ):
             self.logger.info( "No inputs to operation; returning empty result" )
         else:
+            tid = threading.current_thread().ident
+            self.logger.info(" @RRR@ - " + str(tid) + " Starting regrid operation for input variables: {0} at time {1}".format( str( _inputs.keys() ), str(datetime.now())))
             cdms2.setAutoBounds(2)
             t0 = time.time()
             mdata = task.metadata;     """:type : dict[str,str] """
@@ -115,13 +118,13 @@ class RegridKernel(CDMSKernel):
                 if( _input is None ):
                     raise Exception(" Can't find variable id {0} ({1}) in inputs {2} ".format( vid, input_id, str( _inputs.keys() ) ))
                 else:
-                    self.logger.info( "Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}, mdata: {4}".format( vid, _input.name, _input.collection, _input.gridFile, mdata_keys ) )
+                    self.logger.info( "@RRR@ - " + str(tid) + " Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}, mdata: {4}".format( vid, _input.name, _input.collection, _input.gridFile, mdata_keys ) )
                     variable = _input.getVariable()
                     ingrid = _input.getGrid()
 #                    self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
                     toGrid = self.getOutGrid( mdata, _inputs, ingrid )
                     if( not ingrid == toGrid ):
-                        self.logger.info( " Regridding Variable {0} using grid {1} ".format( variable.id, toGrid.getType() ) )
+                        self.logger.info( "@RRR@ - " + str(tid) + " Regridding Variable {0} using grid {1} ".format( variable.id, toGrid.getType() ) )
                         if self._debug:
                             self.logger.info( " >> Input Data Sample: [ {0} ]".format( ', '.join(  [ str( variable.data.flat[i] ) for i in range(20,90) ] ) ) )
                             self.logger.info( " >> Input Variable Shape: {0}, Grid Shape: {1}, Regrid Method: {2}, Grid Type: {3} ".format( str(variable.shape), str([len(ingrid.getLatitude()),len(ingrid.getLongitude())] ), method, toGrid.getType() ))
@@ -140,7 +143,7 @@ class RegridKernel(CDMSKernel):
                         self.logger.info( " >> Gridded Data Sample ( variable.regrid op time = {0} ): [ {1} ]".format(  (tr1 - tr0), ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
                         results.append( self.createResult( jobId, result_var, _input, task ) )
             t1 = time.time()
-            self.logger.info(" @RRR@ Completed regrid operation for input variables: {0} in time {1}".format( str( _inputs.keys() ), (t1 - t0)))
+            self.logger.info(" @RRR@ - " + str(tid) + " Completed regrid operation for input variables: {0} at time {1}, elapsed: {2}".format( str( _inputs.keys() ), str(datetime.now()), (t1 - t0)))
     #        log_file.close()
         return results
 
