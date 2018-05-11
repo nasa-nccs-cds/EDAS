@@ -215,13 +215,18 @@ object EDASExecutionManager extends Loggable {
       val t3 = System.nanoTime()
       val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
       val t4 = System.nanoTime()
-      val coordAxes: List[CoordinateAxis] = gridFileOpt match {
-        case Some( gridFilePath ) =>
-          val gridDSet = NetcdfDataset.openDataset(gridFilePath)
-          gridDSet.getCoordinateAxes.toList :+ timeCoordAxis
-        case None =>
-          targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
-      }
+      val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
+//      val coordAxes: List[CoordinateAxis] = gridFileOpt match {
+//        case Some( gridFilePath ) =>
+//          val gridDSet = NetcdfDataset.openDataset(gridFilePath)
+//          gridDSet.getCoordinateAxes.toList :+ timeCoordAxis
+//        case None =>
+//          targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
+//      }
+
+
+//      println( " %%% Writing result to file " + path )
+      logger.info(" #CV#  Grid file: " + gridFileOpt.getOrElse("") )
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
         resultId, path, slice.elements.keys.mkString(","), dimsMap.mapValues( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
@@ -243,8 +248,9 @@ object EDASExecutionManager extends Loggable {
           case Some(range) =>
             val coordDataType = if( coordAxis.getAxisType == AxisType.Time ) { DataType.DOUBLE } else { coordAxis.getDataType }
             val dims = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).toList
-            val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getFullName, coordAxis.getDataType, dims )
-            if( coordVar == null ) { None }
+            val newVar = writer.addVariable( null, coordAxis.getFullName, coordAxis.getDataType, dims )
+            val coordVar: nc2.Variable = if( newVar == null ) { writer.findVariable(coordAxis.getFullName) } else { newVar }
+            if( coordVar == null ) { logger.info("#CV# X2: " + coordAxis.getFullName ); None }
             else {
               for (attr <- coordAxis.getAttributes; if attr != null) { writer.addVariableAttribute(coordVar, attr) }
               if (coordAxis.getAxisType == AxisType.Time) {
@@ -271,7 +277,7 @@ object EDASExecutionManager extends Loggable {
               }
               Some(coordVar, data)
             }
-          case None => None
+          case None => logger.info("#CV# X1"); None
         }
       }).flatten
 
@@ -288,15 +294,12 @@ object EDASExecutionManager extends Loggable {
         ( variable, maskedTensor )
       }
       writer.addGroupAttribute( null, new Attribute("nFiles", nFiles) )
-
       writer.create()
 
-      for (newCoordVar <- newCoordVars) {
-        newCoordVar match {
-          case (coordVar, coordData) =>
-            logger.info("Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString))
-            writer.write(coordVar, coordData)
-        }
+      for ((coordVar, coordData) <- newCoordVars) {
+        logger.info("#CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s, data sample = [%f,%f,...]".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString, coordData.getFloat(0), coordData.getFloat(1)))
+        writer.write(coordVar, coordData)
+
       }
       variables.foreach { case (variable, maskedTensor) => {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
