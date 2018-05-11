@@ -382,7 +382,10 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     val mapresult: CDRecordRDD = context.profiler.profile("mapReduce.mapRDD") (() => { mapRDD(input, context) } )
     val test = mapresult.rdd.first
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
-    val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge || orderedReduce(context) ) } )
+    val rv = context.profiler.profile("mapReduce.reduce") ( () => {
+      logger.info( s" #M# Beginning mapReduce, kernel =  ${context.operation.identifier} " )
+      reduce( mapresult, context, batchIndex, merge || orderedReduce(context) )
+    } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
   }
@@ -835,9 +838,10 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       })
 
       val reprocessed_input_map = resultArrays.toMap
-      logger.info("Gateway[T:%s]: Executed operation %s, time: %.2f".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9))
       val result_arrays = reprocessed_input_map ++ acceptable_array_map.map { case (key, value) => ( context.operation.output(key), value) }
-      CDRecord( inputs.startTime, inputs.endTime, result_arrays, inputs.metadata + ("gridspec" -> gridFile) )
+      val rv = CDRecord( inputs.startTime, inputs.endTime, result_arrays, inputs.metadata + ("gridspec" -> gridFile) )
+      logger.info(" #M# Gateway[T:%s]: Executed operation %s, time: %.2f".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9))
+      rv
     }
   })
 }
