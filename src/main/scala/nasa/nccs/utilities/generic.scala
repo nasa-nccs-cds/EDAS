@@ -46,7 +46,7 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   var newline_state = true
   val logFileDir: Path = Paths.get( System.getProperty("user.home"), ".edas", "logs" )
   logFileDir.toFile.mkdirs()
-  val logFilePath: Path = logFileDir.resolve( LNAME + LID + ".log" )
+  val logFilePath: Path = logFileDir.resolve( LNAME + ip.getHostName + LID + ".log" )
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
   def timestamp = java.util.Calendar.getInstance().getTime
   def timeStr = s"(${timeFormatter.format(timestamp)})"
