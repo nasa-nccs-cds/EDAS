@@ -1,11 +1,12 @@
 import logging, os, getpass
+import socket
 
 lname = "worker"
-lFilename = "edas-python-" + lname
-log_file = os.path.expanduser('/tmp/' + getpass.getuser() + '/logs/' + lFilename + "-" + str(os.getpid()) +'.log')
+lFilename = "edas-python-" + lname + "-" + socket.gethostname() + "-" + str(os.getpid())
+log_file = os.path.expanduser('/tmp/' + getpass.getuser() + '/logs/' + lFilename  +'.log')
 logger = logging.getLogger()
 formatter = logging.Formatter(lname + ': %(asctime)s %(levelname)s %(message)s')
 handler = logging.FileHandler( log_file )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
