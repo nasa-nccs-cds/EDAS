@@ -277,7 +277,7 @@ object EDASExecutionManager extends Loggable {
               }
               Some(coordVar, data)
             }
-          case None => logger.info("#CV# X1"); None
+          case None => logger.info("#CV# X1: " + coordAxis.getShortName ); None
         }
       }).flatten
 
@@ -297,9 +297,9 @@ object EDASExecutionManager extends Loggable {
       writer.create()
 
       for ((coordVar, coordData) <- newCoordVars) {
-        logger.info("#CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s, data sample = [%f,%f,...]".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString, coordData.getFloat(0), coordData.getFloat(1)))
+        logger.info("#CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString ))
+        try { logger.info("#CV# Coord data sample = [%f,%f,...]".format( coordData.getFloat(0), coordData.getFloat(1))) } catch { case ex: Exception => logger.info("#CV# MISSING Coord data!" ) }
         writer.write(coordVar, coordData)
-
       }
       variables.foreach { case (variable, maskedTensor) => {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
