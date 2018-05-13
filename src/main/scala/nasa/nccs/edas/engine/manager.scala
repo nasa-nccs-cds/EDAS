@@ -298,8 +298,10 @@ object EDASExecutionManager extends Loggable {
 
       for ((coordVar, coordData) <- newCoordVars) {
         logger.info("#CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString ))
-        try { logger.info("#CV# Coord data sample = [%f,%f,...]".format( coordData.getFloat(0), coordData.getFloat(1))) } catch { case ex: Exception => logger.info("#CV# MISSING Coord data!" ) }
-        writer.write(coordVar, coordData)
+        try {
+          logger.info("#CV# Coord data sample = [%f,%f,...]".format( coordData.getFloat(0), coordData.getFloat(1)))
+          writer.write(coordVar, coordData)
+        } catch { case ex: Exception => logger.info("#CV# MISSING Coord data!" ) }
       }
       variables.foreach { case (variable, maskedTensor) => {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
