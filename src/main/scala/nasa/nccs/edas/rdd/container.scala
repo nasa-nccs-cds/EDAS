@@ -451,7 +451,7 @@ object QueryResultCollection {
 
 }
 
-case class QueryResultCollection(records: Array[CDRecord], metadata: Map[String,String] ) extends Serializable {
+case class QueryResultCollection( records: Array[CDRecord], metadata: Map[String,String] ) extends Serializable {
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
   def section( section: CDSection ): QueryResultCollection = {
     QueryResultCollection( records.flatMap( _.section(section) ), metadata )
