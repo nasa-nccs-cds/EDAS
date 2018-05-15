@@ -186,8 +186,11 @@ class DefaultTestSuite extends EDASTestSuite {
   }}
 
   test("pyRegridTest_MERRA")  { if(test_regrid) {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"uniform","shape":"32,64"}]]"""
-    val result_node = executeTest(datainputs )
+    val datainputs =
+      s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],
+         | variable=[{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v1","domain":"d0"}],
+         | operation=[{"name":"CDSpark.noOp","input":"v1","domain":"d0","grid":"uniform","shape":"32,64"}]]""".stripMargin
+    val result_node = executeTest( datainputs, Map( "saveLocalFile" -> "true" ) )
     val result_array = CDFloatArray( getResultData( result_node ) )
     println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
     println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
