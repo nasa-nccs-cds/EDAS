@@ -99,14 +99,14 @@ object KernelContext extends Loggable {
 }
 
 class KernelContext( val operation: OperationContext, val grids: Map[String,Option[GridContext]], val sectionMap: Map[String,Option[CDSection]], val domains: Map[String,DomainContainer],
-                     _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec], val profiler: EventAccumulator ) extends Loggable with Serializable with ScopeContext {
+                     _configuration: Map[String,String], val crsOpt: Option[String], val regridSpecOpt: Option[RegridSpec], val profiler: EventAccumulator,
+                     val _designatedRecordStartTime: Long = Long.MaxValue, private var _variableRecs: Map[String,VariableRecord] = Map.empty[String,VariableRecord] ) extends Loggable with Serializable with ScopeContext {
   import KernelContext._
   val trsOpt = getTRS
   val timings: mutable.SortedSet[(Float, String)] = mutable.SortedSet.empty
   val configuration: Map[String,String] = crsOpt.map(crs => _configuration + ("crs" -> crs)) getOrElse _configuration
   val _weightsOpt: Option[String] = operation.getConfiguration.get("weights")
   lazy val axes: AxisIndices = grid.getAxisIndices(config("axes", ""))
-  private var _variableRecs: Map[String,VariableRecord] = Map.empty[String,VariableRecord]
   def getGroup: Option[TSGroup]  = operation.config("groupBy") map TSGroup.getGroup
   def nonCyclicGroupOp: Boolean = getGroup.fold( false )( _.isNonCyclic )
   def getResultId( inputId: String ): String = operation.output(inputId)
@@ -118,6 +118,12 @@ class KernelContext( val operation: OperationContext, val grids: Map[String,Opti
   private def getCRS: Option[String] = getGridConfiguration("crs")
   private def getTRS: Option[String] = getGridConfiguration("trs")
   def commutativeReduction: Boolean = if (getAxes.includes(0)) { true } else { false }
+
+  def setDesignatedRecord( record: CDRecord ): KernelContext = {
+    new  KernelContext( operation, grids, sectionMap, domains, _configuration, crsOpt, regridSpecOpt, profiler, record.startTime, _variableRecs )
+  }
+  def isDesignatedRecord( record: CDRecord ): Boolean = { record.startTime == _designatedRecordStartTime }
+
   lazy val grid: GridContext = getTargetGridContext
   def addVariableRecords( varRecs: Map[String,VariableRecord] ): KernelContext = { _variableRecs = _variableRecs ++ varRecs; this }
   def getInputVariableRecord(vid: String): Option[VariableRecord] = _variableRecs.get(vid)
@@ -363,7 +369,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
       logger.info( s" @S@: Kernel ${id}.map Data Input Sample: \n  @S@:   ${slices.map ( _.elements.map{ case (key,array) =>
         s" $key: [ ${ array.data.mkString(", ") } ]" }.mkString("; ")).mkString("\n  @S@:   ") }")
     }
-    input.map( map(context) )
+    input.map( map( context.setDesignatedRecord( input.first ) ) )
   }
 
   def mapReduce(input: CDRecordRDD, context: KernelContext, batchIndex: Int, merge: Boolean = false ): QueryResultCollection = {
@@ -373,7 +379,10 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
 //    val test = input.rdd.first
 //    val sz = input.rdd.count
     if( KernelContext.workflowMode == WorkflowMode.profiling ) { mapresult.exe }
-    val rv = context.profiler.profile("mapReduce.reduce") ( () => { reduce( mapresult, context, batchIndex, merge || orderedReduce(context) ) } )
+    val rv = context.profiler.profile("mapReduce.reduce") ( () => {
+      logger.info( s" #M# Beginning mapReduce, kernel =  ${context.operation.identifier} " )
+      reduce( mapresult, context, batchIndex, merge || orderedReduce(context) )
+    } )
     logger.info(" #M# Executed mapReduce, time: %.2f, metadata = { %s }".format( (System.nanoTime-t0)/1.0E9, rv.getMetadata.mkString("; ") ))
     rv
   }
@@ -813,7 +822,7 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
 
       val (gridFile, resultArrays) = context.profiler.profile(s"CDMSRegridKernel.WorkerExecution(${KernelContext.getProcessAddress})")(() => {
         val rID = UID()
-        val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid)
+        val context_metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) + ("gridSpec" -> regridSpec.gridFile, "gridSection" -> regridSpec.subgrid, "createGridFile" -> context.isDesignatedRecord(inputs).toString )
         logger.info(s" RRR Sending regrid request to python worker, op=${context.operation.identifier}, rid = ${rID}, keys = [ ${regrid_array_map.keys.mkString(", ")} ], operation metadata: { ${context_metadata.mkString(", ")} }")
         worker.sendRequest("python.cdmsModule.regrid-" + rID, regrid_array_map.keys.toArray, context_metadata)
         var gFile = ""
@@ -827,9 +836,10 @@ class CDMSRegridKernel extends zmqPythonKernel( "python.cdmsmodule", "regrid", "
       })
 
       val reprocessed_input_map = resultArrays.toMap
-      logger.info("Gateway[T:%s]: Executed operation %s, time: %.2f".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9))
       val result_arrays = reprocessed_input_map ++ acceptable_array_map.map { case (key, value) => ( context.operation.output(key), value) }
-      CDRecord( inputs.startTime, inputs.endTime, inputs.levelIndex, result_arrays, inputs.metadata + ("gridspec" -> gridFile) )
+      val rv = CDRecord( inputs.startTime, inputs.endTime, inputs.levelIndex, result_arrays, inputs.metadata + ("gridspec" -> gridFile) )
+      logger.info(" #M# Gateway[T:%s]: Executed operation %s, time: %.2f".format(Thread.currentThread.getId, context.operation.identifier, (System.nanoTime - t0) / 1.0E9))
+      rv
     }
   })
 }

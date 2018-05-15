@@ -97,7 +97,6 @@ class RegridKernel(CDMSKernel):
         :type task: Task
         :type _inputs: dict[str,npArray]
         """
-#        log_file = open("/tmp/edasadm/logs/debug_log_file.txt","w")
         results = []
         if( len(_inputs) == 0 ):
             self.logger.info( "No inputs to operation; returning empty result" )
@@ -121,7 +120,6 @@ class RegridKernel(CDMSKernel):
                     self.logger.info( "@RRR@ - " + str(tid) + " Getting input for variable {0}, name: {1}, collection: {2}, gridFile: {3}, mdata: {4}".format( vid, _input.name, _input.collection, _input.gridFile, mdata_keys ) )
                     variable = _input.getVariable()
                     ingrid = _input.getGrid()
-#                    self.logger.info(" >>  in variable grid shape: " + str(variable.getGrid().shape))
                     toGrid = self.getOutGrid( mdata, _inputs, ingrid )
                     if( not ingrid == toGrid ):
                         self.logger.info( "@RRR@ - " + str(tid) + " Regridding Variable {0} using grid {1} ".format( variable.id, toGrid.getType() ) )
@@ -131,20 +129,24 @@ class RegridKernel(CDMSKernel):
                         tr0 = time.time()
                         result_var = variable.regrid(toGrid, regridTool=regridTool, regridMethod=method)
 
-                        for iaxis in variable.getAxisList():
+                        if self._debug:
+                          for iaxis in variable.getAxisList():
                             self.logger.info(" #RGA Input axis: {0}, startVal: {1}".format(iaxis.axis, iaxis[0]))
 
-                        for raxis in result_var.getAxisList():
+                          for raxis in result_var.getAxisList():
                             self.logger.info(" #RGA Regrid axis: {0}, startVal: {1}".format(raxis.axis, raxis[0]))
 
-        #                self.logger.info(" #RGA toGrid Latitude startVal: " + toGrid.getLatitude()[0] )
-
                         tr1 = time.time()
+                        createGridFile = str( mdata.get("createGridFile","false") ).startswith("tru")
                         self.logger.info( " >> Gridded Data Sample ( variable.regrid op time = {0} ): [ {1} ]".format(  (tr1 - tr0), ', '.join(  [ str( result_var.data.flat[i] ) for i in range(20,90) ] ) ) )
-                        results.append( self.createResult( jobId, result_var, _input, task ) )
+                        results.append( self.createResult( jobId, result_var, _input, task, createGridFile ) )
             t1 = time.time()
             self.logger.info(" @RRR@ - " + str(tid) + " Completed regrid operation for input variables: {0} at time {1}, elapsed: {2}".format( str( _inputs.keys() ), str(datetime.now()), (t1 - t0)))
+<<<<<<< HEAD
     #        log_file.close()
+=======
+
+>>>>>>> master
         return results
 
 class AverageKernel(CDMSKernel):

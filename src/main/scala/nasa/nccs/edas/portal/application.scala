@@ -122,7 +122,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     } catch  {
       case e: Throwable =>
         logger.error( "Caught execution error: " + e.getMessage )
-        e.printStackTrace()
+        logger.error( "\n" + e.getStackTrace().mkString("\n") )
         executionCallback.failure( e.getMessage )
         new ErrorReport( clientId, jobId, e.getClass.getSimpleName + ": " + e.getMessage )
     }

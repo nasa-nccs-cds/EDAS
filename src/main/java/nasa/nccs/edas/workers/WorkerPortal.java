@@ -37,7 +37,7 @@ public abstract class WorkerPortal extends Thread {
     public Worker getWorker() throws Exception {
         Worker worker = availableWorkers.poll();
         if( worker == null ) { worker =  newWorker(); }
-        else { logger.info( " #PW# ("+ this.getProcessorAddress() + "): Starting new Task with existing worker " + worker.id() ); }
+        else { logger.info( " #PW# ("+ this.getProcessorAddress() + "): Starting new Task with existing worker " + worker.id() + ", # workers = " + String.valueOf(getNumWorkers()) ); }
         busyWorkers.add( worker );
         return worker;
     }

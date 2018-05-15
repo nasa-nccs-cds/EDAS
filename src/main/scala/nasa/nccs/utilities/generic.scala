@@ -2,6 +2,7 @@ package nasa.nccs.utilities
 
 import java.io.{File, PrintWriter}
 import java.lang.management.ManagementFactory
+import java.net.InetAddress
 import java.nio.file.attribute.{FileAttribute, PosixFilePermission, PosixFilePermissions}
 import java.util.jar.JarFile
 import java.nio.file.{Files, Path, Paths}
@@ -39,13 +40,13 @@ import scala.collection.mutable
 //}
 
 class Logger( val name: String, val test: Boolean, val master: Boolean ) extends Serializable {
-  val LNAME = if( test ) name + "-test" else name + "-"
-  val LID = if( master ) "master-" + UID().uid else UID().uid
+  val ip = InetAddress.getLocalHost
+  val LNAME = if( test ) name + "-test-" else name + "-"
+  val LID = if( master ) "-master-" + UID().uid else  "-worker-" + UID().uid
   var newline_state = true
-//  val logFileDir: Path = Paths.get( "/tmp", System.getProperty("user.name"), "logs" )
   val logFileDir: Path = Paths.get( System.getProperty("user.home"), ".edas", "logs" )
   logFileDir.toFile.mkdirs()
-  val logFilePath: Path = logFileDir.resolve( LNAME + LID + ".log" ) // Paths.get( "/tmp", System.getProperty("user.name"), "logs", LNAME + LID + ".log" )
+  val logFilePath: Path = logFileDir.resolve( LNAME + ip.getHostName + LID + ".log" )
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
   def timestamp = java.util.Calendar.getInstance().getTime
   def timeStr = s"(${timeFormatter.format(timestamp)})"

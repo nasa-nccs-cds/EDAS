@@ -15,7 +15,7 @@
     </appender>
 
     <logger name="info" level="INFO" />
-    <logger name="debug" level="DEBUG" />
+    <logger name="debug" level="INFO" />
 
     <root level="WARN">
         <appender-ref ref="FILE" />

@@ -388,6 +388,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   val calendar: Calendar = Calendar.get( metadata.getOrElse("time.calendar","default"))
   def cache() = rdd.cache()
   def nSlices = rdd.count
+  def first: CDRecord = rdd.first
   def exe: CDRecordRDD = { rdd.cache; rdd.count; this }
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
   def section( section: CDSection ): CDRecordRDD = CDRecordRDD( rdd.flatMap( _.section(section) ), metadata, variableRecords )
@@ -427,6 +428,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
       new SlidingRDD[CDRecord]( rdd, windowSize, step )
     }
   }
+
   def reduce(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, context: ReduceContext, kcontext: KernelContext ): QueryResultCollection = {
     val filteredRdd = rdd.map( _.selectElements( elemFilter ) )
     val queryResult: QueryResultCollection = if (context.ordered) context.optGroupBy match {

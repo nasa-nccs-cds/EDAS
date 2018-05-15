@@ -959,6 +959,7 @@ object DataContainer extends ContainerBase {
               val cachedInput: Option[ResultCacheElement] = ResultCacheManager.getResult( cid )
               if( cachedInput.isEmpty ) { throw new Exception(s"Attempt to acess a non existent cached result '$cid', results = ${ResultCacheManager.getContents.mkString(", ")}") }
               val cacheElement =  CachedResult( cid, cachedInput.get )
+              cacheElement
           } else {
             throw new Exception( "Unrecognized ctype: " + ctype )
           }

@@ -139,7 +139,7 @@ class IEDAS(object):
         formatter = logging.Formatter('\t\t %(message)s')
         handler.setFormatter(formatter)
         logger.addHandler(handler)
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
         return logger
 
     def getLogFile( self, index ):
