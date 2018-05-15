@@ -18,12 +18,10 @@ case class CoordAxis( name: String, ctype: String, units: String, maxVal: Double
 
 object Grid extends Loggable {
   def apply( fileResourcePath: String ): Grid = {
-    try {
       val url = getClass.getResource(fileResourcePath).toString
       val ncDataset: NetcdfDataset = NetcdfDataset.openDataset(url)
       val axes = ncDataset.getCoordinateAxes.map( cAxis => CoordAxis( cAxis ) )
       new Grid( axes.toList )
-    }
   }
 }
 
