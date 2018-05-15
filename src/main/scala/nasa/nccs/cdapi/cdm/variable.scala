@@ -57,7 +57,7 @@ object CDSVariable extends Loggable {
       coordAxis1D
     case _ => throw new IllegalStateException("CDSVariable: 2D Coord axes not yet supported: " + coordAxis.getClass.getName)
   }
-  def empty = new CDSVariable( null, null )
+  def empty = new CDSVariable( null, null, Map.empty[String,nc2.Attribute] )
   def key_equals(key_regex: Regex)(map_item: (String, nc2.Attribute)): Boolean = {
     key_regex.findFirstIn(map_item._1) match { case Some(x) => true; case None => false; }
   }
@@ -67,9 +67,10 @@ object CDSVariable extends Loggable {
   def findAttributeValue( attributes: Map[String,nc2.Attribute], keyRegExp: String, default_value: String ): String = filterAttrMap( attributes, keyRegExp.r, default_value )
 }
 
-class CDSVariable( name: String, val collection: Collection ) extends CDSBaseVariable( name ) {
+//
+
+class CDSVariable( name: String, val grid: CDGrid, val attributes: Map[String,nc2.Attribute] ) extends CDSBaseVariable( name ) {
   import CDSVariable._
-  val attributes: Map[String,nc2.Attribute] = nc2.Attribute.makeMap( collection.getVariableMetadata( name ) ).toMap
   def getAttributeValue( key: String, default_value: String  ) =  attributes.get( key ) match { case Some( attr_val ) => attr_val.toString.split('=').last.replace('"',' ').trim; case None => default_value }
   def getAttributeValue( name: String ): String =  attributes.getOrElse(name, new nc2.Attribute(new unidata.util.Parameter("",""))).getValue(0).toString
 
@@ -81,10 +82,10 @@ class CDSVariable( name: String, val collection: Collection ) extends CDSBaseVar
         logger.info("Found missing attribute value: " + s)
         s.toFloat
     }
-  def getAggregation: Aggregation = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") )
+//  def getAggregation: Aggregation = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") )
   def toXml: xml.Node =
     <variable name={name} fullname={fullname} description={description} shape={shape.mkString("[", " ", "]")} units={units}>
-      { for( dim: nc2.Dimension <- collection.getGrid(name).dimensions; name=dim.getFullName; dlen=dim.getLength ) yield getCoordinateAxis( name ) match {
+      { for( dim: nc2.Dimension <- grid.dimensions; name=dim.getFullName; dlen=dim.getLength ) yield getCoordinateAxis( name ) match {
           case None=> <dimension name={name} length={dlen.toString}/>
           case Some(axis)=>
               val units = axis.getAxisType match { case AxisType.Time =>{EDTime.units} case x => axis.getUnitsString }
@@ -95,13 +96,13 @@ class CDSVariable( name: String, val collection: Collection ) extends CDSBaseVar
     </variable>
 
   def toXmlHeader: xml.Node = {
-      collection.getGrid(name).getVariable(name) match {
+    grid.getVariable(name) match {
         case Some( (index, variable) ) =>   <variable name={name} fullname={fullname} description={description} units={units} shape={shape.mkString("[", " ", "]")} dims={variable.getDimensionsString}/>
         case None =>                        <variable name={name} fullname={fullname} description={description} units={units} shape={shape.mkString("[", " ", "]")} />
       }
   }
 
-  def getGrid: CDGrid = collection.getGrid(name)
+  def getGrid: CDGrid = grid
 
   //  def read( section: ma2.Section ) = ncVariable.read(section)
 //  def getTargetGrid( fragSpec: DataFragmentSpec ): TargetGrid = fragSpec.targetGridOpt match { case Some(targetGrid) => targetGrid;  case None => new TargetGrid( this, Some(fragSpec.getAxes) ) }

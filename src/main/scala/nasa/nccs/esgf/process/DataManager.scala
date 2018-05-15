@@ -68,11 +68,10 @@ object RegridSpec {
 class RegridSpec( val gridFile: String, resolution: String, projection: String, val subgrid: String ) extends EDASCoordSystem( resolution, projection ) { }
 
 
-abstract class GenericOperationData( val metadata: Map[String,String] ) extends Serializable {
+abstract class GenericOperationData( val metadata: Map[String,String], val variableRecords: Map[String,VariableRecord] ) extends Serializable {
   def getSize: Long
   def getWeight: Int = { math.max( 1, ( getSize / 25000.0 ).toInt ) }    // Memory size in 100 K
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
-  def getVars: Seq[String]
   def getMetadata: Map[String,String] = metadata
 }
 
@@ -80,13 +79,13 @@ class ResultWeigher extends Weigher[ResultCacheElement] {
   def	weightOf(element: ResultCacheElement): Int = element.result.getWeight
 }
 
-case class ResultCacheElement( result: GenericOperationData, grid: GridContext )
+case class ResultCacheElement( result: GenericOperationData  )
 
 object ResultCacheManager {
   private val resultMemoryCache: ConcurrentLinkedHashMap[ String, ResultCacheElement ] =
     new ConcurrentLinkedHashMap.Builder[String, ResultCacheElement ].initialCapacity(10000).maximumWeightedCapacity(10000).weigher( new ResultWeigher ).build()  //  Weight = memory size in 100 K
 
-  def addResult( key: String, result: GenericOperationData, grid: GridContext ) = resultMemoryCache.put( key, ResultCacheElement(result,grid) )
+  def addResult( key: String, result: GenericOperationData ) = resultMemoryCache.put( key, ResultCacheElement(result) )
   def getResult( key: String ): Option[ResultCacheElement] = Option( resultMemoryCache.get( key ) )
   def getContents: Seq[String] = resultMemoryCache.keys.toSeq
 }
@@ -583,25 +582,25 @@ class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblAr
   }
 }
 
-class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None ) extends CDSVariable( variable.name, variable.collection ) {
-  val grid = GridSection( variable, roiOpt )
+class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None ) extends CDSVariable( variable.name, variable.grid, variable.attributes ) {
+  val gridSection = GridSection( variable, roiOpt )
   val dbg = 1
   def toBoundsString = roiOpt.map( _.map( _.toBoundsString ).mkString( "{ ", ", ", " }") ).getOrElse("")
-  def getRank = grid.getRank
-  def getGridSpec: String  = grid.getGridSpec
-  def getGridFile: String  = grid.getGridFile
-//  def getCalendarDate ( idx: Int, context: String ): CalendarDate = grid.getCalendarDate(idx,context)
-  def getDims: IndexedSeq[String] = grid.axes.map( _.coordAxis.getDimension(0).getFullName )
+  def getRank = gridSection.getRank
+  def getGridSpec: String  = gridSection.getGridSpec
+  def getGridFile: String  = gridSection.getGridFile
+//  def getCalendarDate ( idx: Int, context: String ): CalendarDate = gridSection.getCalendarDate(idx,context)
+  def getDims: IndexedSeq[String] = gridSection.axes.map( _.coordAxis.getDimension(0).getFullName )
 
-  def addSectionMetadata( section: ma2.Section ): ma2.Section = grid.addRangeNames( section )
+  def addSectionMetadata( section: ma2.Section ): ma2.Section = gridSection.addRangeNames( section )
 
   def getSubGrid( section: ma2.Section ): TargetGrid = {
-    assert( section.getRank == grid.getRank, "Section with wrong rank for subgrid: %d vs %d ".format( section.getRank, grid.getRank) )
+    assert( section.getRank == gridSection.getRank, "Section with wrong rank for subgrid: %d vs %d ".format( section.getRank, gridSection.getRank) )
     val subgrid_axes = section.getRanges.map( r => new DomainAxis( DomainAxis.fromCFAxisName(r.getName), r.first, r.last, "indices" ) )
     new TargetGrid( variable, Some(subgrid_axes.toList)  )
   }
 
-  //  def getAxisIndices( axisCFNames: String ): Array[Int] = for(cfName <- axisCFNames.toArray) yield grid.getAxisSpec(cfName.toString).map( _.index ).getOrElse(-1)
+  //  def getAxisIndices( axisCFNames: String ): Array[Int] = for(cfName <- axisCFNames.toArray) yield gridSection.getAxisSpec(cfName.toString).map( _.index ).getOrElse(-1)
 
   //  def getPotentialAxisIndices( axisConf: List[OperationSpecs], flatten: Boolean = false ): AxisIndices = {
   //      val axis_ids = mutable.HashSet[Int]()
@@ -615,23 +614,23 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
   //    }
 
   def getAxisIndices( axisConf: String ): AxisIndices = new AxisIndices( axisIds=axisConf.map( ch => getAxisIndex(ch.toString ) ).toSet )
-  def getAxisIndex( cfAxisName: String ): Int = grid.getAxisSpec( cfAxisName.toLowerCase ).map( gcs => gcs.index ).getOrElse( throw new Exception( "Unrecognized axis name ( should be 'x', 'y', 'z', or 't' ): " + cfAxisName ) )
-  def getCFAxisName( dimension_index: Int ): String = grid.getAxisSpec( dimension_index ).getCFAxisName
+  def getAxisIndex( cfAxisName: String ): Int = gridSection.getAxisSpec( cfAxisName.toLowerCase ).map( gcs => gcs.index ).getOrElse( throw new Exception( "Unrecognized axis name ( should be 'x', 'y', 'z', or 't' ): " + cfAxisName ) )
+  def getCFAxisName( dimension_index: Int ): String = gridSection.getAxisSpec( dimension_index ).getCFAxisName
 
   def getAxisData( axis: Char, section: ma2.Section ): Option[( Int, ma2.Array )] = {
-    grid.getAxisSpec(axis.toString).map(axisSpec => {
+    gridSection.getAxisSpec(axis.toString).map(axisSpec => {
       val range = section.getRange(axisSpec.index)
       axisSpec.index -> axisSpec.coordAxis.read( List( range) )
     })
   }
 
   def getAxisData( axis: Char ): Option[( Int, ma2.Array )] = {
-    grid.getAxisSpec(axis.toString).map(axisSpec => {
+    gridSection.getAxisSpec(axis.toString).map(axisSpec => {
       axisSpec.index -> axisSpec.coordAxis.read()
     })
   }
   def getSpatialAxisData( axis: Char ): Option[( Int, HeapDblArray )] = {
-    grid.getAxisSpec(axis.toString) match {
+    gridSection.getAxisSpec(axis.toString) match {
       case Some(axisSpec) => axisSpec.coordAxis.getAxisType match {
         case AxisType.Time => None
         case x => Some(axisSpec.index -> HeapDblArray(axisSpec.coordAxis.read(), Array(0), axisSpec.getMetadata, variable.missing))
@@ -641,7 +640,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
   }
 
   def coordValuesToIndices( axis: Char, values: Array[Float] ): Array[Int] = {
-    grid.getAxisSpec(axis.toString) match {
+    gridSection.getAxisSpec(axis.toString) match {
       case Some(axisSpec) => axisSpec.coordAxis.getAxisType match {
         case AxisType.Time =>
           val data =  HeapLongArray( axisSpec.coordAxis.read(), Array(0), axisSpec.getMetadata, variable.missing )
@@ -655,7 +654,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
   }
 
   def getTimeAxisData: Option[ HeapLongArray ] = {
-    grid.getAxisSpec("t") match {
+    gridSection.getAxisSpec("t") match {
       case Some(axisSpec) => axisSpec.coordAxis.getAxisType match {
         case AxisType.Time => Some( HeapLongArray( axisSpec.coordAxis.read(), Array(0), axisSpec.getMetadata, variable.missing ) )
         case x => None
@@ -663,11 +662,11 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
       case None => None
     }
   }
-  def getTimeCoordAxis: Option[ CoordinateAxis1D ] = grid.getAxisSpec("t").map( _.coordAxis )
+  def getTimeCoordAxis: Option[ CoordinateAxis1D ] = gridSection.getAxisSpec("t").map( _.coordAxis )
 
   def getBounds( section: ma2.Section ): Option[Array[Double]] = {
-    val xrangeOpt: Option[Array[Double]] = Option( section.find("X") ) flatMap ( (r: ma2.Range) => grid.getAxisSpec("X").map( (gs: GridCoordSpec) => gs.getBounds(r) ) )
-    val yrangeOpt: Option[Array[Double]] = Option( section.find("Y") ) flatMap ( (r: ma2.Range) => grid.getAxisSpec("y").map(( gs: GridCoordSpec) => gs.getBounds(r) ) )
+    val xrangeOpt: Option[Array[Double]] = Option( section.find("X") ) flatMap ( (r: ma2.Range) => gridSection.getAxisSpec("X").map( (gs: GridCoordSpec) => gs.getBounds(r) ) )
+    val yrangeOpt: Option[Array[Double]] = Option( section.find("Y") ) flatMap ( (r: ma2.Range) => gridSection.getAxisSpec("y").map(( gs: GridCoordSpec) => gs.getBounds(r) ) )
     xrangeOpt.flatMap( xrange => yrangeOpt.map( yrange => Array( xrange(0), xrange(1), yrange(0), yrange(1) )) )
   }
 
@@ -692,7 +691,7 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
   def getAxisData( fragSpec: DataFragmentSpec, axis: Char ): Option[( Int, ma2.Array )] = {
     val variable: CDSVariable = fragSpec.getVariable
     fragSpec.targetGridOpt.flatMap(targetGrid =>
-      targetGrid.grid.getAxisSpec(axis.toString).map(axisSpec => {
+      targetGrid.gridSection.getAxisSpec(axis.toString).map(axisSpec => {
         val range = fragSpec.roi.getRange(axisSpec.index)
         axisSpec.index -> axisSpec.coordAxis.read( List( range) )
       })
@@ -732,7 +731,7 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
   //    val t1 = System.nanoTime
   //    val variable = getVariable( fragSpec.collection, fragSpec.varname )
   //    val targetGrid = fragSpec.targetGridOpt match { case Some(tg) => tg; case None => new TargetGrid( variable, Some(fragSpec.getAxes) ) }
-  //    val newFragmentSpec = targetGrid.createFragmentSpec( variable, targetGrid.grid.getSubSection(new_domain_container.axes),  new_domain_container.mask )
+  //    val newFragmentSpec = targetGrid.createFragmentSpec( variable, targetGrid.gridSection.getSubSection(new_domain_container.axes),  new_domain_container.mask )
   //    val rv = baseFragment.cutIntersection( newFragmentSpec.roi )
   //    val t2 = System.nanoTime
   //    logger.info( " GetSubsetT: %.4f %.4f".format( (t1-t0)/1.0E9, (t2-t1)/1.0E9 ) )
@@ -750,8 +749,8 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
     val maskOpt: Option[String] = domain_container_opt.flatMap( domain_container => domain_container.mask )
     val fragRoiOpt = data_source.fragIdOpt.map( fragId => DataFragmentKey(fragId).getRoi )
     val domain_mdata = domain_container_opt.map( _.metadata ).getOrElse(Map.empty)
-    val optSection: Option[ma2.Section] = fragRoiOpt match { case Some(roi) => Some(roi); case None => targetGrid.grid.getSection }
-    val optDomainSect: Option[ma2.Section] = domain_container_opt.flatMap( domain_container => targetGrid.grid.getSubSection( domain_container.axes ) )
+    val optSection: Option[ma2.Section] = fragRoiOpt match { case Some(roi) => Some(roi); case None => targetGrid.gridSection.getSection }
+    val optDomainSect: Option[ma2.Section] = domain_container_opt.flatMap( domain_container => targetGrid.gridSection.getSubSection( domain_container.axes ) )
     val fragSpec: Option[DataFragmentSpec] = optSection map { section =>
       new DataFragmentSpec( dataContainer.uid, variable.name, variable.collection, data_source.fragIdOpt, Some(targetGrid), variable.dims.mkString(","),
         variable.units, variable.getAttributeValue("long_name", variable.fullname), section, optDomainSect, domain_mdata, variable.missing, variable.getAttributeValue("numDataFiles", "1").toInt, maskOpt, data_source.autoCache )
@@ -783,9 +782,9 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
 //    val maskOpt: Option[String] = domain_container_opt.flatMap( domain_container => domain_container.mask )
 //    val optSection: Option[ma2.Section] = data_source.fragIdOpt match {
 //      case Some(fragId) => Some(DataFragmentKey(fragId).getRoi);
-//      case None => targetGrid.grid.getSection
+//      case None => targetGrid.gridSection.getSection
 //    }
-//    val optDomainSect: Option[ma2.Section] = domain_container_opt.flatMap( domain_container => targetGrid.grid.getSubSection(domain_container.axes) )
+//    val optDomainSect: Option[ma2.Section] = domain_container_opt.flatMap( domain_container => targetGrid.gridSection.getSubSection(domain_container.axes) )
 //    val domain_mdata = domain_container_opt.map( _.metadata ).getOrElse(Map.empty)
 //    if( optSection == None ) logger.warn( "Attempt to cache empty segment-> No caching will occur: " + dataContainer.toString )
 //    optSection map { section =>

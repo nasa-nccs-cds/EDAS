@@ -154,7 +154,7 @@ class Collection( ctype: String, id: String, val dataPath: String, val aggregati
   def isMeta: Boolean = dataPath.endsWith(".csv")
   def getVariableMetadata(varName: String): List[nc2.Attribute] = getGrid( varName ).getVariableMetadata(varName)
   def getGridFilePath( varName: String ) = getGrid( varName ).gridFilePath
-  def getVariable(varName: String): CDSVariable = _variables.getOrElseUpdate(varName, new CDSVariable(varName, this))
+  def getVariable(varName: String): CDSVariable = _variables.getOrElseUpdate(varName, new CDSVariable( varName, getGrid( varName ), nc2.Attribute.makeMap( getVariableMetadata( varName ) ).toMap ))
 
   def getDatasetMetadata(): List[nc2.Attribute] = List(
     new nc2.Attribute("variables", varNames),

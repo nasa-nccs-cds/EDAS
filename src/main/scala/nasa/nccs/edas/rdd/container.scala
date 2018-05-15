@@ -24,7 +24,7 @@ import org.apache.spark.Partitioner
 import org.apache.spark.mllib.linalg.{Matrix, Vector, Vectors}
 import org.apache.spark.rdd.RDD
 import org.spark_project.guava.io.Files
-import ucar.ma2
+import ucar.{ma2, nc2}
 import ucar.nc2.Variable
 import ucar.nc2.dataset.CoordinateAxis1DTime
 import ucar.nc2.time.{Calendar, CalendarDate, CalendarPeriod}
@@ -383,7 +383,7 @@ object CDRecordRDD  {
     rdd.reduceByKey( op ) map { case ( key, slice ) => key -> postOp( postOpId )( slice ).setGroupId( groupBy, key ) }
 }
 
-class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val variableRecords: Map[String,VariableRecord] ) extends GenericOperationData(metadata) with Loggable {
+class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ) extends GenericOperationData(metadata,variableRecords) with Loggable {
   import CDRecordRDD._
   val calendar: Calendar = Calendar.get( metadata.getOrElse("time.calendar","default"))
   def cache() = rdd.cache()
@@ -404,7 +404,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def selectElements(  elemFilter: String => Boolean  ): CDRecordRDD = CDRecordRDD ( rdd.map( _.selectElements( elemFilter ) ), metadata, variableRecords )
   def toMatrix(selectElems: Seq[String]): RowMatrix = { new RowMatrix(rdd.map(_.toVector( selectElems ))) }
   def toVectorRDD(selectElems: Seq[String]): RDD[Vector] = { rdd.map(_.toVector( selectElems )) }
-  def collect: QueryResultCollection = { QueryResultCollection( rdd.collect.sortBy(_.startTime), metadata ) }
+  def collect: QueryResultCollection = { QueryResultCollection( rdd.collect.sortBy(_.startTime), metadata, variableRecords ) }
   def join( other: RDD[CDRecord] ) = CDRecordRDD( rdd.keyBy( _.startTime ).join( other.keyBy( _.startTime ) ).mapPartitions( CDRecord.join ), metadata, variableRecords )
   def getVars: Seq[String] = rdd.first.elements.keys.toSeq
 
@@ -417,7 +417,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
 
   def collect( elemFilter: String => Boolean, postOpId: String ): QueryResultCollection = {
     val processedRDD: RDD[CDRecord] = rdd.map(slice => postOp( postOpId )( slice.selectElements( elemFilter ) ) )
-    QueryResultCollection( processedRDD.collect, metadata )
+    QueryResultCollection( processedRDD.collect, metadata, variableRecords )
   }
 
   def sliding( windowSize: Int, step: Int ): RDD[Array[CDRecord]] = {
@@ -433,44 +433,44 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
     val filteredRdd = rdd.map( _.selectElements( elemFilter ) )
     val queryResult: QueryResultCollection = if (context.ordered) context.optGroupBy match {
       case None =>
-        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ), kcontext.grid ) }
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ) ) }
         val partialProduct = filteredRdd.mapPartitions( slices => Iterator( CDRecordRDD.sortedReducePartition(op)(slices.toIterable) ) ).collect
         val slice: CDRecord = postOp( context.postOpId )(
           CDRecordRDD.sortedReducePartition(op)(partialProduct)
         )
-        QueryResultCollection( slice, metadata)
+        QueryResultCollection( slice, metadata, variableRecords)
       case Some( groupBy ) =>
         val partialProduct = filteredRdd.groupBy( groupBy.group(calendar) ).mapValues( CDRecordRDD.sortedReducePartition(op) ).map(item => postOp( context.postOpId )( item._2 ) )
-        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(partialProduct,metadata,variableRecords ), kcontext.grid ) }
-        QueryResultCollection( partialProduct.collect.sortBy( _.startTime ), metadata )
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(partialProduct,metadata,variableRecords ) ) }
+        QueryResultCollection( partialProduct.collect.sortBy( _.startTime ), metadata, variableRecords )
     }
     else context.optGroupBy match {
       case None =>
-        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ), kcontext.grid ) }
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(filteredRdd,metadata,variableRecords ) ) }
         val slice: CDRecord = postOp( context.postOpId )( filteredRdd.treeReduce(op) )
-        QueryResultCollection( slice, metadata )
+        QueryResultCollection( slice, metadata, variableRecords )
       case Some( groupBy ) =>
         val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceRddByGroup( filteredRdd, op, context.postOpId, groupBy, calendar )
-        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(groupedRDD.map(_._2),metadata,variableRecords ), kcontext.grid ) }
-        QueryResultCollection( groupedRDD.values.collect, metadata )
+        if( context.cacheRdd ) { ResultCacheManager.addResult( context.cacheId, CDRecordRDD(groupedRDD.map(_._2),metadata,variableRecords ) ) }
+        QueryResultCollection( groupedRDD.values.collect, metadata, variableRecords )
     }
-    if( context.cacheCollection ) { ResultCacheManager.addResult( context.cacheId, queryResult, kcontext.grid ) }
+    if( context.cacheCollection ) { ResultCacheManager.addResult( context.cacheId, queryResult ) }
     queryResult.addMetadata( "cacheId", context.cacheId )
   }
 }
 
 object QueryResultCollection {
-  def apply(slice: CDRecord, metadata: Map[String,String] ): QueryResultCollection = new QueryResultCollection( Array(slice), metadata )
-  def apply(records: Array[CDRecord], metadata: Map[String,String] ): QueryResultCollection = new QueryResultCollection( records, metadata )
-  def empty: QueryResultCollection = QueryResultCollection( Array.empty[CDRecord], Map.empty[String,String] )
+  def apply(slice: CDRecord, metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ): QueryResultCollection = new QueryResultCollection( Array(slice), metadata, variableRecords )
+  def apply(records: Array[CDRecord], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ): QueryResultCollection = new QueryResultCollection( records, metadata, variableRecords )
+  def empty: QueryResultCollection = QueryResultCollection( Array.empty[CDRecord], Map.empty[String,String], Map.empty[String,VariableRecord] )
 
 }
 
-class QueryResultCollection(val records: Array[CDRecord], metadata: Map[String,String] ) extends GenericOperationData(metadata) {
+class QueryResultCollection(val records: Array[CDRecord], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ) extends GenericOperationData(metadata,variableRecords) {
   def section( section: CDSection ): QueryResultCollection = {
-    QueryResultCollection( records.flatMap( _.section(section) ), metadata )
+    QueryResultCollection( records.flatMap( _.section(section) ), metadata, variableRecords )
   }
-  def sort(): QueryResultCollection = { QueryResultCollection( records.sortBy( _.startTime ), metadata ) }
+  def sort(): QueryResultCollection = { QueryResultCollection( records.sortBy( _.startTime ), metadata, variableRecords ) }
   val nslices: Int = records.length
   def getSize: Long = records.foldLeft(0L)( (size,rec) => rec.size + size )       // Number of 4B elements
 
@@ -479,19 +479,19 @@ class QueryResultCollection(val records: Array[CDRecord], metadata: Map[String,S
     val merged_slices = if(tsc0.records.isEmpty) { tsc1.records } else if(tsc1.records.isEmpty) { tsc0.records } else {
       tsc0.records.zip( tsc1.records ) map { case (s0,s1) => op(s0,s1) }
     }
-    QueryResultCollection( merged_slices, metadata ++ other.metadata )
+    QueryResultCollection( merged_slices, metadata ++ other.metadata, variableRecords )
   }
 
   override def getMetadata: Map[String,String] = metadata ++ records.headOption.fold(Map.empty[String,String])(_.metadata) // slices.foldLeft(metadata)( _ ++ _.metadata )
 
   def concatSlices: QueryResultCollection = {
     val concatSlices = sort().records.reduce( _ <+ _ )
-    QueryResultCollection( Array( concatSlices ), metadata )
+    QueryResultCollection( Array( concatSlices ), metadata, variableRecords )
   }
 
   def getConcatSlice: CDRecord = concatSlices.records.head
   def getVars: Seq[String] = records.head.elements.keys.toSeq
-  def addMetadata( key: String, value: String ): QueryResultCollection = { QueryResultCollection( records, metadata + ( key -> value ) ) }
+  def addMetadata( key: String, value: String ): QueryResultCollection = { QueryResultCollection( records, metadata + ( key -> value ), variableRecords ) }
 }
 
 object PartitionExtensionGenerator {
@@ -535,6 +535,8 @@ object VariableRecord {
 
 class VariableRecord( val varName: String, val collection: String, val gridFilePath: String, resolution: String, projection: String, val dimensions: String, val metadata: Map[String,String] ) extends EDASCoordSystem( resolution, projection ) {
   override def toString = s"VariableRecord[ varName=${varName}, collection=${collection}, gridFilePath=${gridFilePath}, resolution=${resolution}, projection=${projection}, dimensions=${dimensions}, metadata={${metadata.mkString(",")}} )"
+  val getMetadata = metadata ++ Map( "collection" -> collection, "gridFilePath" -> gridFilePath, "resolution" -> resolution, "projection" -> projection, "dimensions" -> dimensions )
+  def getAttributes: Map[String,nc2.Attribute] = getMetadata.map { case (key, sval) => key -> new nc2.Attribute( key, sval) }
 }
 
 class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggable {

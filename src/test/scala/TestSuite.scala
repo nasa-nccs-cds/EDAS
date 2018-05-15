@@ -642,9 +642,9 @@ class DefaultTestSuite extends EDASTestSuite {
     //  ncks -O -v tas -d lat,25,30 -d lon,20,25 -d time,45,50 ${datafile} ~/test/out/subset.nc
     val nco_verified_result: CDFloatArray = CDFloatArray( Array(  289.0866, 290.5467, 292.9329, 294.6103, 295.5956, 294.7446   ).map(_.toFloat), Float.MaxValue )
     val datainputs0 =
-      s"""[domain=[{"name":"d0","lat":{"start":25,"end":30,"system":"indices"},"lon":{"start":20,"end":25,"system":"indices"},"time":{"start":45,"end":50,"system":"indices"}}],
+      s"""[domain=[{"name":"d0","time":{"start":45,"end":50,"system":"indices"}}],
          |  variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
-         |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy","cache":"mr"}]]""".stripMargin
+         |  operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"t","cache":"mr","grid":"uniform","shape":"15,36","res":"10,10"}]]""".stripMargin
     val result_node0 = executeTest( datainputs0 )
     val result_str = result_node0.toString
     val cache_id = getCacheIds( result_node0 ).head
@@ -652,7 +652,7 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[domain=[{"name":"d1"}],
          |  variable=[{"uri":"cache:/${cache_id}","name":"tas:v2","domain":"d1"}],
-         |  operation=[{"name":"CDSpark.ave","input":"v2","domain":"d1","axes":"t"}]]""".stripMargin
+         |  operation=[{"name":"CDSpark.ave","input":"v2","domain":"d1","axes":"xy"}]]""".stripMargin
     val result_node1 = executeTest( datainputs )
     val result_data = getResultData( result_node1 )
 
