@@ -1,10 +1,13 @@
 package nasa.nccs.edas.engine
 
+import java.nio.file.{Path, Paths}
+
 import nasa.nccs.caching.{BatchSpec, RDDTransientVariable, collectionDataCache}
 import nasa.nccs.cdapi.cdm.{OperationInput, _}
 import nasa.nccs.edas.engine.EDASExecutionManager.saveResultToFile
 import nasa.nccs.edas.kernels.{KernelImpl, _}
 import nasa.nccs.edas.rdd.{QueryResultCollection, VariableRecord}
+import nasa.nccs.edas.sources.{AggregationWriter, CDScan}
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
 import nasa.nccs.utilities.{DAGNode, Loggable}
 import nasa.nccs.wps.{RDDExecutionResult, RefExecutionResult, WPSProcessExecuteResponse}
@@ -12,6 +15,7 @@ import ucar.{ma2, nc2}
 
 import scala.collection.immutable.Map
 import scala.collection.mutable
+import scala.reflect.io.File
 import scala.util.Try
 
 object WorkflowNode {
@@ -426,9 +430,20 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
         case "file" =>
           val resultFiles: List[String] = executionMgr.getResultFilePath( executionResult, executor )
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFiles) )
+        case "collection" =>
+          val resultFiles: List[String] = executionMgr.getResultFilePath( executionResult, executor )
+          val collId = executor.requestCx.getConf( "cid", resultId.split('-').last )
+          createCollection( collId, resultFiles, executionResult.results )
+          Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, collId, List.empty[String], "collection" ) )
       }
     logger.info("Completed createResponse in %.4f sec".format( ( System.nanoTime() - t0 ) / 1.0E9 ) )
     rv
+  }
+
+  def createCollection( collId: String, filePaths: List[String], result: QueryResultCollection ): Unit = {
+    val dataPath: Path = Paths.get(filePaths.head)
+    val ncSubPaths = filePaths.map( fpath => File(fpath).name).toArray
+    AggregationWriter.extractAggregationsFromFiles( collId, dataPath.getParent, ncSubPaths )
   }
 
   def cacheResult( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): String = {

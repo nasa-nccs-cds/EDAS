@@ -282,8 +282,9 @@ object EDASExecutionManager extends Loggable {
       val varDims: Array[Dimension] = axisTypes.map( aType => dimsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
       val dataMap: Map[String,CDFloatArray] = slice.elements.mapValues( _.toCDFloatArray )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
+        val optVarName = executor.getRelatedInputSpec( tname.split('-').head ).map( _.varname )
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
-        val varname = baseName + "-" + tname
+        val varname: String = optVarName.getOrElse( baseName + "-" + tname )
         logger.info("Creating var %s: dims = [%s], data sample = [ %s ]".format(varname, varDims.map( _.getShortName).mkString(", "), maskedTensor.getSectionArray( Math.min(10,maskedTensor.getSize.toInt) ).mkString(", ") ) )
         val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, varDims.toList )
         varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }

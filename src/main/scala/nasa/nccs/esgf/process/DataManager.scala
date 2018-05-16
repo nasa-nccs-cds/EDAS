@@ -79,6 +79,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def variableRecs: Map[String,VariableRecord] = _inputsRDD.variableRecs
   def nSlices: Long = _inputsRDD.nSlices
   def update: CDRecordRDD = _inputsRDD.update
+  def getRelatedInputSpec( id: String ): Option[DataFragmentSpec] = requestCx.getRelatedInputSpec(id)
 
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Unit = {
     val inputs =  getInputs(node)
@@ -133,6 +134,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = task.domainMap
   val profiler: EventAccumulator = new EventAccumulator()
+  lazy val responseType = configuration.getOrElse("response","file")
 
   def initializeProfiler( activationStatus: String, sc: SparkContext ) = {
     logger.info( s" #EA# Initializing profiler, configuration = ${configuration.mkString(",")}, task meta = ${task.metadata.mkString(",")}")
@@ -145,6 +147,10 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   def missing_variable(uid: String) = throw new Exception("Can't find Variable '%s' in uids: [ %s ]".format(uid, inputs.keySet.mkString(", ")))
   def getDataSources: Map[String, Option[DataFragmentSpec]] = inputs
   def getInputSpec( uid: String ): Option[DataFragmentSpec] = inputs.get( uid ).flatten
+  def getRelatedInputSpec( id: String ): Option[DataFragmentSpec] = {
+    val optElem = inputs.find { case (vid,optDataFrag) => vid.split('-').head.equals(id) }
+    optElem.flatMap { case (key,optDataFrag) => optDataFrag }
+  }
   def getInputSpec(): Option[DataFragmentSpec] = inputs.head._2
   def getCollection( uid: String = "" ): Option[Collection] = inputs.get( uid ) match {
     case Some(optInputSpec) => optInputSpec map { inputSpec => inputSpec.getCollection }
@@ -385,7 +391,8 @@ object GridSection extends Loggable {
     val t1 = System.nanoTime
     val axes = variable.getCoordinateAxesList
     val t2 = System.nanoTime
-    val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = variable.getCoordinateAxis(dim)) yield coord_axis_opt match {
+    val coordAxisMap: Map[String,CoordinateAxis1D] = variable.coordinateAxesFromDims
+    val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = coordAxisMap.get(dim)) yield coord_axis_opt match {
       case Some( coord_axis ) =>
         val domainAxisOpt: Option[DomainAxis] = roiOpt.flatMap(axes => axes.find(da => da.matches( coord_axis.getAxisType )))
         Some( new GridCoordSpec(idim, grid, variable.getAggregation, coord_axis, domainAxisOpt) )
@@ -406,6 +413,7 @@ object GridSection extends Loggable {
 }
 
 class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) extends Serializable with Loggable {
+  val test = 0;
   def getAxisSpec( dim_index: Int ): GridCoordSpec = axes(dim_index)
   def getAxisSpec( axis_type: AxisType ): Option[GridCoordSpec] = axes.find( axis => axis.getAxisType == axis_type )
   def getAxisSpec( domainAxis: DomainAxis ): Option[GridCoordSpec] = axes.find( axis => domainAxis.matches(axis.getAxisType ) )

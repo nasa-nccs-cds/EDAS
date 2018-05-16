@@ -377,6 +377,17 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
     }
   }
 
+  def coordinateAxesFromDims(): Map[String,CoordinateAxis1D] = {
+    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 6.toString, true)
+    val axes = gridDS.getCoordinateAxes.toList
+    val elemList = for( axis <- axes; dims = axis.getDimensions; dim <- dims ) yield axis match {
+      case axis1D: CoordinateAxis1D => dim.getShortName -> axis1D
+      case x => throw new Exception( "Error, curvilinear axes not currently supported here: " + axis.getShortName )
+    }
+    gridDS.close
+    elemList.toMap
+  }
+
   def updateTimeCoordinateAxis(context: String): Unit = {
     val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, context, true)
     try {

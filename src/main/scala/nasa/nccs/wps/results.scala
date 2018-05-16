@@ -179,13 +179,13 @@ abstract class WPSExecuteResponse( val serviceInstance: String ) extends WPSResp
       <data id={id} uom={units} shape={array.getShape.mkString(",")}>  {array.mkBoundedDataString(",", maxSize)}  </data>
   }
 
-  def getDataRef( response_syntax: ResponseSyntax.Value, id: String, resultId: String, filePaths: List[String] ): xml.Elem = getSyntax(response_syntax) match {
+  def getDataRef( response_syntax: ResponseSyntax.Value, id: String, resultId: String, filePaths: List[String],  resultMode: String = "result" ): xml.Elem = getSyntax(response_syntax) match {
     case ResponseSyntax.WPS =>
-      if( filePaths.isEmpty ) {   <wps:Data id={id} href={"result://"+resultId}> </wps:Data> }
-      else {                      <wps:Data id={id} href={"result://"+resultId} files={filePaths.mkString(",")}> </wps:Data>  }
+      if( filePaths.isEmpty ) {   <wps:Data id={id} href={s"${resultMode}://"+resultId}> </wps:Data> }
+      else {                      <wps:Data id={id} href={s"${resultMode}://"+resultId} files={filePaths.mkString(",")}> </wps:Data>  }
     case ResponseSyntax.Generic =>
-      if( filePaths.isEmpty ) {   <data id={id} href={"result://"+resultId}> </data> }
-      else {                      <data id={id} href={"result://"+resultId} files={filePaths.mkString(",")}> </data>  }
+      if( filePaths.isEmpty ) {   <data id={id} href={s"${resultMode}://"+resultId}> </data> }
+      else {                      <data id={id} href={s"${resultMode}://"+resultId} files={filePaths.mkString(",")}> </data>  }
   }
 }
 
@@ -278,10 +278,10 @@ class RDDExecutionResult(serviceInstance: String, processes: List[WPSProcess], i
   }
 }
 
-class RefExecutionResult(serviceInstance: String, process: WPSProcess, id: String, resultId: String, resultFiles: List[String] ) extends WPSReferenceExecuteResponse( serviceInstance, List(process), resultId, resultFiles )  with Loggable {
+class RefExecutionResult(serviceInstance: String, process: WPSProcess, id: String, resultId: String, resultFiles: List[String], val resultMode: String = "result" ) extends WPSReferenceExecuteResponse( serviceInstance, List(process), resultId, resultFiles )  with Loggable {
   override def getProcessOutputs( response_syntax: ResponseSyntax.Value, process_id: String, output_id: String  ): Iterable[xml.Elem] = {
     val syntax = getSyntax(response_syntax)
-    Seq( getDataRef( syntax, id, resultId, resultFiles ) )
+    Seq( getDataRef( syntax, id, resultId, resultFiles, resultMode ) )
   }
 }
 

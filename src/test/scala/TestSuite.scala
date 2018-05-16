@@ -40,6 +40,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val test_python = true
   val test_binning = true
   val test_regrid = true
+  val test_collection_output = false
   val reanalysis_ensemble = false
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
@@ -196,8 +197,28 @@ class DefaultTestSuite extends EDASTestSuite {
     println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
   }}
 
+  test("pyRegridTest_MERRA_collection")  { if(test_collection_output) {
+    val datainputs =
+      s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],
+         | variable=[{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v0","domain":"d0"}],
+         | operation=[{"name":"CDSpark.noOp","input":"v0","domain":"d0","grid":"uniform","shape":"32,64"}]]""".stripMargin
+    val result_node0 = executeTest( datainputs, Map( "response" -> "collection", "cid" ->  "merra2_tas_regrid_32x64", "vid" -> "tas" ) )
+    println( " ** Result: " + result_node0.toString() )
+    val datainputs1 =
+      s"""[domain=[{"name":"d1"}],
+         | variable=[{"uri":"collection:/merra2_tas_regrid_32x64","name":"tas:v1","domain":"d1"}],
+         | operation=[{"name":"CDSpark.ave","input":"v1","domain":"d1","axes":"xy"}]]""".stripMargin
+    val result_node1 = executeTest( datainputs1 )
+    val result_array = CDFloatArray( getResultData( result_node1 ) )
+    println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
+    println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
+  }}
+
   test("AveTest")  { if(test_regrid) {
-    val datainputs = s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]"""
+    val datainputs =
+      s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","axes":"xy"}]]""".stripMargin
     val result_node = executeTest(datainputs )
     val result_array = CDFloatArray( getResultData( result_node ) )
     println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
