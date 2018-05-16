@@ -10,7 +10,7 @@ import nasa.nccs.edas.engine.{ExecutionCallback, Workflow, WorkflowContext, Work
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.kernels.{AxisIndices, KernelContext, WorkflowMode}
 import nasa.nccs.edas.rdd.{CDRecordRDD, VariableRecord, _}
-import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
+import nasa.nccs.edas.sources.{Aggregation, FileCollection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.esgf.utilities.numbers.GenericNumber
@@ -171,7 +171,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   def getDataSources: Map[String, Option[DataFragmentSpec]] = inputs
   def getInputSpec( uid: String ): Option[DataFragmentSpec] = inputs.get( uid ).flatten
   def getInputSpec(): Option[DataFragmentSpec] = inputs.head._2
-  def getCollection( uid: String = "" ): Option[Collection] = inputs.get( uid ) match {
+  def getCollection( uid: String = "" ): Option[FileCollection] = inputs.get( uid ) match {
     case Some(optInputSpec) => optInputSpec map { inputSpec => inputSpec.getCollection }
     case None =>inputs.head._2 map { inputSpec => inputSpec.getCollection }
   }
@@ -211,7 +211,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   val t0 = System.nanoTime()
   private val _optRange: Option[ma2.Range] = getAxisRange
   val t1 = System.nanoTime()
-  lazy val _spatialCoordValues = getSpaceCoordinateValues
+  lazy val _coordValues = getCoordinateValues
   val t2 = System.nanoTime()
   private val _rangeCache: concurrent.TrieMap[String, (Int,Int)] = concurrent.TrieMap.empty[String, (Int,Int)]
   val t3 = System.nanoTime()
@@ -234,8 +234,8 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   def getAxisName: String = coordAxis.getFullName
   def getIndexRange: Option[ma2.Range] = _optRange
   def getLength: Int = _optRange.fold( 0 )( _.length )
-  def getStartValue: Double = if( coordAxis.getAxisType == AxisType.Time ) { agg.time_start } else { _spatialCoordValues.head }
-  def getEndValue: Double = if( coordAxis.getAxisType == AxisType.Time ) { agg.time_end } else { _spatialCoordValues.last }
+  def getStartValue: Double =  _coordValues.head
+  def getEndValue: Double =  _coordValues.last
   def toXml: xml.Elem = <axis id={getAxisName} units={getUnits} cfName={getCFAxisName} type={getAxisType.toString} start={getStartValue.toString} end={getEndValue.toString} length={getLength.toString} > </axis>
   override def toString: String = "GridCoordSpec{id=%s units=%s cfName=%s type=%s start=%f end=%f length=%d}".format(getAxisName,getUnits,getCFAxisName,getAxisType.toString,getStartValue,getEndValue,getLength)
   def getMetadata: Map[String,String] = Map( "id"->getAxisName, "units"->getUnits, "name"->getCFAxisName, "type"->getAxisType.toString, "start"->getStartValue.toString, "end"->getEndValue.toString, "length"->getLength.toString )
@@ -257,12 +257,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
     }
   }
 
-  def getBounds( range: ma2.Range ): Array[Double]  = coordAxis.getAxisType match {
-    case AxisType.Time => Array(agg.toTimeValue(range.first).index, agg.toTimeValue(range.last).index)
-    case x => Array( _spatialCoordValues(range.first), _spatialCoordValues(range.last) )
-  }
-
-  def getSpaceCoordinateValues: Array[Double] =  _optRange match {
+  def getCoordinateValues: Array[Double] =  _optRange match {
     case Some(range) => CDDoubleArray.factory( coordAxis.read(List(range)) ).getArrayData()
     case None =>        CDDoubleArray.factory( coordAxis.read() ).getArrayData()
   }
@@ -346,7 +341,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   }
 
   def getGridCoordIndex(cval: Double, role: BoundsRole.Value, strict: Boolean = true): Option[Int] = {
-    val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
+    val coordAxis1D = CDSGridVariable.toCoordAxis1D( coordAxis )
     val ncval = getNormalizedCoordinate( cval )
     findCoordElement( coordAxis1D, ncval ) match {
       case -1 =>
@@ -378,7 +373,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   }
 
   def getGridIndexBounds( v0: Double, v1: Double ): Option[ma2.Range] = {
-    val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
+    val coordAxis1D = CDSGridVariable.toCoordAxis1D( coordAxis )
     val axis_size = coordAxis1D.getSize.toInt
     val ( startval, endval ) = getOffsetBounds( v0, v1 )
 //    logger.info( s" @O@ ${coordAxis.getAxisType.getCFAxisName} GetOffsetBounds: ($v0, $v1) -> ($startval, $endval), Axis Start: ${coordAxis.getBound1.head}" )
@@ -413,7 +408,7 @@ object GridSection extends Loggable {
     val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = variable.getCoordinateAxis(dim)) yield coord_axis_opt match {
       case Some( coord_axis ) =>
         val domainAxisOpt: Option[DomainAxis] = roiOpt.flatMap(axes => axes.find(da => da.matches( coord_axis.getAxisType )))
-        Some( new GridCoordSpec(idim, grid, variable.getAggregation, coord_axis, domainAxisOpt) )
+        Some( new GridCoordSpec(idim, grid, coord_axis, domainAxisOpt) )
       case None =>
         logger.warn( "Unrecognized coordinate axis: %s, axes = ( %s )".format( dim, grid.getCoordinateAxes.map( axis => axis.getFullName ).mkString(", ") )); None
     }
@@ -582,7 +577,7 @@ class GridContext(val uid: String, val axisMap: Map[Char,Option[( Int, HeapDblAr
   }
 }
 
-class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None ) extends CDSVariable( variable.name, variable.grid, variable.attributes ) {
+class TargetGrid(variable: CDSVariable, collection: FileCollection, roiOpt: Option[List[DomainAxis]]=None ) extends CDSVariable( variable.name, variable.grid, variable.attributes, collection ) {
   val gridSection = GridSection( variable, roiOpt )
   val dbg = 1
   def toBoundsString = roiOpt.map( _.map( _.toBoundsString ).mkString( "{ ", ", ", " }") ).getOrElse("")
@@ -597,7 +592,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
   def getSubGrid( section: ma2.Section ): TargetGrid = {
     assert( section.getRank == gridSection.getRank, "Section with wrong rank for subgrid: %d vs %d ".format( section.getRank, gridSection.getRank) )
     val subgrid_axes = section.getRanges.map( r => new DomainAxis( DomainAxis.fromCFAxisName(r.getName), r.first, r.last, "indices" ) )
-    new TargetGrid( variable, Some(subgrid_axes.toList)  )
+    new TargetGrid( variable, collection, Some(subgrid_axes.toList) )
   }
 
   //  def getAxisIndices( axisCFNames: String ): Array[Int] = for(cfName <- axisCFNames.toArray) yield gridSection.getAxisSpec(cfName.toString).map( _.index ).getOrElse(-1)
@@ -664,16 +659,10 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
   }
   def getTimeCoordAxis: Option[ CoordinateAxis1D ] = gridSection.getAxisSpec("t").map( _.coordAxis )
 
-  def getBounds( section: ma2.Section ): Option[Array[Double]] = {
-    val xrangeOpt: Option[Array[Double]] = Option( section.find("X") ) flatMap ( (r: ma2.Range) => gridSection.getAxisSpec("X").map( (gs: GridCoordSpec) => gs.getBounds(r) ) )
-    val yrangeOpt: Option[Array[Double]] = Option( section.find("Y") ) flatMap ( (r: ma2.Range) => gridSection.getAxisSpec("y").map(( gs: GridCoordSpec) => gs.getBounds(r) ) )
-    xrangeOpt.flatMap( xrange => yrangeOpt.map( yrange => Array( xrange(0), xrange(1), yrange(0), yrange(1) )) )
-  }
-
 }
 
 class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  extends ScopeContext with Serializable with Loggable  {
-  def getVariable( collection: Collection, varname: String ): CDSVariable = collection.getVariable(varname)
+  def getVariable(collection: FileCollection, varname: String ): CDSVariable = collection.getVariable(varname)
   def getConfiguration: Map[String,String] = appParameters.getParameterMap
 
   def getOperationInput( fragSpec: DataFragmentSpec, partsConfig: Map[String,String], workflowNode: WorkflowNode ): OperationInput = {

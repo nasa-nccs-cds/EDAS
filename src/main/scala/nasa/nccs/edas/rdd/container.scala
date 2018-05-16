@@ -14,7 +14,7 @@ import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import nasa.nccs.edas.engine.Workflow
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.kernels._
-import nasa.nccs.edas.sources.{Aggregation, Collection, FileBase, FileInput}
+import nasa.nccs.edas.sources.{Aggregation, FileCollection, FileBase, FileInput}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import nasa.nccs.edas.utilities.runtime
 import nasa.nccs.edas.workers.TransVar
@@ -527,7 +527,7 @@ class PartitionExtensionGenerator(val partIndex: Int) extends Serializable {
 }
 
 object VariableRecord {
-  def apply( vspec: DirectRDDVariableSpec, collection: Collection, metadata: Map[String,String]  ): VariableRecord = {
+  def apply(vspec: DirectRDDVariableSpec, collection: FileCollection, metadata: Map[String,String]  ): VariableRecord = {
     val grid = collection.getGrid(vspec.varShortName)
     new VariableRecord(vspec.varShortName, collection.id, grid.gridFilePath, collection.getResolution(vspec.varShortName), grid.getProjection, vspec.getParameter("dimensions", ""), vspec.metadata ++ metadata)
   }
@@ -547,7 +547,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val nTS = timeRange.length()
     varspec match {
       case vspec: DirectRDDVariableSpec =>
-        val collection: Collection = vspec.getCollection
+        val collection: FileCollection = vspec.getCollection
         val agg: Aggregation = collection.getAggregation(vspec.varShortName) getOrElse {
           throw new Exception(s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.id}")
         }
@@ -577,7 +577,7 @@ class RDDGenerator( val sc: CDSparkContext, val nPartitions: Int) extends Loggab
     val section = varspec.section.toString()
     varspec match {
       case vspec: DirectRDDVariableSpec =>
-        val collection: Collection = vspec.getCollection
+        val collection: FileCollection = vspec.getCollection
         val agg: Aggregation = collection.getAggregation( vspec.varShortName ) getOrElse { throw new Exception( s"Can't find aggregation for variable ${vspec.varShortName} in collection ${collection.id}" ) }
         val basePath = agg.parms.get("base.path")
         val optVar = agg.findVariable( vspec.varShortName )

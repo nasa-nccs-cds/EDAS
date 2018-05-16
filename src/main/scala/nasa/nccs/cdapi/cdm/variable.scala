@@ -7,7 +7,7 @@ import nasa.nccs.edas.engine.{Workflow, WorkflowNode}
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.rdd.{CDRecord, QueryResultCollection}
-import nasa.nccs.edas.sources.{Aggregation, Collection, DataSource}
+import nasa.nccs.edas.sources.{Aggregation, BaseCollection, DataSource, FileCollection}
 import nasa.nccs.esgf.process.{DataFragmentSpec, _}
 import ucar.{ma2, nc2, unidata}
 import ucar.nc2.dataset.{CoordinateAxis1D, _}
@@ -41,23 +41,23 @@ abstract class CDSBaseVariable( val name: String ) extends Loggable with Seriali
   def normalize(sval: String): String = sval.stripPrefix("\"").stripSuffix("\"").toLowerCase
 
   def getCoordinateAxes: List[ CoordinateAxis1D ] = {
-    dims.flatMap( dim => getGrid.findCoordinateAxis( dim ).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) ) ).toList
+    dims.flatMap( dim => getGrid.findCoordinateAxis( dim ).map( coordAxis => CDSGridVariable.toCoordAxis1D( coordAxis ) ) ).toList
   }
   def getCoordinateAxis( cname: String ): Option[CoordinateAxis1D] = {
     val caxis = getGrid.findCoordinateAxis(cname)
-    caxis.map( CDSVariable.toCoordAxis1D(_) )
+    caxis.map( CDSGridVariable.toCoordAxis1D(_) )
   }
   def getCoordinateAxesList = getGrid.getCoordinateAxes
 }
 
-object CDSVariable extends Loggable {
+object CDSGridVariable extends Loggable {
   def toCoordAxis1D(coordAxis: CoordinateAxis): CoordinateAxis1D = coordAxis match {
     case coordAxis1D: CoordinateAxis1D =>
      //  if( coordAxis1D.getShortName.equalsIgnoreCase("time") ){coordAxis1D.setUnitsString( EDTime.units ) }
       coordAxis1D
     case _ => throw new IllegalStateException("CDSVariable: 2D Coord axes not yet supported: " + coordAxis.getClass.getName)
   }
-  def empty = new CDSVariable( null, null, Map.empty[String,nc2.Attribute] )
+  def empty = new CDSGridVariable( null, null, Map.empty[String,nc2.Attribute] )
   def key_equals(key_regex: Regex)(map_item: (String, nc2.Attribute)): Boolean = {
     key_regex.findFirstIn(map_item._1) match { case Some(x) => true; case None => false; }
   }
@@ -69,8 +69,8 @@ object CDSVariable extends Loggable {
 
 //
 
-class CDSVariable( name: String, val grid: CDGrid, val attributes: Map[String,nc2.Attribute] ) extends CDSBaseVariable( name ) {
-  import CDSVariable._
+class CDSGridVariable( name: String, val grid: CDGrid, val attributes: Map[String,nc2.Attribute] ) extends CDSBaseVariable( name ) {
+  import CDSGridVariable._
   def getAttributeValue( key: String, default_value: String  ) =  attributes.get( key ) match { case Some( attr_val ) => attr_val.toString.split('=').last.replace('"',' ').trim; case None => default_value }
   def getAttributeValue( name: String ): String =  attributes.getOrElse(name, new nc2.Attribute(new unidata.util.Parameter("",""))).getValue(0).toString
 
@@ -82,7 +82,6 @@ class CDSVariable( name: String, val grid: CDGrid, val attributes: Map[String,nc
         logger.info("Found missing attribute value: " + s)
         s.toFloat
     }
-//  def getAggregation: Aggregation = collection.getAggregation( name ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${name} in collection ${collection.id}") )
   def toXml: xml.Node =
     <variable name={name} fullname={fullname} description={description} shape={shape.mkString("[", " ", "]")} units={units}>
       { for( dim: nc2.Dimension <- grid.dimensions; name=dim.getFullName; dlen=dim.getLength ) yield getCoordinateAxis( name ) match {
@@ -108,6 +107,14 @@ class CDSVariable( name: String, val grid: CDGrid, val attributes: Map[String,nc
 //  def getTargetGrid( fragSpec: DataFragmentSpec ): TargetGrid = fragSpec.targetGridOpt match { case Some(targetGrid) => targetGrid;  case None => new TargetGrid( this, Some(fragSpec.getAxes) ) }
 
 }
+
+object CDSVariable {
+  def apply( varName: String, collection: FileCollection ): CDSVariable = {
+    new CDSVariable( varName, collection.getGrid( varName ), nc2.Attribute.makeMap( collection.getVariableMetadata( varName )).toMap, collection )
+  }
+}
+
+class CDSVariable( name: String, grid: CDGrid, attributes: Map[String,nc2.Attribute], val collection: BaseCollection  ) extends CDSGridVariable( name, grid, attributes  ) { }
 
 class InputConsumer( val operation: OperationContext ) {
   private var _satiated = false;

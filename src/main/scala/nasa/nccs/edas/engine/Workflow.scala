@@ -402,15 +402,21 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
       logger.info("getInputSpec: %s -> %s ".format(uid, inputSpec.longname))
       if( workflowNode.kernel.extInputs ) { new ExternalDataInput( inputSpec, workflowNode ) }
       else                                { executionMgr.serverContext.getOperationInput(inputSpec, requestCx.getConfiguration, workflowNode ) }
-    case None =>
-      nodes.find( _.hasOutput(uid) ) match {
-        case Some(inode) => new DependencyOperationInput( inode, workflowNode )
-        case None =>
-          val errorMsg = " ** Unidentified input in workflow node %s: %s, input ids = %s".format(workflowNode.getNodeId, uid, requestCx.inputs.keySet.mkString(", "))
-          logger.error(errorMsg)
-          throw new Exception(errorMsg)
-      }
+    case None => getCacheInput(uid) match {
+      case Some(inputSpec) =>
+        throw new Exception("")
+      case None =>
+        nodes.find(_.hasOutput(uid)) match {
+          case Some(inode) => new DependencyOperationInput(inode, workflowNode)
+          case None =>
+            val errorMsg = " ** Unidentified input in workflow node %s: %s, input ids = %s".format(workflowNode.getNodeId, uid, requestCx.inputs.keySet.mkString(", "))
+            logger.error(errorMsg)
+            throw new Exception(errorMsg)
+        }
+    }
   }
+
+  def getCacheInput( uid: String ): Option[OperationInput] = { None }
 
 
   def getNodeInputs(requestCx: RequestContext, workflowNode: WorkflowNode): Map[String, OperationInput] = {

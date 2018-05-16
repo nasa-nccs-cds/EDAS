@@ -76,7 +76,7 @@ class TaskRequest(val id: UID,
     val t0 = System.nanoTime
     lazy val variable: CDSVariable = dataContainer.getVariable
     val t1 = System.nanoTime
-    val rv = new TargetGrid(variable, roiOpt)
+    val rv = new TargetGrid(variable, variable.collection, roiOpt)
     val t2 = System.nanoTime
  //   logger.info( " CreateTargetGridT: %.4f %.4f ".format((t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9))
     rv
@@ -484,7 +484,7 @@ class DataInputSpec( ) {
 
 class DataFragmentSpec(val uid: String,
                        val varname: String,
-                       val collection: Collection,
+                       val collection: FileCollection,
                        val fragIdOpt: Option[String] = None,
                        val targetGridOpt: Option[TargetGrid] = None,
                        val dimensions: String = "",
@@ -544,7 +544,7 @@ class DataFragmentSpec(val uid: String,
 //    case None => throw new Exception( "Missing target grid ")
 //  }
 
-  def readData(section: ma2.Section) = collection.readVariableData(varname, section)
+//  def readData(section: ma2.Section) = collection.readVariableData(varname, section)
 //  def getVariableMetadata: Map[String, nc2.Attribute] = nc2.Attribute.makeMap(collection.getVariableMetadata(varname)).toMap
 
   def getMetadata( section: Option[ma2.Section] = None): Map[String, String] = Map (
@@ -598,12 +598,6 @@ class DataFragmentSpec(val uid: String,
                          numDataFiles,
                          mask, autoCache )
 
-  def getBounds(section: Option[ma2.Section] = None): Array[Double] = {
-    val bndsOpt = targetGridOpt.flatMap(targetGrid =>
-      targetGrid.getBounds(section.getOrElse(roi)))
-    bndsOpt.getOrElse(
-      throw new Exception("Can't get bounds from FragmentSpec: " + toString))
-  }
 
   private def collapse(range: ma2.Range, newsize: Int = 1): ma2.Range =
     newsize match {
@@ -770,7 +764,7 @@ class DataFragmentSpec(val uid: String,
 
   def getDatasetMetadata(serverContext: ServerContext): List[nc2.Attribute] =
     collection.getDatasetMetadata()
-  def getCollection: Collection = collection
+  def getCollection: FileCollection = collection
 
   def reduceSection(dimensions: Int*): DataFragmentSpec = {
     var newSection = roi;
@@ -896,7 +890,7 @@ object DataContainer extends ContainerBase {
       idItems.head
   }
 
-  def getCollection( metadata: Map[String, Any]): (Option[Collection], Option[String] ) = {
+  def getCollection( metadata: Map[String, Any]): (Option[FileCollection], Option[String] ) = {
     val uri = metadata.getOrElse("uri", "").toString
     val varsList: List[String] =
       if (metadata.keySet.contains("id")) metadata.getOrElse("id", "").toString.split(",").map(item => stripQuotes(vid(item, false))).toList

@@ -27,7 +27,7 @@ import scala.collection.JavaConverters._
 import nasa.nccs.edas.engine.spark.CDSparkContext
 import nasa.nccs.edas.portal.CleanupManager
 import nasa.nccs.edas.rdd.{ArraySpec, CDRecord, QueryResultCollection}
-import nasa.nccs.edas.sources.{Collection, Collections}
+import nasa.nccs.edas.sources.{FileCollection, Collections}
 import nasa.nccs.wps.{WPSExecuteStatusStarted, WPSResponse, _}
 import ucar.ma2.DataType
 import ucar.nc2.constants.AxisType

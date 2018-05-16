@@ -23,7 +23,7 @@ import scala.collection.JavaConverters._
 import nasa.nccs.edas.kernels.KernelContext
 import nasa.nccs.edas.portal.TestReadApplication.logger
 import nasa.nccs.edas.rdd.CDRecord
-import nasa.nccs.edas.sources.{Aggregation, Collection, Collections}
+import nasa.nccs.edas.sources.{Aggregation, FileCollection, Collections}
 import nasa.nccs.edas.sources.netcdf.NetcdfDatasetMgr
 import ucar.ma2.{ArrayFloat, Index, IndexIterator}
 import ucar.nc2.dataset.{CoordinateAxis1DTime, NetcdfDataset}
@@ -1093,7 +1093,7 @@ class DirectCDTimeSliceSpec(val partition: Partition, iRecord: Int, val varSpecs
 //}
 
 class DirectRDDVariableSpec( uid: String, metadata: Map[String,String], missing: Float, section: CDSection, val varShortName: String, val collectionId: String  ) extends RDDVariableSpec( uid, metadata, missing, section  ) with Loggable {
-  def getCollection: Collection =  Collections.findCollection(collectionId) getOrElse { throw new Exception( s"Can't find collection ${collectionId}") }
+  def getCollection: FileCollection =  Collections.findCollection(collectionId) getOrElse { throw new Exception( s"Can't find collection ${collectionId}") }
   def getAggregation(): Aggregation = getCollection.getAggregation(varShortName) getOrElse { throw new Exception( s"Can't find aggregation for variable ${varShortName} in collection ${collectionId}" ) }
 }
 

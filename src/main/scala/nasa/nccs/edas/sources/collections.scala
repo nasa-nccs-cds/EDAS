@@ -140,116 +140,68 @@ object CollectionLoadServices {
   def loadCollection( collId: String ): Boolean = { startService.loadCollection(collId) }
 }
 
-class Collection( ctype: String, id: String, val dataPath: String, val aggregations: Map[String,Aggregation], metadata: Map[String,String], vars: List[String] = List() ) extends DataSource(ctype, id, metadata, vars) {
+abstract class BaseCollection( ctype: String, id: String, metadata: Map[String,String], vars: List[String] = List() ) extends DataSource(ctype, id, metadata, vars) {
   val fileFilter = metadata.getOrElse("fileFilter","")
-  private val _grids = new ConcurrentLinkedHashMap.Builder[String, CDGrid].initialCapacity(10).maximumWeightedCapacity(500).build()
-  private val _variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()
-  override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
-  def isEmpty = dataPath.isEmpty
+  protected val _grids = new ConcurrentLinkedHashMap.Builder[String, CDGrid].initialCapacity(10).maximumWeightedCapacity(500).build()
+  protected val _variables = new ConcurrentLinkedHashMap.Builder[String, CDSVariable].initialCapacity(10).maximumWeightedCapacity(500).build()
+  override def toString = "Collection( id=%s, ctype=%s, title=%s, fileFilter=%s )".format(id, ctype, title, fileFilter)
+  def isEmpty = false
   lazy val varNames = vars.map( varStr => varStr.split(Array(':', '|')).head )
-  override def getGrid( varName: String ) = _grids.getOrElseUpdate( varName,  CDGrid( getRequiredAggregation(varName), dataPath ) )
-  def getAggregation( varName: String ): Option[Aggregation] = aggregations.get(varName)
-  def getRequiredAggregation( varName: String ): Aggregation = getAggregation( varName ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${varName} in collection ${id}") )
-
-  def isMeta: Boolean = dataPath.endsWith(".csv")
-  def getVariableMetadata(varName: String): List[nc2.Attribute] = getGrid( varName ).getVariableMetadata(varName)
-  def getGridFilePath( varName: String ) = getGrid( varName ).gridFilePath
-  def getVariable(varName: String): CDSVariable = _variables.getOrElseUpdate(varName, new CDSVariable( varName, getGrid( varName ), nc2.Attribute.makeMap( getVariableMetadata( varName ) ).toMap ))
-
+  override def getGrid( varName: String ): CDGrid
+  def isMeta: Boolean = false
+  def getVariableMetadata(varName: String): List[nc2.Attribute]
+  def getGridFilePath( varName: String ): String
+  def getVariable(varName: String): CDSVariable
   def getDatasetMetadata(): List[nc2.Attribute] = List(
     new nc2.Attribute("variables", varNames),
-    new nc2.Attribute("path", dataPath),
     new nc2.Attribute("ctype", ctype)
   )
-
-//  def generateAggregation(): xml.Elem = {
-//    val ncDataset: NetcdfDataset = NetcdfDatasetMgr.aquireFile(grid.gridFilePath, 10.toString, true)
-//    try {
-//      _aggCollection(ncDataset)
-//    } catch {
-//      case err: Exception => logger.error("Can't aggregate collection for dataset " + ncDataset.toString); throw err
-//    }
-//  }
-
-  def readVariableData(varShortName: String, section: ma2.Section): ma2.Array =
-    NetcdfDatasetMgr.readVariableData(varShortName, dataPath, section )
-
-//  private def _aggCollection(dataset: NetcdfDataset): xml.Elem = {
-//    val vars = dataset.getVariables.filter(!_.isCoordinateVariable).map(v => Collections.getVariableString(v)).toList
-//    val title: String = Collections.findAttribute(dataset, List("Title", "LongName"))
-//    val newCollection = new Collection(ctype, id, dataPath, fileFilter, scope, title, vars)
-//    Collections.updateCollection(newCollection)
-//    newCollection.toXml
-//  }
-//  def url(varName: String = "") = ctype match {
-//    case "http" => dataPath
-//    case _ => "file://" + dataPath
-//  }
-
-
-//  def getVarNodes: Seq[(String,Node)] = if(isMeta) {
-//    val subCollections = new MetaCollectionFile(dataPath).aggregations
-//    subCollections flatMap ( _.getVarNodes )
-//  } else {
-//    val vnames: List[String] = vars.map( _.split(':').head ).filter( !_.endsWith("_bnds") )
-//    vnames.map( vname => ( vname, getVariable( vname ).toXmlHeader ) )
-//  }
-
   def getResolution( varName: String ): String = try {
     getGrid(varName).resolution.toSeq.sortBy( _._1 ).map{ case (key,value)=> s"$key:" + f"$value%.2f"}.mkString(";")
-  } catch {
-    case ex: Exception =>
-      print( s"Exception in Collection.getResolution: ${ex.getMessage}" )
-      ex.printStackTrace()
-      ""
-  }
-
-
+  } catch { case ex: Exception =>  print( s"Exception in Collection.getResolution: ${ex.getMessage}" ); ex.printStackTrace(); "" }
   def toXml: xml.Elem = {
-    <collection id={id} title={title}>
-      { aggregations.values.toSet.map { agg: Aggregation => agg.toXml } }
-    </collection>
+    <collection id={id} title={title}> </collection>
   }
-
-  // <variable name={elems.head} axes={elems.last}> {v} </variable> } ) }
-
-//  def createNCML( pathFile: File, collectionId: String  ): String = {
-//    val _ncmlFile = Collections.getAggregationPath.resolve(collectionId).toFile
-//    val recreate = appParameters.bool("ncml.recreate", false)
-//    if (!_ncmlFile.exists || recreate) {
-//      logger.info( s"Creating NCML file for collection ${collectionId} from path ${pathFile.toString}")
-//      _ncmlFile.getParentFile.mkdirs
-//      val ncmlWriter = NCMLWriter(pathFile.toString)
-//      val variableMap = new collection.mutable.HashMap[String,String]()
-//      val varNames: List[String] = ncmlWriter.writeNCML(_ncmlFile)
-//      varNames.foreach( vname => variableMap += ( vname -> collectionId ) )
-//      NCMLWriter.writeCollectionDirectory( collectionId, variableMap.toMap )
-//    }
-//    _ncmlFile.toString
-//  }
-
-//  def getDataFilePath( uri: String, collectionId: String ) : String = ctype match {
-//    case "csv" =>
-//      val pathFile: File = new File(toFilePath(uri))
-//      createNCML( pathFile, collectionId )
-//    case "txt" =>
-//      val pathFile: File = new File(toFilePath(uri))
-//      createNCML( pathFile, collectionId )
-//    case "file" =>
-//      val pathFile: File = new File(toFilePath(uri))
-//      if( pathFile.isDirectory ) createNCML( pathFile, collectionId )
-//      else pathFile.toString
-//    case "dap" => uri
-//    case _ => throw new Exception( "Unexpected attempt to create Collection data file from ctype " + ctype )
-//  }
-
   def toFilePath(path: String): String = path.split(':').last.trim
-
   def toFilePath1(path: String): String = {
     if (path.startsWith("file:")) path.substring(5)
     else path
   }
 }
+
+
+class FileCollection(ctype: String, id: String, val dataPath: String, val aggregations: Map[String,Aggregation], metadata: Map[String,String], vars: List[String] = List() ) extends BaseCollection(ctype, id, metadata, vars) {
+  override def toString = "Collection( id=%s, ctype=%s, path=%s, title=%s, fileFilter=%s )".format(id, ctype, dataPath, title, fileFilter)
+  override def isEmpty = dataPath.isEmpty
+  override def getGrid( varName: String ) = _grids.getOrElseUpdate( varName,  CDGrid( getRequiredAggregation(varName), dataPath ) )
+  def getAggregation( varName: String ): Option[Aggregation] = aggregations.get(varName)
+  def getRequiredAggregation( varName: String ): Aggregation = getAggregation( varName ).getOrElse( throw new Exception(s"Can't find Aggregation for variable ${varName} in collection ${id}") )
+
+  override def isMeta: Boolean = dataPath.endsWith(".csv")
+  def getVariableMetadata(varName: String): List[nc2.Attribute] = getGrid( varName ).getVariableMetadata(varName)
+  def getGridFilePath( varName: String ): String = getGrid( varName ).gridFilePath
+  def getVariable(varName: String): CDSVariable = _variables.getOrElseUpdate(varName, new CDSVariable( varName, getGrid( varName ), nc2.Attribute.makeMap( getVariableMetadata( varName ) ).toMap, this ))
+
+  override def toXml: xml.Elem = {
+    <collection id={id} title={title}>
+      { aggregations.values.toSet.map { agg: Aggregation => agg.toXml } }
+    </collection>
+  }
+}
+
+
+class CacheCollection( id: String, val cachedResult: CachedResult ) extends BaseCollection("cache", id, cachedResult.metadata, cachedResult.variableRecords.keys.toList ) {
+  override def toString = "Collection( id=%s, ctype=%s, title=%s )".format( id, ctype, title )
+  override def getGrid( varName: String ) = _grids.getOrElseUpdate( varName, cachedResult.getGrid(varName) )
+  def getVariableMetadata(varName: String): List[nc2.Attribute] = getGrid( varName ).getVariableMetadata(varName)
+  def getGridFilePath( varName: String ) = getGrid( varName ).gridFilePath
+  def getVariable(varName: String): CDSVariable = _variables.getOrElseUpdate(varName, new CDSVariable( varName, getGrid( varName ), nc2.Attribute.makeMap( getVariableMetadata( varName ) ).toMap, this ))
+
+  override def toXml: xml.Elem = {
+    <collection id={id} title={title}> </collection>
+  }
+}
+
 
 
 //object Collection extends Loggable {
@@ -343,7 +295,7 @@ class CollectionGridFileLoader( val collId: String,val collectionFile: File ) ex
 object Collections extends XmlResource with Loggable {
   val maxCapacity: Int=500
   val initialCapacity: Int=10
-  private val _datasets: TrieMap[String,Collection] =  TrieMap.empty[String,Collection]
+  private val _datasets: TrieMap[String,FileCollection] =  TrieMap.empty[String,FileCollection]
   implicit def filter(r: Regex): FilenameFilter = new FilenameFilter { def accept( dir: File,  name: String ): Boolean  = name match { case r(_*) => true; case _ => false } }
 
 
@@ -358,7 +310,7 @@ object Collections extends XmlResource with Loggable {
     Files.exists( Paths.get( gridFile )  )
   }
 
-  def getCollectionFromPath( path: String ): Option[Collection] = _datasets.values.find( _.dataPath.equals( path ) )
+  def getCollectionFromPath( path: String ): Option[FileCollection] = _datasets.values.find( _.dataPath.equals( path ) )
   def getCollectionPaths: Iterable[String] = _datasets.values.map( _.dataPath )
 
   def getCacheDir: String = {
@@ -401,13 +353,13 @@ object Collections extends XmlResource with Loggable {
 
   def toXml: xml.Elem = {
     <collections>
-      {for ( (id: String, collection: Collection) <- _datasets; if collection.isMeta ) yield collection.toXml}
+      {for ((id: String, collection: FileCollection) <- _datasets; if collection.isMeta ) yield collection.toXml}
     </collections>
   }
 
   def toXml( scope: String ): xml.Elem = {
     <collections>
-      { for( ( id: String, collection:Collection ) <- _datasets; if collection.scope.equalsIgnoreCase(scope) ) yield collection.toXml }
+      { for(( id: String, collection:FileCollection ) <- _datasets; if collection.scope.equalsIgnoreCase(scope) ) yield collection.toXml }
     </collections>
   }
 
@@ -451,7 +403,7 @@ object Collections extends XmlResource with Loggable {
   def getPersistedVariableListXml: xml.Elem = FragmentPersistence.getFragmentListXml
 
   def idSet: Set[String] = _datasets.keySet.toSet
-  def values: Iterator[Collection] = _datasets.valuesIterator
+  def values: Iterator[FileCollection] = _datasets.valuesIterator
 
   def uriToFile( uri: String ): String = {
     uri.toLowerCase.split(":").last.stripPrefix("/").stripPrefix("/").replaceAll("[-/]","_").replaceAll("[^a-zA-Z0-9_.]", "X") + ".ncml"
@@ -482,7 +434,7 @@ object Collections extends XmlResource with Loggable {
   //    collection
   //  }
 
-  def addCollection( id: String, optFilePath: Option[String] = None ): Option[Collection] = {
+  def addCollection( id: String, optFilePath: Option[String] = None ): Option[FileCollection] = {
     val collectionFilePath = optFilePath getOrElse { getNCMLDirectory.resolve(id + ".csv").toString }
     try {
       val collection = _datasets.getOrElseUpdate(id, {
@@ -490,7 +442,7 @@ object Collections extends XmlResource with Loggable {
         val vars = for (line <- groupedLines._2; elems = line.split(",").map(_.trim)) yield elems.head
         val metadata: Map[String,String] = groupedLines._1.map( _.split(',') ).map( toks => toks(0).substring(1).trim -> toks(1).trim ).toMap
         val aggregations: Map[String,Aggregation] = getAggregations(collectionFilePath)
-        new Collection("file", id, collectionFilePath, aggregations, metadata, vars.toList)
+        new FileCollection("file", id, collectionFilePath, aggregations, metadata, vars.toList)
       })
       Some(collection)
     } catch {
@@ -531,7 +483,7 @@ object Collections extends XmlResource with Loggable {
   //    collection
   //  }
 
-  def updateCollection( collection: Collection ): Collection = {
+  def updateCollection( collection: FileCollection ): FileCollection = {
     _datasets.put( collection.id, collection  )
     logger.info( " *----> Persist New Collection: " + collection.id )
     //    persistLocalCollections()
@@ -576,7 +528,7 @@ object Collections extends XmlResource with Loggable {
   //  }
 
   def isChild( subDir: String,  parentDir: String ): Boolean = Paths.get( subDir ).toAbsolutePath.startsWith( Paths.get( parentDir ).toAbsolutePath )
-  def findCollectionByPath( subDir: String ): Option[Collection] = _datasets.values.toList.find { case collection => if( collection.dataPath.isEmpty) { false } else { isChild( subDir, collection.dataPath ) } }
+  def findCollectionByPath( subDir: String ): Option[FileCollection] = _datasets.values.toList.find { case collection => if( collection.dataPath.isEmpty) { false } else { isChild( subDir, collection.dataPath ) } }
 
 //  def loadCollectionXmlData( filePaths: Map[String,String] = Map.empty[String,String] ): TrieMap[String,Collection] = {
 //    val maxCapacity: Int=100000
@@ -619,12 +571,12 @@ object Collections extends XmlResource with Loggable {
 
   def hasCollection( collectionId: String ): Boolean = _datasets.containsKey( collectionId.toLowerCase )
 
-  def findCollection( collectionId: String ): Option[Collection] =
+  def findCollection( collectionId: String ): Option[FileCollection] =
     _datasets.get( collectionId.toLowerCase )
 
   def getCollectionXml( collectionId: String ): xml.Elem = {
     _datasets.get( collectionId.toLowerCase ) match {
-      case Some( collection: Collection ) => collection.toXml
+      case Some( collection: FileCollection ) => collection.toXml
       case None => <error> { "Invalid collection id:" + collectionId } </error>
     }
   }

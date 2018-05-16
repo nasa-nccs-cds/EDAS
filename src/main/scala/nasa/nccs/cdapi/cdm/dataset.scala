@@ -1008,7 +1008,7 @@ class MetaCollectionFile( val path: String ) {
 
   def getPath( varName: String ): Option[String] = _aggregations.get( varName.toLowerCase )
   def paths: Seq[String] = _aggregations.values.toSeq
-  def aggregations: Seq[Collection] = paths flatMap Collections.getCollectionFromPath
+  def aggregations: Seq[FileCollection] = paths flatMap Collections.getCollectionFromPath
 }
 
 //class ncWriteTest extends Loggable {
