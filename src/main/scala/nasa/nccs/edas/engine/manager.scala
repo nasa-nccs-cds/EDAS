@@ -246,10 +246,13 @@ object EDASExecutionManager extends Loggable {
           case Some(range) =>
             val coordDataType = if( coordAxis.getAxisType == AxisType.Time ) { DataType.DOUBLE } else { coordAxis.getDataType }
             val dims = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).toList
-            val newVar = writer.addVariable( null, coordAxis.getFullName, coordAxis.getDataType, dims )
-            val coordVar: nc2.Variable = if( newVar == null ) { writer.findVariable(coordAxis.getFullName) } else { newVar }
-            if( coordVar == null ) { logger.info("#CV# X2: " + coordAxis.getFullName ); None }
+            val newVar = writer.addVariable( null, coordAxis.getShortName, coordAxis.getDataType, dims )
+            val coordVar: nc2.Variable = if( newVar == null ) { writer.findVariable(coordAxis.getShortName) } else { newVar }
+            if( coordVar == null ) { logger.info("#CV# X2: " + coordAxis.getShortName ); None }
             else {
+              writer.addVariableAttribute( coordVar, new Attribute( "axis", coordAxis.getAxisType.getCFAxisName.toUpperCase ) )
+              writer.addVariableAttribute( coordVar, new Attribute( "standard_name", coordAxis.getDODSName ) )
+              writer.addVariableAttribute( coordVar, new Attribute( "long_name", coordAxis.getFullName ) )
               for (attr <- coordAxis.getAttributes; if attr != null) { writer.addVariableAttribute(coordVar, attr) }
               if (coordAxis.getAxisType == AxisType.Time) {
                 coordVar.addAttribute(new Attribute("units", timeUnits))
