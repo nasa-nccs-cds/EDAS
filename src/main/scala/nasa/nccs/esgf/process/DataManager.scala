@@ -188,7 +188,7 @@ object RangeCacheMaker {
   def create: mutable.Map[String, (Int,Int)] = { new mutable.HashMap[String, (Int,Int)] with mutable.SynchronizedMap[String, (Int,Int)] {} }
 }
 
-class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val coordAxis: CoordinateAxis1D, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {
+class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val coordAxis: CoordinateAxis, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {
   val t0 = System.nanoTime()
   private val _optRange: Option[ma2.Range] = getAxisRange
   val t1 = System.nanoTime()
@@ -199,6 +199,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   val enable_range_caching = true;
 //  logger.info( s" Created GridCoordSpec ${coordAxis.getFullName}, times = ${(t1-t0)/1.0E9} ${(t2-t1)/1.0E9} ${(t3-t2)/1.0E9} sec" )
   def getAxisType: AxisType = coordAxis.getAxisType
+  def coordAxis1D: CoordinateAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
 
   def getCFAxisName: String = Option(coordAxis.getAxisType) match  {
     case Some( axisType ) => getAxisType.getCFAxisName
@@ -345,14 +346,11 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
       case ival => Some(ival)
     }
   }
-  def getNumericCoordValues( range: ma2.Range ) = {
-    val coord_values = coordAxis.getCoordValues
-    if (coord_values.length == range.length) coord_values else (0 until range.length).map(iE => coord_values(range.element(iE))).toArray
-  }
 
   def getOffsetBounds( v0: Double, v1: Double ): ( Double, Double ) = {
-    val offset0: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getCoordValue(0) >= 0 )
-    val offset1: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getCoordValue( coordAxis.getSize.toInt-1 ) <= 180 )
+  val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
+    val offset0: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis1D.getCoordValue(0) >= 0 )
+    val offset1: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis1D.getCoordValue( coordAxis.getSize.toInt-1 ) <= 180 )
     val r0: Double = if( offset0 && ( v0 < 0 ) ) { v0 + 360 } else if( offset1 && ( v0 > 180 ) ) { v0 - 360 } else v0
     val r1: Double = if( offset0 && ( v1 < 0 ) ) { v1 + 360 } else if( offset1 && ( v1 > 180 ) ) { v1 - 360 } else v1
     ( r0, r1 )
@@ -391,7 +389,7 @@ object GridSection extends Loggable {
     val t1 = System.nanoTime
     val axes = variable.getCoordinateAxesList
     val t2 = System.nanoTime
-    val coordAxisMap: Map[String,CoordinateAxis1D] = variable.coordinateAxesFromDims
+    val coordAxisMap: Map[String,CoordinateAxis] = variable.coordinateAxesFromDims
     val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = coordAxisMap.get(dim)) yield coord_axis_opt match {
       case Some( coord_axis ) =>
         val domainAxisOpt: Option[DomainAxis] = roiOpt.flatMap(axes => axes.find(da => da.matches( coord_axis.getAxisType )))
@@ -645,7 +643,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
       case None => None
     }
   }
-  def getTimeCoordAxis: Option[ CoordinateAxis1D ] = grid.getAxisSpec("t").map( _.coordAxis )
+  def getTimeCoordAxis: Option[ CoordinateAxis1D ] = grid.getAxisSpec("t").map( axisSpec => axisSpec.coordAxis1D )
 
   def getBounds( section: ma2.Section ): Option[Array[Double]] = {
     val xrangeOpt: Option[Array[Double]] = Option( section.find("X") ) flatMap ( (r: ma2.Range) => grid.getAxisSpec("X").map( (gs: GridCoordSpec) => gs.getBounds(r) ) )
