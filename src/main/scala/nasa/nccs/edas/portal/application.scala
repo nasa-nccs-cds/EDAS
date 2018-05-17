@@ -100,7 +100,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     val process_name = elem(taskSpec,2)
     val dataInputsSpec = elem(taskSpec,3)
     setExeStatus( clientId, jobId, "executing " + process_name + "-> " + dataInputsSpec )
-    logger.info( "\n\nExecuting " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; ") + "\n\n")
+    logger.info( " @@E: Executing " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; "))
     val response_syntax = getResponseSyntax(runargs)
     val responseType = runargs.getOrElse("response","file")
     val executionCallback: ExecutionCallback = new ExecutionCallback {

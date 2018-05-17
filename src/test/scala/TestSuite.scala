@@ -40,7 +40,7 @@ class DefaultTestSuite extends EDASTestSuite {
   val test_python = true
   val test_binning = true
   val test_regrid = true
-  val test_collection_output = false
+  val test_collection_output = true
   val reanalysis_ensemble = false
   val mod_collections = for (model <- List( "GISS", "GISS-E2-R" ); iExp <- (1 to nExp)) yield (model -> s"${model}_r${iExp}i1p1")
   val cip_collections = for ( model <- List( "CIP_CFSR_6hr", "CIP_MERRA2_mon" ) ) yield (model -> s"${model}_ta")
@@ -201,8 +201,8 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],
          | variable=[{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v0","domain":"d0"}],
-         | operation=[{"name":"CDSpark.noOp","input":"v0","domain":"d0","grid":"uniform","shape":"32,64"}]]""".stripMargin
-    val result_node0 = executeTest( datainputs, Map( "response" -> "collection", "cid" ->  "merra2_tas_regrid_32x64" ) )
+         | operation=[{"name":"CDSpark.noOp","input":"v0","domain":"d0","grid":"uniform","shape":"32,64","response":"collection","cid":"merra2_tas_regrid_32x64"}]]""".stripMargin
+    val result_node0 = executeTest( datainputs )
     println( " ** Result: " + result_node0.toString() )
     val datainputs1 =
       s"""[domain=[{"name":"d1"}],
