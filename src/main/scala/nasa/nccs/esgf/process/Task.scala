@@ -324,7 +324,7 @@ class DataSource(val name: String, val collection: Collection, val declared_doma
   def updateDomainsFromOperation( operation: OperationContext ): Boolean = if( declared_domain.isEmpty ) {
     logger.info( s"DataSource(${collection.collId}:${name})--> Update Domains From Operation(${operation.name}) --> op domains: ${operation.getDomains.mkString(", ")}")
     val updated = operation.getDomains.exists( _addDomain )
-    if( _inferredDomains.size > 1 ) { throw new Exception( s"Ambiguous Domain for input ${name}, domains: ${_inferredDomains.mkString(", ")}") }
+    if( _inferredDomains.size > 1 ) { logger.warn( s"Ambiguous Domain for input ${name}, domains: ${_inferredDomains.mkString(", ")}") }
     updated
   } else { false }
 }
