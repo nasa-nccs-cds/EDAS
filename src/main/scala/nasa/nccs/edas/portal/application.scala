@@ -86,11 +86,15 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 
   def getRunArgs( taskSpec: Array[String] ): Map[String,String] = {
     val runargs = if( taskSpec.length > 4 ) wpsObjectParser.parseMap( taskSpec(4) ) else Map.empty[String, Any]
-    if( !runargs.keys.contains("response") ) {
+    if( !runargs.keys.contains("responseform") ) {
       val status = runargs.getOrElse("status","false").toString.toBoolean
       val defaultResponseType = if( status ) { "file" } else { "xml" }
       runargs.mapValues(_.toString) + ("response" -> defaultResponseType )
-    } else runargs.mapValues(_.toString)
+    } else {
+      val responseToks = runargs.getOrElse("responseform","").toString.split(':')
+      val new_runargs = runargs.mapValues(_.toString) + ("response" -> responseToks.head )
+      if( responseToks.length == 1 ) { new_runargs } else { new_runargs + ("response" -> responseToks.last ) }
+    }
   }
 
   override def execute( taskSpec: Array[String] ): Response = {

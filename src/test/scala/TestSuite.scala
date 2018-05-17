@@ -201,8 +201,8 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],
          | variable=[{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v0","domain":"d0"}],
-         | operation=[{"name":"CDSpark.noOp","input":"v0","domain":"d0","grid":"uniform","shape":"32,64","response":"collection","cid":"merra2_tas_regrid_32x64"}]]""".stripMargin
-    val result_node0 = executeTest( datainputs )
+         | operation=[{"name":"CDSpark.noOp","input":"v0","domain":"d0","grid":"uniform","shape":"32,64"}]]""".stripMargin
+    val result_node0 = executeTest( datainputs, runArgs = Map( "response" -> "collection","cid" -> "merra2_tas_regrid_32x64" ) )
     println( " ** Result: " + result_node0.toString() )
     val datainputs1 =
       s"""[domain=[{"name":"d1"}],
