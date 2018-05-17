@@ -159,13 +159,15 @@ object EDASExecutionManager extends Loggable {
 
   def saveResultToFile(executor: WorkflowExecutor, result: QueryResultCollection, dsetMetadata: List[nc2.Attribute] = List.empty[nc2.Attribute] ): Iterable[String] = {
     if( result.records.isEmpty ) { return Iterable.empty }
-    val merged_record: CDRecord = result.concatSlices.records.head
-    val partitioned_records = merged_record.partitionByShape
-    var fileIndex = -1
-    partitioned_records.map { case (shape, record) =>
-      fileIndex = fileIndex + 1
-      saveResultToFile(executor, record, result.getMetadata, dsetMetadata, fileIndex, partitioned_records.size )
+    val multiFiles: Boolean = executor.requestCx.getConf("response", "xml") == "collection"
+    val records_list: Array[(CDRecord,Int)] = if(multiFiles) { result.records.zipWithIndex } else { result.concatSlices.records.zipWithIndex }
+    val file_lists = for( ( record, timeIndex ) <- records_list ) yield {
+      val partitioned_records = record.partitionByShape.zipWithIndex
+      for( ( (shape, record), fileIndex ) <-  partitioned_records ) yield {
+        saveResultToFile(executor, record, result.getMetadata, dsetMetadata, fileIndex, timeIndex, partitioned_records.size )
+      }
     }
+    file_lists.toIterable.flatten
   }
   def ex( msg: String ) = throw new Exception( msg )
 
@@ -184,13 +186,14 @@ object EDASExecutionManager extends Loggable {
 //    newRange.
 //  }
 
-  def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute], fileIndex: Int, nFiles: Int  ): String = {
+  def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute], fileIndex: Int, timeIndex: Int, nFiles: Int  ): String = {
     val t0 = System.nanoTime()
     val multiFiles = false
     val head_elem: ArraySpec = slice.elements.values.head
     val resultId: String = if(multiFiles) { executor.requestCx.jobId + "-" + slice.elements.keys.head } else { executor.requestCx.jobId }
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
-    val fileName = if( fileIndex == 0 ) { resultId } else { resultId + "-" + fileIndex }
+    val baseFileName = if( fileIndex == 0 ) { resultId } else { resultId + "-" + fileIndex }
+    val fileName = if( timeIndex == 0 ) { baseFileName } else { baseFileName + "-" + timeIndex }
     val resultFile = Kernel.getResultFile( fileName, true )
     val path = resultFile.getAbsolutePath
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, path, chunker)
