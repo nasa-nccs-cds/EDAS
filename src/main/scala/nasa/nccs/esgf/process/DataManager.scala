@@ -79,6 +79,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   def variableRecs: Map[String,VariableRecord] = _inputsRDD.variableRecs
   def nSlices: Long = _inputsRDD.nSlices
   def update: CDRecordRDD = _inputsRDD.update
+  def getRelatedInputSpec( id: String ): Option[DataFragmentSpec] = requestCx.getRelatedInputSpec(id)
 
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Unit = {
     val inputs =  getInputs(node)
@@ -133,6 +134,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   def getConfiguration = configuration.map(identity)
   val domains: Map[String,DomainContainer] = task.domainMap
   val profiler: EventAccumulator = new EventAccumulator()
+  lazy val responseType = configuration.getOrElse("response","file")
 
   def initializeProfiler( activationStatus: String, sc: SparkContext ) = {
     logger.info( s" #EA# Initializing profiler, configuration = ${configuration.mkString(",")}, task meta = ${task.metadata.mkString(",")}")
@@ -145,6 +147,10 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   def missing_variable(uid: String) = throw new Exception("Can't find Variable '%s' in uids: [ %s ]".format(uid, inputs.keySet.mkString(", ")))
   def getDataSources: Map[String, Option[DataFragmentSpec]] = inputs
   def getInputSpec( uid: String ): Option[DataFragmentSpec] = inputs.get( uid ).flatten
+  def getRelatedInputSpec( id: String ): Option[DataFragmentSpec] = {
+    val optElem = inputs.find { case (vid,optDataFrag) => vid.split('-').head.equals(id) }
+    optElem.flatMap { case (key,optDataFrag) => optDataFrag }
+  }
   def getInputSpec(): Option[DataFragmentSpec] = inputs.head._2
   def getCollection( uid: String = "" ): Option[Collection] = inputs.get( uid ) match {
     case Some(optInputSpec) => optInputSpec map { inputSpec => inputSpec.getCollection }
@@ -182,7 +188,7 @@ object RangeCacheMaker {
   def create: mutable.Map[String, (Int,Int)] = { new mutable.HashMap[String, (Int,Int)] with mutable.SynchronizedMap[String, (Int,Int)] {} }
 }
 
-class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val coordAxis: CoordinateAxis1D, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {
+class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val coordAxis: CoordinateAxis, val domainAxisOpt: Option[DomainAxis] )  extends Serializable with Loggable {
   val t0 = System.nanoTime()
   private val _optRange: Option[ma2.Range] = getAxisRange
   val t1 = System.nanoTime()
@@ -193,6 +199,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
   val enable_range_caching = true;
 //  logger.info( s" Created GridCoordSpec ${coordAxis.getFullName}, times = ${(t1-t0)/1.0E9} ${(t2-t1)/1.0E9} ${(t3-t2)/1.0E9} sec" )
   def getAxisType: AxisType = coordAxis.getAxisType
+  def coordAxis1D: CoordinateAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
 
   def getCFAxisName: String = Option(coordAxis.getAxisType) match  {
     case Some( axisType ) => getAxisType.getCFAxisName
@@ -339,14 +346,11 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
       case ival => Some(ival)
     }
   }
-  def getNumericCoordValues( range: ma2.Range ) = {
-    val coord_values = coordAxis.getCoordValues
-    if (coord_values.length == range.length) coord_values else (0 until range.length).map(iE => coord_values(range.element(iE))).toArray
-  }
 
   def getOffsetBounds( v0: Double, v1: Double ): ( Double, Double ) = {
-    val offset0: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getCoordValue(0) >= 0 )
-    val offset1: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis.getCoordValue( coordAxis.getSize.toInt-1 ) <= 180 )
+  val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
+    val offset0: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis1D.getCoordValue(0) >= 0 )
+    val offset1: Boolean = ( coordAxis.getAxisType.getCFAxisName == "X" ) && ( coordAxis1D.getCoordValue( coordAxis.getSize.toInt-1 ) <= 180 )
     val r0: Double = if( offset0 && ( v0 < 0 ) ) { v0 + 360 } else if( offset1 && ( v0 > 180 ) ) { v0 - 360 } else v0
     val r1: Double = if( offset0 && ( v1 < 0 ) ) { v1 + 360 } else if( offset1 && ( v1 > 180 ) ) { v1 - 360 } else v1
     ( r0, r1 )
@@ -385,7 +389,8 @@ object GridSection extends Loggable {
     val t1 = System.nanoTime
     val axes = variable.getCoordinateAxesList
     val t2 = System.nanoTime
-    val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = variable.getCoordinateAxis(dim)) yield coord_axis_opt match {
+    val coordAxisMap: Map[String,CoordinateAxis] = variable.coordinateAxesFromDims
+    val coordSpecs: IndexedSeq[Option[GridCoordSpec]] = for (idim <- variable.dims.indices; dim = variable.dims(idim); coord_axis_opt = coordAxisMap.get(dim)) yield coord_axis_opt match {
       case Some( coord_axis ) =>
         val domainAxisOpt: Option[DomainAxis] = roiOpt.flatMap(axes => axes.find(da => da.matches( coord_axis.getAxisType )))
         Some( new GridCoordSpec(idim, grid, variable.getAggregation, coord_axis, domainAxisOpt) )
@@ -406,6 +411,7 @@ object GridSection extends Loggable {
 }
 
 class  GridSection( val grid: CDGrid, val axes: IndexedSeq[GridCoordSpec] ) extends Serializable with Loggable {
+  val test = 0;
   def getAxisSpec( dim_index: Int ): GridCoordSpec = axes(dim_index)
   def getAxisSpec( axis_type: AxisType ): Option[GridCoordSpec] = axes.find( axis => axis.getAxisType == axis_type )
   def getAxisSpec( domainAxis: DomainAxis ): Option[GridCoordSpec] = axes.find( axis => domainAxis.matches(axis.getAxisType ) )
@@ -637,7 +643,7 @@ class TargetGrid( variable: CDSVariable, roiOpt: Option[List[DomainAxis]]=None )
       case None => None
     }
   }
-  def getTimeCoordAxis: Option[ CoordinateAxis1D ] = grid.getAxisSpec("t").map( _.coordAxis )
+  def getTimeCoordAxis: Option[ CoordinateAxis1D ] = grid.getAxisSpec("t").map( axisSpec => axisSpec.coordAxis1D )
 
   def getBounds( section: ma2.Section ): Option[Array[Double]] = {
     val xrangeOpt: Option[Array[Double]] = Option( section.find("X") ) flatMap ( (r: ma2.Range) => grid.getAxisSpec("X").map( (gs: GridCoordSpec) => gs.getBounds(r) ) )

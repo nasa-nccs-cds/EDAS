@@ -115,11 +115,19 @@ object AggregationWriter extends Loggable {
   }
 
   def extractAggregations(collectionId: String, dataPath: Path, options: Map[String,String] = Map.empty ): Unit = {
-    Collections.clearCacheFilesById( collectionId )
-    val dataLocation: Path = if(dataPath.toFile.exists) { dataPath } else { Paths.get( new java.io.File(".").getCanonicalPath, dataPath.toString ) }
-    assert( dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
+    Collections.clearCacheFilesById(collectionId)
+    val dataLocation: Path = if (dataPath.toFile.exists) {
+      dataPath
+    } else {
+      Paths.get(new java.io.File(".").getCanonicalPath, dataPath.toString)
+    }
+    assert(dataLocation.toFile.exists, s"Data location ${dataLocation.toString} does not exist:")
     //    logger.info(s" %C% Extract collection $collectionId from " + dataLocation.toString)
     val ncSubPaths = recursiveListNcFiles(dataLocation)
+    extractAggregationsFromFiles(collectionId, dataLocation, ncSubPaths, options)
+  }
+
+  def extractAggregationsFromFiles(collectionId: String, dataLocation: Path, ncSubPaths: Array[String], options: Map[String,String] = Map.empty ): Unit = {
     FileHeader.factory( collectionId, dataLocation,  ncSubPaths )
     val refresh: Boolean = options.getOrElse("refresh","false").toBoolean
     val nameTemplate: Regex = options.getOrElse("filter",".*").r

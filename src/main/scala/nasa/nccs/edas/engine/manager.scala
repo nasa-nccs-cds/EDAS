@@ -159,13 +159,15 @@ object EDASExecutionManager extends Loggable {
 
   def saveResultToFile(executor: WorkflowExecutor, result: QueryResultCollection, dsetMetadata: List[nc2.Attribute] = List.empty[nc2.Attribute] ): Iterable[String] = {
     if( result.records.isEmpty ) { return Iterable.empty }
-    val merged_record: CDRecord = result.concatSlices.records.head
-    val partitioned_records = merged_record.partitionByShape
-    var fileIndex = -1
-    partitioned_records.map { case (shape, record) =>
-      fileIndex = fileIndex + 1
-      saveResultToFile(executor, record, result.getMetadata, dsetMetadata, fileIndex, partitioned_records.size )
+    val multiFiles: Boolean = executor.requestCx.getConf("response", "xml") == "collection"
+    val records_list: Array[(CDRecord,Int)] = if(multiFiles) { result.records.zipWithIndex } else { result.concatSlices.records.zipWithIndex }
+    val file_lists = for( ( record, timeIndex ) <- records_list ) yield {
+      val partitioned_records = record.partitionByShape.zipWithIndex
+      for( ( (shape, record), fileIndex ) <-  partitioned_records ) yield {
+        saveResultToFile(executor, record, result.getMetadata, dsetMetadata, fileIndex, timeIndex, partitioned_records.size )
+      }
     }
+    file_lists.toIterable.flatten
   }
   def ex( msg: String ) = throw new Exception( msg )
 
@@ -184,13 +186,14 @@ object EDASExecutionManager extends Loggable {
 //    newRange.
 //  }
 
-  def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute], fileIndex: Int, nFiles: Int  ): String = {
+  def saveResultToFile(executor: WorkflowExecutor, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute], fileIndex: Int, timeIndex: Int, nFiles: Int  ): String = {
     val t0 = System.nanoTime()
     val multiFiles = false
     val head_elem: ArraySpec = slice.elements.values.head
     val resultId: String = if(multiFiles) { executor.requestCx.jobId + "-" + slice.elements.keys.head } else { executor.requestCx.jobId }
     val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
-    val fileName = if( fileIndex == 0 ) { resultId } else { resultId + "-" + fileIndex }
+    val baseFileName = if( fileIndex == 0 ) { resultId } else { resultId + "-" + fileIndex }
+    val fileName = if( timeIndex == 0 ) { baseFileName } else { baseFileName + "-" + timeIndex }
     val resultFile = Kernel.getResultFile( fileName, true )
     val path = resultFile.getAbsolutePath
     val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, path, chunker)
@@ -215,17 +218,15 @@ object EDASExecutionManager extends Loggable {
       val t3 = System.nanoTime()
       val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
       val t4 = System.nanoTime()
-      val coordAxes: List[CoordinateAxis] = targetGrid.grid.grid.getCoordinateAxes
-//      val coordAxes: List[CoordinateAxis] = gridFileOpt match {
-//        case Some( gridFilePath ) =>
-//          val gridDSet = NetcdfDataset.openDataset(gridFilePath)
-//          gridDSet.getCoordinateAxes.toList :+ timeCoordAxis
-//        case None =>
-//          targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
-//      }
 
+      val coordAxes: List[CoordinateAxis] = gridFileOpt match {
+        case Some( gridFilePath ) =>
+          val gridDSet = NetcdfDataset.openDataset(gridFilePath)
+          gridDSet.getCoordinateAxes.toList :+ timeCoordAxis
+        case None =>
+          targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
+      }
 
-//      println( " %%% Writing result to file " + path )
       logger.info(" #CV#  Grid file: " + gridFileOpt.getOrElse("") )
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
@@ -248,10 +249,13 @@ object EDASExecutionManager extends Loggable {
           case Some(range) =>
             val coordDataType = if( coordAxis.getAxisType == AxisType.Time ) { DataType.DOUBLE } else { coordAxis.getDataType }
             val dims = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).toList
-            val newVar = writer.addVariable( null, coordAxis.getFullName, coordAxis.getDataType, dims )
-            val coordVar: nc2.Variable = if( newVar == null ) { writer.findVariable(coordAxis.getFullName) } else { newVar }
-            if( coordVar == null ) { logger.info("#CV# X2: " + coordAxis.getFullName ); None }
+            val newVar = writer.addVariable( null, coordAxis.getShortName, coordAxis.getDataType, dims )
+            val coordVar: nc2.Variable = if( newVar == null ) { writer.findVariable(coordAxis.getShortName) } else { newVar }
+            if( coordVar == null ) { logger.info("#CV# X2: " + coordAxis.getShortName ); None }
             else {
+              writer.addVariableAttribute( coordVar, new Attribute( "axis", coordAxis.getAxisType.getCFAxisName.toUpperCase ) )
+              writer.addVariableAttribute( coordVar, new Attribute( "standard_name", coordAxis.getDODSName ) )
+              writer.addVariableAttribute( coordVar, new Attribute( "long_name", coordAxis.getFullName ) )
               for (attr <- coordAxis.getAttributes; if attr != null) { writer.addVariableAttribute(coordVar, attr) }
               if (coordAxis.getAxisType == AxisType.Time) {
                 coordVar.addAttribute(new Attribute("units", timeUnits))
@@ -284,8 +288,9 @@ object EDASExecutionManager extends Loggable {
       val varDims: Array[Dimension] = axisTypes.map( aType => dimsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
       val dataMap: Map[String,CDFloatArray] = slice.elements.mapValues( _.toCDFloatArray )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
+        val optVarName = executor.getRelatedInputSpec( tname.split('-').head ).map( _.varname )
         val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
-        val varname = baseName + "-" + tname
+        val varname: String = optVarName.getOrElse( baseName + "-" + tname )
         logger.info("Creating var %s: dims = [%s], data sample = [ %s ]".format(varname, varDims.map( _.getShortName).mkString(", "), maskedTensor.getSectionArray( Math.min(10,maskedTensor.getSize.toInt) ).mkString(", ") ) )
         val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, varDims.toList )
         varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }
@@ -299,9 +304,9 @@ object EDASExecutionManager extends Loggable {
       for ((coordVar, coordData) <- newCoordVars) {
         logger.info("#CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString ))
         try {
-          logger.info("#CV# Coord data sample = [%f,%f,...]".format( coordData.getFloat(0), coordData.getFloat(1)))
+          logger.info("#CV# Coord data sample = [%f,%f,...], size = %d".format( coordData.getFloat(0), coordData.getFloat(1), coordData.getSize ) )
           writer.write(coordVar, coordData)
-        } catch { case ex: Exception => logger.info("#CV# MISSING Coord data!" ) }
+        } catch { case ex: Exception => logger.info("#CV# MISSING Coord data: " + ex.getMessage + " -> " + ex.getStackTrace.head.toString ) }
       }
       variables.foreach { case (variable, maskedTensor) => {
         logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))

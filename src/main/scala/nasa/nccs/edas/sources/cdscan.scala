@@ -130,7 +130,7 @@ object FileHeader extends Loggable {
     waitUntilDone( filterCompleted(seq) )
   }
 
-  def factory(collectionId: String, dataLocation: Path, files: Array[String], timeRegular: Boolean = false ):Unit = {
+  def factory(collectionId: String, dataLocation: Path, files: Array[String], timeRegular: Boolean = false ): Unit = {
     val futures: IndexedSeq[Future[_]] = files.filter { file => !isCached(file) } map { file => _pool.submit( new FileHeaderGenerator(collectionId, dataLocation, file, timeRegular) ) }
     waitUntilDone( futures )
   }

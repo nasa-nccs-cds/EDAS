@@ -377,6 +377,14 @@ class CDGrid( val name: String,  val gridFilePath: String, val coordAxes: List[C
     }
   }
 
+  def coordinateAxesFromDims(): Map[String,CoordinateAxis] = {
+    val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, 6.toString, true)
+    val axes = gridDS.getCoordinateAxes.toList
+    val elemList = for( axis <- axes; dims = axis.getDimensions; dim <- dims ) yield dim.getShortName -> axis
+    gridDS.close
+    elemList.toMap
+  }
+
   def updateTimeCoordinateAxis(context: String): Unit = {
     val gridDS = NetcdfDatasetMgr.aquireFile(gridFilePath, context, true)
     try {

@@ -87,6 +87,8 @@ class CDSVariable( val name: String, val collection: Collection ) extends Loggab
     dims.flatMap( dim => collection.getGrid(name).findCoordinateAxis( dim ).map( coordAxis => CDSVariable.toCoordAxis1D( coordAxis ) ) ).toList
   }
 
+  def coordinateAxesFromDims: Map[String,CoordinateAxis] = { collection.getGrid(name).coordinateAxesFromDims }
+
   def getCoordinateAxis( cname: String ): Option[CoordinateAxis1D] = {
     val caxis = collection.getGrid(name).findCoordinateAxis(cname)
     caxis.map( CDSVariable.toCoordAxis1D(_) )
