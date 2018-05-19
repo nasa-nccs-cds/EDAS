@@ -53,8 +53,10 @@ class svd extends KernelImpl {
       }
     }
     val elems = if( computeU ) {
+
       val Uelems: Seq[(String, ArraySpec)] = CDRecord.rowMatrixCols2Arrays( svd.U ).zipWithIndex.map { case (udata, index) =>
-        s"U$index" -> new ArraySpec(topElem.missing, Array(udata.length,1,1), topElem.origin, udata, topElem.optGroup )
+        val shape = if( topElem.shape.length == 4 ) { Array(udata.length,1,1,1) } else { Array(udata.length,1,1) }
+        s"U$index" -> new ArraySpec(topElem.missing, shape, topElem.origin, udata, topElem.optGroup )
       }
       (Uelems ++ Velems).toMap
     } else { Velems.toMap }
