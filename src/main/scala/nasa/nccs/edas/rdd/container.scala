@@ -226,6 +226,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
     val groupedElems = elements.groupBy { case (id,array) => array.shape.mkString(",") }
     groupedElems.mapValues( elems => new CDRecord(startTime, endTime, elems, metadata ) )
   }
+  def shape: Array[Int] = elements.values.headOption.fold(Array.empty[Int])(_.shape)
   def shiftTime( startTime: Long, endTime: Long ) = new CDRecord( startTime, endTime, elements, metadata )
   def release( keys: Iterable[String] ): CDRecord = { new CDRecord(startTime, endTime, elements.filterKeys(key => !keys.contains(key) ), metadata) }
   def selectElement( elemId: String ): CDRecord = CDRecord(startTime, endTime, elements.filterKeys( _.equalsIgnoreCase(elemId) ), metadata)
@@ -669,7 +670,7 @@ class TimeSlicePartition(val varId: String, val varName: String, cdsection: CDSe
       CDRecord(time_bounds(0), time_bounds(1), Map(varId -> arraySpec), Map( "dims" -> variable.getDimensionsString ) )
     }
     dataset.close()
-    logger.info(" [%s] Completed Read of %d timeSlices in %.4f sec, partitionRange = %s".format(KernelContext.getProcessAddress, nTimesteps, (System.nanoTime() - t0) / 1.0E9, partitionRange.toString ) )
+    logger.info(" #GS# [%s] Completed Read of %d timeSlices in %.4f sec, partitionRange = %s, shape = [%s]".format(KernelContext.getProcessAddress, nTimesteps, (System.nanoTime() - t0) / 1.0E9, partitionRange.toString, slices.headOption.fold("")(_.shape.mkString(",")) ) )
     slices.toIterator
   }
 
