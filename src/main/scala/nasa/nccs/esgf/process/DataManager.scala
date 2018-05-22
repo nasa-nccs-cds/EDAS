@@ -732,13 +732,15 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
     val domain_mdata = domain_container_opt.map( _.metadata ).getOrElse(Map.empty)
     val optSection: Option[ma2.Section] = fragRoiOpt match { case Some(roi) => Some(roi); case None => targetGrid.grid.getSection }
     val optDomainSect: Option[ma2.Section] = domain_container_opt.flatMap( domain_container => targetGrid.grid.getSubSection( domain_container.axes ) )
+    val axes: List[DomainAxis] = domain_container_opt.fold(List.empty[DomainAxis])( domain_container => domain_container.axes )
     val fragSpec: Option[DataFragmentSpec] = optSection map { section =>
       new DataFragmentSpec( dataContainer.uid, variable.name, variable.collection, data_source.fragIdOpt, Some(targetGrid), variable.dims.mkString(","),
         variable.units, variable.getAttributeValue("long_name", variable.fullname), section, optDomainSect, domain_mdata, variable.missing, variable.getAttributeValue("numDataFiles", "1").toInt, maskOpt, data_source.autoCache )
     }
     val rv = dataContainer.uid -> fragSpec
-    logger.info( " LoadVariableDataT: section=%s, domainSect=%s, fragId=%s, fragRoi=%s, %.4f %.4f %.4f, T = %.4f ".format(
+    logger.info( " #LV# LoadVariableDataT: section=%s, domainSect=%s, fragId=%s, fragRoi=%s, %.4f %.4f %.4f, T = %.4f ".format(
       optSection.getOrElse("null").toString, optDomainSect.getOrElse("null").toString, data_source.fragIdOpt.getOrElse("null").toString, fragRoiOpt.getOrElse("null").toString, (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, (t3-t0)/1.0E9 ) )
+    logger.info( s" #LV# axes = ${axes.map(_.toString).mkString(",")}" )
     rv
   }
 
