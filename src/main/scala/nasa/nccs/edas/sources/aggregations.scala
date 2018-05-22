@@ -468,10 +468,18 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     val start_date = CalendarDate.of( calendar, time_start )
     val end_date = CalendarDate.of( calendar, time_end )
     val value_date = CalendarDate.of( calendar, time_value )
-    if( time_value < time_start ) { return  TimeRange( time_start, time_start, 0, 0, BoundedIndex.BelowRange )  }
-    if( time_value >= time_end ) { return TimeRange( time_end, time_end, time_nrows-1, 0, BoundedIndex.AboveRange ) }
+    if( time_value < time_start ) {
+      logger.info( s" #LV#: MappingTimeValue-PRE: file_index=${estimated_file_index} range start=${time_start}, range end=${time_end}, nFiles=${files.length}, time_value=${time_value}, value_date=${value_date.toString}")
+      return  TimeRange( time_start, time_start, 0, 0, BoundedIndex.BelowRange )
+    }
+    if( time_value >= time_end ) {
+      logger.info( s" #LV#: MappingTimeValue-POST: file_index=${estimated_file_index} range start=${time_start}, range end=${time_end}, nFiles=${files.length}, time_value=${time_value}, value_date=${value_date.toString}")
+      return TimeRange( time_end, time_end, time_nrows-1, 0, BoundedIndex.AboveRange )
+    }
     val file0 = files( estimated_file_index )
-    if (time_value < file0.startTime) { return _fileInputsFromTimeValue(time_value, estimated_file_index - 1) }
+    if (time_value < file0.startTime) {
+      return _fileInputsFromTimeValue(time_value, estimated_file_index - 1)
+    }
     if( estimated_file_index == ( files.length - 1 ) ) {
       logger.info( s" #LV#: MappingTimeValue-Ceiling: file_index=${estimated_file_index} file start Time=${file0.startTime}, row=${file0.firstRowIndex}, nFiles=${files.length}, time_value=${time_value}, value_date=${value_date.toString}")
       TimeRange(file0.startTime, time_end, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange )
