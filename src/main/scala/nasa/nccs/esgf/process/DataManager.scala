@@ -361,18 +361,27 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
     val coordAxis1D = CDSVariable.toCoordAxis1D( coordAxis )
     val axis_size = coordAxis1D.getSize.toInt
     val ( startval, endval ) = getOffsetBounds( v0, v1 )
-    logger.info( s" #LV# ${coordAxis.getAxisType.getCFAxisName} GetOffsetBounds: ($v0, $v1) -> ($startval, $endval)" )
     val coordStartIndex = Math.max( coordAxis1D.findCoordElementBounded(startval) - 1, 0 )
+    logger.info( s" #LV# ${coordAxis.getAxisType.getCFAxisName} GetOffsetBounds: ($v0, $v1) -> ($startval, $endval), coordStartIndex = $coordStartIndex" )
     var startIndex = -1
     for(  coordIndex <- coordStartIndex until axis_size; cval = coordAxis1D.getCoordValue( coordIndex ); if cval >= startval ) {
       if( cval <= endval ) {
         if( startIndex == -1 ) { startIndex = coordIndex }
       } else {
-        return if(startIndex == -1) { Some( new ma2.Range( coordIndex, coordIndex ) ) } else { Some( new ma2.Range( startIndex, coordIndex-1 ) ) }
+        return if(startIndex == -1) {
+          logger.info( s" #LV# IndexBounds:  ( start=$startIndex, end=$coordIndex )" )
+          Some( new ma2.Range( coordIndex, coordIndex ) )
+        } else {
+          logger.info( s" #LV# IndexBounds:  ( start=$startIndex, end=${coordIndex-1} )" )
+          Some( new ma2.Range( startIndex, coordIndex-1 ) )
+        }
       }
     }
-    if( startIndex == -1 ) { None } else {
-      logger.info( s" #LV# IndexBounds:  ( start=$startIndex, axis_size=$axis_size )" )
+    if( startIndex == -1 ) {
+      logger.info( s" #LV# IndexBounds:  NONE " )
+      None
+    } else {
+      logger.info( s" #LV# IndexBounds:  ( start=$startIndex, end=${axis_size-1} )" )
       Some( new ma2.Range( startIndex, axis_size - 1) )
     }
   }
