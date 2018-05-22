@@ -634,10 +634,17 @@ object Aggregation extends Loggable {
       bw.write( s"P; num.files; ${fileHeaders.length}\n")
       for (attr <- fileMetadata.attributes ) { bw.write( s"P; ${attr.getFullName}; ${attr.getStringValue} \n") }
       for (coordAxis <- fileMetadata.coordinateAxes; ctype = coordAxis.getAxisType.getCFAxisName ) {
-        if(ctype.equals("Z") ) {  bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n") }
-        else {                    bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n" ) }
+        if(ctype.equals("Z") )      {  bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n") }
+        else if(ctype.equals("T") ) {  bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${nTimeSteps}; ${coordAxis.getUnitsString};  ${startTime}; ${endtime}\n") }
+        else {                         bw.write( s"A; ${coordAxis.getShortName}; ${coordAxis.getDODSName}; $ctype; ${coordAxis.getShape.mkString(",")}; ${coordAxis.getUnitsString};  ${coordAxis.getMinValue}; ${coordAxis.getMaxValue}\n" ) }
       }
-      for (cVar <- fileMetadata.coordVars) { bw.write( s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} \n" ) }
+      for (cVar <- fileMetadata.coordVars) {
+        if( cVar.getShortName.toLowerCase.startsWith("tim") ) {
+          bw.write(s"C; ${cVar.getShortName};  ${nTimeSteps} \n")
+        } else {
+          bw.write(s"C; ${cVar.getShortName};  ${cVar.getShape.mkString(",")} \n")
+        }
+      }
       for (variable <- fileMetadata.variables) { bw.write( s"V; ${variable.getShortName}; ${variable.getFullName}; ${variable.getDODSName};  ${variable.getDescription};  ${getShapeStr(variable.getDimensionsString,nTimeSteps,variable.getShape)}; ${resolution}; ${variable.getDimensionsString};  ${variable.getUnitsString} \n" ) }
       for (fileHeader <- fileHeaders) {
         bw.write( s"F; ${EDTime.toString(fileHeader.startValue)}; ${fileHeader.nElem.toString}; ${fileHeader.relFile}\n" )
