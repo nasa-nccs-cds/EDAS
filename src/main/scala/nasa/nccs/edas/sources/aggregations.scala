@@ -408,7 +408,7 @@ case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: I
       val r0 = (time_value - firstValue)/dt
       val ri: Int = Math.round( r0 - 0.001 ).toInt
       val rval = if( range_position == RangeStart ) { ri } else { ri - 1 }
-//      logger.info( s" @DSX: toRowIndex: firstRow: ${firstRow}, nRows: ${nRows}, r0: ${r0}, rval: ${rval}, result: ${firstRow + rval}, boundsStatus: ${boundsStatus} ")
+      logger.info( s" #LV#: toRowIndex: firstRow: ${firstRow}, nRows: ${nRows}, r0: ${r0}, rval: ${rval}, result: ${firstRow + rval}, boundsStatus: ${boundsStatus} ")
       BoundedIndex( firstRow + rval.toLong, boundsStatus )
     case BoundedIndex.AboveRange =>
       BoundedIndex( firstRow, boundsStatus)
@@ -505,7 +505,7 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     val endIndex: BoundedIndex = fileInputsFromTimeValue( t1 ).toRowIndex( t1, BoundedIndex.RangeEnd )
     if( endIndex.isBelowRange || startIndex.isAboveRange ) { None }
     else {
-//      logger.info( s" @DSX: FindRowIndicesFromCalendarDates: startRow=${startIndex.index.toInt} endRow=${endIndex.index.toInt}")
+      logger.info( s" #LV#: FindRowIndicesFromCalendarDates: startRow=${startIndex.index.toInt} endRow=${endIndex.index.toInt}")
       Some((startIndex.index.toInt, endIndex.index.toInt ))
     }
   }
