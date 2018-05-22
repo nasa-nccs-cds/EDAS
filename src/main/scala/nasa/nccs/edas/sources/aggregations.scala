@@ -626,7 +626,7 @@ object Aggregation extends Loggable {
     val fileMetadata = FileMetadata( fileHeaders.head.toPath.toString, nTimeSteps )
     logger.info( " ")
     try {
-      bw.write( s"P; time.nrows; ${fileHeaders.length}\n")
+      bw.write( s"P; time.nrows; ${nTimeSteps}\n")
       bw.write( s"P; time.start; ${startTime}\n")
       bw.write( s"P; time.end; ${endTime}\n")
       bw.write( s"P; time.calendar; ${calendar.name}\n")
