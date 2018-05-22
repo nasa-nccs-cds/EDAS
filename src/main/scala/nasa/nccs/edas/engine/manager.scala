@@ -200,6 +200,7 @@ object EDASExecutionManager extends Loggable {
     var optGridDset: Option[NetcdfDataset] = None
     var originalDataset: Option[NetcdfDataset] = None
     try {
+      logger.info(s" #CV#  Saving slice, elems: [ ${slice.elements.keys.mkString(", ")} ], shape: [${slice.elements.head._2.shape.mkString(",")}], sliceMetadata: ${slice.metadata.toString()}, varMetadata: ${varMetadata.toString()}, dsetMetadata: [ ${dsetMetadata.map( attr => attr.getShortName + ": " +  attr.getStringValue ).mkString(",")} ] "  )
       val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
       val shape: Array[Int] = head_elem.shape
       val timeValues: IndexedSeq[Double] = generateRange( slice.startTime , slice.endTime, shape(0) )
@@ -227,7 +228,7 @@ object EDASExecutionManager extends Loggable {
           targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
       }
 
-      logger.info(" #CV#  Grid file: " + gridFileOpt.getOrElse("") )
+
 
       logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
         resultId, path, slice.elements.keys.mkString(","), dimsMap.mapValues( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),

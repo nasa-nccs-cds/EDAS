@@ -10,7 +10,7 @@ import nasa.nccs.edas.rdd.{QueryResultCollection, VariableRecord}
 import nasa.nccs.edas.sources.{AggregationWriter, CDScan}
 import nasa.nccs.esgf.process.{WorkflowExecutor, _}
 import nasa.nccs.utilities.{DAGNode, Loggable}
-import nasa.nccs.wps.{RDDExecutionResult, RefExecutionResult, WPSProcessExecuteResponse}
+import nasa.nccs.wps.{RDDExecutionResult, RefExecutionResult, WPSExecuteStatusError, WPSProcessExecuteResponse}
 import ucar.{ma2, nc2}
 
 import scala.collection.immutable.Map
@@ -435,6 +435,10 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
           val collId = executor.requestCx.getConf( "cid", resultId.split('-').last )
           createCollection( collId, resultFiles, executionResult.results )
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, collId, List.empty[String], "collection" ) )
+        case wtf =>
+          val error_msg = "Error, unrecognized response type: " + wtf
+          logger.error( error_msg )
+          None
       }
     logger.info("Completed createResponse in %.4f sec".format( ( System.nanoTime() - t0 ) / 1.0E9 ) )
     rv

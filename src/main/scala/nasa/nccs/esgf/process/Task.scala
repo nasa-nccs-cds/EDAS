@@ -937,66 +937,59 @@ object DataContainer extends ContainerBase {
   }
 
   def factory(uid: UID, metadata: Map[String, Any], noOp: Boolean ): Array[DataContainer] = {
-    try {
-      validateInputMethods( metadata )
-      val fullname =
-        if (metadata.keySet.contains("id")) metadata.getOrElse("id", "").toString
-        else metadata.getOrElse("name", "").toString
-      val domain = metadata.getOrElse("domain", "").toString
-      val (collectionOpt, fragIdOpt) = getCollection(metadata)
-      val base_index = random.nextInt(Integer.MAX_VALUE)
-      val autocache = metadata.getOrElse( "cache", false ).toString.toBoolean
-      collectionOpt match {
-        case None =>
-          val var_names: Array[String] = fullname.toString.split(',')
-          val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
-          val cid = dataPath.split('/').last
-          val collection = Collections.addCollection( cid ) getOrElse {
-            throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
-          }
-          for ((name, index) <- var_names.zipWithIndex) yield {
-            val name_items = name.split(Array(':', '|'))
-            val dsource = new DataSource( stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
-            val vid = stripQuotes(name_items.last)
-            val vname = normalize(name_items.head)
-            val dcid =
-              if (vid.isEmpty) uid + s"c-$base_index$index"
-              else if (vname.isEmpty) vid
-              else uid + vid
-            new DataContainer(dcid, source = Some(dsource))
-          }
-        case Some(collection) =>
-          val var_names: Array[String] =
-            if (fullname.equals("*")) collection.varNames.toArray
-            else fullname.toString.split(',')
-          fragIdOpt match {
-            case Some(fragId) =>
-              val name_items = var_names.head.split(Array(':', '|'))
-              val dsource = new DataSource(stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache, fragIdOpt)
-              val vid = normalize(name_items.last)
-              Array(
-                new DataContainer(if (vid.isEmpty) uid + s"c-$base_index"
-                                  else uid + vid,
-                                  source = Some(dsource)))
-            case None =>
-              for ((name, index) <- var_names.zipWithIndex) yield {
-                val name_items = name.split(Array(':', '|'))
-                val dsource = new DataSource(stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
-                val vid = stripQuotes(name_items.last)
-                val vname = normalize(name_items.head)
-                val dcid =
-                  if (vid.isEmpty) uid + s"c-$base_index$index"
-                  else if (vname.isEmpty) vid
-                  else uid + vid
-                new DataContainer(dcid, source = Some(dsource))
-              }
-          }
-      }
-    } catch {
-      case e: Exception =>
-        logger.error("Error creating DataContainer: " + e.getMessage)
-        logger.error(e.getStackTrace.mkString("\n"))
-        throw new Exception(e.getMessage, e)
+    validateInputMethods( metadata )
+    val fullname =
+      if (metadata.keySet.contains("id")) metadata.getOrElse("id", "").toString
+      else metadata.getOrElse("name", "").toString
+    val domain = metadata.getOrElse("domain", "").toString
+    val (collectionOpt, fragIdOpt) = getCollection(metadata)
+    val base_index = random.nextInt(Integer.MAX_VALUE)
+    val autocache = metadata.getOrElse( "cache", false ).toString.toBoolean
+    collectionOpt match {
+      case None =>
+        val var_names: Array[String] = fullname.toString.split(',')
+        val dataPath = metadata.getOrElse("uri", metadata.getOrElse("url", uid)).toString
+        val cid = dataPath.split('/').last
+        val collection = Collections.addCollection( cid ) getOrElse {
+          throw new Exception(s"Attempt to acess a non existent collection '$cid', collections = ${Collections.getCollections.mkString(", ")}")
+        }
+        for ((name, index) <- var_names.zipWithIndex) yield {
+          val name_items = name.split(Array(':', '|'))
+          val dsource = new DataSource( stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
+          val vid = stripQuotes(name_items.last)
+          val vname = normalize(name_items.head)
+          val dcid =
+            if (vid.isEmpty) uid + s"c-$base_index$index"
+            else if (vname.isEmpty) vid
+            else uid + vid
+          new DataContainer(dcid, source = Some(dsource))
+        }
+      case Some(collection) =>
+        val var_names: Array[String] =
+          if (fullname.equals("*")) collection.varNames.toArray
+          else fullname.toString.split(',')
+        fragIdOpt match {
+          case Some(fragId) =>
+            val name_items = var_names.head.split(Array(':', '|'))
+            val dsource = new DataSource(stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache, fragIdOpt)
+            val vid = normalize(name_items.last)
+            Array(
+              new DataContainer(if (vid.isEmpty) uid + s"c-$base_index"
+                                else uid + vid,
+                                source = Some(dsource)))
+          case None =>
+            for ((name, index) <- var_names.zipWithIndex) yield {
+              val name_items = name.split(Array(':', '|'))
+              val dsource = new DataSource(stripQuotes(name_items.head), collection, normalizeOpt(domain), autocache )
+              val vid = stripQuotes(name_items.last)
+              val vname = normalize(name_items.head)
+              val dcid =
+                if (vid.isEmpty) uid + s"c-$base_index$index"
+                else if (vname.isEmpty) vid
+                else uid + vid
+              new DataContainer(dcid, source = Some(dsource))
+            }
+        }
     }
   }
 
