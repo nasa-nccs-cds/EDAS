@@ -411,8 +411,10 @@ case class TimeRange( firstValue: Long, lastValue: Long, firstRow: Int, nRows: I
       logger.info( s" #LV#: toRowIndex: firstRow: ${firstRow}, nRows: ${nRows}, r0: ${r0}, rval: ${rval}, result: ${firstRow + rval}, boundsStatus: ${boundsStatus} ")
       BoundedIndex( firstRow + rval.toLong, boundsStatus )
     case BoundedIndex.AboveRange =>
+      logger.info( s" #LV#: toRowIndex: firstRow: ${firstRow}, nRows: ${nRows}, AboveRange: boundsStatus: ${boundsStatus} ")
       BoundedIndex( firstRow, boundsStatus)
     case BoundedIndex.BelowRange =>
+      logger.info( s" #LV#: toRowIndex: firstRow: ${firstRow}, nRows: ${nRows}, BelowRange: boundsStatus: ${boundsStatus} ")
       BoundedIndex( 0, boundsStatus )
   }
 
@@ -471,11 +473,12 @@ case class Aggregation( dataPath: String, files: Array[FileInput], variables: Li
     val file0 = files( estimated_file_index )
     if (time_value < file0.startTime) { return _fileInputsFromTimeValue(time_value, estimated_file_index - 1) }
     if( estimated_file_index == ( files.length - 1 ) ) {
+      logger.info( s" #LV#: MappingTimeValue-Ceiling: file_index=${estimated_file_index} file start Time=${file0.startTime}, row=${file0.firstRowIndex}, nFiles=${files.length}, time_value=${time_value}, value_date=${value_date.toString}")
       TimeRange(file0.startTime, time_end, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange )
     } else {
       val file1 = files(estimated_file_index + 1)
       if (time_value >= file1.startTime) { return _fileInputsFromTimeValue(time_value, estimated_file_index + 1) }
-//      logger.info( s" @DSX: MappingTimeValue: estimated_file_index=${estimated_file_index} file start Time=${file0.startTime}, row=${file0.firstRowIndex}")
+      logger.info( s" #LV#: MappingTimeValue-InRange: file_index=${estimated_file_index+1} file start Time=${file0.startTime}, row=${file0.firstRowIndex}, nFiles=${files.length}, fileIndex=${estimated_file_index}, time_value=${time_value}, value_date=${value_date.toString}")
       TimeRange(file0.startTime, file1.startTime, file0.firstRowIndex, file0.nRows, BoundedIndex.InRange)
     }
 
