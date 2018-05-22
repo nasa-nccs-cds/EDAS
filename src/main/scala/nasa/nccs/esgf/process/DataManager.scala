@@ -291,7 +291,7 @@ class GridCoordSpec( val index: Int, val grid: CDGrid, val agg: Aggregation, val
     val startDate: CalendarDate = cdsutils.dateTimeParser.parse(calendar,tvalStart)
     val endDate: CalendarDate = cdsutils.dateTimeParser.parse(calendar,tvalEnd)
     val rv = findTimeIndicesFromCalendarDates( startDate, endDate ) map { case (start,end) => new ma2.Range( getCFAxisName, start, end ) }
-    logger.info( s" #LV#: getTimeCoordIndices: ${startDate.formatted("yyyy-MM-dd:HH")} <-> ${endDate.formatted("yyyy-MM-dd:HH")}, range = [ ${rv.mkString("; ")} ] ")
+    logger.info( s" #LV#: getTimeCoordIndices: ${tvalStart} <-> ${tvalEnd}, ${startDate.toString} <-> ${endDate.toString}, range = [ ${rv.mkString("; ")} ] ")
     rv
   }
 
