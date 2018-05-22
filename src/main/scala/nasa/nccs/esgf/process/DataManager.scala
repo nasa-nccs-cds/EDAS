@@ -740,7 +740,9 @@ class ServerContext( val dataLoader: DataLoader, val spark: CDSparkContext )  ex
     val rv = dataContainer.uid -> fragSpec
     logger.info( " #LV# LoadVariableDataT: section=%s, domainSect=%s, fragId=%s, fragRoi=%s, %.4f %.4f %.4f, T = %.4f ".format(
       optSection.getOrElse("null").toString, optDomainSect.getOrElse("null").toString, data_source.fragIdOpt.getOrElse("null").toString, fragRoiOpt.getOrElse("null").toString, (t1-t0)/1.0E9, (t2-t1)/1.0E9, (t3-t2)/1.0E9, (t3-t0)/1.0E9 ) )
-    logger.info( s" #LV# axes = ${axes.map(_.toString).mkString(",")}" )
+    logger.info( s" #LV# domain axes = ${axes.map(_.toString).mkString(",")}" )
+    logger.info( s" #LV# target grid axes = ${targetGrid.grid.axes.map(_.toString).mkString(",")}" )
+    logger.info( s" #LV# target grid section = ${targetGrid.grid.getSection.toString}" )
     rv
   }
 
