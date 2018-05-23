@@ -2,7 +2,7 @@ package nasa.nccs.edas.sources.netcdf
 
 import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.net.URI
-
+import scala.xml
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import ucar.{ma2, nc2}
 import nasa.nccs.edas.sources.{FileHeader, FileMetadata}
@@ -13,10 +13,6 @@ import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-
-
-
-
 
 class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader], val maxCores: Int = 8)  extends Loggable {
   private val nReadProcessors = Math.min( Runtime.getRuntime.availableProcessors, maxCores )

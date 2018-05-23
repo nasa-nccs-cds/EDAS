@@ -3,7 +3,7 @@ package nasa.nccs.edas.kernels
 import java.io._
 import java.net.{InetAddress, UnknownHostException}
 import java.nio.{ByteBuffer, ByteOrder, FloatBuffer}
-
+import scala.xml
 import nasa.nccs.caching.EDASPartitioner
 import nasa.nccs.cdapi.cdm._
 import nasa.nccs.cdapi.data.{HeapFltArray, _}

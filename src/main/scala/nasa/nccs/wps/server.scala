@@ -1,5 +1,6 @@
 package nasa.nccs.wps
 import nasa.nccs.edas.utilities.appParameters
+import scala.xml
 
 trait WPSServer extends WPSResponse {
   def visibility = "public"

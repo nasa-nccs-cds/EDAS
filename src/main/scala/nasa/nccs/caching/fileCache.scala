@@ -28,7 +28,7 @@ import ucar.nc2.time.{Calendar, CalendarDate}
 import ucar.nc2.time.CalendarPeriod.Field.{Month, Year}
 import ucar.nc2.units.TimeUnit
 import ucar.{ma2, nc2}
-
+import scala.xml
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Map

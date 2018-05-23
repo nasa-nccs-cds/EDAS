@@ -5,7 +5,7 @@ import java.nio.channels.Channels
 import java.nio.file.{FileSystems, Files, Path, Paths}
 import javax.xml.parsers.{ParserConfigurationException, SAXParserFactory}
 import java.util.concurrent.{ExecutorService, Executors}
-
+import scala.xml
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
 
 import scala.collection.JavaConversions._

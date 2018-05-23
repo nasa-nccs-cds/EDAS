@@ -2,7 +2,7 @@ package nasa.nccs.edas.engine
 import java.io.{IOException, PrintWriter, StringWriter}
 import java.nio.file.{Files, Paths}
 import java.io.File
-
+import scala.xml
 import scala.collection.concurrent.TrieMap
 import nasa.nccs.cdapi.cdm.{CDGrid, PartitionedFragment}
 import nasa.nccs.esgf.process._

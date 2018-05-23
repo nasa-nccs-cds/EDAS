@@ -8,7 +8,7 @@ import ucar.{ma2, nc2}
 import org.joda.time.{DateTime, DateTimeZone}
 import nasa.nccs.utilities.Loggable
 import java.util.UUID
-
+import scala.xml
 import nasa.nccs.cdapi.data.RDDVariableSpec
 import nasa.nccs.edas.engine.spark.RecordKey
 import nasa.nccs.edas.engine.{EDASExecutionManager, Workflow}

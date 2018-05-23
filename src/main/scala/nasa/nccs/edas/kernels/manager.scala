@@ -1,7 +1,7 @@
 package nasa.nccs.edas.kernels
 import nasa.nccs.edas.utilities.appParameters
 import nasa.nccs.edas.workers.python.PythonWorkerPortal
-
+import scala.xml
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.utilities.{Loggable, cdsutils}

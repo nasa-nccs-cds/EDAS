@@ -3,7 +3,7 @@ import java.io.File
 import java.lang.management.ManagementFactory
 import java.nio.file.{Files, Path, Paths}
 import java.sql.{Date, Timestamp}
-
+import scala.xml
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import nasa.nccs.cdapi.data.{FastMaskedArray, HeapFltArray}

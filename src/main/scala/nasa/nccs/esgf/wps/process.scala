@@ -6,7 +6,7 @@ import nasa.nccs.edas.sources.{CollectionLoadServices, EDAS_XML}
 import nasa.nccs.esgf.process.{TaskRequest, WorkflowExecutor}
 import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.Loggable
-
+import scala.xml
 import scala.collection.JavaConversions._
 import nasa.nccs.wps
 import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSExecuteStatusError}

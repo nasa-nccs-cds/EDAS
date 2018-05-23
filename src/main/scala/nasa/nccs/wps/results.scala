@@ -2,7 +2,7 @@ package nasa.nccs.wps
 
 import java.text.SimpleDateFormat
 import java.util.Calendar
-
+import scala.xml
 import nasa.nccs.caching.RDDTransientVariable
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.rdd.CDRecord

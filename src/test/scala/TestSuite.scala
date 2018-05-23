@@ -3,7 +3,7 @@ import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.util.Formatter
 import java.util.regex.Pattern
-
+import scala.xml
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.engine.ExecutionCallback
 import nasa.nccs.edas.sources.{CollectionLoadServices, Collections}

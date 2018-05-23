@@ -4,7 +4,7 @@ import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.net.URI
 import java.nio.file.{Path, Paths}
 import java.util.Date
-
+import scala.xml
 import nasa.nccs.cdapi.cdm.CDGrid
 import nasa.nccs.edas.portal.RandomString
 

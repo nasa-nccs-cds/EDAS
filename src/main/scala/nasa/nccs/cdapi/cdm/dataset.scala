@@ -8,7 +8,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.net.URI
 import java.nio._
 import java.util.{Date, Formatter}
-
+import scala.xml
 import scala.concurrent.ExecutionContext.Implicits.global
 import nasa.nccs.cdapi.tensors.CDFloatArray
 import nasa.nccs.edas.sources.{Variable => _, _}
@@ -182,7 +182,10 @@ object CDGrid extends Loggable {
             case None => Unit
           }
         } else {
-          gridWriter.write(newVar, coordAxis.read())
+          val data = coordAxis.read()
+          val dsize: Int = math.min( data.getSize, 4 ).toInt
+          logger.info( s" %G% Writing coord axis ${coordAxis.getShortName}, size = ${data.getSize}, data sample = [ ${ (0 until dsize ) map data.getFloat mkString "," } ]" )
+          gridWriter.write( newVar, data )
           coordAxis match {
             case coordAxis1D: CoordinateAxis1D =>
               boundsVarOpt flatMap varMap.get match {
@@ -228,6 +231,7 @@ object CDGrid extends Loggable {
     //    }
     gridWriter.close()
     ncDataset.close()
+    logger.info( s" %G% COMPLETED Creating #grid# file $gridFilePath" )
   }
 
 

@@ -19,7 +19,7 @@ import ucar.nc2.time.{Calendar, CalendarDate, CalendarDateRange}
 import ucar.{ma2, nc2}
 import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{CoordinateAxis, CoordinateAxis1D, CoordinateAxis1DTime, NetcdfDataset}
-
+import scala.xml
 import scala.collection.immutable.Map
 import scala.collection.concurrent
 import scala.collection.JavaConversions._

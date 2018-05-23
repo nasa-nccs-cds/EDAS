@@ -13,7 +13,7 @@ import ucar.ma2
 import java.nio
 import java.nio.FloatBuffer
 import java.util.Formatter
-
+import scala.xml
 import nasa.nccs.cdapi.data.FastMaskedArray.join
 import nasa.nccs.cdapi.tensors.CDFloatArray.ReduceOpFlt
 import org.apache.spark.mllib.linalg.DenseVector
