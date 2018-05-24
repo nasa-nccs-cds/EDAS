@@ -2,6 +2,7 @@ package nasa.nccs.edas.engine
 import java.io.{IOException, PrintWriter, StringWriter}
 import java.nio.file.{Files, Paths}
 import java.io.File
+
 import scala.xml
 import scala.collection.concurrent.TrieMap
 import nasa.nccs.cdapi.cdm.{CDGrid, PartitionedFragment}
@@ -29,6 +30,7 @@ import nasa.nccs.edas.portal.CleanupManager
 import nasa.nccs.edas.rdd.{ArraySpec, CDRecord, QueryResultCollection}
 import nasa.nccs.edas.sources.{Collection, Collections}
 import nasa.nccs.wps.{WPSExecuteStatusStarted, WPSResponse, _}
+import org.joda.time.DateTime
 import ucar.ma2.DataType
 import ucar.nc2.constants.AxisType
 import ucar.nc2.{Attribute, Dimension}
@@ -204,6 +206,7 @@ object EDASExecutionManager extends Loggable {
       val inputSpec: DataFragmentSpec = executor.requestCx.getInputSpec().getOrElse( throw new Exception( s"Missing InputSpec in saveResultToFile for result $resultId"))
       val shape: Array[Int] = head_elem.shape
       val timeValues: IndexedSeq[Double] = generateRange( slice.startTime , slice.endTime, shape(0) )
+      val dateRange = List( new DateTime(slice.startTime).toString, new DateTime(slice.endTime).toString ).mkString(", ")
       val timeUnits: String = "minutes since 1970-01-01T00:00:00Z" // EDTime.units
       val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
       val targetGrid: TargetGrid = executor.getTargetGrid.getOrElse( throw new Exception( s"Missing Target Grid in saveResultToFile for result $resultId"))
@@ -228,11 +231,9 @@ object EDASExecutionManager extends Loggable {
           targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
       }
 
-
-
-      logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s]".format(
+      logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], dateRange=[%s]".format(
         resultId, path, slice.elements.keys.mkString(","), dimsMap.mapValues( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
-        coordAxes.map { caxis => "%s: (%s)".format(caxis.getShortName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString ) )
+        coordAxes.map { caxis => "%s: (%s)".format(caxis.getShortName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString, dateRange ) )
 
 
 //      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.map( coordAxis => {
