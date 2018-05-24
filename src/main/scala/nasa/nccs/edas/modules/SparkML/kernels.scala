@@ -30,7 +30,8 @@ class svd extends KernelImpl {
     val t0 = System.nanoTime()
     val inputVectors: RDD[Vector] = input.toVectorRDD( context.operation.inputs )
     val topSlice: CDRecord = input.rdd.first
-    val bottomSlice: CDRecord = input.rdd.top(1).last
+    val startTime = topSlice.startTime
+    val endTime = input.rdd.aggregate( -Long.MaxValue )( (etime,rec) => math.max( etime, rec.endTime), math.max )
     val topElem = topSlice.elements.head._2
     val elemIds: Array[String] = getSelectedElemIds( topSlice, context )
     val nElems = elemIds.size
@@ -54,14 +55,13 @@ class svd extends KernelImpl {
       }
     }
     val elems = if( computeU ) {
-
       val Uelems: Seq[(String, ArraySpec)] = CDRecord.rowMatrixCols2Arrays( svd.U ).zipWithIndex.map { case (udata, index) =>
         val shape = if( topElem.shape.length == 4 ) { Array(udata.length,1,1,1) } else { Array(udata.length,1,1) }
         s"U$index" -> new ArraySpec(topElem.missing, shape, topElem.origin, udata, topElem.optGroup )
       }
       (Uelems ++ Velems).toMap
     } else { Velems.toMap }
-    val slice: CDRecord = new CDRecord( topSlice.startTime, bottomSlice.endTime, elems, topSlice.metadata )
+    val slice: CDRecord = new CDRecord( startTime, endTime, elems, topSlice.metadata )
     logger.info( s"@SVD Created modes, nModes = ${Velems.length}, time = ${(System.nanoTime - t0) / 1.0E9}" )
     new QueryResultCollection( Array( slice ), input.metadata + ("lambdas" -> lambdas) )
   }
