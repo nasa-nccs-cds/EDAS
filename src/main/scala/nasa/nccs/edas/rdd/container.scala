@@ -205,11 +205,13 @@ object CDRecord extends Loggable {
 
 }
 
-case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArraySpec], metadata: Map[String, String] ) {
+case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArraySpec], metadata: Map[String, String] ) extends Ordered[CDRecord] {
+  import scala.math.Ordered.orderingToOrdered
   import CDRecord._
   def ++( other: CDRecord ): CDRecord = { new CDRecord(startTime, endTime, elements ++ other.elements, metadata) }
   def <+( other: CDRecord ): CDRecord = append( other )
   def clear: CDRecord = { new CDRecord(startTime, endTime, Map.empty[String,ArraySpec], metadata) }
+  def compare(that: CDRecord): Int = (this.startTime - that.startTime).toInt
   lazy val midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDRecord ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDRecord ): Long = Math.max( endTime, other.endTime )

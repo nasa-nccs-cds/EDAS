@@ -30,6 +30,7 @@ class svd extends KernelImpl {
     val t0 = System.nanoTime()
     val inputVectors: RDD[Vector] = input.toVectorRDD( context.operation.inputs )
     val topSlice: CDRecord = input.rdd.first
+    val bottomSlice: CDRecord = input.rdd.top(1).last
     val topElem = topSlice.elements.head._2
     val elemIds: Array[String] = getSelectedElemIds( topSlice, context )
     val nElems = elemIds.size
@@ -60,7 +61,7 @@ class svd extends KernelImpl {
       }
       (Uelems ++ Velems).toMap
     } else { Velems.toMap }
-    val slice: CDRecord = new CDRecord( topSlice.startTime, topSlice.endTime, elems, topSlice.metadata )
+    val slice: CDRecord = new CDRecord( topSlice.startTime, bottomSlice.endTime, elems, topSlice.metadata )
     logger.info( s"@SVD Created modes, nModes = ${Velems.length}, time = ${(System.nanoTime - t0) / 1.0E9}" )
     new QueryResultCollection( Array( slice ), input.metadata + ("lambdas" -> lambdas) )
   }
