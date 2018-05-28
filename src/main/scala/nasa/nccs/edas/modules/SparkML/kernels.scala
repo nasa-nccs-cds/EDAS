@@ -35,15 +35,19 @@ class svd extends KernelImpl {
     val topElem = topSlice.elements.head._2
     val elemIds: Array[String] = getSelectedElemIds( topSlice, context )
     val nElems = elemIds.size
-    val scaler = new StandardScaler( withMean = true, withStd = true ).fit( inputVectors )
-    val scaling_result: RDD[Vector] = inputVectors.map( scaler.transform )
+    val doNorm: Boolean = context.operation.getConfParm("norm").fold( true )( _.toBoolean )
+    val scaling_result: RDD[Vector] = if( doNorm ) {
+      val scaler = new StandardScaler(withMean = true, withStd = true).fit(inputVectors)
+      logger.info( s"  ##### @SVD Rescale inputs with ${scaler.mean.size} means: ${scaler.mean.toArray.slice(0,32).mkString(", ")}" )
+      logger.info( s"  ##### @SVD Rescale inputs with ${scaler.std.size} stDevs: ${scaler.std.toArray.slice(0,32).mkString(", ")}" )
+      inputVectors.map(scaler.transform)
+    } else { inputVectors }
+
     logger.info( s"  ##### @SVD Input Vector Size: ${topElem.shape.mkString(", ")}, Num Input Vectors: ${inputVectors.count}, Num Input Slices: ${input.rdd.count}, Num input elems: $nElems" )
-    logger.info( s"  ##### @SVD Rescale inputs with ${scaler.mean.size} means: ${scaler.mean.toArray.slice(0,32).mkString(", ")}" )
-    logger.info( s"  ##### @SVD Rescale inputs with ${scaler.std.size} stDevs: ${scaler.std.toArray.slice(0,32).mkString(", ")}" )
     scaling_result.cache()
     val matrix = new RowMatrix( scaling_result )
     val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
-    val computeU: Boolean = context.operation.getConfParm("compu").fold( false )( _.toBoolean )
+    val computeU: Boolean = context.operation.getConfParm("compu").fold( true )( _.toBoolean )
     val svd = matrix.computeSVD( nModes, true )
     val lambda2s = svd.s.toArray.map( l => l*l )
     val norm = lambda2s.foldLeft(0.0)( ( l2sum, l2 ) => l2sum + l2 )
@@ -60,7 +64,7 @@ class svd extends KernelImpl {
       val Uelems: Seq[(String, ArraySpec)] = CDRecord.rowMatrixCols2Arrays( svd.U ).zipWithIndex.map { case (udata, index) =>
         val shape = if( topElem.shape.length == 4 ) { Array(udata.length,1,1,1) } else { Array(udata.length,1,1) }
         val PVE = "%.1f".format( PVEs(index) )
-        s"U-$index:$PVE" -> new ArraySpec(topElem.missing, shape, topElem.origin, udata, topElem.optGroup )
+        s"U-${index}_PVE=$PVE" -> new ArraySpec(topElem.missing, shape, topElem.origin, udata, topElem.optGroup )
       }
       (Uelems ++ Velems).toMap
     } else { Velems.toMap }
