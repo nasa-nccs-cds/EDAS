@@ -45,7 +45,9 @@ class svd extends KernelImpl {
     val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
     val computeU: Boolean = context.operation.getConfParm("compu").fold( false )( _.toBoolean )
     val svd = matrix.computeSVD( nModes, true )
-    val lambdas = svd.s.toArray.mkString(",")
+    val lambda2s = svd.s.toArray.map( l => l*l )
+    val norm = lambda2s.foldLeft(0.0)( ( l2sum, l2 ) => l2sum + l2 )
+    val PVEs = lambda2s.map( l2 => (l2*100)/norm )
     val array_size = topElem.shape.product
     val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex flatMap { case (array, index) =>
       logger.info( s"@SVD Creating V$index Array, data size = ${array.length}, array size = ${array_size}, input shape= [ ${topElem.shape.mkString(", ")} ]")
@@ -57,13 +59,14 @@ class svd extends KernelImpl {
     val elems = if( computeU ) {
       val Uelems: Seq[(String, ArraySpec)] = CDRecord.rowMatrixCols2Arrays( svd.U ).zipWithIndex.map { case (udata, index) =>
         val shape = if( topElem.shape.length == 4 ) { Array(udata.length,1,1,1) } else { Array(udata.length,1,1) }
-        s"U$index" -> new ArraySpec(topElem.missing, shape, topElem.origin, udata, topElem.optGroup )
+        val PVE = "%.1f".format( PVEs(index) )
+        s"U-$index:$PVE" -> new ArraySpec(topElem.missing, shape, topElem.origin, udata, topElem.optGroup )
       }
       (Uelems ++ Velems).toMap
     } else { Velems.toMap }
     val slice: CDRecord = new CDRecord( startTime, endTime, elems, topSlice.metadata )
     logger.info( s"@SVD Created modes, nModes = ${Velems.length}, time = ${(System.nanoTime - t0) / 1.0E9}" )
-    new QueryResultCollection( Array( slice ), input.metadata + ("lambdas" -> lambdas) )
+    new QueryResultCollection( Array( slice ), input.metadata )
   }
 }
 
