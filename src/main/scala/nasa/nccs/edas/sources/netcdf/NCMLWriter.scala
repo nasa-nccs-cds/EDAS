@@ -118,7 +118,11 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
   def getData(variable: nc2.Variable, isRegular: Boolean): xml.Node = {
     val dataArray: Array[Double] = CDDoubleArray.factory(variable.read).getArrayData()
     if (isRegular) {
-        <values start={"%.3f".format(dataArray(0))} increment={"%.6f".format(dataArray(1)-dataArray(0))}/>
+      if( dataArray.length == 1 ) {
+          <values start={"%.3f".format(dataArray(0))} increment={0.0}/>
+      } else {
+          <values start={"%.3f".format(dataArray(0))} increment={"%.6f".format(dataArray(1) - dataArray(0))}/>
+      }
     } else {
       <values> { dataArray.map(dv => "%.3f".format(dv)).mkString(" ") } </values>
     }
@@ -230,7 +234,7 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
     } catch {
       case err: Exception =>
         logger.error( "Error writing NCML file "  + ncmlFile.toString + ": " + err.toString )
-        logger.error( err.getStackTrace.mkString("\n") )
+        logger.error( err.getStackTrace.head.toString )
         List.empty
     }
   }
