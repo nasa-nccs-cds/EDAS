@@ -420,9 +420,10 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def createResponse( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): Option[WPSProcessExecuteResponse] = {
     val t0 = System.nanoTime()
     val resultId = cacheResult( executionResult, executor )
-    logger.info( s"Create result ${resultId}: req-context metadata: ${executor.requestCx.task.metadata.mkString("; ")}" )
     val node = executor.rootNode
-    val rv = executor.requestCx.getConf("response", "xml") match {
+    val responseTokens = executor.requestCx.getConf("response", "xml").split(':')
+    logger.info( s" #CR# Create result ${resultId}, type: ${responseTokens.head}, req conf: ${executor.requestCx.getConfiguration.mkString("; ")}, req-context metadata: ${executor.requestCx.task.metadata.mkString("; ")}" )
+    val rv = responseTokens.head match {
         case "object" =>
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, List.empty[String] ) )
         case "xml" =>
@@ -432,7 +433,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, resultFiles) )
         case "collection" =>
           val resultFiles: List[String] = executionMgr.getResultFilePath( executionResult, executor )
-          val collId = executor.requestCx.getConf( "cid", resultId.split('-').last )
+          val collId = if( responseTokens.length > 1 ) { responseTokens.last } else { resultId.split('-').last }
           createCollection( collId, resultFiles, executionResult.results )
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, collId, List.empty[String], "collection" ) )
         case wtf =>
