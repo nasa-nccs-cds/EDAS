@@ -420,7 +420,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def createResponse( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): Option[WPSProcessExecuteResponse] = {
     val t0 = System.nanoTime()
     val resultId = cacheResult( executionResult, executor )
-    val responseForm = executionResult.kernelCx.operation.getConfParm("responseForm").getOrElse( executor.requestCx.getConf("response", "xml") )
+    val responseForm = executionResult.kernelCx.operation.getConfParm("responseform").getOrElse( executor.requestCx.getConf("response", "xml") )
     val node = executor.rootNode
     val responseTokens = responseForm.split(':')
     logger.info( s" #CR# Create result ${resultId}, responseForm: ${responseForm}, kernel conf: ${executionResult.kernelCx.operation.getConfiguration.mkString("; ")}, req conf: ${executor.requestCx.getConfiguration.mkString("; ")}, req-context metadata: ${executor.requestCx.task.metadata.mkString("; ")}" )
