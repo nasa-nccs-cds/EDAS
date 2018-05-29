@@ -230,6 +230,7 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
     } catch {
       case err: Exception =>
         logger.error( "Error writing NCML file "  + ncmlFile.toString + ": " + err.toString )
+        logger.error( err.getStackTrace.mkString("\n") )
         List.empty
     }
   }

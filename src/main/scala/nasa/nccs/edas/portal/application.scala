@@ -200,6 +200,8 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
           logger.info("     ****>> Found file node for jobId: " + jobId + ", clientId: " + clientId + ", sending File: " + filepath + " ****** ")
           result_files += sendFile( clientId, jobId, "publish", filepath, sharedDataDir.isEmpty )
         })
+      } else if (hrefOpt.isDefined && hrefOpt.get.startsWith("collection")) {
+        responder.sendResponse( new Message( clientId, jobId, "Created " + hrefOpt.get ) )
       } else {
         sendErrorReport( response_format, clientId, jobId, new Exception( "Can't find href or files in attributes: " + getNodeAttributes( node ) ) )
       }
