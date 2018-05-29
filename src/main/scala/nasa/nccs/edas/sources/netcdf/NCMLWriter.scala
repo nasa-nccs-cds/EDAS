@@ -119,7 +119,7 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
     val dataArray: Array[Double] = CDDoubleArray.factory(variable.read).getArrayData()
     if (isRegular) {
       if( dataArray.length == 1 ) {
-          <values start={"%.3f".format(dataArray(0))} increment={0.0}/>
+          <values start={"%.3f".format(dataArray(0))}/>
       } else {
           <values start={"%.3f".format(dataArray(0))} increment={"%.6f".format(dataArray(1) - dataArray(0))}/>
       }
