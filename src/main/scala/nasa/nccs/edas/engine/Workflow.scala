@@ -423,7 +423,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     val responseForm = executionResult.kernelCx.operation.getConfParm("responseForm").getOrElse( executor.requestCx.getConf("response", "xml") )
     val node = executor.rootNode
     val responseTokens = responseForm.split(':')
-    logger.info( s" #CR# Create result ${resultId}, responseForm: ${responseForm}, req conf: ${executor.requestCx.getConfiguration.mkString("; ")}, req-context metadata: ${executor.requestCx.task.metadata.mkString("; ")}" )
+    logger.info( s" #CR# Create result ${resultId}, responseForm: ${responseForm}, kernel conf: ${executionResult.kernelCx.operation.getConfiguration.mkString("; ")}, req conf: ${executor.requestCx.getConfiguration.mkString("; ")}, req-context metadata: ${executor.requestCx.task.metadata.mkString("; ")}" )
     val rv = responseTokens.head match {
         case "object" =>
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, List.empty[String] ) )
