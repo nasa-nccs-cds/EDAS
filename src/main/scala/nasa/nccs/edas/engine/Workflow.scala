@@ -176,7 +176,7 @@ class WorkflowContext(val inputs: Map[String, OperationInput], val rootNode: Wor
   }
 }
 
-case class KernelExecutionResult(results: QueryResultCollection, files: List[String] ) {
+case class KernelExecutionResult(results: QueryResultCollection, kernelCx: KernelContext, files: List[String] ) {
   val holdsData: Boolean = results.records.nonEmpty
   val slice = results.getConcatSlice
 }
@@ -236,7 +236,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     } while ( { batchIndex+=1; false; /* executor.hasBatch(batchIndex) */ } )
 
     if( Try( executor.requestCx.config("unitTest","false").toBoolean ).getOrElse(false)  ) { root_node.kernel.cleanUp(); }
-    KernelExecutionResult( aggResult, resultFiles.toList )
+    KernelExecutionResult( aggResult, kernelCx, resultFiles.toList )
   }
 
   private def common_inputs( node0: WorkflowNode, node_input_map: Map[ String, Set[String] ] )( node1: WorkflowNode ): Boolean = {
@@ -420,9 +420,10 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
   def createResponse( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): Option[WPSProcessExecuteResponse] = {
     val t0 = System.nanoTime()
     val resultId = cacheResult( executionResult, executor )
+    val responseForm = executionResult.kernelCx.operation.getConfParm("responseForm").getOrElse( executor.requestCx.getConf("response", "xml") )
     val node = executor.rootNode
-    val responseTokens = executor.requestCx.getConf("response", "xml").split(':')
-    logger.info( s" #CR# Create result ${resultId}, type: ${responseTokens.head}, req conf: ${executor.requestCx.getConfiguration.mkString("; ")}, req-context metadata: ${executor.requestCx.task.metadata.mkString("; ")}" )
+    val responseTokens = responseForm.split(':')
+    logger.info( s" #CR# Create result ${resultId}, responseForm: ${responseForm}, req conf: ${executor.requestCx.getConfiguration.mkString("; ")}, req-context metadata: ${executor.requestCx.task.metadata.mkString("; ")}" )
     val rv = responseTokens.head match {
         case "object" =>
           Some( new RefExecutionResult("WPS", node.kernel, node.operation.identifier, resultId, List.empty[String] ) )
