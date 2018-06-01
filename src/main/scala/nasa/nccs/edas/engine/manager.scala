@@ -296,7 +296,8 @@ object EDASExecutionManager extends Loggable {
         val varname: String = optVarName.getOrElse( baseName + "-" + tname )
         logger.info("Creating var %s: dims = [%s], data sample = [ %s ]".format(varname, varDims.map( _.getShortName).mkString(", "), maskedTensor.getSectionArray( Math.min(10,maskedTensor.getSize.toInt) ).mkString(", ") ) )
         val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, varDims.toList )
-        varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }
+        assert( variable != null, s"Error creating variable $varname with dims [${varDims.toList.mkString(",")}] in output file $baseFileName" )
+        varMetadata map { case (key, value) => if( (key != null) && (value != null) ) { variable.addAttribute(new Attribute(key, value)) } }
         variable.addAttribute(new nc2.Attribute("missing_value", maskedTensor.getInvalid))
         dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
         ( variable, maskedTensor )
