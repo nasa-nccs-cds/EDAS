@@ -338,7 +338,7 @@ class KeyPartitioner( val nParts: Int ) extends Partitioner {
   }
 }
 
-object CDRecordRDD extends Serializable {
+object CDRecordRDD extends Serializable with Loggable {
   def apply(rdd: RDD[CDRecord], metadata: Map[String,String], variableRecords: Map[String,VariableRecord] ): CDRecordRDD = new CDRecordRDD( rdd, metadata, variableRecords )
   def sortedReducePartition(op: (CDRecord,CDRecord) => CDRecord )(slices: Iterable[CDRecord]): CDRecord = {
     val nSlices = slices.size
@@ -377,8 +377,11 @@ object CDRecordRDD extends Serializable {
   def reduceRddByGroup(rdd: RDD[CDRecord], op: (CDRecord,CDRecord) => CDRecord, postOpId: String, groupBy: TSGroup, calendar: Calendar ): RDD[(Int,CDRecord)] =
     reduceKeyedRddByGroup( rdd.keyBy( groupBy.group( calendar ) ), op, postOpId, groupBy )
 
-  def reduceKeyedRddByGroup(rdd: RDD[(Int,CDRecord)], op: (CDRecord,CDRecord) => CDRecord, postOpId: String, groupBy: TSGroup ): RDD[(Int,CDRecord)] =
-    rdd.reduceByKey( op ) map { case ( key, slice ) => key -> postOp( postOpId )( slice ).setGroupId( groupBy, key ) }
+  def reduceKeyedRddByGroup(rdd: RDD[(Int,CDRecord)], op: (CDRecord,CDRecord) => CDRecord, postOpId: String, groupBy: TSGroup ): RDD[(Int,CDRecord)] = {
+    val rv = rdd.reduceByKey(op) map { case (key, slice) => key -> postOp(postOpId)(slice).setGroupId(groupBy, key) }
+    logger.info( s" #RBG# ReduceKeyedRddByGroup: [${rdd.first._2.shape.mkString(",")}] -> [${rv.first._2.shape.mkString(",")}] ${rdd.count()} -> ${rv.count()}" )
+    rv
+  }
 }
 
 class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val variableRecords: Map[String,VariableRecord] ) extends DataCollection(metadata) with Loggable {
