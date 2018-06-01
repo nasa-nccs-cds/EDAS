@@ -379,7 +379,7 @@ object CDRecordRDD extends Serializable with Loggable {
 
   def reduceKeyedRddByGroup(rdd: RDD[(Int,CDRecord)], op: (CDRecord,CDRecord) => CDRecord, postOpId: String, groupBy: TSGroup ): RDD[(Int,CDRecord)] = {
     val rv = rdd.reduceByKey(op) map { case (key, slice) => key -> postOp(postOpId)(slice).setGroupId(groupBy, key) }
-    logger.info( s" #RBG# ReduceKeyedRddByGroup: [${rdd.first._2.shape.mkString(",")}] -> [${rv.first._2.shape.mkString(",")}] ${rdd.count()} -> ${rv.count()}" )
+    logger.info( s" #RBG# ReduceKeyedRddByGroup: [${rdd.first._2.shape.mkString(",")}] -> [${rv.first._2.shape.mkString(",")}] ${rdd.count()} -> ${rv.count()} keys=[${rdd.keys.collect.mkString(",")}]" )
     rv
   }
 }
