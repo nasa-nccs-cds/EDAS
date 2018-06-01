@@ -652,13 +652,6 @@ class noOp extends KernelImpl(Map.empty) {
   override def elemFilter(rid: String) = (elemId: String) => true
 
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = { inputs }
-
-  override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
-    val t0 = System.nanoTime
-    val result = reduce( input, context, batchIndex )
-    logger.info( s" noOp execution (reduce) time = ${(System.nanoTime-t0)/1e9} ")
-    result
-  }
 }
 
 class subset extends noOp {
