@@ -292,8 +292,8 @@ object EDASExecutionManager extends Loggable {
       val dataMap: Map[String,CDFloatArray] = slice.elements.mapValues( _.toCDFloatArray )
       val variables = dataMap.map { case ( tname, maskedTensor ) =>
         val optVarName = executor.getRelatedInputSpec( tname.split('-').head ).map( _.varname )
-        val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
-        val varname: String = optVarName.getOrElse( baseName + "-" + tname )
+        val baseNameOpt  = varMetadata.get("name" ).map( _.replace(' ','_') )
+        val varname: String = List( optVarName, baseNameOpt, Some(tname) ).flatten.mkString("-")
         logger.info("Creating var %s: dims = [%s], data sample = [ %s ]".format(varname, varDims.map( _.getShortName).mkString(", "), maskedTensor.getSectionArray( Math.min(10,maskedTensor.getSize.toInt) ).mkString(", ") ) )
         var variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, varDims.toList )
         if( variable == null ) { variable = writer.findVariable(varname) }
