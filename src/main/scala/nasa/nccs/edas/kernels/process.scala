@@ -378,7 +378,8 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
         s" $key: [ ${ array.data.mkString(", ") } ]" }.mkString("; ")).mkString("\n  @S@:   ") }")
     }
     val rv = input.map( map( context.setDesignatedRecord( input.first ) ) )
-    logger.info( s" @WW@ mapRDD: op: ${context.operation.identifier}, output count: ${rv.rdd.count}, output slice shape: [ ${rv.rdd.first.elements.head._2.shape.mkString(", ")} ]")
+//    val msg = s" @WW@ mapRDD: op: ${context.operation.identifier}, output count: ${rv.rdd.count}, output slice shape: [ ${rv.rdd.first.elements.head._2.shape.mkString(", ")} ], elems = ${rv.rdd.first.elements.keys.mkString(",")}"
+//    logger.info( msg )
     rv
   }
 
@@ -410,7 +411,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
       val result: QueryResultCollection =  context.profiler.profile[QueryResultCollection]( "Kernel.reduce" ) (() => {
           input.reduce( getReduceOp(context), elemFilter(rid), postOpId, context.getGroup, ordered )
         })
-      result.sort
+      result
     }
   }
 
@@ -771,8 +772,12 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      val grouped_input_arrays: Map[String, List[(String,ArraySpec)]] = getInputArrays( inputs, context ) groupBy { case (uid,array) => uid.split('-').head }
-      val results: Map[String,ArraySpec] = grouped_input_arrays.map { case ( vid, input_arrays ) => vid + "-" + context.operation.rid -> input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) ) }
+      val grouped_input_arrays: Map[String, List[(String,ArraySpec)]] = getInputArrays( inputs, context ) groupBy { case (uid,array) => uid.split('-').last }
+      val results: Map[String,ArraySpec] = grouped_input_arrays.map {
+        case ( vid, input_arrays ) =>
+          vid + "-" + context.operation.rid ->
+            input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
+      }
       CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ results, inputs.metadata )
     } else { inputs }
   }

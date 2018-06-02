@@ -48,7 +48,7 @@ object ArraySpec {
   }
 }
 
-case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float], optGroup: Option[TSGroupIdentifier] ) {
+case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], data: Array[Float], optGroup: Option[TSGroupIdentifier] ) extends Loggable {
   def size: Long = shape.product
   def ++( other: ArraySpec ): ArraySpec = concat( other )
   def toHeapFltArray( gridSpec: String, metadata: Map[String,String] = Map.empty) = new HeapFltArray( shape, origin, data, Option( missing ), gridSpec, metadata + ( "gridfile" -> gridSpec ) )
@@ -83,6 +83,7 @@ case class ArraySpec( missing: Float, shape: Array[Int], origin: Array[Int], dat
 
   def combine( combineOp: CDArray.ReduceOp[Float], other: ArraySpec, weighted: Boolean ): ArraySpec = {
     val result: FastMaskedArray = toFastMaskedArray.merge( other.toFastMaskedArray, combineOp, weighted )
+//    logger.info( s" #C@ W(${weighted.toString}) combine: ${data(0)} ${other.data(0)} -> ${result.getData(0)}")
     ArraySpec( missing, result.shape, origin, result.getData, optGroup  )
   }
 
@@ -212,6 +213,7 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   def <+( other: CDRecord ): CDRecord = append( other )
   def clear: CDRecord = { new CDRecord(startTime, endTime, Map.empty[String,ArraySpec], metadata) }
   def compare(that: CDRecord): Int = (this.startTime - that.startTime).toInt
+  def conf( key: String, value: String ): CDRecord = new CDRecord(startTime, endTime, elements, metadata + ( key -> value ) )
   lazy val midpoint: Long = (startTime + endTime)/2
   def mergeStart( other: CDRecord ): Long = Math.min( startTime, other.startTime )
   def mergeEnd( other: CDRecord ): Long = Math.max( endTime, other.endTime )
@@ -404,15 +406,13 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def selectElements(  elemFilter: String => Boolean  ): CDRecordRDD = CDRecordRDD ( rdd.map( _.selectElements( elemFilter ) ), metadata, variableRecords )
   def toMatrix(selectElems: Seq[String]): RowMatrix = { new RowMatrix(rdd.map(_.toVector( selectElems ))) }
   def toVectorRDD(selectElems: Seq[String]): RDD[Vector] = { rdd.map(_.toVector( selectElems )) }
-  def collect: QueryResultCollection = { QueryResultCollection( rdd.collect.sortBy(_.startTime), metadata ) }
+  def collect: QueryResultCollection = { QueryResultCollection( rdd.collect, metadata ) }
   def join( other: RDD[CDRecord] ) = CDRecordRDD( rdd.keyBy( _.startTime ).join( other.keyBy( _.startTime ) ).mapPartitions( CDRecord.join ), metadata, variableRecords )
 
   def reduceByGroup(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): CDRecordRDD = {
     val keyedRDD: RDD[(Int,CDRecord)] = rdd.keyBy( groupBy.group( calendar )  )
     val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceKeyedRddByGroup( keyedRDD.mapValues( _.selectElements( elemFilter ) ), op, postOpId, groupBy )
-    val result_rdd = keyedRDD.leftOuterJoin( groupedRDD ) map { case ( key, (slice0, optSlice1) ) => slice0 ++ optSlice1.getOrElse( throw new Exception("Gropu key mismatch in reduceByGroup") ) }
-    val data = keyedRDD.collect
-    val data1 = groupedRDD.collect
+    val result_rdd = keyedRDD.leftOuterJoin( groupedRDD ) map { case ( key, (slice0, optSlice1) ) => slice0.conf("groupKey",key.toString) ++ optSlice1.getOrElse( throw new Exception("Group key mismatch in reduceByGroup") ) } sortBy( _.startTime )
     new CDRecordRDD( result_rdd, metadata, variableRecords )
   }
 
@@ -441,7 +441,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
         QueryResultCollection( slice, metadata)
       case Some( groupBy ) =>
         val partialProduct = filteredRdd.groupBy( groupBy.group(calendar) ).mapValues( CDRecordRDD.sortedReducePartition(op) ).map(item => postOp( postOpId )( item._2 ) )
-        QueryResultCollection( partialProduct.collect.sortBy( _.startTime ), metadata )
+        QueryResultCollection( partialProduct.collect, metadata )
     }
     else optGroupBy match {
       case None =>
@@ -460,16 +460,16 @@ object QueryResultCollection {
 
 }
 
-case class QueryResultCollection( records: Array[CDRecord], metadata: Map[String,String] ) extends Serializable {
+case class QueryResultCollection( _records: Array[CDRecord], metadata: Map[String,String] ) extends Serializable {
+  val records = _records.sortBy( _.startTime )
   def getParameter( key: String, default: String ="" ): String = metadata.getOrElse( key, default )
   def section( section: CDSection ): QueryResultCollection = {
     QueryResultCollection( records.flatMap( _.section(section) ), metadata )
   }
-  def sort(): QueryResultCollection = { QueryResultCollection( records.sortBy( _.startTime ), metadata ) }
   val nslices: Int = records.length
 
   def merge(other: QueryResultCollection, op: CDRecord.ReduceOp ): QueryResultCollection = {
-    val ( tsc0, tsc1 ) = ( sort(), other.sort() )
+    val ( tsc0, tsc1 ) = ( this, other )
     val merged_slices = if(tsc0.records.isEmpty) { tsc1.records } else if(tsc1.records.isEmpty) { tsc0.records } else {
       tsc0.records.zip( tsc1.records ) map { case (s0,s1) => op(s0,s1) }
     }
@@ -479,7 +479,7 @@ case class QueryResultCollection( records: Array[CDRecord], metadata: Map[String
   def getMetadata: Map[String,String] = metadata ++ records.headOption.fold(Map.empty[String,String])(_.metadata) // slices.foldLeft(metadata)( _ ++ _.metadata )
 
   def concatSlices: QueryResultCollection = {
-    val concatSlices = sort().records.reduce( _ <+ _ )
+    val concatSlices = records.reduce( _ <+ _ )
     QueryResultCollection( Array( concatSlices ), metadata )
   }
 
