@@ -379,7 +379,7 @@ object CDRecordRDD extends Serializable with Loggable {
 
   def reduceKeyedRddByGroup(rdd: RDD[(Int,CDRecord)], op: (CDRecord,CDRecord) => CDRecord, postOpId: String, groupBy: TSGroup ): RDD[(Int,CDRecord)] = {
     val rv = rdd.reduceByKey(op) map { case (key, slice) => key -> postOp(postOpId)(slice).setGroupId(groupBy, key) }
-    logger.info( s" #RBG# ReduceKeyedRddByGroup: [${rdd.first._2.shape.mkString(",")}] -> [${rv.first._2.shape.mkString(",")}] ${rdd.count()} -> ${rv.count()} keys=[${rdd.keys.collect.mkString(",")}]" )
+//    logger.info( s" #RBG# ReduceKeyedRddByGroup: [${rdd.first._2.shape.mkString(",")}] -> [${rv.first._2.shape.mkString(",")}] ${rdd.count()} -> ${rv.count()} keys=[${rdd.keys.collect.mkString(",")}]" )
     rv
   }
 }
@@ -410,7 +410,9 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def reduceByGroup(op: (CDRecord,CDRecord) => CDRecord, elemFilter: String => Boolean, postOpId: String, groupBy: TSGroup ): CDRecordRDD = {
     val keyedRDD: RDD[(Int,CDRecord)] = rdd.keyBy( groupBy.group( calendar )  )
     val groupedRDD:  RDD[(Int,CDRecord)] = CDRecordRDD.reduceKeyedRddByGroup( keyedRDD.mapValues( _.selectElements( elemFilter ) ), op, postOpId, groupBy )
-    val result_rdd = keyedRDD.join( groupedRDD ) map { case ( key, (slice0, slice1) ) => slice0 ++ slice1 }
+    val result_rdd = keyedRDD.leftOuterJoin( groupedRDD ) map { case ( key, (slice0, optSlice1) ) => slice0 ++ optSlice1.getOrElse( throw new Exception("Gropu key mismatch in reduceByGroup") ) }
+    val data = keyedRDD.collect
+    val data1 = groupedRDD.collect
     new CDRecordRDD( result_rdd, metadata, variableRecords )
   }
 

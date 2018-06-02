@@ -146,6 +146,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   def getConf( key: String, default: String ) = configuration.getOrElse(key,default)
   def missing_variable(uid: String) = throw new Exception("Can't find Variable '%s' in uids: [ %s ]".format(uid, inputs.keySet.mkString(", ")))
   def getDataSources: Map[String, Option[DataFragmentSpec]] = inputs
+  def getDataSourceIds: Iterable[String] = inputs.map { case (key,fragSpecOpt) => key + ":" + fragSpecOpt.fold("EMPTY")(_.uid) }
   def getInputSpec( uid: String ): Option[DataFragmentSpec] = inputs.get( uid ).flatten
   def getRelatedInputSpec( id: String ): Option[DataFragmentSpec] = {
     val optElem = inputs.find { case (vid,optDataFrag) => vid.split('-').head.equals(id) }

@@ -426,7 +426,8 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
       case Some( group ) =>
         val rid = context.operation.rid.toLowerCase
         val elemFilter = (elemId: String) => elemId.toLowerCase.startsWith( rid )
-        input.reduceByGroup( getReduceOp(context), elemFilter, options.getOrElse("postOp",""), group )
+        val rv = input.reduceByGroup( getReduceOp(context), elemFilter, options.getOrElse("postOp",""), group )
+        rv
       case None =>
         val groupOpt = context.getGroup
         val reducedCollection: QueryResultCollection = reduce( input, context, batchIndex )

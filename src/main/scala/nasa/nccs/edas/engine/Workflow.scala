@@ -351,9 +351,8 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
           nodes.find( _.hasOutput(uid) ) match {
             case Some(inode) => workflowNode.addInput(inode)
             case None =>
-              val errorMsg = s" * Unidentified input in workflow node %s: '%s', available inputs: { ${nodes.map(_.outputIds.mkString(",")).mkString("; ")} }: This is typically due to an empty domain intersection with the dataset! \n ----> inputs ids = %s, input source keys = %s, input source values = %s, result ids = %s".format(
-                workflowNode.getNodeId, uid, requestCx.inputs.keySet.map(k=>s"'$k'").mkString(", "), requestCx.inputs.keys.mkString(", "), requestCx.inputs.values.mkString(", "),
-                nodes.map(_.getNodeId).map(k=>s"'$k'").mkString(", "))
+              val errorMsg = s" * Unidentified input in workflow node %s: '%s', data inputs: { ${requestCx.getDataSourceIds.mkString(",")} }, node inputs: { ${nodes.map(_.outputIds.mkString(",")).mkString("; ")} }: This is typically due to an empty domain intersection with the dataset! \n ----> inputs ids = %s, input source keys = %s, input source values = %s, result ids = %s".format(
+                workflowNode.getNodeId, uid, requestCx.inputs.keySet.map(k=>s"'$k'").mkString(", "), requestCx.inputs.keys.mkString(", "), requestCx.inputs.values.mkString(", "), nodes.map(_.getNodeId).map(k=>s"'$k'").mkString(", "))
               logger.error(errorMsg)
               throw new Exception(errorMsg)
           }
