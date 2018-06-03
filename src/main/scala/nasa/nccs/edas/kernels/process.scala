@@ -416,7 +416,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
   }
 
   def getReduceOp(context: KernelContext): CDRecord.ReduceOp = {
-    if (reduceCombineOp.exists(_ == CDFloatArray.customOp)) {
+    if ( reduceCombineOp contains CDFloatArray.customOp ) {
       customReduceRDD(context)
     } else { reduceRDDOp(context) }
   }
@@ -426,7 +426,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     context.getGroup match {
       case Some( group ) =>
         val rid = context.operation.rid.toLowerCase
-        val elemFilter = (elemId: String) => elemId.toLowerCase.startsWith( rid )
+        val elemFilter = (elemId: String) => { elemId.startsWith( context.getResultId( elemId.split('-').head ) ) }
         val rv = input.reduceByGroup( getReduceOp(context), elemFilter, options.getOrElse("postOp",""), group )
         rv
       case None =>
