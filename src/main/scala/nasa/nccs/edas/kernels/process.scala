@@ -421,7 +421,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
     } else { reduceRDDOp(context) }
   }
 
-  def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: CDRecordRDD): CDRecordRDD = {
+  def reduceBroadcast( context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: CDRecordRDD): CDRecordRDD = {
     assert( batchIndex == 0, "reduceBroadcast is not supported over multiple batches")
     context.getGroup match {
       case Some( group ) =>
@@ -772,10 +772,12 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      val input_arrays = getInputArrays( inputs, context )
+      val input_arrays: List[(String,ArraySpec)] = getInputArrays( inputs, context )
       val grouped_input_arrays: Map[String, List[(String,ArraySpec)]] = input_arrays groupBy { case (uid,array) => uid.split('-').head }
+
       val results: Map[String,ArraySpec] = grouped_input_arrays.map {
         case ( vid, input_arrays ) =>
+          logger.info( s"#GI#: grouped_input_arrays [${vid}] -> [${context.operation.output( vid )}]: [ ${input_arrays.map(_._1).mkString(", ")}  ]")
           context.operation.output( vid ) -> input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
       }
       CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ results, inputs.metadata )
