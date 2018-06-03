@@ -71,7 +71,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   val rootNodeId = rootNode.getNodeId
   def getGridRefInput: Option[OperationDataInput] = workflowCx.getGridRefInput
   def contents: Set[String] = _inputsRDD.contents.toSet
-  def getInputs(node: WorkflowNode): List[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
+  def getInputs(node: WorkflowNode): Set[(String,OperationInput)] = node.operation.inputs.flatMap( uid => workflowCx.inputs.get( uid ).map ( uid -> _ ) )
   def getReduceOp(context: KernelContext): CDRecord.ReduceOp = rootNode.kernel.getReduceOp(context)
   def getTargetGrid: Option[TargetGrid] = workflowCx.getTargetGrid
   def releaseBatch: Unit = _inputsRDD.releaseBatch
@@ -84,7 +84,7 @@ class WorkflowExecutor(val requestCx: RequestContext, val workflowCx: WorkflowCo
   private def releaseInputs( node: WorkflowNode, kernelCx: KernelContext ): Unit = {
     val inputs =  getInputs(node)
     for( (uid,input) <- inputs ) input.consume( kernelCx.operation )
-    val groupedInputs: Map[ Boolean, List[(String,OperationInput)] ] = inputs.groupBy { case (uid,input) => node.isDisposable( input ) }
+    val groupedInputs: Map[ Boolean, Set[(String,OperationInput)] ] = inputs.groupBy { case (uid,input) => node.isDisposable( input ) }
     _inputsRDD.release( groupedInputs.getOrElse(true,Map.empty).map( _._1 ) )
 //    _inputsRDD.cache( groupedInputs.getOrElse(false,Map.empty).map( _._1 ) )
   }

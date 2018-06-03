@@ -1191,14 +1191,14 @@ object OperationContext extends ContainerBase {
             uid + op_name + "-" + resultIndex.toString
         }
     }
-    new OperationContext( identifier = UID() + op_name, name = op_name, rid = rid, inputs = op_inputs.toList, optargs )
+    new OperationContext( identifier = UID() + op_name, name = op_name, rid = rid, inputs = op_inputs.toSet, optargs )
   }
 }
 
 class OperationContext(val identifier: String,
                        val name: String,
                        val rid: String,
-                       val inputs: List[String],
+                       val inputs: Set[String],
                        private val configuration: Map[String, String]) extends ContainerBase with ScopeContext with Serializable {
   import OperationContext._
   def getConfiguration: Map[String, String] = configuration
@@ -1211,7 +1211,7 @@ class OperationContext(val identifier: String,
   def operatesOnAxis( axis: Char ): Boolean = configuration.getOrElse("axes","").contains(axis)
   def reconfigure( new_configuration: Map[String, String] ): OperationContext = new OperationContext( identifier, name, rid, inputs, new_configuration )
   def getDomains: List[String] = _domains.toList
-  def outputs: List[String] = inputs map ( inputId =>  getRid(rid)( inputId ) )
+  def outputs: Set[String] = inputs map ( inputId =>  getRid(rid)( inputId ) )
   def output( inputId: String ): String = getRid(rid)( inputId )
   def getRenameOp: (String)=>String = getRid(rid)
 

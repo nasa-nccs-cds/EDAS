@@ -38,7 +38,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: KernelImpl  ) e
   import WorkflowNode._
   private val contexts = mutable.HashMap.empty[String,KernelContext]
   private var _isMergedSubworkflowRoot: Boolean = false;
-  lazy val outputIds: List[String] = operation.outputs
+  lazy val outputIds: Set[String] = operation.outputs
 
   def markAsMergedSubworkflowRoot: WorkflowNode = { _isMergedSubworkflowRoot = true; this }
   def isMergedSubworkflowRoot: Boolean = _isMergedSubworkflowRoot
@@ -413,7 +413,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     val items = for (uid <- workflowNode.operation.inputs) yield {
       uid -> _nodeInputs.getOrElseUpdate( uid, getNodeInput( uid, requestCx, workflowNode) ).registerConsumer( workflowNode.operation )
     }
-    Map(items: _*)
+    Map(items.toSeq: _*)
   }
 
   def createResponse( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): Option[WPSProcessExecuteResponse] = {
