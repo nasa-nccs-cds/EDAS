@@ -773,6 +773,7 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
       val input_arrays: List[(String,ArraySpec)] = getInputArrays( inputs, context )
+      logger.info( s"#GI#: grouped_input_arrays input ids=[${context.operation.inputs.mkString(",")}], inputs=[${inputs.elements.keySet.mkString(",")}], filtered inputs=[${input_arrays.map(_._1).mkString(",")}] " )
       val grouped_input_arrays: Map[String, List[(String,ArraySpec)]] = input_arrays groupBy { case (uid,array) => uid.split('-').head }
 
       val results: Map[String,ArraySpec] = grouped_input_arrays.map {
