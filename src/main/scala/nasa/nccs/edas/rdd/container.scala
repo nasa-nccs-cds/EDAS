@@ -767,7 +767,7 @@ class RDDContainer extends Loggable {
   }
 
   class RDDVault( init_value: CDRecordRDD ) {
-    val debug = false
+    val debug = true
     private var _rdd = init_value
     if( debug ) {
       val elems = init_value.rdd.first.elements.map { case ( key, array ) => s"${key}:[${array.shape.mkString(",")}]"}

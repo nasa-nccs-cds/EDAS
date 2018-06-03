@@ -772,11 +772,11 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      val grouped_input_arrays: Map[String, List[(String,ArraySpec)]] = getInputArrays( inputs, context ) groupBy { case (uid,array) => uid.split('-').last }
+      val input_arrays = getInputArrays( inputs, context )
+      val grouped_input_arrays: Map[String, List[(String,ArraySpec)]] = input_arrays groupBy { case (uid,array) => uid.split('-').head }
       val results: Map[String,ArraySpec] = grouped_input_arrays.map {
         case ( vid, input_arrays ) =>
-          vid + "-" + context.operation.rid ->
-            input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
+          context.operation.output( vid ) -> input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
       }
       CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ results, inputs.metadata )
     } else { inputs }
