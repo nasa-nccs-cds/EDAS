@@ -28,7 +28,7 @@ class svd extends KernelImpl {
 
   override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
     val t0 = System.nanoTime()
-    val inputVectors: RDD[Vector] = input.toVectorRDD( context.operation.inputs )
+    val inputVectors: RDD[Vector] = input.toVectorRDD( context.operation.inputs.toSeq )
     val topSlice: CDRecord = input.rdd.first
     val startTime = topSlice.startTime
     val endTime = input.rdd.aggregate( -Long.MaxValue )( (etime,rec) => math.max( etime, rec.endTime), math.max )
@@ -84,7 +84,7 @@ class rescale extends KernelImpl {
   val description = "Implement Singular Value Decomposition"
 
   override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
-    val inputVectors = input.toVectorRDD( context.operation.inputs ): RDD[Vector]
+    val inputVectors = input.toVectorRDD( context.operation.inputs.toSeq ): RDD[Vector]
     val topSlice: CDRecord = input.rdd.first
     val topElem = topSlice.elements.head._2
     val rid = context.operation.inputs.mkString("-")

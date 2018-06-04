@@ -398,13 +398,23 @@ class DefaultTestSuite extends EDASTestSuite {
 //    println( "Op Result:       " + result_data.mkDataString(", ") )
 //  }
 
+  test("anomaly-cycle")  { if(test_binning) {
+    val datainputs =
+      s"""[domain=[{"name":"d0","lat":{"start":40,"end":40,"system":"values"},"lon":{"start":40,"end":40,"system":"values"}}],
+         | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         | operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","groupBy":"monthofyear","axes":"t"}]]""".stripMargin
+    val result_node = executeTest( datainputs )
+    val result_data = getResultData( result_node )
+    println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
+  }}
 
   test("anomaly")  { if(test_binning) {
     val datainputs =
-      s"""[domain=[{"name":"d0","lat":{"start":40,"end":60,"system":"values"}}],
+      s"""[domain=[{"name":"d0","lat":{"start":40,"end":40,"system":"values"},"lon":{"start":40,"end":40,"system":"values"}}],
          | variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
-         | operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","groupBy":"monthofyear","axes":"xt","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]""".stripMargin
+         | operation=[{"name":"CDSpark.ave","input":"v1","domain":"d0","groupBy":"monthofyear","axes":"t","id":"v1ave"},{"name":"CDSpark.eDiff","input":"v1,v1ave","domain":"d0"}]]""".stripMargin
     val result_node = executeTest( datainputs )
+    println( "Result Node:       " + result_node.toString )
     val result_data = getResultData( result_node )
     println( "Op Result:       " + result_data.mkBoundedDataString(", ",100) )
   }}
@@ -438,7 +448,9 @@ class DefaultTestSuite extends EDASTestSuite {
   }
 
   test("seasonal-cycle") {
-    val datainputs = s"""[domain=[{"name":"d0", "lat":{"start":40,"end":40,"system":"values"}, "lon":{"start":260,"end":260,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],operation=[{"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave","groupBy":"season"}]]"""
+    val datainputs =
+      s"""[domain=[{"name":"d0", "lat":{"start":40,"end":40,"system":"values"}, "lon":{"start":260,"end":260,"system":"values"}}],variable=[{"uri":"collection:/giss_r1i1p1","name":"tas:v1","domain":"d0"}],
+         |operation=[{"name":"CDSpark.ave","input":"v1","axes":"t","id":"v1ave","groupBy":"season"}]]""".stripMargin
     val result_node = executeTest( datainputs )
     val result_data = getResultData( result_node )
     println( "Op Shape: " + result_data.getShape.mkString(",") )

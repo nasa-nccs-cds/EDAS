@@ -627,8 +627,8 @@ class ave extends SingularRDDKernel( Map( "mapOp" -> "avew", "reduceOp" -> "avew
         } else {
           input_array.weightedSum(axisIndices,None)
         }
-        List( context.operation.rid -> ArraySpec(weighted_value_sum_masked.missing, weighted_value_sum_masked.shape, input_data.origin, weighted_value_sum_masked.getData, input_data.optGroup ),
-              context.operation.rid + "_WEIGHTS_" -> ArraySpec(weights_sum_masked.missing, weights_sum_masked.shape, input_data.origin, weights_sum_masked.getData, input_data.optGroup ))
+        List( context.operation.output( inputId ) -> ArraySpec(weighted_value_sum_masked.missing, weighted_value_sum_masked.shape, input_data.origin, weighted_value_sum_masked.getData, input_data.optGroup ),
+          context.operation.output( inputId ) + "_WEIGHTS_" -> ArraySpec(weights_sum_masked.missing, weights_sum_masked.shape, input_data.origin, weights_sum_masked.getData, input_data.optGroup ))
       case None =>
         throw new Exception("Missing input to 'average' kernel: " + inputId + ", available inputs = " + inputs.elements.keySet.mkString(","))
     })
@@ -652,13 +652,6 @@ class noOp extends KernelImpl(Map.empty) {
   override def elemFilter(rid: String) = (elemId: String) => true
 
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = { inputs }
-
-  override def execute(workflow: Workflow, input: CDRecordRDD, context: KernelContext, batchIndex: Int ): QueryResultCollection = {
-    val t0 = System.nanoTime
-    val result = reduce( input, context, batchIndex )
-    logger.info( s" noOp execution (reduce) time = ${(System.nanoTime-t0)/1e9} ")
-    result
-  }
 }
 
 class subset extends noOp {
@@ -713,10 +706,11 @@ class stdDev extends MultiKernel(Map.empty) {
 
   def getExpandedOperations( workflow: Workflow, operation: OperationContext ): List[OperationContext] = {
     val opId = UID( operation.identifier.split('-').last )
-    val ( anomaly, rms, anomalyResult ) = ( "CDSpark.anomaly", "CDSpark.rms", workflow.request.id + "anomalyResult" )
-    val opAnomaly  = new OperationContext( opId + anomaly, anomaly, anomalyResult, operation.inputs, operation.getConfiguration )
-    val opRms = new OperationContext( opId + rms, rms, operation.rid, opAnomaly.outputs, operation.getConfiguration )
-    List( opAnomaly, opRms )
+    val ( ave, eDiff, aveResult, diffResult, rms ) = ( "CDSpark.ave", "CDSpark.eDiff", workflow.request.id + "aveResult", workflow.request.id + "diffResult", "CDSpark.rms" )
+    val opAve  = new OperationContext( opId + ave, ave, aveResult, operation.inputs, operation.getConfiguration )
+    val opDiff = new OperationContext( opId + eDiff, eDiff, diffResult, operation.inputs ++ opAve.outputs, Map.empty[String, String] )
+    val opRms = new OperationContext( opId + rms, rms, operation.rid, opDiff.outputs, operation.getConfiguration )
+    List( opAve, opDiff, opRms )
   }
 }
 

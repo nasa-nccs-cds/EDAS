@@ -38,7 +38,7 @@ class WorkflowNode( val operation: OperationContext, val kernel: KernelImpl  ) e
   import WorkflowNode._
   private val contexts = mutable.HashMap.empty[String,KernelContext]
   private var _isMergedSubworkflowRoot: Boolean = false;
-  lazy val outputIds: List[String] = operation.outputs
+  lazy val outputIds: Set[String] = operation.outputs
 
   def markAsMergedSubworkflowRoot: WorkflowNode = { _isMergedSubworkflowRoot = true; this }
   def isMergedSubworkflowRoot: Boolean = _isMergedSubworkflowRoot
@@ -351,9 +351,8 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
           nodes.find( _.hasOutput(uid) ) match {
             case Some(inode) => workflowNode.addInput(inode)
             case None =>
-              val errorMsg = s" * Unidentified input in workflow node %s: '%s', available inputs: { ${nodes.map(_.outputIds.mkString(",")).mkString("; ")} }: This is typically due to an empty domain intersection with the dataset! \n ----> inputs ids = %s, input source keys = %s, input source values = %s, result ids = %s".format(
-                workflowNode.getNodeId, uid, requestCx.inputs.keySet.map(k=>s"'$k'").mkString(", "), requestCx.inputs.keys.mkString(", "), requestCx.inputs.values.mkString(", "),
-                nodes.map(_.getNodeId).map(k=>s"'$k'").mkString(", "))
+              val errorMsg = s" * Unidentified input in workflow node %s: '%s', data inputs: { ${requestCx.getDataSourceIds.mkString(",")} }, node inputs: { ${nodes.map(_.outputIds.mkString(",")).mkString("; ")} }: This is typically due to an empty domain intersection with the dataset! \n ----> inputs ids = %s, input source keys = %s, input source values = %s, result ids = %s".format(
+                workflowNode.getNodeId, uid, requestCx.inputs.keySet.map(k=>s"'$k'").mkString(", "), requestCx.inputs.keys.mkString(", "), requestCx.inputs.values.mkString(", "), nodes.map(_.getNodeId).map(k=>s"'$k'").mkString(", "))
               logger.error(errorMsg)
               throw new Exception(errorMsg)
           }
@@ -414,7 +413,7 @@ class Workflow( val request: TaskRequest, val executionMgr: EDASExecutionManager
     val items = for (uid <- workflowNode.operation.inputs) yield {
       uid -> _nodeInputs.getOrElseUpdate( uid, getNodeInput( uid, requestCx, workflowNode) ).registerConsumer( workflowNode.operation )
     }
-    Map(items: _*)
+    Map(items.toSeq: _*)
   }
 
   def createResponse( executionResult: KernelExecutionResult, executor: WorkflowExecutor  ): Option[WPSProcessExecuteResponse] = {

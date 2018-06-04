@@ -351,7 +351,7 @@ abstract class MultiKernel( options: Map[String,String] = Map.empty ) extends Ke
 abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Kernel(options) {
   import Kernel._
   val weighted: Boolean
-  def getInputArrays(inputs: CDRecord, context: KernelContext ): List[(String,ArraySpec)] = context.operation.inputs.flatMap(id => inputs.filterElements( id ))
+  def getInputArrays(inputs: CDRecord, context: KernelContext ): Set[(String,ArraySpec)] = context.operation.inputs.flatMap(id => inputs.filterElements( id ))
   val mapCombineOp: Option[ReduceOpFlt] = options.get("mapOp").fold (options.get("mapreduceOp")) (Some(_)) map CDFloatArray.getOp
   val mapCombineNOp: Option[ReduceNOpFlt] = None
   val mapCombineWNOp: Option[ReduceWNOpFlt] = None
@@ -379,7 +379,8 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
         s" $key: [ ${ array.data.mkString(", ") } ]" }.mkString("; ")).mkString("\n  @S@:   ") }")
     }
     val rv = input.map( map( context.setDesignatedRecord( input.first ) ) )
-    logger.info( s" @WW@ mapRDD: op: ${context.operation.identifier}, output count: ${rv.rdd.count}, output slice shape: [ ${rv.rdd.first.elements.head._2.shape.mkString(", ")} ]")
+//    val msg = s" @WW@ mapRDD: op: ${context.operation.identifier}, output count: ${rv.rdd.count}, output slice shape: [ ${rv.rdd.first.elements.head._2.shape.mkString(", ")} ], elems = ${rv.rdd.first.elements.keys.mkString(",")}"
+//    logger.info( msg )
     rv
   }
 
@@ -411,23 +412,24 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
       val result: QueryResultCollection =  context.profiler.profile[QueryResultCollection]( "Kernel.reduce" ) (() => {
           input.reduce( getReduceOp(context), elemFilter(rid), postOpId, context.getGroup, ordered )
         })
-      result.sort
+      result
     }
   }
 
   def getReduceOp(context: KernelContext): CDRecord.ReduceOp = {
-    if (reduceCombineOp.exists(_ == CDFloatArray.customOp)) {
+    if ( reduceCombineOp contains CDFloatArray.customOp ) {
       customReduceRDD(context)
     } else { reduceRDDOp(context) }
   }
 
-  def reduceBroadcast(context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: CDRecordRDD): CDRecordRDD = {
+  def reduceBroadcast( context: KernelContext, serverContext: ServerContext, batchIndex: Int )(input: CDRecordRDD): CDRecordRDD = {
     assert( batchIndex == 0, "reduceBroadcast is not supported over multiple batches")
     context.getGroup match {
       case Some( group ) =>
         val rid = context.operation.rid.toLowerCase
-        val elemFilter = (elemId: String) => elemId.toLowerCase.startsWith( rid )
-        input.reduceByGroup( getReduceOp(context), elemFilter, options.getOrElse("postOp",""), group )
+        val elemFilter = (elemId: String) => { elemId.startsWith( context.getResultId( elemId.split('-').head ) ) }
+        val rv = input.reduceByGroup( getReduceOp(context), elemFilter, options.getOrElse("postOp",""), group )
+        rv
       case None =>
         val groupOpt = context.getGroup
         val reducedCollection: QueryResultCollection = reduce( input, context, batchIndex )
@@ -771,8 +773,15 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
   override def map ( context: KernelContext ) (inputs: CDRecord  ): CDRecord = {
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
-      val grouped_input_arrays: Map[String, List[(String,ArraySpec)]] = getInputArrays( inputs, context ) groupBy { case (uid,array) => uid.split('-').head }
-      val results: Map[String,ArraySpec] = grouped_input_arrays.map { case ( vid, input_arrays ) => vid + "-" + context.operation.rid -> input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) ) }
+      val input_arrays: Set[(String,ArraySpec)] = getInputArrays( inputs, context )
+      logger.info( s"#GI#: grouped_input_arrays input ids=[${context.operation.inputs.mkString(",")}], inputs=[${inputs.elements.keySet.mkString(",")}], filtered inputs=[${input_arrays.map(_._1).mkString(",")}] " )
+      val grouped_input_arrays: Map[String, Set[(String,ArraySpec)]] = input_arrays groupBy { case (uid,array) => uid.split('-').head }
+
+      val results: Map[String,ArraySpec] = grouped_input_arrays.map {
+        case ( vid, input_arrays ) =>
+          logger.info( s"#GI#: grouped_input_arrays [${vid}] -> [${context.operation.output( vid )}]: [ ${input_arrays.map(_._1).mkString(", ")}  ]")
+          context.operation.output( vid ) -> input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
+      }
       CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ results, inputs.metadata )
     } else { inputs }
   }
@@ -876,7 +885,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
     val workerManager: PythonWorkerPortal = PythonWorkerPortal.getInstance()
     val worker: PythonWorker = workerManager.getPythonWorker
     try {
-      val input_arrays: List[(String,ArraySpec)] = getInputArrays(inputs, context)
+      val input_arrays: Set[(String,ArraySpec)] = getInputArrays(inputs, context)
       val t1 = System.nanoTime
       for (input_id <- context.operation.inputs) inputs.element(input_id) match {
         case Some(input_array) =>
@@ -888,7 +897,7 @@ class zmqPythonKernel( _module: String, _operation: String, _title: String, _des
       }
       val metadata = indexAxisConf(context.getConfiguration, context.grid.axisIndexMap) ++ Map("resultDir" -> Kernel.getResultDir.toString)
       worker.sendRequest(context.operation.identifier, context.operation.inputs.toArray, metadata)
-      val resultItems: Seq[(String, ArraySpec)] = for (iInput <- 0 until (input_arrays.length * nOutputsPerInput)) yield {
+      val resultItems: Seq[(String, ArraySpec)] = for (iInput <- 0 until (input_arrays.size * nOutputsPerInput)) yield {
         val tvar: TransVar = worker.getResult
         val uid = tvar.getMetaData.get("uid")
         val result = ArraySpec(tvar)
