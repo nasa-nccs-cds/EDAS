@@ -387,6 +387,7 @@ class CDRecordRDD(val rdd: RDD[CDRecord], metadata: Map[String,String], val vari
   def cache() = rdd.cache()
   def nSlices = rdd.count
   def first: CDRecord = rdd.first
+  def isEmpty: Boolean = rdd.isEmpty()
   def exe: CDRecordRDD = { rdd.cache; rdd.count; this }
   def unpersist(blocking: Boolean ) = rdd.unpersist(blocking)
   def section( section: CDSection ): CDRecordRDD = CDRecordRDD( rdd.flatMap( _.section(section) ), metadata, variableRecords )
@@ -771,7 +772,7 @@ class RDDContainer extends Loggable {
     def map( f: (CDRecordRDD) => CDRecordRDD, logStr: String ): Unit = update( f(_rdd), logStr )
     def value = _rdd
     def clear: Unit = _rdd.unpersist(false)
-    def contents = _rdd.rdd.first().elements.keys
+    def contents: Iterable[String] = if( _rdd.rdd.isEmpty() ) { Iterable.empty[String] } else { _rdd.rdd.first().elements.keys }
     def release( keys: Iterable[String] ) = { update( _rdd.release(keys), s"Release keys: [${keys.mkString(",")}]" ) }
 //    def += ( record: CDRecord ) = { update( _rdd.map(slice => slice ++ record ) ) }
     def addResult ( records: QueryResultCollection, logStr: String  ) = {

@@ -371,6 +371,7 @@ abstract class KernelImpl( options: Map[String,String] = Map.empty ) extends Ker
 
   def mapRDD(input: CDRecordRDD, context: KernelContext ): CDRecordRDD = {
     EDASExecutionManager.checkIfAlive
+    assert( !input.isEmpty, s"Empty input to Kernel ${name}" )
 //    logger.info( s" @WW@ mapRDD: op: ${context.operation.identifier}, input elems: ${input.rdd.first.elements.keys.mkString(",")}, op inputs: ${context.operation.inputs.mkString(",")}")
     if( sampleInputs ) {
       val slices = input.rdd.collect()

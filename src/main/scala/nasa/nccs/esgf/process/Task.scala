@@ -130,7 +130,7 @@ class TaskRequest(val id: UID,
         var keylist = variableMap.keys.mkString("[", ",", "]")
         logger.error(s"Error, No $var_arg in $keylist in operation $opid")
         throw new Exception(
-          s"Error, Missing variable $var_arg in operation $opid")
+          s"Error, Missing variable $var_arg in operation $opid, available variables = ${keylist}")
       }
     }
   }
@@ -184,7 +184,7 @@ object UID {
   def apply( rId: String = RandomStringUtils.random(ndigits, true, true) ) = new UID(rId)
 }
 class UID( val uid: String  ) {
-  def +(id: String): String = id + "-" + uid.toString
+  def +(id: String): String = if( id.endsWith( uid.toString) ) { id } else { id + "-" + uid.toString }
   override def toString = uid
 }
 

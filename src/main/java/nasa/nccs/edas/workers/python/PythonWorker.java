@@ -25,7 +25,7 @@ public class PythonWorker extends Worker {
     protected Process startup() throws Exception {
         try {
             FileSystem fileSystems = FileSystems.getDefault();
-            Path log_path = fileSystems.getPath( "/tmp", System.getProperty("user.name"), "logs", String.format("python-worker-%d.log",request_port) );
+            Path log_path = fileSystems.getPath( System.getProperty("user.home"), ".edas", "logs", String.format("python-worker-%d.log",request_port) );
             Path run_script = fileSystems.getPath( System.getProperty("user.home"), ".edas", "sbin", "startup_python_worker.sh" );
             Map<String, String> sysenv = System.getenv();
 //            ProcessBuilder pb = new ProcessBuilder( "python", "-m", "pyedas.worker", String.valueOf(request_port), String.valueOf(result_port) );

@@ -201,8 +201,25 @@ class DefaultTestSuite extends EDASTestSuite {
     val datainputs =
       s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],
          | variable=[{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v0","domain":"d0"}],
-         | operation=[{"name":"CDSpark.noOp","input":"v0","domain":"d0","grid":"uniform","shape":"32,64"}]]""".stripMargin
-    val result_node0 = executeTest( datainputs, runArgs = Map( "response" -> "collection","cid" -> "merra2_tas_regrid_32x64" ) )
+         | operation=[{"name":"CDSpark.noOp","input":"v0","domain":"d0","grid":"uniform","shape":"32,64","responseform":"collection:merra2_tas_regrid_32x64"}]]""".stripMargin
+    val result_node0 = executeTest( datainputs )  // , runArgs = Map( "response" -> "collection","cid" -> "merra2_tas_regrid_32x64" )
+    println( " ** Result: " + result_node0.toString() )
+    val datainputs1 =
+      s"""[domain=[{"name":"d1"}],
+         | variable=[{"uri":"collection:/merra2_tas_regrid_32x64","name":"tas:v1","domain":"d1"}],
+         | operation=[{"name":"CDSpark.ave","input":"v1","domain":"d1","axes":"xy"}]]""".stripMargin
+    val result_node1 = executeTest( datainputs1 )
+    val result_array = CDFloatArray( getResultData( result_node1 ) )
+    println( " ** Result Sample:       " + result_array.sample( 35 ).mkDataString( ", " ) )
+    println( " ** Result Shape:       " + result_array.getShape.mkString(",") )
+  }}
+
+  test("preprocess_MERRA_collection")  { if(test_collection_output) {
+    val datainputs =
+      s"""[domain=[{"name":"d0","time":{"start":0,"end":10,"system":"indices"}}],
+         | variable=[{"uri":"collection:/cip_merra2_mon_1980-2015","name":"tas:v0","domain":"d0"}],
+         | operation=[{"name":"SparkML.rescale","input":"v0","domain":"d0","grid":"uniform","shape":"32,64","responseform":"collection:merra2_tas_regrid_32x64"}]]""".stripMargin
+    val result_node0 = executeTest( datainputs )  // , runArgs = Map( "response" -> "collection","cid" -> "merra2_tas_regrid_32x64" )
     println( " ** Result: " + result_node0.toString() )
     val datainputs1 =
       s"""[domain=[{"name":"d1"}],

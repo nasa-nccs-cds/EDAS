@@ -72,7 +72,8 @@ public class ResponseManager extends Thread {
         publishDir =  EDASPortalClient.getOrDefault( configuration, "edas.publish.dir", cacheDir );
         logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
         File[] subdirs = getDirs(publishDir);
-        for(int i = 0; i< subdirs.length; i++){ cleanupManager.addFileCleanupTask( subdirs[i].getAbsolutePath(), 2.0f, true, ".*" ); }
+        for(int i = 0; i< subdirs.length; i++){ cleanupManager.addFileCleanupTask( subdirs[i].getAbsolutePath(), 1.0f, true, ".*" ); }
+        cleanupManager.addFileCleanupTask( publishDir, 1.0f, false, ".*" );
         Path log_path = fileSystems.getPath( "/tmp", System.getProperty("user.name"), "logs" );
         cleanupManager.addFileCleanupTask( log_path.toString(), 2.0f, true, ".*" );
 

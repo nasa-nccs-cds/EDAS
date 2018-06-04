@@ -5,7 +5,7 @@ import java.io.File
 
 import scala.xml
 import scala.collection.concurrent.TrieMap
-import nasa.nccs.cdapi.cdm.{CDGrid, PartitionedFragment}
+import nasa.nccs.cdapi.cdm._
 import nasa.nccs.esgf.process._
 
 import scala.collection.mutable.ListBuffer
@@ -331,6 +331,141 @@ object EDASExecutionManager extends Loggable {
     }
     path
   }
+
+//  def saveRecordToFile( resultId: String, grid: Grid, slice: CDRecord, varMetadata: Map[String,String], dsetMetadata: List[nc2.Attribute], fileIndex: Int, timeIndex: Int, nFiles: Int  ): String = {
+//    val t0 = System.nanoTime()
+//    val multiFiles = false
+//    val head_elem: ArraySpec = slice.elements.values.head
+//    val chunker: Nc4Chunking = new Nc4ChunkingStrategyNone()
+//    val baseFileName = if( fileIndex == 0 ) { resultId } else { resultId + "-" + fileIndex }
+//    val fileName = if( timeIndex == 0 ) { baseFileName } else { baseFileName + "-" + timeIndex }
+//    val resultFile = Kernel.getResultFile( fileName, true )
+//    val path = resultFile.getAbsolutePath
+//    val writer: nc2.NetcdfFileWriter = nc2.NetcdfFileWriter.createNew(nc2.NetcdfFileWriter.Version.netcdf4, path, chunker)
+//    var optGridDset: Option[NetcdfDataset] = None
+//    var originalDataset: Option[NetcdfDataset] = None
+//    try {
+//      logger.info(s" #CV#  Saving slice, elems: [ ${slice.elements.keys.mkString(", ")} ], shape: [${slice.elements.head._2.shape.mkString(",")}], sliceMetadata: ${slice.metadata.toString()}, varMetadata: ${varMetadata.toString()}, dsetMetadata: [ ${dsetMetadata.map( attr => attr.getShortName + ": " +  attr.getStringValue ).mkString(",")} ] "  )
+//      val shape: Array[Int] = head_elem.shape
+//      val timeValues: IndexedSeq[Double] = generateRange( slice.startTime , slice.endTime, shape(0) )
+//      val dateRange = List( new DateTime(slice.startTime).toString, new DateTime(slice.endTime).toString ).mkString(", ")
+//      val timeUnits: String = "minutes since 1970-01-01T00:00:00Z" // EDTime.units
+//      val gridFileOpt: Option[String] = varMetadata.get( "gridspec" )
+//      val t1 = System.nanoTime()
+//      val coordsList: List[(CoordAxis,Int)] = grid.getAxes
+//      for( (coord,idim) <- coordsList ) { writer.addDimension(null, coord.dims.head.name, shape(idim)) }
+//      val t2 = System.nanoTime()
+//      val gblTimeCoordAxis = grid.getAxis("T")
+//      val t3 = System.nanoTime()
+//      val timeCoordAxis = gblTimeCoordAxis.section( inputSpec.roi.getRange(0) )
+//      val t4 = System.nanoTime()
+//
+//      val coordAxes: List[CoordinateAxis] = gridFileOpt match {
+//        case Some( gridFilePath ) =>
+//          val gridDSet = NetcdfDataset.openDataset(gridFilePath)
+//          gridDSet.getCoordinateAxes.toList :+ timeCoordAxis
+//        case None =>
+//          targetGrid.grid.grid.getCoordinateAxes :+ timeCoordAxis
+//      }
+//
+//      logger.info(" WWW Writing result %s to file '%s', vars=[%s], dims=(%s), shape=[%s], coords = [%s], roi=[%s], dateRange=[%s]".format(
+//        resultId, path, slice.elements.keys.mkString(","), dimsMap.mapValues( dim => s"${dim.getShortName}:${dim.getLength}" ).mkString(","), shape.mkString(","),
+//        coordAxes.map { caxis => "%s: (%s)".format(caxis.getShortName, caxis.getShape.mkString(",")) }.mkString(","), inputSpec.roi.toString, dateRange ) )
+//
+//
+//      //      val newCoordVars: List[(nc2.Variable, ma2.Array)] = coordAxes.map( coordAxis => {
+//      //        val coordVar: nc2.Variable = writer.addVariable(null, coordAxis.getShortName, coordAxis.getDataType, coordAxis.getShortName)
+//      //        for (attr <- coordAxis.getAttributes) writer.addVariableAttribute(coordVar, attr)
+//      //        val data = coordAxis.read()
+//      //        (coordVar, data)
+//      //      })
+//
+//      val axisTypes = if( shape.length == 4 ) Array("T", "Z", "Y", "X" )  else Array("T", "Y", "X" )
+//      val newCoordVars: List[(nc2.Variable, ma2.Array)] = (for (coordAxis <- coordAxes) yield optInputSpec flatMap { inputSpec =>
+//        inputSpec.getRangeCF( coordAxis.getAxisType.getCFAxisName ) match {
+//          case Some(range) =>
+//            val coordDataType = if( coordAxis.getAxisType == AxisType.Time ) { DataType.DOUBLE } else { coordAxis.getDataType }
+//            val dims = dimsMap.get( coordAxis.getAxisType.getCFAxisName ).toList
+//            val coordAxisName = dims.head.getShortName
+//            val newVar = writer.addVariable( null, coordAxisName, coordAxis.getDataType, dims )
+//            val coordVar: nc2.Variable = if( newVar == null ) { writer.findVariable(coordAxisName) } else { newVar }
+//            if( coordVar == null ) { logger.info("#CV# X2: " + coordAxisName ); None }
+//            else {
+//              writer.addVariableAttribute( coordVar, new Attribute( "axis", coordAxis.getAxisType.getCFAxisName.toUpperCase ) )
+//              writer.addVariableAttribute( coordVar, new Attribute( "standard_name", coordAxis.getDODSName ) )
+//              writer.addVariableAttribute( coordVar, new Attribute( "long_name", coordAxis.getFullName ) )
+//              for (attr <- coordAxis.getAttributes; if attr != null) { writer.addVariableAttribute(coordVar, attr) }
+//              if (coordAxis.getAxisType == AxisType.Time) {
+//                coordVar.addAttribute(new Attribute("units", timeUnits))
+//              }
+//              val newRange = dimsMap.get(coordAxis.getAxisType.getCFAxisName).fold(range)(dim =>
+//                if (dim.getLength == 1) {
+//                  val center = (range.first + range.last) / 2; new ma2.Range(range.getName, center, center)
+//                } else {
+//                  range
+//                }
+//              )
+//              val data = if (coordAxis.getAxisType == AxisType.Time) {
+//                ma2.Array.factory(timeValues.toArray)
+//              } else {
+//                if (dims.head.getLength == 1) {
+//                  ma2.Array.makeArray(coordDataType, Array("0"))
+//                } else if (coordAxis.getSize > newRange.length) {
+//                  coordAxis.read(List(newRange))
+//                } else {
+//                  coordAxis.read()
+//                }
+//
+//              }
+//              Some(coordVar, data)
+//            }
+//          case None => logger.info("#CV# X1: " + coordAxis.getShortName ); None
+//        }
+//      }).flatten
+//
+//      val varDims: Array[Dimension] = axisTypes.map( aType => dimsMap.getOrElse(aType, throw new Exception( s"Missing coordinate type ${aType} in saveResultToFile") ) )
+//      val dataMap: Map[String,CDFloatArray] = slice.elements.mapValues( _.toCDFloatArray )
+//      val variables = dataMap.map { case ( tname, maskedTensor ) =>
+//        val optVarName = executor.getRelatedInputSpec( tname.split('-').head ).map( _.varname )
+//        val baseName  = varMetadata.getOrElse("name", varMetadata.getOrElse("longname", "result") ).replace(' ','_')
+//        val varname: String = optVarName.getOrElse( baseName + "-" + tname )
+//        logger.info("Creating var %s: dims = [%s], data sample = [ %s ]".format(varname, varDims.map( _.getShortName).mkString(", "), maskedTensor.getSectionArray( Math.min(10,maskedTensor.getSize.toInt) ).mkString(", ") ) )
+//        val variable: nc2.Variable = writer.addVariable(null, varname, ma2.DataType.FLOAT, varDims.toList )
+//        varMetadata map { case (key, value) => variable.addAttribute(new Attribute(key, value)) }
+//        variable.addAttribute(new nc2.Attribute("missing_value", maskedTensor.getInvalid))
+//        dsetMetadata.foreach(attr => writer.addGroupAttribute(null, attr))
+//        ( variable, maskedTensor )
+//      }
+//      writer.addGroupAttribute( null, new Attribute("nFiles", nFiles) )
+//      writer.create()
+//
+//      for ((coordVar, coordData) <- newCoordVars) {
+//        logger.info("#CV# Writing cvar %s: var shape = [%s], data shape = [%s], dataType = %s".format(coordVar.getShortName, coordVar.getShape.mkString(","), coordData.getShape.mkString(","), coordVar.getDataType.toString ))
+//        try {
+//          logger.info("#CV# Coord data sample = [%f,%f,...], size = %d".format( coordData.getFloat(0), coordData.getFloat(1), coordData.getSize ) )
+//          writer.write(coordVar, coordData)
+//        } catch { case ex: Exception => logger.info("#CV# MISSING Coord data: " + ex.getMessage + " -> " + ex.getStackTrace.head.toString ) }
+//      }
+//      variables.foreach { case (variable, maskedTensor) => {
+//        logger.info(" #V# Writing var %s: var shape = [%s], data Shape = %s".format(variable.getShortName, variable.getShape.mkString(","), maskedTensor.getShape.mkString(",") ))
+//        writer.write(variable, maskedTensor)
+//      } }
+//
+//      writer.close()
+//      originalDataset.foreach( _.close )
+//      optGridDset.foreach( _.close )
+//      logger.info("Done writing output to file %s, time = %.3f ( %.3f, %.3f, %.3f, %.3f )".format(path,(System.nanoTime() - t0) / 1.0E9, (t1 - t0) / 1.0E9, (t2 - t1) / 1.0E9, (t3 - t2) / 1.0E9, (t4 - t3) / 1.0E9 ) )
+//      //      println( "\n ------ ---> Saving output to:" + path + "\n")
+//
+//    } catch {
+//      case ex: IOException =>
+//        logger.error("*** ERROR creating file %s%n%s".format(resultFile.getAbsolutePath, ex.getMessage()));
+//        ex.printStackTrace(logger.writer)
+//        ex.printStackTrace()
+//        throw ex
+//    }
+//    path
+//  }
 
   def searchForAttrValue(metadata: Map[String, nc2.Attribute], keys: List[String], default_val: String): String = {
     keys.length match {

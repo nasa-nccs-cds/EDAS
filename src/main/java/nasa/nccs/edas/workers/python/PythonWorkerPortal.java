@@ -16,6 +16,8 @@ public class PythonWorkerPortal extends WorkerPortal {
             releaseWorker(worker);
             return response.split("[|]");
         } catch ( Exception ex ) {
+            logger.error( "GET CAPABILITIES ERROR: " + ex.toString() );
+            logger.error( ex.getStackTrace()[0].toString() );
             return null;
         }
     }
