@@ -1,7 +1,7 @@
 from distutils.core import setup
 setup(
   name = 'pyedas',
-  packages = ['pyedas','pyedas.kernels','pyedas.kernels.internal','pyedas.portal'],
+  packages = ['pyedas','pyedas.kernels','pyedas.kernels.internal','pyedas.portal','pyedas.eofs'],
   version = '1.2.1',
   package_dir = {'': 'python/src'},
   description = 'Python portal and worker components of the Earth Data Analytic Services (EDAS) framework',
