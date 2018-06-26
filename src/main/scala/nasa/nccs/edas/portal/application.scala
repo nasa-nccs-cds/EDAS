@@ -57,7 +57,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   import EDASapp._
   val processManager = new ProcessManager( appConfiguration )
   val process = "edas"
-  val randomIds = new RandomString(8)
+  val randomIds = new RandomString(16)
   val printer = new scala.xml.PrettyPrinter(200, 3)
   Runtime.getRuntime().addShutdownHook( new Thread() { override def run() { term("ShutdownHook Called") } } )
 

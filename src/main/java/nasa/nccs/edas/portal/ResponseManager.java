@@ -11,9 +11,6 @@ import org.apache.commons.lang.exception.ExceptionUtils;
 
 import java.io.*;
 import java.nio.file.*;
-import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -89,19 +86,6 @@ public class ResponseManager extends Thread {
     public void processHeartbeat( String type ) {
         if (heartbeatManager == null) { heartbeatManager = new HeartbeatManager(); }
         heartbeatManager.processHeartbeat(type);
-    }
-
-    public void setFilePermissions( Path directory, String perms ) {
-        try {
-            Files.setPosixFilePermissions( directory, PosixFilePermissions.fromString(perms));
-            File[] listOfFiles = directory.toFile().listFiles();
-            for (int i = 0; i < listOfFiles.length; i++) {
-                File file = listOfFiles[i];
-                Files.setPosixFilePermissions( file.toPath(), PosixFilePermissions.fromString(perms) );
-            }
-        } catch ( Exception ex ) {
-            logger.error("Error setting perms in dir " + directory + ", error = " + ex.getMessage());
-        }
     }
 
     public void registerCallback( String jobId, ExecutionCallback callback ) {
@@ -218,7 +202,6 @@ public class ResponseManager extends Thread {
         DataOutputStream os = new DataOutputStream(new FileOutputStream(outFilePath.toFile()));
         os.write(data, offset, data.length-offset );
         os.close();
-        Files.setPosixFilePermissions( outFilePath, PosixFilePermissions.fromString("rwxrwxrwx") );
         return outFilePath;
     }
 
@@ -226,9 +209,7 @@ public class ResponseManager extends Thread {
     public Path getPublishFile( String role, String fileName  ) throws IOException {
         Path pubishDir = Paths.get( publishDir, role );
         if( !pubishDir.toFile().exists() ) {
-            java.util.Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrwx");
-            FileAttribute<Set<PosixFilePermission>> fileAttr = PosixFilePermissions.asFileAttribute(perms);
-            Files.createDirectories( pubishDir, fileAttr );
+            Files.createDirectories( pubishDir );
         }
         return Paths.get( publishDir, role, fileName );
     }

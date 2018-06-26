@@ -1,3 +1,4 @@
+
 ###                                EDAS Project
 
 _Earth Data Analytic Services provider built on scala, Spark, and python tools such as UVCDAT, etc._
@@ -66,7 +67,7 @@ _Earth Data Analytic Services provider built on scala, Spark, and python tools s
     2) Create EDAS conda environment:
         
         >> conda create -n edas uvcdat -c conda-forge -c uvcdat -c acme 
-        >> conda install pyzmq psutil lxml requests urllib3 six
+        >> conda install pyzmq psutil lxml requests urllib3 six defusedxml
         
     3) Initialize shell enviromnment for edas:
     

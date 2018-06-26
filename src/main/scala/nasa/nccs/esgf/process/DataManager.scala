@@ -167,6 +167,7 @@ class RequestContext( val jobId: String, val inputs: Map[String, Option[DataFrag
   def logTimingReport(label: String): Unit = logger.info(getTimingReport(label))
 
   def saveTimingReport( filePath: String, label: String): Unit = {
+    DiskCacheFileMgr.validatePath( filePath )
     val pw = new PrintWriter( new File(filePath) )
     pw.write(getTimingReport(label))
     pw.close()

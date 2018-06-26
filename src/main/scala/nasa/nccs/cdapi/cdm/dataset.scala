@@ -19,7 +19,7 @@ import ucar.nc2.constants.AxisType
 import ucar.nc2.dataset.{CoordinateAxis, _}
 import ucar.ma2
 import ucar.nc2.constants.CDM
-
+import java.io.File
 import scala.collection.{concurrent, mutable}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -477,6 +477,13 @@ object DiskCacheFileMgr extends XmlResource {
       cacheFilePath.toString
     }
 
+  def validatePath( file_path: String  ) = validatePath( new File(file_path) )
+
+  def validatePath( file: File ) = {
+    val test_file = file.getCanonicalPath
+    assert( test_file.startsWith( appParameters.cacheDir ), "Unexpected Path: " + test_file )
+  }
+
   def getCacheDirectory( cachetype: String, subDir: String ): Path = {
     val cacheFilePath = Paths.get( appParameters.cacheDir, cachetype, subDir )
     Files.createDirectories( cacheFilePath )
@@ -501,6 +508,7 @@ object DiskCacheFileMgr extends XmlResource {
   protected def loadDiskCacheMap: Map[String,String] = {
     try {
       var filePath = getFilePath("/cache.xml")
+      DiskCacheFileMgr.validatePath( filePath )
       val tuples = EDAS_XML.loadFile(filePath).child.map(
         node => node.attribute("id") match {
           case None => None;
@@ -545,19 +553,25 @@ trait DiskCachable extends XmlResource {
 
   protected def objectToDisk[T <: Serializable]( record: T  ): String = {
     val cache_file = "c" + System.nanoTime.toHexString
-    val ostr = new ObjectOutputStream ( new FileOutputStream( DiskCacheFileMgr.getDiskCacheFilePath( getCacheType, cache_file) ) )
+    val ostr = new ObjectOutputStream ( new FileOutputStream( getValidatedFilePath( cache_file ) ) )
     ostr.writeObject( record )
     cache_file
   }
 
   protected def objectFromDisk[T <: Serializable]( cache_file: String  ): T = {
-    val istr = new ObjectInputStream ( new FileInputStream( DiskCacheFileMgr.getDiskCacheFilePath( getCacheType, cache_file) ) )
+    val istr = new ObjectInputStream ( new FileInputStream( getValidatedFilePath( cache_file ) ) )
     istr.readObject.asInstanceOf[T]
   }
 
   def getReadBuffer( cache_id: String ): ( FileChannel, MappedByteBuffer ) = {
-    val channel = new FileInputStream(DiskCacheFileMgr.getDiskCacheFilePath(getCacheType, cache_id)).getChannel
+    val channel = new FileInputStream( getValidatedFilePath(cache_id) ).getChannel
     channel -> channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size)
+  }
+
+  def getValidatedFilePath( fileName: String ): String = {
+    val filePath = DiskCacheFileMgr.getDiskCacheFilePath(getCacheType, fileName )
+    DiskCacheFileMgr.validatePath(filePath)
+    filePath
   }
 
   protected def bufferFromDiskFloat( cache_id: String, size: Int  ): Option[FloatBuffer] = {
