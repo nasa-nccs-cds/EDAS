@@ -774,12 +774,12 @@ abstract class CombineRDDsKernel(options: Map[String,String] ) extends KernelImp
     if( mapCombineOp.isDefined ) {
       assert(inputs.elements.size > 1, "Missing input(s) to dual input operation " + id + ": required inputs=(%s), available inputs=(%s)".format(context.operation.inputs.mkString(","), inputs.elements.keySet.mkString(",")))
       val input_arrays: Set[(String,ArraySpec)] = getInputArrays( inputs, context )
-      logger.info( s"#GI#: grouped_input_arrays input ids=[${context.operation.inputs.mkString(",")}], inputs=[${inputs.elements.keySet.mkString(",")}], filtered inputs=[${input_arrays.map(_._1).mkString(",")}] " )
+//      logger.info( s"#GI#: grouped_input_arrays input ids=[${context.operation.inputs.mkString(",")}], inputs=[${inputs.elements.keySet.mkString(",")}], filtered inputs=[${input_arrays.map(_._1).mkString(",")}] " )
       val grouped_input_arrays: Map[String, Set[(String,ArraySpec)]] = input_arrays groupBy { case (uid,array) => uid.split('-').head }
 
       val results: Map[String,ArraySpec] = grouped_input_arrays.map {
         case ( vid, input_arrays ) =>
-          logger.info( s"#GI#: grouped_input_arrays [${vid}] -> [${context.operation.output( vid )}]: [ ${input_arrays.map(_._1).mkString(", ")}  ]")
+//          logger.info( s"#GI#: grouped_input_arrays [${vid}] -> [${context.operation.output( vid )}]: [ ${input_arrays.map(_._1).mkString(", ")}  ]")
           context.operation.output( vid ) -> input_arrays.map(_._2).reduce( (a0,a1) => a0.combine( mapCombineOp.get, a1, weighted ) )
       }
       CDRecord(inputs.startTime, inputs.endTime, inputs.elements ++ results, inputs.metadata )
