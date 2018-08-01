@@ -2,6 +2,9 @@ package nasa.nccs.edas.sources.netcdf
 
 import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.net.URI
+
+import nasa.nccs.cdapi.cdm.DiskCacheFileMgr
+
 import scala.xml
 import nasa.nccs.cdapi.tensors.CDDoubleArray
 import ucar.{ma2, nc2}
@@ -224,6 +227,7 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
 
   def writeNCML(ncmlFile: File): List[String] = {
     logger.info("Writing *NCML* File: " + ncmlFile.toString)
+    DiskCacheFileMgr.validatePath( ncmlFile )
     try {
       val bw = new BufferedWriter(new FileWriter(ncmlFile))
       val (varNames, result) = getNCMLVerbose

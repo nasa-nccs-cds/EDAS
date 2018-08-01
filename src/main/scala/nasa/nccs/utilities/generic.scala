@@ -3,7 +3,6 @@ package nasa.nccs.utilities
 import java.io.{File, PrintWriter}
 import java.lang.management.ManagementFactory
 import java.net.InetAddress
-import java.nio.file.attribute.{FileAttribute, PosixFilePermission, PosixFilePermissions}
 import java.util.jar.JarFile
 import java.nio.file.{Files, Path, Paths}
 import scala.xml
@@ -59,7 +58,6 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
       new PrintWriter( logFilePath.toFile )
     }
     printer.print("LOGFILE\n"); printer.flush();
-    val p = Runtime.getRuntime.exec( s"chmod -R a+rwX ${Paths.get( "/tmp", System.getProperty("user.name"))}")
     printer
   }
 

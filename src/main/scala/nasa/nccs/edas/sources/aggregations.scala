@@ -4,8 +4,9 @@ import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.net.URI
 import java.nio.file.{Path, Paths}
 import java.util.Date
+
 import scala.xml
-import nasa.nccs.cdapi.cdm.CDGrid
+import nasa.nccs.cdapi.cdm.{CDGrid, DiskCacheFileMgr}
 import nasa.nccs.edas.portal.RandomString
 
 import scala.util.control.Breaks._
@@ -45,7 +46,7 @@ case class Axis( name: String, longName: String, ctype: String, shape: Array[Int
 }
 
 object AggregationWriter extends Loggable {
-  val randomIds = new RandomString(4)
+  val randomIds = new RandomString(8)
   val ncExtensions = Seq( "nc", "nc4")
   val colIdSep = "."
 
@@ -329,6 +330,7 @@ object AggregationWriter extends Loggable {
 
   def addAggregations(collectionId: String, collectionTitle: String, variableMap: Map[String,String], agFormat: String ): Unit = {
     val csvFile = Collections.getAggregationPath.resolve(collectionId + ".csv").toFile
+    DiskCacheFileMgr.validatePath( csvFile )
     logger.info( s"Generating Collection ${csvFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
     val completeVariableMap: Map[String,String] = if( csvFile.exists() ) { getAggregationMap( csvFile ) ++ variableMap } else variableMap
     val pw = new PrintWriter( csvFile )
@@ -614,6 +616,7 @@ object Aggregation extends Loggable {
   }
 
   def writeAggregation( aggFile: File,  fileHeaders: IndexedSeq[FileHeader], format: String, maxCores: Int = 8 ): Unit = {
+    DiskCacheFileMgr.validatePath( aggFile )
     logger.info(s"Writing Aggregation[$format] File: " + aggFile.toString)
     val nReadProcessors = Math.min( Runtime.getRuntime.availableProcessors, maxCores )
     logger.info("Processing %d files with %d workers".format(fileHeaders.length, nReadProcessors))

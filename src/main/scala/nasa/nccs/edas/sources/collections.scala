@@ -61,6 +61,7 @@ trait XmlResource extends Loggable {
   val Encoding = "UTF-8"
 
   def saveXML( fileName: String, node: xml.Node ) = {
+    DiskCacheFileMgr.validatePath( fileName )
     val pp = new xml.PrettyPrinter( 800, 2 )
     logger.info( "Persisting resource to file "+ fileName )
     val fos = new FileOutputStream(fileName)
@@ -103,6 +104,7 @@ object Masks extends XmlResource {
   def isMaskId( maskId: String ): Boolean = (maskId(0) == mid_prefix )
 
   def loadMaskXmlData(filePath:String): Map[String,Mask] = {
+    DiskCacheFileMgr.validatePath( filePath )
     Map(EDAS_XML.loadFile(filePath).child.flatMap( node => node.attribute("id") match {
       case None => None;
       case Some(id) => Some( (mid_prefix +: id.toString) -> createMask(node)); }
