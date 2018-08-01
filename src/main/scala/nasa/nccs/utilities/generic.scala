@@ -58,7 +58,6 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
       new PrintWriter( logFilePath.toFile )
     }
     printer.print("LOGFILE\n"); printer.flush();
-    val p = Runtime.getRuntime.exec( s"chmod -R a+rwX ${Paths.get( "/tmp", System.getProperty("user.name"))}")
     printer
   }
 

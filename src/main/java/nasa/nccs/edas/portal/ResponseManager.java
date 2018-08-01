@@ -71,8 +71,7 @@ public class ResponseManager extends Thread {
         File[] subdirs = getDirs(publishDir);
         for(int i = 0; i< subdirs.length; i++){ cleanupManager.addFileCleanupTask( subdirs[i].getAbsolutePath(), 1.0f, true, ".*" ); }
         cleanupManager.addFileCleanupTask( publishDir, 1.0f, false, ".*" );
-        Path log_path = fileSystems.getPath( "/tmp", System.getProperty("user.name"), "logs" );
-        cleanupManager.addFileCleanupTask( log_path.toString(), 2.0f, true, ".*" );
+        cleanupManager.addFileCleanupTask( logger.logFileDir().toString(), 2.0f, true, ".*" );
 
     }
 
