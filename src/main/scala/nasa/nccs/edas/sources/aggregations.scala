@@ -330,7 +330,7 @@ object AggregationWriter extends Loggable {
 
   def addAggregations(collectionId: String, collectionTitle: String, variableMap: Map[String,String], agFormat: String ): Unit = {
     val csvFile = Collections.getAggregationPath.resolve(collectionId + ".csv").toFile
-    DiskCacheFileMgr.validatePath( csvFile )
+    DiskCacheFileMgr.validatePathFile( csvFile )
     logger.info( s"Generating Collection ${csvFile.toString} from variableMap: \n\t" + variableMap.mkString(";\n\t") )
     val completeVariableMap: Map[String,String] = if( csvFile.exists() ) { getAggregationMap( csvFile ) ++ variableMap } else variableMap
     val pw = new PrintWriter( csvFile )
@@ -616,7 +616,7 @@ object Aggregation extends Loggable {
   }
 
   def writeAggregation( aggFile: File,  fileHeaders: IndexedSeq[FileHeader], format: String, maxCores: Int = 8 ): Unit = {
-    DiskCacheFileMgr.validatePath( aggFile )
+    DiskCacheFileMgr.validatePathFile( aggFile )
     logger.info(s"Writing Aggregation[$format] File: " + aggFile.toString)
     val nReadProcessors = Math.min( Runtime.getRuntime.availableProcessors, maxCores )
     logger.info("Processing %d files with %d workers".format(fileHeaders.length, nReadProcessors))

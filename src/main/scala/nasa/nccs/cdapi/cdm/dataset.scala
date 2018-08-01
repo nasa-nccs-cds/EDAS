@@ -477,9 +477,9 @@ object DiskCacheFileMgr extends XmlResource {
       cacheFilePath.toString
     }
 
-  def validatePath( file_path: String  ) = validatePath( new File(file_path) )
+  def validatePath( file_path: String  ) = validatePathFile( new File(file_path) )
 
-  def validatePath( file: File ) = {
+  def validatePathFile(file: File ) = {
     val test_file = file.getCanonicalPath
     assert( test_file.startsWith( appParameters.cacheDir ), "Unexpected Path: " + test_file )
   }

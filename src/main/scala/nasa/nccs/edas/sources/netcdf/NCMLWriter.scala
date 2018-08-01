@@ -227,7 +227,7 @@ class NCMLWriter( val aggregationId: String, fileHeaders: IndexedSeq[FileHeader]
 
   def writeNCML(ncmlFile: File): List[String] = {
     logger.info("Writing *NCML* File: " + ncmlFile.toString)
-    DiskCacheFileMgr.validatePath( ncmlFile )
+    DiskCacheFileMgr.validatePathFile( ncmlFile )
     try {
       val bw = new BufferedWriter(new FileWriter(ncmlFile))
       val (varNames, result) = getNCMLVerbose
