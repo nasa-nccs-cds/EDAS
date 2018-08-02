@@ -84,6 +84,11 @@ class CDArray:
 class npArray(CDArray):
 
     @classmethod
+    def empty(cls, rId ):
+        """  :rtype: npArray """
+        return npArray( rId, [], [], {}, np.empty([]), 0 )
+
+    @classmethod
     def createResult(cls, task, input, result_array ):
         """  :rtype: npArray """
         return npArray( task.rId, input.origin, result_array.shape, dict( input.metadata, **task.metadata ), result_array, input.undef )
