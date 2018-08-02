@@ -224,13 +224,13 @@ class EDASPortal:
         self.logger =  logging.getLogger("portal")
         try:
             self.cryptogen = SystemRandom()
+            self.tokens = string.lowercase + string.digits + string.uppercase + "!@#$%^&*()_+`={}[]|;:',./<>?"
             self.active = True
             self.app_host = host
             self.application_thread = None
             self.clientID = self.randomId(8)
             self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.REQ)
-            self.tokens = string.lowercase + string.digits + string.uppercase + "!@#$%^&*()_+`={}[]|;:',./<>?"
 
             # if( connectionMode == ConnectionMode.BIND ):
             #     self.request_port = ConnectionMode.bindSocket( self.request_socket, self.app_host, request_port )
