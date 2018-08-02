@@ -223,13 +223,13 @@ class EDASPortal:
     def __init__( self, host="127.0.0.1", request_port=0, response_port=0, **kwargs ):
         self.logger =  logging.getLogger("portal")
         try:
+            self.cryptogen = SystemRandom()
             self.active = True
             self.app_host = host
             self.application_thread = None
             self.clientID = self.randomId(8)
             self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.REQ)
-            self.cryptogen = SystemRandom()
             self.tokens = string.lowercase + string.digits + string.uppercase + "!@#$%^&*()_+`={}[]|;:',./<>?"
 
             # if( connectionMode == ConnectionMode.BIND ):
