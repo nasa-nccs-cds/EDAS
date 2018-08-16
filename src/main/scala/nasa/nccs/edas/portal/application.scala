@@ -103,37 +103,38 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   }
 
   override def execute( taskSpec: Array[String] ): Response = {
-    logger.info( " @@E TaskSpec: " + taskSpec.mkString(", ") )
     val clientId = elem(taskSpec,0)
     val runargs = getRunArgs( taskSpec )
-    val jobId = runargs.getOrElse("jobId",randomIds.nextString)
-    val process_name = elem(taskSpec,2)
-    val dataInputsSpec = elem(taskSpec,3)
-    setExeStatus( clientId, jobId, "executing " + process_name + "-> " + dataInputsSpec )
-    logger.info( " @@E: Executing " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; "))
-    val response_syntax = getResponseSyntax(runargs)
-    val responseType = runargs.getOrElse("response","file")
-    val executionCallback: ExecutionCallback = new ExecutionCallback {
-      override def success( results: xml.Node ): Unit = {
-        logger.info(s" *** ExecutionCallback: jobId = $jobId, responseType = $responseType *** ")
-        val metadata  =  if (responseType == "object")    { sendDirectResponse(response_syntax, clientId, jobId, results) }
-                         else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
-                         else { Map.empty }
-        setExeStatus(clientId, jobId, "completed|" + ( metadata.map { case (key,value) => key + ":" + value } mkString "," ) )
-      }
-      override def failure( msg: String ): Unit = {
-        logger.error( s"ERROR CALLBACK ($jobId:$clientId): " + msg )
-        setExeStatus( clientId, jobId, "error" )
-      }
-    }
+    val jobId = runargs.getOrElse( "jobId", randomIds.nextString )
+    logger.info( " @@E TaskSpec: " + taskSpec.mkString(", ") )
     try {
+      val process_name = elem(taskSpec,2)
+      val dataInputsSpec = elem(taskSpec,3)
+      setExeStatus( clientId, jobId, "executing " + process_name + "-> " + dataInputsSpec )
+      logger.info( " @@E: Executing " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; "))
+      val response_syntax = getResponseSyntax(runargs)
+      val responseType = runargs.getOrElse("response","file")
+      val executionCallback: ExecutionCallback = new ExecutionCallback {
+        override def success( results: xml.Node ): Unit = {
+          logger.info(s" *** ExecutionCallback: jobId = $jobId, responseType = $responseType *** ")
+          val metadata  =  if (responseType == "object")    { sendDirectResponse(response_syntax, clientId, jobId, results) }
+                           else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
+                           else { Map.empty }
+          setExeStatus(clientId, jobId, "completed|" + ( metadata.map { case (key,value) => key + ":" + value } mkString "," ) )
+        }
+        override def failure( msg: String ): Unit = {
+          logger.error( s"ERROR CALLBACK ($jobId:$clientId): " + msg )
+          setExeStatus( clientId, jobId, "error" )
+        }
+      }
+
       val (rid, responseElem) = processManager.executeProcess( process, Job(jobId, process_name, dataInputsSpec, runargs, 1f ), Some(executionCallback) )
       new Message(clientId, jobId, printer.format(responseElem))
     } catch  {
       case e: Throwable =>
         logger.error( "Caught execution error: " + e.getMessage )
         logger.error( "\n" + e.getStackTrace.mkString("\n") )
-        executionCallback.failure( e.getMessage )
+        setExeStatus( clientId, jobId, "error" )
         new ErrorReport( clientId, jobId, e.getClass.getSimpleName + ": " + e.getMessage )
     }
   }
