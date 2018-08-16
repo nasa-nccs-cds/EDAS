@@ -16,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.io.StringWriter;
+import java.io.PrintWriter;
 
 class Response {
     String clientId = null;
@@ -319,6 +321,13 @@ public abstract class EDASPortal {
         } catch (UnknownHostException e) { return "UNKNOWN"; }
     }
 
+    public void logStackTrace( Exception ex ) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        ex.printStackTrace(pw);
+        logger.error( "\nStack Trace:\n" + sw.toString() );
+    }
+
     public void run() {
         String parts[] = {"","",""};
         while( active ) try {
@@ -346,11 +355,11 @@ public abstract class EDASPortal {
                     logger.info(msg);
                     sendResponseMessage(new Message(parts[0], "error", msg));
                 }
-            } catch ( Exception ex ) {   // TODO: COnvert to Java
-//                String clientId = elem(taskSpec,0)
-//                val runargs = getRunArgs( taskSpec )
-//                String jobId = runargs.getOrElse("jobId",randomIds.nextString)
-//                sendResponseMessage( error_response );
+            } catch ( Exception ex ) {
+                String error_msg = ex.toString();
+                logger.error( "Error processing request: " + error_msg );
+                logStackTrace( ex );
+                sendResponseMessage( new Message(parts[0], "error", error_msg ) );
             }
         } catch ( Exception ex ) {
             logger.info( "Request Communication error: Shutting down." );
