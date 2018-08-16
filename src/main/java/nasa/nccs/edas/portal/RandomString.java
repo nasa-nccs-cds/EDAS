@@ -22,6 +22,10 @@ public class RandomString {
         symbols = tmp.toString().toCharArray();
     }
 
+    public static int uint(byte b) {
+        return 0x00 << 24 | b & 0xff;
+    }
+
     public RandomString(int length) {
         if (length < 1)
             throw new IllegalArgumentException("length < 1: " + length);
@@ -33,7 +37,7 @@ public class RandomString {
     public String nextString() {
         srandom.nextBytes(bbuf);
         for (int idx = 0; idx < bbuf.length; ++idx)
-            sbuf[idx] = symbols[ bbuf[idx] % symbols.length ];
+            sbuf[idx] = symbols[ uint(bbuf[idx]) % symbols.length ];
         return new String(sbuf);
     }
 }
