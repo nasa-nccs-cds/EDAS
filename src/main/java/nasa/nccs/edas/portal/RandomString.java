@@ -18,7 +18,6 @@ public class RandomString {
             tmp.append(ch);
         for (char ch = 'A'; ch <= 'Z'; ++ch)
             tmp.append(ch);
-        tmp.append("!@#$%^&*()_+`={}[]|;:',./<>?");
         symbols = tmp.toString().toCharArray();
     }
 
