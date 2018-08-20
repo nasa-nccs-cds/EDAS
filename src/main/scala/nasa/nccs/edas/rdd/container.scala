@@ -240,7 +240,8 @@ case class CDRecord(startTime: Long, endTime: Long, elements: Map[String, ArrayS
   def renameElements(rename: String => String ): CDRecord = CDRecord( startTime, endTime, elements map { case ( key, value ) =>  rename(key) -> value } , metadata )
   def size: Long = elements.values.foldLeft(0L)( (size,array) => array.size + size )
   def filterElements( id: String ): Array[(String,ArraySpec)] =  elements filter { case (key,value) => key.split(':').last.endsWith(id) } toArray
-  def element( id: String ): Option[ArraySpec] =  elements find { case (key,value) => key.split(':').last.equals(id) } map ( _._2 )
+  def element( id: String ): Option[ArraySpec] = elements.get( id ).orElse( find_element( id ) )
+  def find_element( id: String ): Option[ArraySpec] = { elements find { case (key, value) => key.split(':').last.equals(id) } map (_._2) }
   def signature = elements.keys.mkString("-")
   def isEmpty = elements.isEmpty
   def findElements( id: String ): Iterable[ArraySpec] = ( elements filter { case (key,array) => key.split(':').last.equals(id) } ) values

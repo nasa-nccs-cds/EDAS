@@ -22,7 +22,7 @@ public class RandomString {
         symbols = tmp.toString().toCharArray();
     }
 
-    public static int uint(byte b) {
+    static int uint(byte b) {
         return 0x00 << 24 | b & 0xff;
     }
 
