@@ -70,7 +70,7 @@ public class ResponseManager extends Thread {
         String EDAS_CACHE_DIR = System.getenv( "EDAS_CACHE_DIR" );
         cacheDir = ( EDAS_CACHE_DIR == null ) ? "/tmp/" : EDAS_CACHE_DIR;
         publishDir =  EDASPortalClient.getOrDefault( configuration, "edas.publish.dir", cacheDir );
-        logger.info( String.format("Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
+        logger.info( String.format("@@RM: Starting ResponseManager, publishDir = %s, cacheDir = %s, connecting to %s", publishDir, cacheDir, socket_address ) );
         File[] subdirs = getDirs(publishDir);
         for(int i = 0; i< subdirs.length; i++){ cleanupManager.addFileCleanupTask( subdirs[i].getAbsolutePath(), 1.0f, true, ".*" ); }
         cleanupManager.addFileCleanupTask( publishDir, 1.0f, false, ".*" );
@@ -100,7 +100,7 @@ public class ResponseManager extends Thread {
                 Files.setPosixFilePermissions( file.toPath(), PosixFilePermissions.fromString(perms) );
             }
         } catch ( Exception ex ) {
-            logger.error("Error setting perms in dir " + directory + ", error = " + ex.getMessage());
+            logger.error("@@RM: Error setting perms in dir " + directory + ", error = " + ex.getMessage());
         }
     }
 
@@ -110,7 +110,7 @@ public class ResponseManager extends Thread {
 
     public void cacheResult(String id, String result) {
         if( !result.startsWith("heart") ) {
-            logger.info( " #CR# Caching result for id = "+id+", value =  " + result );
+            logger.info( "@@RM:  #CR# Caching result for id = "+id+", value =  " + result );
             getResults(id).add(result);
         }
     }
@@ -118,7 +118,7 @@ public class ResponseManager extends Thread {
     public boolean hasResult( String id ) {
         logger.info( "Checking for result '" + id + "', cached results =  " + cached_results.keySet().toString() );
         List<String> cached_result = cached_results.get(id);
-        if(cached_result != null) {  logger.info( " #CR# Cached result values =  " + cached_result.toString() );  }
+        if(cached_result != null) {  logger.info( "@@RM:  #CR# Cached result values =  " + cached_result.toString() );  }
         return (cached_result != null);
     }
 
@@ -144,14 +144,17 @@ public class ResponseManager extends Thread {
 
     public void run() {
         try {
-            ZMQ.Socket socket = zmqContext.socket(ZMQ.SUB);
+//            ZMQ.Socket socket = zmqContext.socket(ZMQ.SUB);
+//            socket.connect(socket_address);
+//            socket.subscribe(client_id);
+
+            ZMQ.Socket socket = zmqContext.socket(ZMQ.PULL);
             socket.connect(socket_address);
-            socket.subscribe(client_id);
-            logger.info( "EDASPortalClient subscribing to EDASServer publisher channel " + client_id );
+            logger.info( "@@RM: EDASPortalClient subscribing to EDASServer publisher channel " + client_id );
             while (active) { processNextResponse( socket ); }
             socket.close();
         } catch( Exception err ) {
-            logger.error( "ResponseManager ERROR: " + err.toString() );
+            logger.error( "@@RM: ResponseManager ERROR: " + err.toString() );
             logger.error( ExceptionUtils.getStackTrace(err) );
         }
     }
@@ -168,7 +171,7 @@ public class ResponseManager extends Thread {
     public void processNextResponse( ZMQ.Socket socket ) {
         try {
             String response = new String(socket.recv(0)).trim();
-            logger.info( "##$## Received Response: " + response );
+            logger.info( "@@RM: ##$## Received Response: " + response );
             String[] toks = response.split("[!]");
             String rId = toks[0].split("[:]")[0];
             String type = toks[1];
@@ -187,23 +190,23 @@ public class ResponseManager extends Thread {
                     paths.add( outFilePath.toString() );
                     file_paths.put( rId, paths );
                     cacheResult( rId, header );
-                    logger.info( String.format("Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
+                    logger.info( String.format("@@RM: Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
                 } catch( Exception err ) {
-                    logger.error(String.format("Unable to write to output file: %s", err.getMessage() ) );
+                    logger.error(String.format("@@RM: Unable to write to output file: %s", err.getMessage() ) );
                 }
             } else if ( type.equals("response") ) {
                 cacheResult(rId, toks[2]);
                 String currentTime = timeFormat.format(Calendar.getInstance().getTime());
-                logger.info(String.format("Received result[%s] (%s): %s", rId, currentTime, response));
+                logger.info(String.format("@@RM: Received result[%s] (%s): %s", rId, currentTime, response));
             } else if ( type.equals("error") ) {
                 cacheResult(rId, toks[2]);
                 String currentTime = timeFormat.format( Calendar.getInstance().getTime() );
-                logger.info(String.format("Received error[%s] (%s): %s", rId, currentTime, response ) );
+                logger.info(String.format("@@RM: Received error[%s] (%s): %s", rId, currentTime, response ) );
             }  else {
-                logger.error(String.format("EDASPortal.ResponseThread-> Received unrecognized message type: %s",type));
+                logger.error(String.format("@@RM: EDASPortal.ResponseThread-> Received unrecognized message type: %s",type));
             }
         } catch( Exception err ) {
-            logger.error(String.format("EDAS error: %s\n%s\n", err, ExceptionUtils.getStackTrace(err) ) );
+            logger.error(String.format("@@RM: EDAS error: %s\n%s\n", err, ExceptionUtils.getStackTrace(err) ) );
         }
     }
 
@@ -214,7 +217,7 @@ public class ResponseManager extends Thread {
         String fileName = header_toks[3];
 //        String fileName = response_id.substring( response_id.lastIndexOf(':') + 1 ) + ".nc";
         Path outFilePath = getPublishFile( role, fileName );
-        logger.debug(" ##saveFile: role=" + role + " fileName=" + fileName + " id=" + id + " outFilePath=" + outFilePath );
+        logger.debug("@@RM:  ##saveFile: role=" + role + " fileName=" + fileName + " id=" + id + " outFilePath=" + outFilePath );
         DataOutputStream os = new DataOutputStream(new FileOutputStream(outFilePath.toFile()));
         os.write(data, offset, data.length-offset );
         os.close();
