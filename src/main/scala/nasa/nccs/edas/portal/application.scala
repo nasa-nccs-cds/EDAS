@@ -57,12 +57,12 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   import EDASapp._
   val processManager = new ProcessManager( appConfiguration )
   val process = "edas"
-  val randomIds = new RandomString(8)
+  val randomIds = new RandomString(16)
   val printer = new scala.xml.PrettyPrinter(200, 3)
-  Runtime.getRuntime().addShutdownHook( new Thread() { override def run() { term("ShutdownHook Called") } } )
+  Runtime.getRuntime.addShutdownHook( new Thread() { override def run() { term("ShutdownHook Called") } } )
 
-  def start( run_program: String = "" ) = {
-    if( run_program.isEmpty ) { run }
+  def start( run_program: String = "" ): Unit = {
+    if( run_program.isEmpty ) { run() }
     else { runAltProgram(run_program) }
   }
 
@@ -105,34 +105,36 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
   override def execute( taskSpec: Array[String] ): Response = {
     val clientId = elem(taskSpec,0)
     val runargs = getRunArgs( taskSpec )
-    val jobId = runargs.getOrElse("jobId",randomIds.nextString)
-    val process_name = elem(taskSpec,2)
-    val dataInputsSpec = elem(taskSpec,3)
-    setExeStatus( clientId, jobId, "executing " + process_name + "-> " + dataInputsSpec )
-    logger.info( " @@E: Executing " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; "))
-    val response_syntax = getResponseSyntax(runargs)
-    val responseType = runargs.getOrElse("response","file")
-    val executionCallback: ExecutionCallback = new ExecutionCallback {
-      override def success( results: xml.Node ): Unit = {
-        logger.info(s" *** ExecutionCallback: jobId = ${jobId}, responseType = ${responseType} *** ")
-        val metadata  =  if (responseType == "object")    { sendDirectResponse(response_syntax, clientId, jobId, results) }
-                         else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
-                         else { Map.empty }
-        setExeStatus(clientId, jobId, "completed|" + ( metadata.map { case (key,value) => key + ":" + value } mkString(",") ) )
-      }
-      override def failure( msg: String ): Unit = {
-        logger.error( s"ERROR CALLBACK ($jobId:$clientId): " + msg )
-        setExeStatus( clientId, jobId, "error" )
-      }
-    }
+    val jobId = runargs.getOrElse( "jobId", randomIds.nextString )
+    logger.info( " @@E TaskSpec: " + taskSpec.mkString(", ") )
     try {
+      val process_name = elem(taskSpec,2)
+      val dataInputsSpec = elem(taskSpec,3)
+      setExeStatus( clientId, jobId, "executing " + process_name + "-> " + dataInputsSpec )
+      logger.info( " @@E: Executing " + process_name + "-> " + dataInputsSpec + ", jobId = " + jobId + ", runargs = " + runargs.mkString("; "))
+      val response_syntax = getResponseSyntax(runargs)
+      val responseType = runargs.getOrElse("response","file")
+      val executionCallback: ExecutionCallback = new ExecutionCallback {
+        override def success( results: xml.Node ): Unit = {
+          logger.info(s" *** ExecutionCallback: jobId = $jobId, responseType = $responseType *** ")
+          val metadata  =  if (responseType == "object")    { sendDirectResponse(response_syntax, clientId, jobId, results) }
+                           else if (responseType == "file") { sendFileResponse(response_syntax, clientId, jobId, results) }
+                           else { Map.empty }
+          setExeStatus(clientId, jobId, "completed|" + ( metadata.map { case (key,value) => key + ":" + value } mkString "," ) )
+        }
+        override def failure( msg: String ): Unit = {
+          logger.error( s"ERROR CALLBACK ($jobId:$clientId): " + msg )
+          setExeStatus( clientId, jobId, "error" )
+        }
+      }
+
       val (rid, responseElem) = processManager.executeProcess( process, Job(jobId, process_name, dataInputsSpec, runargs, 1f ), Some(executionCallback) )
       new Message(clientId, jobId, printer.format(responseElem))
     } catch  {
       case e: Throwable =>
         logger.error( "Caught execution error: " + e.getMessage )
-        logger.error( "\n" + e.getStackTrace().mkString("\n") )
-        executionCallback.failure( e.getMessage )
+        logger.error( "\n" + e.getStackTrace.mkString("\n") )
+        setExeStatus( clientId, jobId, "error" )
         new ErrorReport( clientId, jobId, e.getClass.getSimpleName + ": " + e.getMessage )
     }
   }
@@ -150,7 +152,7 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
     sendErrorReport( clientId, "requestError", printer.format( err.toXml(syntax) ) )
   }
 
-  override def shutdown = processManager.term
+  override def shutdown(): Unit = processManager.term
 
   def sendDirectResponse( response_format: ResponseSyntax.Value, clientId: String, responseId: String, response: xml.Node ): Map[String,String] =  {
     val refs: xml.NodeSeq = response \\ "data"
@@ -227,20 +229,20 @@ class EDASapp( client_address: String, request_port: Int, response_port: Int, ap
 object EDASApplication extends Loggable {
   def main(args: Array[String]) {
     import EDASapp._
-    EDASLogManager.isMaster
+    EDASLogManager.isMaster()
     logger.info(s"Executing EDAS with args: ${args.mkString(",")}, nprocs: ${Runtime.getRuntime.availableProcessors()}")
     val request_port = elem(args, 0, "0").toInt
     val response_port = elem(args, 1, "0").toInt
-    val parameter_file = elem(args, 2, "")
-    val run_program = elem(args, 3, "")
+    val parameter_file = elem(args, 2 )
+    val run_program = elem(args, 3 )
     val appConfiguration = getConfiguration( parameter_file )
     val client_address: String = appConfiguration.getOrElse("client","*")
 //    EDASExecutionManager.addTestProcess( new TestDatasetProcess( "testDataset") )
 //    EDASExecutionManager.addTestProcess( new TestClockProcess( "testClock") )
     val app = new EDASapp( client_address, request_port, response_port, appConfiguration )
     app.start( run_program )
-    logger.info(s"EXIT EDASApplication");
-    sys.exit();
+    logger.info(s"EXIT EDASApplication")
+    sys.exit()
   }
 
 }
@@ -254,12 +256,12 @@ object SparkCleanup extends Loggable {
 
 object TestApplication extends Loggable {
   def main(args: Array[String]) {
-    EDASLogManager.isMaster
+    EDASLogManager.isMaster()
     val sc = CDSparkContext()
     val indices = sc.sparkContext.parallelize( Array.range(0,500), 100 )
     val base_time = System.currentTimeMillis()
     val timings = indices.map( getProfileDiagnostic(base_time) )
-    val time_list = timings.collect() mkString ("\n")
+    val time_list = timings.collect() mkString "\n"
     println( " @@@ NPart = " + indices.getNumPartitions.toString )
     println( time_list )
   }
@@ -296,11 +298,11 @@ object TestReadApplication extends Loggable {
     val nZ = out_shape(1)
     val out_tstride = out_size / nTS
     val out_zstride = out_tstride / nZ
-    val slice_shape = slices(0).getShape
-    val slice_size = slices(0).getSize.toInt
+    val slice_shape = slices.head.getShape
+    val slice_size = slices.head.getSize.toInt
     val copy_size =  slice_size / nTS
     val t1 = System.nanoTime()
-    logger.info( s"Running test, in_shape : [ ${in_shape.mkString(",")} ], out_shape : [ ${out_shape.mkString(",")} ], slice_shape : [ ${slice_shape.mkString(",")} ], slice_size : [ ${slice_size} ] , nTS : [ ${nTS} ]  " )
+    logger.info( s"Running test, in_shape : [ ${in_shape.mkString(",")} ], out_shape : [ ${out_shape.mkString(",")} ], slice_shape : [ ${slice_shape.mkString(",")} ], slice_size : [ $slice_size ] , nTS : [ $nTS ]  " )
     if( test == 1 ) {
       for (si <- slices.indices; slice = slices(si); slice_index = slice.getIndex ) {
         for( iTS <- 0 until nTS ) {
@@ -312,9 +314,9 @@ object TestReadApplication extends Loggable {
       }
     } else if( test == 2 )  {
       for (slice_index <- slices.indices; slice = slices(slice_index); slice_iter = slice.getIndexIterator) {
-        logger.info(s"Merging slice ${slice_index}, shape = [ ${slice.getShape.mkString(", ")} ]")
+        logger.info(s"Merging slice $slice_index, shape = [ ${slice.getShape.mkString(", ")} ]")
         while (slice_iter.hasNext) {
-          val f0 = slice_iter.getFloatNext()
+          val f0 = slice_iter.getFloatNext
           val counter = slice_iter.getCurrentCounter
           out_index.set(counter(0), slice_index, counter(1), counter(2))
           out_array.setFloat(out_index.currentElement, f0)

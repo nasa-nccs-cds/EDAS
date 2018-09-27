@@ -815,7 +815,7 @@ class EDASExecutionManager extends WPSServer with Loggable {
       case None => throw new Exception( "Error, no operation specified, cannot define workflow")
     }
     FragmentPersistence.close()
-    requestCx.saveTimingReport( "/tmp/edas-profile.txt", s"Request: ${requestCx.jobId}" )
+//    requestCx.saveTimingReport( "/tmp/edas-profile.txt", s"Request: ${requestCx.jobId}" )
     results
   }
 

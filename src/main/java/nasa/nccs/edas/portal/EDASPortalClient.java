@@ -19,7 +19,7 @@ public class EDASPortalClient {
     protected String clientId = "";
     protected Map<String,String> configuration = null;
     protected ResponseManager response_manager = null;
-    protected RandomString randomIds = new RandomString(8);
+    protected RandomString randomIds = new RandomString(16);
     protected int request_port = -1;
     protected int response_port = -1;
     protected SimpleDateFormat timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss");

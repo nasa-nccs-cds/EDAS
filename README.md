@@ -1,3 +1,4 @@
+
 ###                                EDAS Project
 
 _Earth Data Analytic Services provider built on scala, Spark, and python tools such as UVCDAT, etc._
@@ -67,8 +68,8 @@ _Earth Data Analytic Services provider built on scala, Spark, and python tools s
         
         >> conda create -n edas -c conda-forge -c cdat cdat
         >> source activate edas
-        >> conda install pyzmq psutil lxml requests urllib3 six
-        
+        >> conda install pyzmq psutil lxml requests urllib3 six defusedxml
+               
     3) Initialize shell enviromnment for edas:
     
         >> source <prefix>/EDAS/bin/setup_runtime.sh
@@ -85,4 +86,20 @@ _Earth Data Analytic Services provider built on scala, Spark, and python tools s
     2) Start IDEA and import the EDAS Project from Version Control (github) using the address https://github.com/nasa-nccs-cds/EDAS.git.
         
     
+ ### Note on security:
+ 
+     The EDAS framework utilzes a number of network connections:
+        1) A ZeroMQ connection from the web service to the EDAS server.
+        2) Connections from the EDAS master node to the EDAS workers, managed by Apache Spark.
+        3) A ZeroMQ connection on each worker node between the spark worker and a python slave process.
         
+     It is the responsibility of the installer to ensure that these connections are suitably secured.  Information on 
+     ZeroMQ authentication and encryption, should it be needed, can be found at: http://www.evilpaul.org/wp/2017/05/02/authentication-encryption-zeromq.
+     
+     Apache Spark currently supports authentication via a shared secret. Authentication can be configured to be on via the spark.authenticate configuration parameter. 
+     This parameter controls whether the Spark communication protocols do authentication using the shared secret. This authentication is a basic handshake to 
+     make sure both sides have the same shared secret and are allowed to communicate. If the shared secret is not identical they will not be allowed to communicate.
+     The Spark parameter spark.authenticate.secret should be configured on each of the nodes. This secret will be used by all the Master/Workers and applications.
+     See:  https://spark.apache.org/docs/latest/security.html
+     
+     

@@ -49,9 +49,9 @@ class svd extends KernelImpl {
     val nModes: Int = context.operation.getConfParm("modes").fold( 9 )( _.toInt )
     val computeU: Boolean = context.operation.getConfParm("compu").fold( true )( _.toBoolean )
     val svd = matrix.computeSVD( nModes, true )
-    val lambda2s = svd.s.toArray.map( l => l*l )
-    val norm = lambda2s.foldLeft(0.0)( ( l2sum, l2 ) => l2sum + l2 )
-    val PVEs = lambda2s.map( l2 => (l2*100)/norm )
+    val eigens = svd.s.toArray.map( l => (l*l)/(nElems-1) )
+    val norm = eigens.foldLeft(0.0)( ( l2sum, l2 ) => l2sum + l2 )
+    val PVEs = eigens.map( l2 => (l2*100)/norm )
     val array_size = topElem.shape.product
     val Velems: Seq[(String, ArraySpec)] = CDRecord.matrixCols2Arrays( svd.V ).zipWithIndex flatMap { case (array, index) =>
       logger.info( s"@SVD Creating V$index Array, data size = ${array.length}, array size = ${array_size}, input shape= [ ${topElem.shape.mkString(", ")} ]")

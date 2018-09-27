@@ -2,7 +2,9 @@ import zmq, traceback, time, logging, xml, cdms2
 from threading import Thread
 from pyedas.edasArray import npArray
 from cdms2.variable import DatasetVariable
+from random import SystemRandom
 import random, string, os
+import defusedxml
 from enum import Enum
 MB = 1024 * 1024
 
@@ -147,6 +149,12 @@ class ResponseManager(Thread):
         if not os.path.exists(filePath): os.makedirs(filePath)
         return filePath
 
+    def validatePath( self, path ):
+        validPath = os.path.realpath( self.cacheDir )
+        testPath = os.path.realpath( path )
+        if( not testPath.startswith(validPath) ):
+            raise  Exception( "Unrecognized path in read/write: " + path )
+
     def saveFile(self, header, socket ):
         header_toks = header.split('|')
         id = header_toks[1]
@@ -183,7 +191,7 @@ class ResponseManager(Thread):
         vars = []
         for response in responses:
             self.log( "Processing response node: " + response )
-            e = xml.etree.ElementTree.fromstring( response )
+            e = defusedxml.ElementTree.fromstring( response )
             for data_node in e.iter('data'):
                 resultUri = data_node.get("href","")
                 if resultUri:
@@ -197,6 +205,7 @@ class ResponseManager(Thread):
                     else:
                         from cdms2.dataset import Dataset
                         resultFilePath = self.filePaths.get( rId, data_node.get("file", "") )
+                        self.validatePath( resultFilePath )
                         self.log( "Processing file: " + resultFilePath )
                         if resultFilePath:
                             dset = cdms2.open( resultFilePath ); """:type : Dataset """
@@ -212,12 +221,14 @@ class ResponseManager(Thread):
 class EDASPortal:
 
     def __init__( self, host="127.0.0.1", request_port=0, response_port=0, **kwargs ):
+        self.logger =  logging.getLogger("portal")
         try:
+            self.cryptogen = SystemRandom()
+            self.tokens = string.lowercase + string.digits + string.uppercase + "!@#$%^&*()_+`={}[]|;:',./<>?"
             self.active = True
             self.app_host = host
             self.application_thread = None
-            self.clientID = self.randomId(6)
-            self.logger =  logging.getLogger("portal")
+            self.clientID = self.randomId(8)
             self.context = zmq.Context()
             self.request_socket = self.context.socket(zmq.REQ)
 
@@ -272,8 +283,7 @@ class EDASPortal:
                 self.log(  " Completed shutdown " )
 
     def randomId(self, length):
-        sample = string.lowercase+string.digits+string.uppercase
-        return ''.join(random.choice(sample) for i in range(length))
+        return ''.join( self.cryptogen.choice( self.tokens ) for i in range(length) )
 
     def sendMessage( self, type, mDataList = [""] ):
         msgStrs = [ str(mData).replace("'",'"') for mData in mDataList ]

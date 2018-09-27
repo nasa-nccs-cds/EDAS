@@ -165,6 +165,8 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
       case ex: Exception =>
         val err_msg = message + " :" + ex.toString
         executionCallback.foreach( _.failure(err_msg) )
+        logger.error( "zmqProcessManager executeProcess error: " + ex.toString )
+        logger.error( "\n\t" + ex.getStackTrace.map(_.toString).mkString("\n\t") )
         val response = new WPSExecuteStatusError( "EDAS", err_msg, job.requestId )
         ( resultId, response.toXml( ResponseSyntax.WPS ) )
     }

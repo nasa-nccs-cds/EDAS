@@ -2,7 +2,6 @@ package nasa.nccs.edas.portal;
 
 import java.io.File;
 import java.nio.file.Files;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -66,34 +65,6 @@ public class CleanupManager {
             public void run()  { runTasks(); }
         };
         executorService.scheduleAtFixedRate(taskWrapper, initialDelay, PERIOD, TimeUnit.SECONDS);
-    }
-
-    public class FilePermissionsTask implements Executable {
-        String directory;
-        String fileFilter = ".*";
-        String perms = "rwxrwxrwx";
-
-        public FilePermissionsTask( String directory$, String perms$,  String fileFilter$ ) {
-            directory = directory$;
-            fileFilter = fileFilter$;
-            perms = perms$;
-        }
-
-        public void execute( ) {
-            try {
-                File folder = new File(directory);
-                Files.setPosixFilePermissions(folder.toPath(), PosixFilePermissions.fromString(perms));
-                File[] listOfFiles = folder.listFiles();
-                for (int i = 0; i < listOfFiles.length; i++) {
-                    File file = listOfFiles[i];
-                    if (file.getName().matches(fileFilter)) {
-                        Files.setPosixFilePermissions( file.toPath(), PosixFilePermissions.fromString(perms) );
-                    }
-                }
-            } catch ( Exception ex ) {
-                logger.error("Error setting perms in dir " + directory + ", error = " + ex.getMessage());
-            }
-        }
     }
 
     public class FileCleanupTask implements Executable {

@@ -40,7 +40,7 @@ object appParameters extends Serializable with Loggable {
       case Some(cache_dir) => cache_dir
     }
     logger.info( "appParameters--> Get Cache Directory: " + cacheDir )
-    cacheDir
+    new java.io.File(cacheDir).getCanonicalPath
   }
 
   private def buildParameterMap: Map[String, String] = {
