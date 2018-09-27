@@ -168,7 +168,7 @@ public class ResponseManager extends Thread {
                 try {
                     String header = toks[2];
                     byte[] data = socket.recv(0);
-                    Path outFilePath = saveFile( header, rId, data, 8 );
+                    Path outFilePath = saveFile( header, rId, data, 0 );
                     List<String> paths = file_paths.getOrDefault(rId, new LinkedList<String>() );
                     paths.add( outFilePath.toString() );
                     file_paths.put( rId, paths );
