@@ -9,7 +9,7 @@ import nasa.nccs.utilities.Loggable
 import scala.xml
 import scala.collection.JavaConversions._
 import nasa.nccs.wps
-import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSExecuteStatusError}
+import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSExecuteStatusError, WPSExecuteStatusStarted }
 
 import scala.xml.XML
 
@@ -157,8 +157,9 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
       val response = portal.sendMessage( "execute", List( job.requestId, job.datainputs, map2Str(job.runargs) ).toArray )
       resultId = response.split(':').head
       message = response.substring( response.indexOf('!') + 1 )
-      logger.info( "Received 'execute' response, Sample: " + response.substring(0,Math.min(250,message.length)) )
-      val resultNode = EDAS_XML.loadString(message)
+      logger.info( "Received 'execute' response, resultId: " + resultId + ", message (xml): " + message )
+//      val resultNode = EDAS_XML.loadString(message)
+      val resultNode = new WPSExecuteStatusStarted( "EDAS",  message, resultId, 0  ).toXml()
       executionCallback.foreach( _.success(resultNode) )
       ( resultId, resultNode )
     } catch {

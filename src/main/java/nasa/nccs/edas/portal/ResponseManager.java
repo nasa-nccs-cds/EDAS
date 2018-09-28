@@ -228,8 +228,10 @@ public class ResponseManager extends Thread {
 
 
     public List<String> getResponses( String rId, Boolean wait ) {
+        logger.debug("@@RM:#GR rid = " + rId + ", wait = " + wait.toString() );
         while (true) {
             List<String> results = getResults(rId);
+            logger.debug("@@RM:#GR results = " + results.toString() );
             if (( results.size() > 0 ) || !wait) { return results; }
             else { try{ sleep(250 ); } catch(Exception err) { ; } }
         }

@@ -28,8 +28,6 @@ object appParameters extends Serializable with Loggable {
     case None => default
   }
 
-  def keySet: Set[String] = map.keySet
-
   def getCacheDirectory: String = {
     val cacheDir = customCacheDir match {
       case None =>
