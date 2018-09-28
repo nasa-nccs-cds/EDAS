@@ -14,6 +14,10 @@ import java.nio.file.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+class ResponseConnectionType {
+    static int PushPull = 0;
+    static int PubSub = 1;
+}
 class HeartbeatManager  {
     Long heartbeatTime = null;
     Long maxHeartbeatPeriod = 3 * 60 * 1000L;
@@ -35,6 +39,7 @@ class HeartbeatManager  {
 public class ResponseManager extends Thread {
     String socket_address = "";
     String client_id = "";
+    int responseConnectionType = ResponseConnectionType.PushPull;
     protected ZMQ.Context zmqContext = null;
     Boolean active = true;
     Map<String, List<String>> cached_results = null;
@@ -127,12 +132,15 @@ public class ResponseManager extends Thread {
 
     public void run() {
         try {
-//            ZMQ.Socket socket = zmqContext.socket(ZMQ.SUB);
-//            socket.connect(socket_address);
-//            socket.subscribe(client_id);
-
-            ZMQ.Socket socket = zmqContext.socket(ZMQ.PULL);
-            socket.connect(socket_address);
+            ZMQ.Socket socket = null;
+            if( responseConnectionType == ResponseConnectionType.PubSub ) {
+                socket = zmqContext.socket(ZMQ.SUB);
+                socket.connect(socket_address);
+                socket.subscribe(client_id);
+            } else {
+                socket = zmqContext.socket(ZMQ.PULL);
+                socket.connect(socket_address);
+            }
             logger.info( "@@RM: EDASPortalClient subscribing to EDASServer publisher channel " + client_id );
             while (active) { processNextResponse( socket ); }
             socket.close();
@@ -157,18 +165,20 @@ public class ResponseManager extends Thread {
             logger.info( "@@RM: ##$## Received Response: " + response );
             String[] toks = response.split("[!]");
             String rId = toks[0].split("[:]")[0];
+            int dataOffset = 0;
+            if( responseConnectionType == ResponseConnectionType.PubSub ) { dataOffset = 8; }
             String type = toks[1];
             processHeartbeat(type);
             if ( type.equals("array") ) {
                 String header = toks[2];
                 byte[] data = socket.recv(0);
-                cacheArray( rId, new TransVar( header, data, 8) );
+                cacheArray( rId, new TransVar( header, data, dataOffset ) );
                 cacheResult( rId, header );
             } else if ( type.equals("file") ) {
                 try {
                     String header = toks[2];
                     byte[] data = socket.recv(0);
-                    Path outFilePath = saveFile( header, rId, data, 0 );
+                    Path outFilePath = saveFile( header, rId, data, dataOffset );
                     List<String> paths = file_paths.getOrDefault(rId, new LinkedList<String>() );
                     paths.add( outFilePath.toString() );
                     file_paths.put( rId, paths );
