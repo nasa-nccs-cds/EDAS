@@ -33,6 +33,7 @@ trait GenericProcessManager {
   def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def hasResult( service: String, resultId: String ): Boolean
+  def getResultFilePath( service: String, resultId: String ): Option[String]
   def serverIsDown: Boolean
   def term();
   def waitUntilJobCompletes( service: String, resultId: String  ) = {
@@ -88,6 +89,8 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     val serviceProvider = apiManager.getServiceProvider(service)
     serviceProvider.getResult( resultId, response_syntax )
   }
+
+  def getResultFilePath( service: String, resultId: String ): Option[String] = None
 
   def getResultVariable( service: String, resultId: String ): Option[RDDTransientVariable] = {
     logger.info( "EDAS ProcessManager-> getResult: " + resultId)
@@ -173,7 +176,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     }
   }
 
-  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String] = {
+  def getResultFilePath( service: String, resultId: String ): Option[String] = {
     Some( response_manager.getPublishFile( "publish", resultId + ".nc" ).toString )
   }
 
