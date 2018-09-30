@@ -163,7 +163,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
       logger.info( "Received 'execute' response, resultId: " + resultId + ", message (xml): " + message )
 //      val resultNode = EDAS_XML.loadString(message)
       val resultNode = new WPSExecuteStatusStarted( "EDAS",  message, resultId, 0  ).toXml()
-      executionCallback.foreach( _.success(resultNode) )
+//      executionCallback.foreach( _.success(resultNode) )
       ( resultId, resultNode )
     } catch {
       case ex: Exception =>
