@@ -36,8 +36,13 @@ trait GenericProcessManager {
   def getResultFilePath( service: String, resultId: String ): Option[String]
   def serverIsDown: Boolean
   def term();
+
   def waitUntilJobCompletes( service: String, resultId: String  ) = {
     while( !hasResult(service,resultId) ) { Thread.sleep(500); }
+  }
+
+  def jobHasCompleted( service: String, resultId: String  ): Boolean= {
+    return hasResult(service,resultId)
   }
 }
 
@@ -161,9 +166,7 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
       resultId = response.split(':').head
       message = response.substring( response.indexOf('!') + 1 )
       logger.info( "Received 'execute' response, resultId: " + resultId + ", message (xml): " + message )
-//      val resultNode = EDAS_XML.loadString(message)
       val resultNode = new WPSExecuteStatusStarted( "EDAS",  message, resultId, 0  ).toXml()
-//      executionCallback.foreach( _.success(resultNode) )
       ( resultId, resultNode )
     } catch {
       case ex: Exception =>
