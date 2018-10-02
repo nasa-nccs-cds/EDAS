@@ -6,10 +6,11 @@ import nasa.nccs.edas.sources.{CollectionLoadServices, EDAS_XML}
 import nasa.nccs.esgf.process.{TaskRequest, WorkflowExecutor}
 import nasa.nccs.esgf.wps.edasServiceProvider.getResponseSyntax
 import nasa.nccs.utilities.Loggable
+
 import scala.xml
 import scala.collection.JavaConversions._
 import nasa.nccs.wps
-import nasa.nccs.wps.{ResponseSyntax, WPSExceptionReport, WPSExecuteStatusError, WPSExecuteStatusStarted }
+import nasa.nccs.wps._
 
 import scala.xml.XML
 
@@ -29,11 +30,10 @@ trait GenericProcessManager {
   def describeProcess(service: String, name: String, runArgs: Map[String,String]): xml.Node;
   def getCapabilities(service: String, identifier: String, runArgs: Map[String,String]): xml.Node;
   def executeProcess( service: String, job: Job, executionCallback: Option[ExecutionCallback] = None): ( String, xml.Elem )
-//  def getResultFilePath( service: String, resultId: String, executor: WorkflowExecutor ): Option[String]
   def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def hasResult( service: String, resultId: String ): Boolean
-  def getResultFilePath( service: String, resultId: String ): Option[String]
+  def getResultFilePaths( service: String, resultId: String ): List[String] = List[String]()
   def serverIsDown: Boolean
   def term();
 
@@ -94,8 +94,6 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     val serviceProvider = apiManager.getServiceProvider(service)
     serviceProvider.getResult( resultId, response_syntax )
   }
-
-  def getResultFilePath( service: String, resultId: String ): Option[String] = None
 
   def getResultVariable( service: String, resultId: String ): Option[RDDTransientVariable] = {
     logger.info( "EDAS ProcessManager-> getResult: " + resultId)
@@ -179,13 +177,11 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     }
   }
 
-  def getResultFilePath( service: String, resultId: String ): Option[String] = {
-    Some( response_manager.getPublishFile( "publish", resultId + ".nc" ).toString )
-  }
+  override def getResultFilePaths( service: String, resultId: String ): List[String] = response_manager.getSavedFilePaths(resultId).toList
 
   def getResult( service: String, resultId: String, responseSyntax: wps.ResponseSyntax.Value ): xml.Node = {
     val responses = response_manager.getResponses(resultId,true).toList
-    EDAS_XML.loadString( responses(0) )
+    return new WPSExecuteStatusCompleted( service,  responses.head, resultId ).toXml( ResponseSyntax.WPS )
   }
 
   def getResultStatus( service: String, resultId: String, responseSyntax: wps.ResponseSyntax.Value ): xml.Node = {

@@ -164,7 +164,7 @@ public class ResponseManager extends Thread {
             String response = new String(socket.recv(0)).trim();
             logger.info( "@@RM: ##$## Received Response: " + response );
             String[] toks = response.split("[!]");
-            String rId = toks[0].split("[:]")[0];
+            String rId = toks[0].split("[:]")[1];
             int dataOffset = 0;
             if( responseConnectionType == ResponseConnectionType.PubSub ) { dataOffset = 8; }
             String type = toks[1];
@@ -224,6 +224,11 @@ public class ResponseManager extends Thread {
             Files.createDirectories( pubishDir );
         }
         return Paths.get( publishDir, role, fileName );
+    }
+
+    public List<String> getSavedFilePaths( String rId ) throws IOException {
+        logger.debug("@@RM:getSavedFilePaths, rid = " + rId + ", keys = " + file_paths.keySet().toString() );
+        return file_paths.getOrDefault(rId, new LinkedList<String>() );
     }
 
 
