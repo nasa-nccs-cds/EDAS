@@ -44,7 +44,7 @@ public class ResponseManager extends Thread {
     Boolean active = true;
     Map<String, List<String>> cached_results = null;
     Map<String, List<TransVar>> cached_arrays = null;
-    Map<String, List<String>> file_paths = null;
+    Map<String, List<String>> result_file_paths = null;
     Map<String, ExecutionCallback> callbacks = null;
     String cacheDir = null;
     String publishDir = null;
@@ -65,7 +65,7 @@ public class ResponseManager extends Thread {
         cached_results = new HashMap<String, List<String>>();
         cached_arrays = new HashMap<String, List<TransVar>>();
         callbacks = new HashMap<String, ExecutionCallback>();
-        file_paths = new HashMap<String,List<String>>();
+        result_file_paths = new HashMap<String,List<String>>();
         setName("EDAS ResponseManager");
         setDaemon(true);
         FileSystem fileSystems = FileSystems.getDefault();
@@ -179,9 +179,9 @@ public class ResponseManager extends Thread {
                     String header = toks[2];
                     byte[] data = socket.recv(0);
                     Path outFilePath = saveFile( header, rId, data, dataOffset );
-                    List<String> paths = file_paths.getOrDefault(rId, new LinkedList<String>() );
+                    List<String> paths = result_file_paths.getOrDefault(rId, new LinkedList<String>() );
                     paths.add( outFilePath.toString() );
-                    file_paths.put( rId, paths );
+                    result_file_paths.put( rId, paths );
                     cacheResult( rId, header );
                     logger.info( String.format("@@RM: Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
                 } catch( Exception err ) {
@@ -227,8 +227,8 @@ public class ResponseManager extends Thread {
     }
 
     public List<String> getSavedFilePaths( String rId ) throws IOException {
-        logger.debug("@@RM:getSavedFilePaths, rid = " + rId + ", keys = " + file_paths.keySet().toString() );
-        return file_paths.getOrDefault(rId, new LinkedList<String>() );
+        logger.debug("@@RM:getSavedFilePaths, rid = " + rId + ", keys = " + result_file_paths.keySet().toString() );
+        return result_file_paths.getOrDefault(rId, new LinkedList<String>() );
     }
 
 
