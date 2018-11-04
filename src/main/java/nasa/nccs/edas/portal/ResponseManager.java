@@ -227,6 +227,7 @@ public class ResponseManager extends Thread {
     }
 
     public List<String> getSavedFilePaths( String rId ) throws IOException {
+        if ( rId.endsWith(".nc") ) { rId = rId.substring(0,rId.length()-3); }
         logger.debug("@@RM:getSavedFilePaths, rid = " + rId + ", keys = " + result_file_paths.keySet().toString() );
         return result_file_paths.getOrDefault(rId, new LinkedList<String>() );
     }
