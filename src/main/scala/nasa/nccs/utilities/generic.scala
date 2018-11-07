@@ -43,7 +43,8 @@ class Logger( val name: String, val test: Boolean, val master: Boolean ) extends
   val LNAME = if( test ) name + "-test-" else name + "-"
   val LID = if( master ) "-master-" + UID().uid else  "-worker-" + UID().uid
   var newline_state = true
-  val logFileDir: Path = Paths.get( System.getProperty("user.home"), ".edas", "logs" )
+  var log_root = "/tmp" // System.getProperty("user.home")
+  val logFileDir: Path = Paths.get( log_root , ".edas", "logs" )
   logFileDir.toFile.mkdirs()
   val logFilePath: Path = logFileDir.resolve( LNAME + ip.getHostName + LID + ".log" )
   val timeFormatter = new SimpleDateFormat("MM/dd HH:mm:ss")
