@@ -87,11 +87,15 @@ public class CleanupManager {
             File folder = new File( directory );
             if( folder.isDirectory() ) {
                 File[] listOfFiles = folder.listFiles();
-                logger.info(" %C% ------------------------ Cleaning up directory ------------------------" + directory);
-                for (int i = 0; i < listOfFiles.length; i++) {
-                    File file = listOfFiles[i];
-                    if (file.getName().matches(fileFilter)) {
-                        cleanup(file);
+                if ( listOfFiles == null ) {
+                    logger.error( "Attempt to clean up non existent directory: " + folder.toString() );
+                } else {
+                    logger.info(" %C% ------------------------ Cleaning up directory ------------------------" + directory);
+                    for (int i = 0; i < listOfFiles.length; i++) {
+                        File file = listOfFiles[i];
+                        if (file.getName().matches(fileFilter)) {
+                            cleanup(file);
+                        }
                     }
                 }
             } else {
