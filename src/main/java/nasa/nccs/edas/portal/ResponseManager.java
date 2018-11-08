@@ -119,9 +119,9 @@ public class ResponseManager extends Thread {
         return results;
     }
 
-    public void cacheArray( String id, TransVar array ) { getArrays(id).add(array); }
+    private  void cacheArray( String id, TransVar array ) { getArrays(id).add(array); }
 
-    public List<TransVar> getArrays(String id) {
+    public  List<TransVar> getArrays(String id) {
         List<TransVar> arrays = cached_arrays.get(id);
         if( arrays == null ) {
             arrays = new LinkedList<TransVar>();
@@ -159,52 +159,58 @@ public class ResponseManager extends Thread {
         return toks[index];
     }
 
-    public void processNextResponse( ZMQ.Socket socket ) {
+    private void processNextResponse( ZMQ.Socket socket ) {
         try {
             String response = new String(socket.recv(0)).trim();
             String[] toks = response.split("[!]");
             String rId = toks[0].split("[:]")[1];
             int dataOffset = 0;
             if( responseConnectionType == ResponseConnectionType.PubSub ) { dataOffset = 8; }
-            String type = toks[1];
-            logger.info( "@@RM: ##$## Received Response: " + response + ", type = " + type + ", rId = " + rId );
-            processHeartbeat(type);
-            if ( type.equals("array") ) {
-                String header = toks[2];
-                byte[] data = socket.recv(0);
-                cacheArray( rId, new TransVar( header, data, dataOffset ) );
-                cacheResult( rId, header );
-            } else if ( type.equals("file") ) {
-                try {
-                    String header = toks[2];
-                    byte[] data = socket.recv(0);
-                    logger.info( "@@RM: Received File Data for header: " + header );
-                    Path outFilePath = saveFile( header, rId, data, dataOffset );
-                    List<String> paths = result_file_paths.getOrDefault(rId, new LinkedList<String>() );
-                    paths.add( outFilePath.toString() );
-                    result_file_paths.put( rId, paths );
+            String rtype = toks[1];
+            String header = toks[2];
+            logger.info( "@@RM: Received Response: " + response + ", type = " + rtype + ", rId = " + rId );
+            switch ( rtype ) {
+                case "array":
+                    byte[] bdata = socket.recv(0);
+                    cacheArray( rId, new TransVar( header, bdata, dataOffset ) );
                     cacheResult( rId, header );
-                    logger.info( String.format("@@RM: Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
-                } catch( Exception err ) {
-                    logger.error(String.format("@@RM: Unable to write to output file: %s", err.getMessage() ) );
-                }
-            } else if ( type.equals("response") ) {
-                cacheResult(rId, toks[2]);
-                String currentTime = timeFormat.format(Calendar.getInstance().getTime());
-                logger.info(String.format("@@RM: Received result[%s] (%s): %s", rId, currentTime, response));
-            } else if ( type.equals("error") ) {
-                cacheResult(rId, toks[2]);
-                String currentTime = timeFormat.format( Calendar.getInstance().getTime() );
-                logger.info(String.format("@@RM: Received error[%s] (%s): %s", rId, currentTime, response ) );
-            }  else {
-                logger.error(String.format("@@RM: EDASPortal.ResponseThread-> Received unrecognized message type: %s",type));
+                    break;
+                case "file":
+                    try {
+                        logger.info( "@@RM: Receiving File Data for header: " + header );
+                        byte[] data = socket.recv(0);
+                        logger.info( "@@RM: Received File Data" );
+                        Path outFilePath = saveFile( header, rId, data, dataOffset );
+                        List<String> paths = result_file_paths.getOrDefault(rId, new LinkedList<String>() );
+                        paths.add( outFilePath.toString() );
+                        result_file_paths.put( rId, paths );
+                        cacheResult( rId, header );
+                        logger.info( String.format("@@RM: Received file %s for rid %s, saved to: %s", header, rId, outFilePath.toString() ) );
+                    } catch( Exception err ) {
+                        logger.error(String.format("@@RM: Unable to write to output file: %s", err.getMessage() ) );
+                    }
+                    break;
+                case "response":
+                    cacheResult(rId, header );
+                    String _currentTime = timeFormat.format(Calendar.getInstance().getTime());
+                    logger.info(String.format("@@RM: Received result[%s] (%s): %s", rId, _currentTime, response));
+                    break;
+                case "error":
+                    cacheResult(rId, header );
+                    String currentTime_ = timeFormat.format(Calendar.getInstance().getTime());
+                    logger.info(String.format("@@RM: Received error[%s] (%s): %s", rId, currentTime_, response ) );
+                    break;
+                default:
+                    logger.error(String.format("@@RM: EDASPortal.ResponseThread-> Received unrecognized message type: %s",rtype));
             }
+            processHeartbeat(rtype);
+
         } catch( Exception err ) {
             logger.error(String.format("@@RM: EDAS error: %s\n%s\n", err, ExceptionUtils.getStackTrace(err) ) );
         }
     }
 
-    Path saveFile( String header, String response_id, byte[] data, int offset ) throws IOException {
+    private Path saveFile( String header, String response_id, byte[] data, int offset ) throws IOException {
         String[] header_toks = header.split("[|]");
         String id = header_toks[1];
         String role = header_toks[2];
@@ -219,7 +225,7 @@ public class ResponseManager extends Thread {
     }
 
 
-    public Path getPublishFile( String role, String fileName  ) throws IOException {
+    private Path getPublishFile( String role, String fileName  ) throws IOException {
         Path pubishDir = Paths.get( publishDir, role );
         if( !pubishDir.toFile().exists() ) {
             Files.createDirectories( pubishDir );
