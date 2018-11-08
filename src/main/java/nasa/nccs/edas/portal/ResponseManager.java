@@ -162,12 +162,12 @@ public class ResponseManager extends Thread {
     public void processNextResponse( ZMQ.Socket socket ) {
         try {
             String response = new String(socket.recv(0)).trim();
-            logger.info( "@@RM: ##$## Received Response: " + response );
             String[] toks = response.split("[!]");
             String rId = toks[0].split("[:]")[1];
             int dataOffset = 0;
             if( responseConnectionType == ResponseConnectionType.PubSub ) { dataOffset = 8; }
             String type = toks[1];
+            logger.info( "@@RM: ##$## Received Response: " + response + ", type = " + type + ", rId = " + rId );
             processHeartbeat(type);
             if ( type.equals("array") ) {
                 String header = toks[2];
@@ -178,6 +178,7 @@ public class ResponseManager extends Thread {
                 try {
                     String header = toks[2];
                     byte[] data = socket.recv(0);
+                    logger.info( "@@RM: Received File Data for header: " + header );
                     Path outFilePath = saveFile( header, rId, data, dataOffset );
                     List<String> paths = result_file_paths.getOrDefault(rId, new LinkedList<String>() );
                     paths.add( outFilePath.toString() );
