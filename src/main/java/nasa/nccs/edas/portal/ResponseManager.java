@@ -163,7 +163,8 @@ public class ResponseManager extends Thread {
         try {
             String response = new String(socket.recv(0)).trim();
             String[] toks = response.split("[!]");
-            String rId = toks[0].split("[:]")[1];
+            String[] toks0 = toks[0].split("[:]");
+            String rId = toks0[toks0.length-1];
             int dataOffset = 0;
             if( responseConnectionType == ResponseConnectionType.PubSub ) { dataOffset = 8; }
             String rtype = toks[1];
