@@ -197,7 +197,7 @@ public class ResponseManager extends Thread {
                     logger.info(String.format("@@RM: Received result[%s] (%s): %s", rId, _currentTime, response));
                     break;
                 case "error":
-                    cacheResult(rId, header );
+                    cacheResult(rId, "[ERROR]: " + header );
                     String currentTime_ = timeFormat.format(Calendar.getInstance().getTime());
                     logger.info(String.format("@@RM: Received error[%s] (%s): %s", rId, currentTime_, response ) );
                     break;
