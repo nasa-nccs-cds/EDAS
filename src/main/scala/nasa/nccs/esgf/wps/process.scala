@@ -74,6 +74,13 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
     serviceProvider.getWPSCapabilities( identifier, runArgs )
   }
 
+  def executeUtility(service: String, identifiers: Array[String], runArgs: Map[String,String]): xml.Node= {
+    val serviceProvider = apiManager.getServiceProvider(service)
+    //        logger.info("Executing Service %s, Service provider = %s ".format( service, serviceProvider.getClass.getName ))
+    serviceProvider.executeUtility( identifiers, runArgs )
+  }
+
+
   def executeProcess( service: String, job: Job, executionCallback: Option[ExecutionCallback] = None ): ( String, xml.Elem ) = {
     val dataInputsObj = if( !job.datainputs.isEmpty ) wpsObjectParser.parseDataInputs( job.datainputs ) else Map.empty[String, Seq[Map[String, Any]]]
     val request: TaskRequest = TaskRequest( job.requestId, job.identifier, dataInputsObj )

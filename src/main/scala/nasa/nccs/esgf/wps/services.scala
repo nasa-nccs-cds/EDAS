@@ -28,6 +28,7 @@ trait ServiceProvider extends Loggable {
   def getResultVariables: Iterable[String]
   def getResult( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
   def getResultStatus( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node
+  def executeUtility(service: String, identifiers: Array[String], runArgs: Map[String,String]): xml.Node
 
   def fatal( e: Throwable ): WPSExceptionReport = {
     val err = getCause( e )
@@ -102,6 +103,18 @@ object edasServiceProvider extends ServiceProvider {
 
     } catch { case e: Exception => fatal(e).toXml(syntax) }
   }
+
+  def executeUtility( request: TaskRequest, identifiers: Array[String], _run_args: Map[String,String]): xml.Elem = {
+    val syntax = getResponseSyntax( _run_args )
+    val jobRec = request.getJobRec(_run_args)
+    val jobId = collectionDataCache.addJob( jobRec )
+    val runargs = Map("jobId" ->  jobId ) ++ _run_args
+    try {
+      cds2ExecutionManager.executeUtilityRequest( jobId, identifiers.mkString("!"), request, _run_args  ).toXml( syntax )
+
+    } catch { case e: Exception => fatal(e).toXml(syntax) }
+  }
+
 //  override def getResultFilePath( resultId: String, executor: WorkflowExecutor ): Option[String] = cds2ExecutionManager.getResultFilePath( resultId, executor )
   override def getResult( resultId: String, response_syntax: ResponseSyntax.Value ): xml.Node = cds2ExecutionManager.getResult( resultId, response_syntax )
   override def getResultVariable( resultId: String ): Option[RDDTransientVariable] = cds2ExecutionManager.getResultVariable( resultId )
