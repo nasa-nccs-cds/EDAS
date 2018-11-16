@@ -33,6 +33,7 @@ trait GenericProcessManager {
   def getResult( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def getResultStatus( service: String, resultId: String, response_syntax: wps.ResponseSyntax.Value ): xml.Node
   def hasResult( service: String, resultId: String ): Boolean
+  def executeUtility(service: String, identifiers: Array[String], runArgs: Map[String,String]): xml.Node
   def getResultFilePaths( service: String, resultId: String ): List[String] = List[String]()
   def serverIsDown: Boolean
   def term();
@@ -144,6 +145,13 @@ class zmqProcessManager( serverConfiguration: Map[String,String] )  extends Gene
     val response = portal.sendMessage( "getCapabilities", List( identifier ).toArray )
     val message = response.split('!').last
     logger.info( s" EDASW: Received getCapabilities(${identifier}) response: \n" + response.substring( 0, Math.min(500,response.length) ) )
+    EDAS_XML.loadString( message )
+  }
+
+  def executeUtility(service: String, identifiers: Array[String], runArgs: Map[String,String]): xml.Node = {
+    val response = portal.sendMessage( "util", identifiers )
+    val message = response.split('!').last
+    logger.info( s" EDASW: Received getCapabilities(${identifiers}) response: \n" + response.substring( 0, Math.min(500,response.length) ) )
     EDAS_XML.loadString( message )
   }
 
