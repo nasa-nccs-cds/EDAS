@@ -104,7 +104,15 @@ object edasServiceProvider extends ServiceProvider {
     } catch { case e: Exception => fatal(e).toXml(syntax) }
   }
 
-  def executeUtility( request: TaskRequest, identifiers: Array[String], _run_args: Map[String,String]): xml.Elem = {
+  def executeUtility(service: String, identifiers: Array[String], runArgs: Map[String,String]): xml.Node= {
+    val syntax = getResponseSyntax(runArgs)
+    try {
+      cds2ExecutionManager.getWPSCapabilities( identifiers.mkString("|"), syntax )
+
+    } catch { case e: Exception => fatal(e).toXml(syntax) }
+  }
+
+  def executeUtilityRequest(request: TaskRequest, identifiers: Array[String], _run_args: Map[String,String]): xml.Elem = {
     val syntax = getResponseSyntax( _run_args )
     val jobRec = request.getJobRec(_run_args)
     val jobId = collectionDataCache.addJob( jobRec )

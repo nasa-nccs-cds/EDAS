@@ -77,7 +77,7 @@ class ProcessManager( serverConfiguration: Map[String,String] ) extends GenericP
   def executeUtility(service: String, identifiers: Array[String], runArgs: Map[String,String]): xml.Node= {
     val serviceProvider = apiManager.getServiceProvider(service)
     //        logger.info("Executing Service %s, Service provider = %s ".format( service, serviceProvider.getClass.getName ))
-    serviceProvider.executeUtility( identifiers, runArgs )
+    serviceProvider.executeUtility( service, identifiers, runArgs )
   }
 
 
